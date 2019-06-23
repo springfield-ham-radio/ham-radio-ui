@@ -1,0 +1,11 @@
+<form {{action "importFromRadio" on="submit"}}>
+  <FormGroup @label="Serial Port:">
+    {{#async-await this.ports as |ports|}}
+      <Select @InputGroupProps={{this.InputGroupProps}} @data={{ports}} @selected={{this.port}} @pmSe;ect={{action (mut this.port)}}/>
+    {{/async-await}}
+  </FormGroup>
+
+  <Button @intent="primary" @type="submit">Import</Button>
+</form>
+
+<ProgressBar @intent={{"primary"}} @value={{this.progress}}/>

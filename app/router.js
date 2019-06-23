@@ -7,6 +7,8 @@ const Router = EmberRouter.extend({
 });
 
 Router.map(function() {
+  this.route('import');
+  this.route('radio', {path: '/radio/:channels'});
 });
 
 export default Router;
