@@ -21,7 +21,7 @@ export default Controller.extend({
     async importFromRadio() {
       const driver = new BaofengDriver(this.port);
       const decoder = new BaofengDecoder();
-      const memory = await driver.importFromRadio((progress) => this.set('progress', progress));
+      const memory = await driver.importFromRadio({ setValue: (value) => this.set('progress', value), isCanceled: false});
       const programmedRadioChannels = decoder.decode(memory);
       this.router.transitionTo('radio', {channels: programmedRadioChannels});
     }

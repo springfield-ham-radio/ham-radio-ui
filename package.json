@@ -20,7 +20,7 @@
   "devDependencies": {
     "@ember/jquery": "^0.5.2",
     "@ember/optional-features": "^0.6.3",
-    "@springfield/baofeng-driver": "^1.1.1",
+    "@springfield/baofeng-driver": "^2.0.0",
     "babel-plugin-transform-async-to-generator": "^6.24.1",
     "babel-preset-env": "^1.7.0",
     "babel-preset-react": "^6.24.1",
