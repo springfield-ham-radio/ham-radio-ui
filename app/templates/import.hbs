@@ -1,11 +1,23 @@
 <form {{action "importFromRadio" on="submit"}}>
   <FormGroup @label="Serial Port:">
     {{#async-await this.ports as |ports|}}
-      <Select @InputGroupProps={{this.InputGroupProps}} @data={{ports}} @selected={{this.port}} @pmSe;ect={{action (mut this.port)}}/>
+      <Select @InputGroupProps={{this.InputGroupProps}} @data={{ports}} @selected={{this.port}} @onSelect={{action (mut this.port)}} as |port|>
+        {{port}}
+      </Select>
     {{/async-await}}
   </FormGroup>
 
   <Button @intent="primary" @type="submit">Import</Button>
 </form>
 
-<ProgressBar @intent={{"primary"}} @value={{this.progress}}/>
+{{!-- <Button @type="button" onClick={{action (mut this.importing) true}}>
+  Show Import Dialog
+</Button> --}}
+
+<Dialog @isOpen={{this.importing}} @onClose={{action "cancelImport"}}>
+  <div class="bp3-dialog-body">
+    <div>Importing from radio.</div>
+    <ProgressBar @intent={{"primary"}} @value={{this.progress}}/>
+    <Button @type="button" @onClick={{action "cancelImport"}}>Cancel</Button>
+  </div>
+</Dialog>

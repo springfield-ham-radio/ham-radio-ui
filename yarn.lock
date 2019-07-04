@@ -6370,10 +6370,10 @@ ember-electron@^2.10.0:
     tree-sync "^1.2.2"
     yarn-or-npm "^2.0.4"
 
-ember-elements@^0.6.0:
-  version "0.6.0"
-  resolved "https://registry.yarnpkg.com/ember-elements/-/ember-elements-0.6.0.tgz#14ea73f2213ac334e0d5a756082503f5ceaed520"
-  integrity sha512-IcZ843vkIYSgrtyU90/BnBvtPy+4TAATLtq2jMSDNNQaFv48bZxBubwT7AwT40d5EE2Nwupsio+9x8SaSlVm7w==
+ember-elements@^0.7.0:
+  version "0.7.0"
+  resolved "https://registry.yarnpkg.com/ember-elements/-/ember-elements-0.7.0.tgz#6e63ba1ed88d73ee9b42b0f63fda62d4eb455f60"
+  integrity sha512-4cPccBF487WSOeeIJbbjMwWGtMf6PXJUghQNPveByCaabDYoMLt628U83zaSJqcV6c94t6cJovxozBZ1tgReVQ==
   dependencies:
     "@ember-decorators/babel-transforms" "^3.1.5"
     babel-eslint "^8.2.6"

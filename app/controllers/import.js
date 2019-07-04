@@ -17,13 +17,26 @@ export default Controller.extend({
     return ports.map((port) => port.comName);
   }),
 
+  async doImport() {
+    const driver = new BaofengDriver(this.port);
+    const decoder = new BaofengDecoder();
+    const memory = await driver.importFromRadio(this.importProgress);
+    this.set('importing', false);
+    const programmedRadioChannels = decoder.decode(memory);
+    this.router.transitionTo('radio', {channels: programmedRadioChannels});
+  },
+
   actions: {
-    async importFromRadio() {
-      const driver = new BaofengDriver(this.port);
-      const decoder = new BaofengDecoder();
-      const memory = await driver.importFromRadio({ setValue: (value) => this.set('progress', value), isCanceled: false});
-      const programmedRadioChannels = decoder.decode(memory);
-      this.router.transitionTo('radio', {channels: programmedRadioChannels});
+    importFromRadio() {
+      const importProgress = { setValue: (value) => this.set('progress', value), isCanceled: false};
+      this.set('importProgress', importProgress);
+      this.set('importing', true);
+      this.doImport();
+    },
+
+    cancelImport() {
+      this.set('importing', false);
+      this.set('importProgress.isCanceled', true);
     }
   }
 });
