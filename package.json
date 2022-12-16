@@ -1,72 +1,39 @@
 {
-  "name": "my-app",
-  "version": "0.0.0",
+  "name": "ham-radio-ui",
+  "version": "0.0.1",
+  "description": "Ham radio goodness",
+  "productName": "Ham Delux",
+  "author": "Bryan Hunt <bhunt@mac.com>",
   "private": true,
-  "description": "Small description for my-app goes here",
-  "repository": "",
-  "license": "MIT",
-  "author": "",
-  "directories": {
-    "doc": "doc",
-    "test": "tests"
-  },
   "scripts": {
-    "build": "ember build",
-    "lint:hbs": "ember-template-lint .",
-    "lint:js": "eslint .",
-    "start": "ember electron",
-    "test": "ember test"
-  },
-  "devDependencies": {
-    "@ember/jquery": "^0.5.2",
-    "@ember/optional-features": "^0.6.3",
-    "@springfield/baofeng-driver": "^2.0.0",
-    "babel-plugin-transform-async-to-generator": "^6.24.1",
-    "babel-preset-env": "^1.7.0",
-    "babel-preset-react": "^6.24.1",
-    "broccoli-asset-rev": "^2.7.0",
-    "devtron": "^1.4.0",
-    "electron-forge": "^5.2.4",
-    "electron-prebuilt-compile": "4.0.0",
-    "ember-ajax": "^5.0.0",
-    "ember-async-await-helper": "^0.2.0",
-    "ember-cli": "~3.9.0",
-    "ember-cli-app-version": "^3.2.0",
-    "ember-cli-babel": "^7.1.2",
-    "ember-cli-dependency-checker": "^3.1.0",
-    "ember-cli-eslint": "^4.2.3",
-    "ember-cli-htmlbars": "^3.0.0",
-    "ember-cli-htmlbars-inline-precompile": "^1.0.3",
-    "ember-cli-inject-live-reload": "^1.8.2",
-    "ember-cli-sass": "^10.0.1",
-    "ember-cli-sri": "^2.1.1",
-    "ember-cli-template-lint": "^1.0.0-beta.1",
-    "ember-cli-uglify": "^2.1.0",
-    "ember-data": "~3.9.0",
-    "ember-electron": "^2.10.0",
-    "ember-elements": "^0.7.0",
-    "ember-export-application-global": "^2.0.0",
-    "ember-load-initializers": "^1.1.0",
-    "ember-maybe-import-regenerator": "^0.1.6",
-    "ember-qunit": "^3.4.1",
-    "ember-resolver": "^5.0.1",
-    "ember-source": "~3.9.0",
-    "ember-welcome-page": "^3.2.0",
-    "ember-yeti-table": "^0.1.1",
-    "eslint-plugin-ember": "^5.2.0",
-    "loader.js": "^4.7.0",
-    "qunit-dom": "^0.8.0",
-    "sass": "^1.21.0"
-  },
-  "engines": {
-    "node": "6.* || 8.* || >= 10.*"
+    "dev": "quasar dev",
+    "lint": "eslint --ext .js,.ts,.vue ./",
+    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "test": "echo \"No test specified\" && exit 0"
   },
   "dependencies": {
-    "electron-compile": "^6.4.4",
-    "electron-protocol-serve": "^1.3.0",
-    "electron-squirrel-startup": "^1.0.0"
+    "@quasar/extras": "^1.0.0",
+    "pinia": "^2.0.11",
+    "quasar": "^2.6.0",
+    "vue": "^3.0.0",
+    "vue-router": "^4.0.0"
   },
-  "config": {
-    "forge": "./ember-electron/electron-forge-config.js"
-  }
+  "devDependencies": {
+    "@quasar/app-vite": "^1.0.0",
+    "@types/node": "^12.20.21",
+    "@typescript-eslint/eslint-plugin": "^5.10.0",
+    "@typescript-eslint/parser": "^5.10.0",
+    "autoprefixer": "^10.4.2",
+    "eslint": "^8.10.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-vue": "^9.0.0",
+    "prettier": "^2.5.1",
+    "typescript": "^4.5.4"
+  },
+  "engines": {
+    "node": "^18 || ^16 || ^14.19",
+    "npm": ">= 6.13.4",
+    "yarn": ">= 1.21.1"
+  },
+  "packageManager": "yarn@3.3.0"
 }
