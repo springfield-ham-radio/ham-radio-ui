@@ -1,6 +1,8 @@
 <template>
-  <q-select outlined label="Serial Port" v-model="model" :options="serialPorts" option-label="path" />
-  <q-btn @click="refresh">Refresh</q-btn>
+  <div class="row items-center">
+    <q-select class="col" outlined label="Serial Port" v-model="model" :options="serialPorts" option-label="path" />
+    <q-btn class="q-ma-md" round @click="refresh" icon="refresh"/>
+  </div>
 </template>
 
 <script lang="ts">
