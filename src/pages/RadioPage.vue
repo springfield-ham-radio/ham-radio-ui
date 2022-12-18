@@ -7,9 +7,7 @@
           Import from radio
         </q-tooltip>
       </q-btn>
-      <suspense>
-        <serial-port-selector />
-      </suspense>
+      <serial-port-selector />
     </div>
   </q-page>
 </template>
