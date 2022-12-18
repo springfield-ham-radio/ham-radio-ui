@@ -1,7 +1,11 @@
 <template>
   <div class="row items-center">
     <q-select class="col" outlined label="Serial Port" v-model="model" :options="serialPorts" option-label="path" />
-    <q-btn class="q-ma-md" round @click="refresh" icon="refresh"/>
+    <q-btn class="q-ma-md" round @click="refresh" icon="refresh">
+      <q-tooltip>
+        Refresh serial ports
+      </q-tooltip>
+    </q-btn>
   </div>
 </template>
 
@@ -17,14 +21,12 @@ export default defineComponent({
   },
 
   async created() {
-    this.serialPorts = await window.serialport.list();
+    this.refresh();
   },
 
   methods: {
     async refresh() {
-      window.console.log('refresh()');
       this.serialPorts = await window.serialport.list();
-      window.console.log(this.serialPorts);
     }
   }
 });
