@@ -35,4 +35,19 @@ contextBridge.exposeInMainWorld('serialport', {
   list: () => {
     return SerialPort.list();
   },
+
+  reset: (path: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const port = new SerialPort({ path, baudRate: 9600 });
+      port.open((error) => {
+        if (error) {
+          reject(error);
+        }
+
+        port.close(() => {
+          resolve();
+        });
+      });
+    });
+  },
 });
