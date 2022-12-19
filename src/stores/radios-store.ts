@@ -6,7 +6,10 @@ export const useRadiosStore = defineStore('radios', {
       { id: '1', name: 'Baofeng' },
       { id: '2', name: 'Kenwood' },
     ],
-    models: [{ id: '1', name: 'UV-5RE Plus', manufacturerId: '1' }],
+    models: [
+      { id: '1', name: 'UV-5RE Plus', manufacturerId: '1' },
+      { id: '2', name: 'TM-D710GA', manufacturerId: '2' },
+    ],
     currentRadio: undefined,
   }),
 });
