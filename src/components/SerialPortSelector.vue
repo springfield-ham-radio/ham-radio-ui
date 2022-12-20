@@ -24,9 +24,17 @@ export default defineComponent({
     this.refresh();
   },
 
+  emits: ['portSelected'],
+
   methods: {
     async refresh() {
       this.serialPorts = await window.serialport.list();
+    }
+  },
+
+  watch: {
+    model(value) {
+      this.$emit('portSelected', value);
     }
   }
 });

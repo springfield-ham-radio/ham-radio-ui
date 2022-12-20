@@ -28,7 +28,7 @@
  * }
  */
 
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 import { SerialPort } from 'serialport';
 
 contextBridge.exposeInMainWorld('serialport', {
@@ -50,4 +50,15 @@ contextBridge.exposeInMainWorld('serialport', {
       });
     });
   },
+});
+
+contextBridge.exposeInMainWorld('radio', {
+  importFromRadio: (path: string) => {
+    ipcRenderer.send('importFromRadio', path);
+  },
+});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  onRenderRadioProgram: (callback) => ipcRenderer.on('renderRadioProgram', callback),
+  onRadioProgressIndicator: (callback) => ipcRenderer.on('radioProgressIndicator', callback),
 });

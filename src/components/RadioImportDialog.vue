@@ -1,20 +1,12 @@
 <template>
-  <q-btn round color="primary" icon="input" @click="showDialog = true">
-    <q-tooltip>
-      Import from radio
-    </q-tooltip>
-  </q-btn>
-
   <q-dialog v-model="showDialog">
     <q-card style="width: 500px">
       <q-card-section class="col items-center">
-        <radio-selector />
-        <serial-port-selector />
+        <q-linear-progress :value="progress" class="q-mt-md" />
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-btn flat label="Cancel" color="primary" v-close-popup />
-        <q-btn flat label="Import" color="primary" @click="importFromRadio" v-close-popup />
+        <q-btn flat label="Cancel" color="primary" @click="$emit('cancelled')"  v-close-popup />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -22,23 +14,29 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import RadioSelector from 'components/RadioSelector.vue';
-import SerialPortSelector from 'components/SerialPortSelector.vue';
-
+const electron = window.require('electron');
 
 export default defineComponent({
-  components: { SerialPortSelector, RadioSelector },
-
   data() {
     return {
-      showDialog: false,
+      showDialog: this.show,
+      progress: 0,
     }
   },
 
-  methods: {
-    importFromRadio() {
-      window.console.log('import()');
+  props: {
+    show: {
+      type: Boolean,
+      required: true,
     }
-  }
+  },
+
+  mounted() {
+    electron.ipcRenderer.on('radioImportProgress', (_event, value)=>{
+      this.progress = value;
+    });
+  },
+
+  emits: ['cancelled'],
 });
 </script>

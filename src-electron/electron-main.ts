@@ -1,19 +1,27 @@
-import { app, BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, nativeTheme, ipcMain } from 'electron';
+import { ElectronRadioProgressIndicator } from './electron-radio-progress-indicator';
 import path from 'path';
 import os from 'os';
+import { BaofengDriver } from '@springfield/baofeng-driver';
+import winston from 'winston';
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
 
 try {
   if (platform === 'win32' && nativeTheme.shouldUseDarkColors === true) {
-    require('fs').unlinkSync(
-      path.join(app.getPath('userData'), 'DevTools Extensions')
-    );
+    require('fs').unlinkSync(path.join(app.getPath('userData'), 'DevTools Extensions'));
   }
 } catch (_) {}
 
+const logger = winston.createLogger({
+  level: 'debug',
+  transports: [new winston.transports.Console()],
+  format: winston.format.simple(),
+});
+
 let mainWindow: BrowserWindow | undefined;
+const radioDriver = new BaofengDriver(logger);
 
 function createWindow() {
   /**
@@ -33,6 +41,13 @@ function createWindow() {
   });
 
   mainWindow.loadURL(process.env.APP_URL);
+  const radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
+
+  ipcMain.on('importFromRadio', async (_event, path) => {
+    radioProgressIndicator?.reset();
+    const program = await radioDriver.importFromRadio(path, radioProgressIndicator);
+    mainWindow?.webContents.send('renderRadioProgram', program);
+  });
 
   if (process.env.DEBUGGING) {
     // if on DEV or Production with debug enabled

@@ -23,6 +23,8 @@ export default defineComponent({
     };
   },
 
+  emits: ['radioSelected'],
+
   computed: {
     filteredModels() {
       if (this.manufacturer == undefined) {
@@ -37,6 +39,10 @@ export default defineComponent({
   watch: {
     manufacturer() {
       this.model = undefined;
+    },
+
+    model(value) {
+      this.$emit('radioSelected', value);
     }
   }
 });
