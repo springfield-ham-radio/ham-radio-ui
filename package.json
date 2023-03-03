@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.15.11",
-    "@springfield/baofeng-driver": "2.1.2",
-    "@springfield/ham-radio-api": "^0.3.0",
+    "@springfield/baofeng-driver": "3.0.1",
+    "@springfield/ham-radio-api": "^0.4.0",
     "pinia": "^2.0.32",
     "quasar": "^2.6.0",
     "serialport": "^10.5.0",
