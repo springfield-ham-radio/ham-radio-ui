@@ -40,12 +40,12 @@ contextBridge.exposeInMainWorld('serialport', {
     return new Promise<void>((resolve, reject) => {
       const port = new SerialPort({ path, baudRate: 9600, autoOpen: false });
       port.open((error) => {
-        if (error) {
-          reject(error);
-        }
-
         port.close(() => {
-          resolve();
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
         });
       });
     });
