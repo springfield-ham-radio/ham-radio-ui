@@ -22,8 +22,8 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import RadioSelector from 'components/RadioSelector.vue';
-import SerialPortSelector from 'components/SerialPortSelector.vue';
+import RadioSelector from './RadioSelector.vue';
+import SerialPortSelector from './SerialPortSelector.vue';
 
 interface RadioModel {
   id: string,

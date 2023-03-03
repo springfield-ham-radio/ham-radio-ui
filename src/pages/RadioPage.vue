@@ -21,7 +21,7 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import RadioSelectionDialog from 'components/RadioSelectionDialog.vue';
+import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue';
 
 interface RadioModel {
   id: string,
