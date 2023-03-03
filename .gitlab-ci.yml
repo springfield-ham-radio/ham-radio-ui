@@ -15,7 +15,7 @@ build:
   stage: build
   script:
     - yarn install
-    - yarn build
+    - yarn lint
 
 publish:
   stage: publish
