@@ -6,6 +6,7 @@
       <q-dialog v-model="importing">
         <q-card style="width: 500px">
           <q-card-section class="col items-center">
+            Importing from {{ radioConnection.model.name }}
             <q-linear-progress instant-feedback :value="progress" class="q-mt-md" />
           </q-card-section>
 
@@ -40,6 +41,7 @@ export default defineComponent({
 
   data() {
     return {
+      radioConnection: { model: { name: 'UNKNOWN' } },
       importing: false,
       progress: 0,
       program: null,
@@ -65,6 +67,7 @@ export default defineComponent({
 
   methods: {
     async importFromRadio(radioConnection: RadioConnection) {
+      this.radioConnection = radioConnection;
       window.console.log(radioConnection.serialPortPath);
       this.importing = true;
       window.radio.importFromRadio(radioConnection.serialPortPath.path);
