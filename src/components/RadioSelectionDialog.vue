@@ -47,8 +47,9 @@ export default defineComponent({
   emits: ['radioSelected'],
 
   methods: {
-    updateSerialPort(path: string) {
+    async updateSerialPort(path: string) {
       this.radioConnection.serialPortPath = path;
+      await window.serialport.reset(path.path);
     },
 
     updateRadioSelection(model: RadioModel) {

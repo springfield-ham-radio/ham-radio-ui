@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('serialport', {
 
   reset: (path: string) => {
     return new Promise<void>((resolve, reject) => {
-      const port = new SerialPort({ path, baudRate: 9600 });
+      const port = new SerialPort({ path, baudRate: 9600, autoOpen: false });
       port.open((error) => {
         if (error) {
           reject(error);
