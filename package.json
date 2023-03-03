@@ -16,7 +16,7 @@
     "@springfield/baofeng-driver": "3.0.1",
     "@springfield/ham-radio-api": "^0.4.0",
     "pinia": "^2.0.32",
-    "quasar": "^2.6.0",
+    "quasar": "^2.11.7",
     "serialport": "^10.5.0",
     "vue": "^3.2.47",
     "vue-router": "^4.1.6"
@@ -24,14 +24,14 @@
   "devDependencies": {
     "@quasar/app-vite": "1.2.1",
     "@types/node": "18.14.6",
-    "@typescript-eslint/eslint-plugin": "5.46.1",
-    "@typescript-eslint/parser": "5.46.1",
+    "@typescript-eslint/eslint-plugin": "5.54.0",
+    "@typescript-eslint/parser": "5.54.0",
     "autoprefixer": "10.4.13",
-    "electron": "latest",
+    "electron": "^23.1.2",
     "electron-rebuild": "3.2.9",
     "eslint": "8.35.0",
     "eslint-config-prettier": "8.6.0",
-    "eslint-plugin-vue": "9.8.0",
+    "eslint-plugin-vue": "9.9.0",
     "prettier": "2.8.4",
     "typescript": "4.9.5"
   },
