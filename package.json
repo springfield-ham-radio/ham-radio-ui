@@ -12,9 +12,9 @@
     "test": "echo \"No test specified\" && exit 0"
   },
   "dependencies": {
-    "@quasar/extras": "^1.0.0",
+    "@quasar/extras": "^1.15.11",
     "@springfield/baofeng-driver": "3.0.0",
-    "@springfield/ham-radio-api": "^0.2.0",
+    "@springfield/ham-radio-api": "^0.3.0",
     "pinia": "^2.0.11",
     "quasar": "^2.6.0",
     "serialport": "^10.5.0",
@@ -22,8 +22,8 @@
     "vue-router": "^4.0.0"
   },
   "devDependencies": {
-    "@quasar/app-vite": "^1.0.0",
-    "@types/node": "^18.11.17",
+    "@quasar/app-vite": "^1.2.1",
+    "@types/node": "^18.14.4",
     "@typescript-eslint/eslint-plugin": "^5.10.0",
     "@typescript-eslint/parser": "^5.10.0",
     "autoprefixer": "^10.4.2",
@@ -40,7 +40,7 @@
     "npm": ">= 6.13.4",
     "yarn": ">= 1.21.1"
   },
-  "packageManager": "yarn@3.3.0",
+  "packageManager": "yarn@3.4.1",
   "resolutions": {
     "@springfield/baofeng-driver": "portal:/Users/bhunt/Development/Springfield/baofeng-driver"
   }
