@@ -1,8 +1,11 @@
 <template>
   <q-page class="">
-    <h1>Radio</h1>
-    <div class="q-pa-md q-gutter-sm">
+    <div class="q-pa-md row items-center justify-between" style="font-size: 24px">
+      <div>Radio</div>
       <radio-selection-dialog @radio-selected="importFromRadio"/>
+    </div>
+
+    <div class="q-pa-md q-gutter-sm">
       <q-dialog v-model="importing">
         <q-card style="width: 500px">
           <q-card-section class="col items-center">
