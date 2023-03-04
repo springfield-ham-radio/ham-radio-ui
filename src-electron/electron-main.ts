@@ -46,7 +46,7 @@ function createWindow() {
   ipcMain.on('importFromRadio', async (_event, path) => {
     radioProgressIndicator?.reset();
     const program = await radioDriver.importFromRadio(path, radioProgressIndicator);
-    mainWindow?.webContents.send('renderRadioProgram', program);
+    mainWindow?.webContents.send('renderRadioProgram', program || null);
   });
 
   if (process.env.DEBUGGING) {

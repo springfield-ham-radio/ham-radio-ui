@@ -20,45 +20,28 @@
   </q-dialog>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue';
+<script setup lang="ts">
+import { ref } from 'vue';
 import RadioSelector from './RadioSelector.vue';
 import SerialPortSelector from './SerialPortSelector.vue';
+import { RadioConnection, RadioModel } from '@springfield/ham-radio-api';
 
-interface RadioModel {
-  id: string,
-  name: string,
-  manufacturerId: string,
+const emit = defineEmits(['radioSelected']);
+
+const showDialog = ref(false);
+const radioConnection = ref<RadioConnection>({ serialPortPath: '', model: { modelName: 'UNKNOWN', manufactureId: ''} });
+
+async function updateSerialPort(path: string) {
+  radioConnection.value.serialPortPath = path;
+  await window.serialport.reset(path);
+};
+
+function updateRadioSelection(model: RadioModel) {
+  radioConnection.value.model = model;
+};
+
+function importFromRadio() {
+  emit('radioSelected', radioConnection.value);
 }
 
-export default defineComponent({
-  components: { SerialPortSelector, RadioSelector },
-
-  data() {
-    return {
-      showDialog: false,
-      radioConnection: {
-        serialPortPath: '',
-        model: {},
-      },
-    }
-  },
-
-  emits: ['radioSelected'],
-
-  methods: {
-    async updateSerialPort(path: string) {
-      this.radioConnection.serialPortPath = path;
-      await window.serialport.reset(path.path);
-    },
-
-    updateRadioSelection(model: RadioModel) {
-      this.radioConnection.model = model;
-    },
-
-    importFromRadio() {
-      this.$emit('radioSelected', this.radioConnection);
-    }
-  }
-});
 </script>

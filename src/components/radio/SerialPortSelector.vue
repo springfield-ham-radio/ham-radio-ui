@@ -1,6 +1,6 @@
 <template>
   <div class="row items-center">
-    <q-select class="col" outlined label="Serial Port" v-model="model" :options="serialPorts" option-label="path" />
+    <q-select class="col" outlined label="Serial Port" v-model="serialPort" :options="serialPorts" />
     <q-btn class="q-ma-md" round @click="refresh" icon="refresh">
       <q-tooltip>
         Refresh serial ports
@@ -9,33 +9,24 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, ref } from 'vue';
+<script setup lang="ts">
+import { onMounted, ref, watch } from 'vue';
 
-export default defineComponent({
-  data() {
-    return {
-      model: ref(null),
-      serialPorts: [],
-    }
-  },
+const serialPort = ref();
+const serialPorts = ref([]);
 
-  async created() {
-    this.refresh();
-  },
+const emit = defineEmits(['portSelected']);
 
-  emits: ['portSelected'],
+async function refresh() {
+  serialPorts.value = await window.serialport.list();
+}
 
-  methods: {
-    async refresh() {
-      this.serialPorts = await window.serialport.list();
-    }
-  },
-
-  watch: {
-    model(value) {
-      this.$emit('portSelected', value);
-    }
-  }
+onMounted(async () => {
+  await refresh();
 });
+
+watch(serialPort, (value) => {
+  emit('portSelected', value)
+});
+
 </script>

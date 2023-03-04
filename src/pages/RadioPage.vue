@@ -6,7 +6,7 @@
       <q-dialog v-model="importing">
         <q-card style="width: 500px">
           <q-card-section class="col items-center">
-            Importing from {{ radioConnection.model.name }}
+            Importing from {{ radioConnection ? radioConnection.model.modelName : 'UNKNOWN' }}
             <q-linear-progress instant-feedback :value="progress" class="q-mt-md" />
           </q-card-section>
 
@@ -20,62 +20,47 @@
   </q-page>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue';
+<script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import { RadioConnection, RadioProgram } from '@springfield/ham-radio-api';
 import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue';
 
-interface RadioModel {
-  id: string,
-  name: string,
-  manufacturerId: string,
-}
+const importing = ref(false);
+const program = ref<RadioProgram<void>>();
+const progress = ref(0);
+const radioConnection = ref<RadioConnection>();
 
-interface RadioConnection {
-  serialPortPath: string,
-  model: RadioModel,
-}
+const columns = [
+  { name: 'number', required: true, label: 'Number', align: 'left', field: (row) => row.channelNumber, sortable: true },
+  { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.channelName, sortable: true },
+  { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => `${val / 1000000}` },
+  { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => `${val / 1000000}` },
+  { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone, sortable: true },
+  { name: 'rx-tone', required: true, label: 'RX Tone', align: 'left', field: (row) => row.radioChannel.receiveTone, sortable: true },
+];
 
-export default defineComponent({
-  name: 'ChannelsPage',
-  components: { RadioSelectionDialog },
+function importFromRadio(connection: RadioConnection) {
+  radioConnection.value = connection;
+  importing.value = true;
+  window.radio.importFromRadio(connection.serialPortPath);
+};
 
-  data() {
-    return {
-      radioConnection: { model: { name: 'UNKNOWN' } },
-      importing: false,
-      progress: 0,
-      program: null,
-      columns: [
-        { name: 'number', required: true, label: 'Number', align: 'left', field: (row) => row.channelNumber, sortable: true },
-        { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.channelName, sortable: true },
-        { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => `${val/1000000}` },
-        { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => `${val/1000000}` },
-        { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone, sortable: true },
-        { name: 'rx-tone', required: true, label: 'RX Tone', align: 'left', field: (row) => row.radioChannel.receiveTone, sortable: true },
-      ],
+ function cancelImport() {
+   window.radio.cancelImport();
+};
+
+onMounted(() => {
+  window.electronAPI.onRenderRadioProgram((_event, value) => {
+    importing.value = false;
+
+    if (value != null) {
+      program.value = value;
     }
-  },
+  });
 
-  mounted() {
-    window.electronAPI.onRenderRadioProgram((_event, program) => {
-      this.importing = false;
-      this.program = program;
-    });
-
-    window.electronAPI.onRadioProgressIndicator((_event, progress) => this.progress = progress);
-  },
-
-  methods: {
-    async importFromRadio(radioConnection: RadioConnection) {
-      this.radioConnection = radioConnection;
-      window.console.log(radioConnection.serialPortPath);
-      this.importing = true;
-      window.radio.importFromRadio(radioConnection.serialPortPath.path);
-    },
-
-    cancelImport() {
-      window.console.log('cancelImport()');
-    }
-  }
+  window.electronAPI.onRadioProgressIndicator((_event, value) => {
+    progress.value = value;
+  });
 });
+
 </script>

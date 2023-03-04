@@ -33,7 +33,11 @@ import { SerialPort } from 'serialport';
 
 contextBridge.exposeInMainWorld('serialport', {
   list: () => {
-    return SerialPort.list();
+    return new Promise<string[]>(async (resolve) => {
+      const ports = await SerialPort.list();
+      const paths = ports.map((port) => port.path);
+      resolve(paths);
+    });
   },
 
   reset: (path: string) => {
@@ -56,6 +60,10 @@ contextBridge.exposeInMainWorld('radio', {
   importFromRadio: (path: string) => {
     ipcRenderer.send('importFromRadio', path);
   },
+
+  cancelImport: () => {
+    ipcRenderer.send('radioCancel');
+  }
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
