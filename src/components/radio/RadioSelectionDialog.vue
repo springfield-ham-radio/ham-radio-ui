@@ -7,6 +7,9 @@
 
   <q-dialog v-model="showDialog">
     <q-card style="width: 500px">
+      <q-card-section>
+        Plug the programming cable for your radio into your computer.  Select the serial port, then plug the programming cable into your radio.
+      </q-card-section>
       <q-card-section class="col items-center">
         <radio-selector @radio-selected="updateRadioSelection"/>
         <serial-port-selector @port-selected="updateSerialPort"/>
