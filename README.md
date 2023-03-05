@@ -2,40 +2,25 @@
 
 Ham radio goodness
 
-## Install the dependencies
-```bash
-yarn
-# or
-npm install
+## Development Environment
+
+If you develop with [VS Code](https://code.visualstudio.com), settings and extension recommendations are pre-configured.
+
+This project is based on [NodeJS](https://nodejs.dev) 18.  It is recommended, but not required, to install NodeJS with [Volta](https://volta.sh).  The version of NodeJS is pinned in the package.json with Volta.
+
+You will also need yarn.  If you are using Volta, you can install yarn with:
+
+```
+volta install yarn
 ```
 
-### Start the app in development mode (hot-code reloading, error reporting, etc.)
-```bash
-quasar dev
-```
+## Running From Source
 
+- git clone https://gitlab.com/springfield-ham-radio/app/ham-radio-ui.git
+- yarn install
+- yarn dev
 
-### Lint the files
-```bash
-yarn lint
-# or
-npm run lint
-```
+## Contrbuting
 
-
-### Format the files
-```bash
-yarn format
-# or
-npm run format
-```
-
-
-
-### Build the app for production
-```bash
-quasar build
-```
-
-### Customize the configuration
-See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
+Report bugs and feature requests to: https://gitlab.com/springfield-ham-radio/app/ham-radio-ui/-/issues
+For source contributions, please open a merge request: https://gitlab.com/springfield-ham-radio/app/ham-radio-ui/-/merge_requests
