@@ -5,7 +5,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRadioStore } from 'stores/radios-store';
+import { useRadioStore } from 'src/stores/radio-store';
 import { emit } from 'process';
 
 const manufacturer = ref();

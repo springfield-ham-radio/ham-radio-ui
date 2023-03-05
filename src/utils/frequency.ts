@@ -1,18 +1,15 @@
 import { SpectrumBand } from '@springfield/ham-radio-api';
+import { useSpectrumStore } from 'src/stores/spectrum-store';
 
 export function formatFrequency(frequency: number, band?: SpectrumBand): string {
   const targetBand = band || findBand(frequency);
-  return (frequency / 10 ** targetBand.frequencyDisplayBaseMultiplier).toFixed(targetBand.frequencyDisplayNumberDecimals);
+  return targetBand ? (frequency / 10 ** targetBand.frequencyDisplayBaseMultiplier).toFixed(targetBand.frequencyDisplayNumberDecimals) : frequency.toString();
 }
 
-function findBand(_frequency: number): SpectrumBand {
-  return {
-    name: '2m',
-    wavelength: 2 * 10 ** 6,
-    lowerFrequency: 144 * 10 ** 6,
-    upperFrequency: 148 * 10 ** 6,
-    frequencyDisplayBaseMultiplier: 6,
-    frequencyDisplayNumberDecimals: 3,
-    privilegeIds: [],
-  };
+function findBand(frequency: number): SpectrumBand | undefined {
+  for (const band of useSpectrumStore().bands) {
+    if (frequency >= band.lowerFrequency && frequency <= band.upperFrequency) {
+      return band;
+    }
+  }
 }
