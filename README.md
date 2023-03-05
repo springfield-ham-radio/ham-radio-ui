@@ -8,7 +8,7 @@ If you develop with [VS Code](https://code.visualstudio.com), settings and exten
 
 This project is based on [NodeJS](https://nodejs.dev) 18.  It is recommended, but not required, to install NodeJS with [Volta](https://volta.sh).  The version of NodeJS is pinned in the package.json with Volta.
 
-You will also need yarn.  If you are using Volta, you can install yarn with:
+You will also need [yarn](https://yarnpkg.com).  If you are using Volta, you can install yarn with:
 
 - volta install yarn
 
