@@ -2,7 +2,14 @@
   <q-page class="">
     <div class="q-pa-md row items-center justify-between" style="font-size: 24px">
       <div>Radio</div>
-      <radio-selection-dialog @radio-selected="importFromRadio"/>
+      <div>
+        <q-btn class="q-mr-md" round color="primary" @click="save" icon="save" :disable="program == undefined">
+          <q-tooltip>
+            Save program to file
+          </q-tooltip>
+       </q-btn>
+        <radio-selection-dialog @radio-selected="importFromRadio"/>
+      </div>
     </div>
 
     <div class="q-pa-md q-gutter-sm">
@@ -24,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, toRaw } from 'vue';
 import { RadioConnection, RadioProgram } from '@springfield/ham-radio-api';
 import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue';
 import { formatFrequency } from 'src/utils/frequency';
@@ -53,6 +60,9 @@ function importFromRadio(connection: RadioConnection) {
    window.radio.cancelImport();
 };
 
+async function save() {
+  await window.radio.save(toRaw(program.value));
+}
 onMounted(() => {
   window.electronAPI.onRenderRadioProgram((_event, value) => {
     importing.value = false;

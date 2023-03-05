@@ -28,6 +28,7 @@
  * }
  */
 
+import { RadioProgram } from '@springfield/ham-radio-api';
 import { contextBridge, ipcRenderer } from 'electron';
 import { SerialPort } from 'serialport';
 
@@ -63,7 +64,11 @@ contextBridge.exposeInMainWorld('radio', {
 
   cancelImport: () => {
     ipcRenderer.send('radioCancel');
-  }
+  },
+
+  save: (program: RadioProgram<any>) => {
+    ipcRenderer.send('saveRadioProgram', program);
+  },
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {

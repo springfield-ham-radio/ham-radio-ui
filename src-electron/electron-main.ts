@@ -1,9 +1,11 @@
-import { app, BrowserWindow, nativeTheme, ipcMain } from 'electron';
+import { app, BrowserWindow, nativeTheme, ipcMain, dialog } from 'electron';
 import { ElectronRadioProgressIndicator } from './electron-radio-progress-indicator';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { BaofengDriver } from '@springfield/baofeng-driver';
 import winston from 'winston';
+import { strict as assert } from 'assert';
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
@@ -44,9 +46,19 @@ function createWindow() {
   const radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
 
   ipcMain.on('importFromRadio', async (_event, path) => {
+    assert(mainWindow);
     radioProgressIndicator?.reset();
     const program = await radioDriver.importFromRadio(path, radioProgressIndicator);
-    mainWindow?.webContents.send('renderRadioProgram', program || null);
+    mainWindow.webContents.send('renderRadioProgram', program || null);
+  });
+
+  ipcMain.on('saveRadioProgram', async (_event, program) => {
+    assert(mainWindow);
+    const results = await dialog.showSaveDialog(mainWindow, {});
+
+    if (results.filePath) {
+      fs.writeFileSync(results.filePath, JSON.stringify(program, null, 2));
+    }
   });
 
   if (process.env.DEBUGGING) {
