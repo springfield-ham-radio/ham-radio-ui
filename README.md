@@ -10,9 +10,8 @@ This project is based on [NodeJS](https://nodejs.dev) 18.  It is recommended, bu
 
 You will also need yarn.  If you are using Volta, you can install yarn with:
 
-```
-volta install yarn
-```
+- volta install yarn
+
 
 ## Running From Source
 
