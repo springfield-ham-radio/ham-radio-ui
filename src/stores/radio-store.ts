@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
 
 const radioModels = [
-  { id: '1', modelName: 'UV-5RE Plus', manufacturerId: '1' },
-  { id: '2', modelName: 'TM-D710GA', manufacturerId: '2' },
+  { id: '1', name: 'UV-5RE Plus', manufacturerId: '1' },
+  { id: '2', name: 'TM-D710GA', manufacturerId: '2' },
 ];
 
 const radioManufacturers = [

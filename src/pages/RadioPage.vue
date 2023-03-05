@@ -16,7 +16,7 @@
       <q-dialog v-model="importing">
         <q-card style="width: 500px">
           <q-card-section class="col items-center">
-            Importing from {{ radioConnection ? radioConnection.model.modelName : 'UNKNOWN' }}
+            Importing from {{ radioConnection ? radioConnection.model.name : 'UNKNOWN' }}
             <q-linear-progress instant-feedback :value="progress" class="q-mt-md" />
           </q-card-section>
 
@@ -37,13 +37,13 @@ import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue'
 import { formatFrequency } from 'src/utils/frequency';
 
 const importing = ref(false);
-const program = ref<RadioProgram<void>>();
+const program = ref<RadioProgram>();
 const progress = ref(0);
 const radioConnection = ref<RadioConnection>();
 
 const columns = [
   { name: 'number', required: true, label: 'Number', align: 'left', field: (row) => row.channelNumber, sortable: true },
-  { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.channelName, sortable: true },
+  { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.name, sortable: true },
   { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => formatFrequency(val) },
   { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => formatFrequency(val) },
   { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone, sortable: true },

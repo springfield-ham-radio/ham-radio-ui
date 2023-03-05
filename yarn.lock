@@ -426,42 +426,35 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/baofeng-driver@npm:3.0.2":
-  version: 3.0.2
-  resolution: "@springfield/baofeng-driver@npm:3.0.2"
+"@springfield/baofeng-driver@npm:3.0.4":
+  version: 3.0.4
+  resolution: "@springfield/baofeng-driver@npm:3.0.4"
   dependencies:
     "@serialport/parser-byte-length": ^10.5.0
-    "@springfield/ham-radio-api": 0.6.1
-    "@springfield/ham-radio-driver-api": 0.6.0
+    "@springfield/ham-radio-api": 0.8.0
+    "@springfield/ham-radio-driver-api": 0.8.0
     "@types/node": ^18.14.6
     serialport: ^10.5.0
     winston: ^3.8.2
-  checksum: 02b66f0b5681c31177dbef2937595e741192c4104b6e10480b0431c83a7f9b39b41bac6590e1e128eee1c1313741a7127fc43eeb8f76e686402b4f39877b40c9
+  checksum: b5706e870f0dfbc056b34ab6adf0444e23af52c4e31ad46f473724aa2e5c7b4944a0c666acb5a36ca2b0c8359625d60758b6a09816f0126aecdd5e974bf407ff
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:0.6.1":
-  version: 0.6.1
-  resolution: "@springfield/ham-radio-api@npm:0.6.1"
-  checksum: 21180b1851a625a5608583a704a93ec1948478f1e83106efc68c2dea2abae7699909f83f56f7579393c82fef9645b5c66b49e39c38bdf56bffea6044ed4c7ee9
+"@springfield/ham-radio-api@npm:0.8.0, @springfield/ham-radio-api@npm:^0.8.0":
+  version: 0.8.0
+  resolution: "@springfield/ham-radio-api@npm:0.8.0"
+  checksum: c48c3bcce544846c233f30b5f7ad0149b3873bebad029d1260b255453a22487c96efeb5811a9827766fce5a9b9a5fb21c09dcc485300417868f481a737b3d391
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:^0.7.0":
-  version: 0.7.0
-  resolution: "@springfield/ham-radio-api@npm:0.7.0"
-  checksum: ab31959c8223f590562ee2b88b5c78cdad3742aa5369b8f09001f1f1ab0120c864499af42fe6a8f93f2f7630b98bf38f46193df0dd0800f81a2ef4680e8b9ae4
-  languageName: node
-  linkType: hard
-
-"@springfield/ham-radio-driver-api@npm:0.6.0":
-  version: 0.6.0
-  resolution: "@springfield/ham-radio-driver-api@npm:0.6.0"
+"@springfield/ham-radio-driver-api@npm:0.8.0":
+  version: 0.8.0
+  resolution: "@springfield/ham-radio-driver-api@npm:0.8.0"
   dependencies:
-    "@springfield/ham-radio-api": 0.6.1
+    "@springfield/ham-radio-api": 0.8.0
     serialport: ^10.5.0
     winston: ^3.8.2
-  checksum: e1621549075900c754bc8ec5e06424e9f80dfa9ae55454a11681ecd7184009fb39a0762052e0b01180d7a951c5ddaf3d64a969370282e00242b7fef766e8cc8d
+  checksum: a55fa83f4f41055b68f561da9e9b55539eea7315c63dd4fa394f2cb90413ee27e7c46b95eea83b6647207c216a495a9f6ec6ed671e0a5a9194cf76e6d1b7ef55
   languageName: node
   linkType: hard
 
@@ -3140,8 +3133,8 @@ __metadata:
   dependencies:
     "@quasar/app-vite": 1.2.1
     "@quasar/extras": ^1.15.11
-    "@springfield/baofeng-driver": 3.0.2
-    "@springfield/ham-radio-api": ^0.7.0
+    "@springfield/baofeng-driver": 3.0.4
+    "@springfield/ham-radio-api": ^0.8.0
     "@types/node": 18.14.6
     "@typescript-eslint/eslint-plugin": 5.54.0
     "@typescript-eslint/parser": 5.54.0

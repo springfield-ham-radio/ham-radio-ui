@@ -1,12 +1,11 @@
 <template>
   <q-select class="col" outlined label="Manufacturer" v-model="manufacturer" :options="radioStore.manufacturers" option-label="name" />
-  <q-select class="col" outlined label="Model" v-model="model" :options="filteredModels" option-label="modelName" />
+  <q-select class="col" outlined label="Model" v-model="model" :options="filteredModels" option-label="name" />
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRadioStore } from 'src/stores/radio-store';
-import { emit } from 'process';
 
 const manufacturer = ref();
 const model = ref();
