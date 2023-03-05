@@ -40,5 +40,8 @@
     "npm": ">= 6.13.4",
     "yarn": ">= 1.21.1"
   },
-  "packageManager": "yarn@3.4.1"
+  "packageManager": "yarn@3.4.1",
+  "volta": {
+    "node": "18.14.2"
+  }
 }
