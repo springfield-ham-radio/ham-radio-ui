@@ -27,6 +27,7 @@
 import { onMounted, ref } from 'vue';
 import { RadioConnection, RadioProgram } from '@springfield/ham-radio-api';
 import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue';
+import { formatFrequency } from 'src/utils/frequency';
 
 const importing = ref(false);
 const program = ref<RadioProgram<void>>();
@@ -36,8 +37,8 @@ const radioConnection = ref<RadioConnection>();
 const columns = [
   { name: 'number', required: true, label: 'Number', align: 'left', field: (row) => row.channelNumber, sortable: true },
   { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.channelName, sortable: true },
-  { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => `${val / 1000000}` },
-  { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => `${val / 1000000}` },
+  { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => formatFrequency(val) },
+  { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => formatFrequency(val) },
   { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone, sortable: true },
   { name: 'rx-tone', required: true, label: 'RX Tone', align: 'left', field: (row) => row.radioChannel.receiveTone, sortable: true },
 ];

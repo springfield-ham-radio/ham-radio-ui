@@ -440,10 +440,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:0.6.1, @springfield/ham-radio-api@npm:^0.6.1":
+"@springfield/ham-radio-api@npm:0.6.1":
   version: 0.6.1
   resolution: "@springfield/ham-radio-api@npm:0.6.1"
   checksum: 21180b1851a625a5608583a704a93ec1948478f1e83106efc68c2dea2abae7699909f83f56f7579393c82fef9645b5c66b49e39c38bdf56bffea6044ed4c7ee9
+  languageName: node
+  linkType: hard
+
+"@springfield/ham-radio-api@npm:^0.7.0":
+  version: 0.7.0
+  resolution: "@springfield/ham-radio-api@npm:0.7.0"
+  checksum: ab31959c8223f590562ee2b88b5c78cdad3742aa5369b8f09001f1f1ab0120c864499af42fe6a8f93f2f7630b98bf38f46193df0dd0800f81a2ef4680e8b9ae4
   languageName: node
   linkType: hard
 
@@ -3134,7 +3141,7 @@ __metadata:
     "@quasar/app-vite": 1.2.1
     "@quasar/extras": ^1.15.11
     "@springfield/baofeng-driver": 3.0.2
-    "@springfield/ham-radio-api": ^0.6.1
+    "@springfield/ham-radio-api": ^0.7.0
     "@types/node": 18.14.6
     "@typescript-eslint/eslint-plugin": 5.54.0
     "@typescript-eslint/parser": 5.54.0
