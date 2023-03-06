@@ -7,7 +7,6 @@ import BaofengModule from '@springfield/baofeng-driver';
 import winston from 'winston';
 import { strict as assert } from 'assert';
 import { RadioConnection, RadioManufacturer, RadioModule } from '@springfield/ham-radio-api';
-import { v4 as uuidv4 } from 'uuid';
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
@@ -32,10 +31,9 @@ const manufacturers: RadioManufacturer[] = [];
 const module = new BaofengModule(logger);
 
 const manufacturer = module.getManufacturer();
-manufacturer.id = uuidv4();
 
 manufacturers.push(manufacturer);
-modules.set(manufacturer.id, module);
+modules.set(manufacturer.moduleId, module);
 
 function createWindow() {
   /**
@@ -76,8 +74,14 @@ function createWindow() {
     }
   });
 
-  ipcMain.on('getRadios', () => {
-    mainWindow?.webContents.send('radios', manufacturers);
+  ipcMain.on('getManufacturers', () => {
+    mainWindow?.webContents.send('manufacturers', manufacturers);
+  });
+
+  ipcMain.on('getModels', async (_event, moduleId: string) => {
+    const module = modules.get(moduleId);
+    assert(module);
+    mainWindow?.webContents.send('models', await module.getModels());
   });
 
   if (process.env.DEBUGGING) {

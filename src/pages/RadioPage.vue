@@ -25,7 +25,7 @@
           </q-card-actions>
         </q-card>
       </q-dialog>
-      <q-table v-if="program" title="Channels" :rows="program.channels" :columns="columns" row-key="name" />
+      <q-table v-if="program" title="Channels" :rows="program.channels" :columns="columns" row-key="name" dense :pagination="pagination" />
     </div>
   </q-page>
 </template>
@@ -40,6 +40,7 @@ const importing = ref(false);
 const program = ref<RadioProgram>();
 const progress = ref(0);
 const radioConnection = ref<RadioConnection>();
+const pagination = { rowsPerPage: 20};
 
 const columns = [
   { name: 'number', required: true, label: 'Number', align: 'left', field: (row) => row.channelNumber, sortable: true },
