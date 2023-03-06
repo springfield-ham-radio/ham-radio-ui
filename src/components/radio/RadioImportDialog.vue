@@ -15,25 +15,28 @@
         <serial-port-selector @port-selected="updateSerialPort"/>
       </q-card-section>
 
-      <q-card-actions align="right">
-        <q-btn flat label="Cancel" color="primary" v-close-popup />
-        <q-btn flat label="Import" color="primary" @click="importFromRadio" v-close-popup />
+      <q-card-actions class="row justify-between">
+        <q-btn label="Cancel" v-close-popup />
+        <q-btn label="Import" color="primary" :disable="!complete" @click="importFromRadio" v-close-popup />
       </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import RadioSelector from './RadioSelector.vue';
 import SerialPortSelector from './SerialPortSelector.vue';
 import { RadioConnection } from '@springfield/ham-radio-api';
 
-const emit = defineEmits(['radioSelected']);
+const emit = defineEmits(['importFromRadio']);
 
 const showDialog = ref(false);
-const radioConnection = ref<RadioConnection>({ serialPortPath: '', manufacturerId: '', model: 'UNKNOWN'});
+const radioConnection = ref<RadioConnection>({ serialPortPath: '', manufacturerId: '', model: ''});
 
+const complete = computed(() => {
+  return radioConnection.value.manufacturerId.length > 0 && radioConnection.value.model.length > 0 && radioConnection.value.serialPortPath.length > 0;
+});
 async function updateSerialPort(path: string) {
   radioConnection.value.serialPortPath = path;
   await window.serialport.reset(path);
@@ -48,7 +51,7 @@ function updateRadioModel(model: string) {
 };
 
 function importFromRadio() {
-  emit('radioSelected', radioConnection.value);
+  emit('importFromRadio', radioConnection.value);
 }
 
 </script>

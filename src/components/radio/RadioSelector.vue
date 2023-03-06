@@ -1,6 +1,6 @@
 <template>
   <q-select class="col" outlined label="Manufacturer" v-model="manufacturer" :options="radioStore.manufacturers" option-label="name" />
-  <q-select class="col" outlined label="Model" v-model="model" :options="models" />
+  <q-select class="col" outlined label="Model" v-model="model" :options="models" :disable="manufacturer == undefined"/>
 </template>
 
 <script setup lang="ts">

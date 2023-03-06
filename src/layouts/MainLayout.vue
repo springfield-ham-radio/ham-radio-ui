@@ -44,8 +44,6 @@ export default defineComponent({
   setup() {
     const leftDrawerOpen = ref(false);
     window.electronAPI.onRadios((_event: unknown, value: RadioManufacturer[]) => {
-      console.log('onRadios');
-      console.log(value);
       useRadioStore().manufacturers = value;
     });
 

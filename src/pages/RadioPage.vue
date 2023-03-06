@@ -8,7 +8,7 @@
             Save program to file
           </q-tooltip>
        </q-btn>
-        <radio-selection-dialog @radio-selected="importFromRadio"/>
+        <radio-import-dialog @import-from-radio="importFromRadio"/>
       </div>
     </div>
 
@@ -16,12 +16,12 @@
       <q-dialog v-model="importing">
         <q-card style="width: 500px">
           <q-card-section class="col items-center">
-            Importing from {{ radioConnection ? radioConnection.model.name : 'UNKNOWN' }}
+            Importing from {{ radioConnection?.model }}
             <q-linear-progress instant-feedback :value="progress" class="q-mt-md" />
           </q-card-section>
 
           <q-card-actions align="right">
-            <q-btn flat label="Cancel" color="primary" @click="cancelImport"  v-close-popup />
+            <q-btn label="Cancel" color="primary" @click="cancelImport"  v-close-popup />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { onMounted, ref, toRaw } from 'vue';
 import { RadioConnection, RadioProgram } from '@springfield/ham-radio-api';
-import RadioSelectionDialog from 'src/components/radio/RadioSelectionDialog.vue';
+import RadioImportDialog from 'src/components/radio/RadioImportDialog.vue';
 import { formatFrequency } from 'src/utils/frequency';
 
 const importing = ref(false);
