@@ -32,6 +32,8 @@
 </template>
 
 <script lang="ts">
+import { RadioManufacturer } from '@springfield/ham-radio-api';
+import { useRadioStore } from 'src/stores/radio-store';
 import { defineComponent, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -41,6 +43,13 @@ export default defineComponent({
 
   setup() {
     const leftDrawerOpen = ref(false);
+    window.electronAPI.onRadios((_event: unknown, value: RadioManufacturer[]) => {
+      console.log('onRadios');
+      console.log(value);
+      useRadioStore().manufacturers = value;
+    });
+
+    window.radio.getManufacturers();
 
     return {
       routes: useRouter().options.routes[0].children,

@@ -53,11 +53,11 @@ const columns = [
 function importFromRadio(connection: RadioConnection) {
   radioConnection.value = connection;
   importing.value = true;
-  window.radio.importFromRadio(connection.serialPortPath);
+  window.radio.importFromRadio(toRaw(connection));
 };
 
- function cancelImport() {
-   window.radio.cancelImport();
+function cancelImport() {
+  window.radio.cancelImport();
 };
 
 async function save() {

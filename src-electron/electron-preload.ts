@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('serialport', {
 });
 
 contextBridge.exposeInMainWorld('radio', {
+  getManufacturers: () => {
+    ipcRenderer.send('getRadios');
+  },
+
   importFromRadio: (path: string) => {
     ipcRenderer.send('importFromRadio', path);
   },
@@ -66,12 +70,13 @@ contextBridge.exposeInMainWorld('radio', {
     ipcRenderer.send('radioCancel');
   },
 
-  save: (program: RadioProgram<any>) => {
+  save: (program: RadioProgram) => {
     ipcRenderer.send('saveRadioProgram', program);
   },
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  onRadios: (callback) => ipcRenderer.on('radios', callback),
   onRenderRadioProgram: (callback) => ipcRenderer.on('renderRadioProgram', callback),
   onRadioProgressIndicator: (callback) => ipcRenderer.on('radioProgressIndicator', callback),
 });

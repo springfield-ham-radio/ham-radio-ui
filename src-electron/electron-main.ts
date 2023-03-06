@@ -3,9 +3,11 @@ import { ElectronRadioProgressIndicator } from './electron-radio-progress-indica
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import { BaofengDriver } from '@springfield/baofeng-driver';
+import BaofengModule from '@springfield/baofeng-driver';
 import winston from 'winston';
 import { strict as assert } from 'assert';
+import { RadioConnection, RadioManufacturer, RadioModule } from '@springfield/ham-radio-api';
+import { v4 as uuidv4 } from 'uuid';
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
@@ -23,7 +25,17 @@ const logger = winston.createLogger({
 });
 
 let mainWindow: BrowserWindow | undefined;
-const radioDriver = new BaofengDriver(logger);
+
+const modules = new Map<string, RadioModule>();
+const manufacturers: RadioManufacturer[] = [];
+
+const module = new BaofengModule(logger);
+
+const manufacturer = module.getManufacturer();
+manufacturer.id = uuidv4();
+
+manufacturers.push(manufacturer);
+modules.set(manufacturer.id, module);
 
 function createWindow() {
   /**
@@ -45,10 +57,13 @@ function createWindow() {
   mainWindow.loadURL(process.env.APP_URL);
   const radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
 
-  ipcMain.on('importFromRadio', async (_event, path) => {
+  ipcMain.on('importFromRadio', async (_event, connection: RadioConnection) => {
     assert(mainWindow);
     radioProgressIndicator?.reset();
-    const program = await radioDriver.importFromRadio(path, radioProgressIndicator);
+    const module = modules.get(connection.manufacturerId);
+    const driver = module?.getDriver(connection.model);
+    assert(driver);
+    const program = await driver.importFromRadio(connection.serialPortPath, radioProgressIndicator);
     mainWindow.webContents.send('renderRadioProgram', program || null);
   });
 
@@ -59,6 +74,10 @@ function createWindow() {
     if (results.filePath) {
       fs.writeFileSync(results.filePath, JSON.stringify(program, null, 2));
     }
+  });
+
+  ipcMain.on('getRadios', () => {
+    mainWindow?.webContents.send('radios', manufacturers);
   });
 
   if (process.env.DEBUGGING) {

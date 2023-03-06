@@ -1,6 +1,6 @@
 <template>
   <q-select class="col" outlined label="Manufacturer" v-model="manufacturer" :options="radioStore.manufacturers" option-label="name" />
-  <q-select class="col" outlined label="Model" v-model="model" :options="filteredModels" option-label="name" />
+  <q-select class="col" outlined label="Model" v-model="model" :options="models" />
 </template>
 
 <script setup lang="ts">
@@ -11,22 +11,23 @@ const manufacturer = ref();
 const model = ref();
 const radioStore = useRadioStore();
 
-const emit = defineEmits(['radioSelected']);
+const emit = defineEmits(['radioManufacturerSelected', 'radioModelSelected']);
 
-const filteredModels = computed(() => {
+const models = computed(() => {
   if (manufacturer.value == undefined) {
     return [];
   }
 
-  return radioStore.models.filter((model) => model.manufacturerId == manufacturer.value.id);
+  return manufacturer.value.models;
 });
 
-watch(manufacturer, () => {
+watch(manufacturer, (value) => {
   model.value = undefined;
+  emit('radioManufacturerSelected', value.id);
 });
 
 watch(model, (value) => {
-  emit('radioSelected', value);
+  emit('radioModelSelected', value);
 });
 
 </script>
