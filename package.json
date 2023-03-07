@@ -15,7 +15,7 @@
     "@quasar/extras": "^1.15.11",
     "@springfield/baofeng-driver": "3.2.2",
     "@springfield/ham-radio-api": "^0.12.0",
-    "pinia": "^2.0.32",
+    "pinia": "^2.0.33",
     "quasar": "^2.11.7",
     "serialport": "^10.5.0",
     "vue": "^3.2.47",
