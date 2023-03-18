@@ -61,16 +61,20 @@ function createWindow() {
     const module = modules.get(connection.manufacturerId);
     const driver = module?.getDriver(connection.model);
     assert(driver);
-    const program = await driver.importFromRadio(connection.serialPortPath, radioProgressIndicator);
-    mainWindow.webContents.send('renderRadioProgram', program || null);
+    const memory = await driver.readRadio(connection.serialPortPath, radioProgressIndicator);
+
+    if (memory != undefined) {
+      const program = driver.decodeMemory(memory);
+      mainWindow.webContents.send('renderRadioProgram', program || null);
+    }
   });
 
-  ipcMain.on('saveRadioProgram', async (_event, program) => {
+  ipcMain.on('saveRadioProgram', async (_event, program, memory) => {
     assert(mainWindow);
     const results = await dialog.showSaveDialog(mainWindow, {});
 
     if (results.filePath) {
-      fs.writeFileSync(results.filePath, JSON.stringify(program, null, 2));
+      fs.writeFileSync(results.filePath, JSON.stringify({ program, memory }, null, 2));
     }
   });
 

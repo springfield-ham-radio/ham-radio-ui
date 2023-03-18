@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.15.11",
-    "@springfield/baofeng-driver": "3.2.2",
-    "@springfield/ham-radio-api": "^0.13.0",
+    "@springfield/baofeng-driver": "3.3.2",
+    "@springfield/ham-radio-api": "^0.15.0",
     "pinia": "^2.0.33",
     "quasar": "^2.11.7",
     "serialport": "^10.5.0",
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@quasar/app-vite": "1.2.1",
-    "@types/node": "18.14.6",
+    "@types/node": "18.15.3",
     "@typescript-eslint/eslint-plugin": "5.54.1",
     "@typescript-eslint/parser": "5.54.1",
     "autoprefixer": "10.4.14",

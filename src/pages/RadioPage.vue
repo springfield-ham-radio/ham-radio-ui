@@ -47,8 +47,8 @@ const columns = [
   { name: 'name', required: true, label: 'Name', align: 'left', field: (row) => row.radioChannel.name, sortable: true },
   { name: 'tx', required: true, label: 'TX Frequency', align: 'left', field: (row) => row.radioChannel.transmitFrequency, sortable: true, format: val => formatFrequency(val) },
   { name: 'rx', required: true, label: 'RX Frequency', align: 'left', field: (row) => row.radioChannel.receiveFrequency, sortable: true, format: val => formatFrequency(val) },
-  { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone, sortable: true },
-  { name: 'rx-tone', required: true, label: 'RX Tone', align: 'left', field: (row) => row.radioChannel.receiveTone, sortable: true },
+  { name: 'tx-tone', required: true, label: 'TX Tone', align: 'left', field: (row) => row.radioChannel.transmitTone.tone, sortable: true },
+  { name: 'rx-tone', required: true, label: 'RX Tone', align: 'left', field: (row) => row.radioChannel.receiveTone.tone, sortable: true },
 ];
 
 function importFromRadio(connection: RadioConnection) {
