@@ -1497,10 +1497,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:18.15.3, @types/node@npm:^18.15.3":
-  version: 18.15.3
-  resolution: "@types/node@npm:18.15.3"
-  checksum: 31b1d92475a82c30de29aa6c0771b18a276552d191283b4423ba2d61b3f01159bf0d02576c0b7cc834b043997893800db6bb47f246083ed85aa45e79c80875d7
+"@types/node@npm:18.15.11":
+  version: 18.15.11
+  resolution: "@types/node@npm:18.15.11"
+  checksum: 977b4ad04708897ff0eb049ecf82246d210939c82461922d20f7d2dcfd81bbc661582ba3af28869210f7e8b1934529dcd46bff7d448551400f9d48b9d3bddec3
   languageName: node
   linkType: hard
 
@@ -1508,6 +1508,13 @@ __metadata:
   version: 16.18.10
   resolution: "@types/node@npm:16.18.10"
   checksum: 1b138616923e9a1c6d3806edf75714b605d2ec689357cdc675bc73816c508ff11b3c68df054b02a496c76654d8ed53add2e90816af39423431c73aa6eec06f29
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^18.15.3":
+  version: 18.15.3
+  resolution: "@types/node@npm:18.15.3"
+  checksum: 31b1d92475a82c30de29aa6c0771b18a276552d191283b4423ba2d61b3f01159bf0d02576c0b7cc834b043997893800db6bb47f246083ed85aa45e79c80875d7
   languageName: node
   linkType: hard
 
@@ -4120,7 +4127,7 @@ __metadata:
     "@quasar/extras": ^1.15.11
     "@springfield/baofeng-driver": 3.3.2
     "@springfield/ham-radio-api": ^0.15.0
-    "@types/node": 18.15.3
+    "@types/node": 18.15.11
     "@typescript-eslint/eslint-plugin": 5.54.1
     "@typescript-eslint/parser": 5.54.1
     autoprefixer: 10.4.14
@@ -4132,8 +4139,8 @@ __metadata:
     mongodb: ^5.1.0
     mongodb-memory-server: ^8.12.1
     pinia: ^2.0.33
-    prettier: 2.8.4
-    quasar: ^2.11.7
+    prettier: 2.8.7
+    quasar: ^2.11.9
     serialport: ^10.5.0
     typescript: 4.9.5
     vue: ^3.2.47
@@ -5699,12 +5706,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prettier@npm:2.8.4":
-  version: 2.8.4
-  resolution: "prettier@npm:2.8.4"
+"prettier@npm:2.8.7":
+  version: 2.8.7
+  resolution: "prettier@npm:2.8.7"
   bin:
     prettier: bin-prettier.js
-  checksum: c173064bf3df57b6d93d19aa98753b9b9dd7657212e33b41ada8e2e9f9884066bb9ca0b4005b89b3ab137efffdf8fbe0b462785aba20364798ff4303aadda57e
+  checksum: fdc8f2616f099f5f0d685907f4449a70595a0fc1d081a88919604375989e0d5e9168d6121d8cc6861f21990b31665828e00472544d785d5940ea08a17660c3a6
   languageName: node
   linkType: hard
 
@@ -5782,10 +5789,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"quasar@npm:^2.11.7":
-  version: 2.11.7
-  resolution: "quasar@npm:2.11.7"
-  checksum: 98d36fbdc67038ea594c6baf602240d8c4cfb0c30e85fa0bdd378f1edc27d9d6e4f8a6e7ebf1b569f82f5ce51c2d7db39b231bb555e3a3945943df0ab6897130
+"quasar@npm:^2.11.9":
+  version: 2.11.9
+  resolution: "quasar@npm:2.11.9"
+  checksum: d23c0f5ae072fc11afb95d25a8b3b3fa53fce48e780bbe80d1063f6b1e11e2267562517239cbb94f5fb7148398816244f5ffd8ea88baffe61387ca8eeab3c0ad
   languageName: node
   linkType: hard
 
