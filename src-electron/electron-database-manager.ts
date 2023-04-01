@@ -1,7 +1,6 @@
 import { WebContents, ipcMain } from 'electron';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { Db, MongoClient, ObjectId } from 'mongodb';
-import { Radio } from '@springfield/ham-radio-api';
+import { Db, MongoClient, ObjectId, UpdateResult } from 'mongodb';
 
 export interface DatabaseConfig {
   dbPath: string;
@@ -22,26 +21,24 @@ export class ElectronDatabaseManager {
   constructor(webContents: WebContents) {
     this.webContents = webContents;
 
-    ipcMain.on('data:find', (_event, type: string, id: string) => {});
-
-    ipcMain.on('data:getRadios', async () => {
-      webContents.send('data:radios', await this.getRadios());
+    ipcMain.on('data:create', async (_event, type: string, data: Omit<Model, 'id'>) => {
+      this.webContents.send('data:add', type, await this.create(type, data));
     });
 
-    ipcMain.on('data:addRadio', async (_event, radio: Omit<Radio, 'id'>) => {
-      const newRadio = await this.addRadio(radio);
-
-      if (newRadio != undefined) {
-        this.webContents.send('data:addRadio', newRadio);
-      }
+    ipcMain.on('data:find', async (_event, type: string, id: string) => {
+      this.webContents.send('data:add', id, type, await this.find(type, id));
     });
 
-    ipcMain.on('data:removeRadio', async (_event, id: string) => {
-      const result = await this.removeRadio(id);
+    ipcMain.on('data:findByQuery', async (_event, type: string, query: string) => {
+      this.webContents.send('data:add', type, await this.findByQuery(type, query));
+    });
 
-      if (result) {
-        this.webContents.send('data:removeRadio', id);
-      }
+    ipcMain.on('data:update', async (_event, type: string, data: Model) => {
+      this.webContents.send('data:update', type, data.id, await this.update(type, data));
+    });
+
+    ipcMain.on('data:delete', async (_event, type: string, id: string) => {
+      this.webContents.send('data:delete', type, id, await this.delete(type, id));
     });
   }
 
@@ -95,7 +92,7 @@ export class ElectronDatabaseManager {
     const items: Model[] = [];
 
     while (cursor?.hasNext()) {
-      const data = await cursor.next();
+      const data = (await cursor.next()) as any;
 
       if (data != null) {
         const id = data._id.toHexString();
@@ -105,6 +102,16 @@ export class ElectronDatabaseManager {
     }
 
     return items;
+  }
+
+  public async update(type: string, data: Model): Promise<boolean> {
+    const result = (await this.db?.collection(type).replaceOne({ _id: new ObjectId(data.id) }, data)) as UpdateResult;
+    return result.matchedCount == 1;
+  }
+
+  public async delete(type: string, id: string): Promise<boolean> {
+    const result = await this.db?.collection(type).deleteOne({ _id: new ObjectId(id) });
+    return result?.deletedCount == 1;
   }
 
   public async stop() {
