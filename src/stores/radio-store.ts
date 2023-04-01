@@ -5,6 +5,7 @@ export const useRadioStore = defineStore('radios', {
   state: () => ({
     manufacturers: [] as RadioManufacturer[],
     models: [] as RadioModel[],
+    dbUri: '',
   }),
   actions: {
     loadManufacturers() {

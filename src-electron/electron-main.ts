@@ -1,12 +1,10 @@
-import { app, BrowserWindow, nativeTheme, ipcMain, dialog } from 'electron';
-import { ElectronRadioProgressIndicator } from './electron-radio-progress-indicator';
+import { app, BrowserWindow, nativeTheme } from 'electron';
 import path from 'path';
 import os from 'os';
-import fs from 'fs';
-import BaofengModule from '@springfield/baofeng-driver';
 import winston from 'winston';
-import { strict as assert } from 'assert';
-import { RadioConnection, RadioManufacturer, RadioModule } from '@springfield/ham-radio-api';
+import { ElectronDatabaseManager } from './electron-database-manager';
+import { ElectronRadioManager } from './electron-radio-manager';
+import { ElectronModuleManager } from './electron-module-manager';
 
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform();
@@ -15,7 +13,9 @@ try {
   if (platform === 'win32' && nativeTheme.shouldUseDarkColors === true) {
     require('fs').unlinkSync(path.join(app.getPath('userData'), 'DevTools Extensions'));
   }
-} catch (_) {}
+} catch (error) {
+  // do nothing
+}
 
 const logger = winston.createLogger({
   level: 'debug',
@@ -25,17 +25,7 @@ const logger = winston.createLogger({
 
 let mainWindow: BrowserWindow | undefined;
 
-const modules = new Map<string, RadioModule>();
-const manufacturers: RadioManufacturer[] = [];
-
-const module = new BaofengModule(logger);
-
-const manufacturer = module.getManufacturer();
-
-manufacturers.push(manufacturer);
-modules.set(manufacturer.moduleId, module);
-
-function createWindow() {
+async function createWindow() {
   /**
    * Initial window options
    */
@@ -52,45 +42,17 @@ function createWindow() {
     },
   });
 
+  const databaseManager = new ElectronDatabaseManager(mainWindow.webContents);
+  databaseManager.start({ port: 27018, dbPath: '/Users/bhunt/db' });
+
+  const moduleManager = new ElectronModuleManager(mainWindow.webContents, logger);
+  new ElectronRadioManager(moduleManager, mainWindow);
+
   mainWindow.loadURL(process.env.APP_URL);
-  const radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
-
-  ipcMain.on('importFromRadio', async (_event, connection: RadioConnection) => {
-    assert(mainWindow);
-    radioProgressIndicator?.reset();
-    const module = modules.get(connection.manufacturerId);
-    const driver = module?.getDriver(connection.model);
-    assert(driver);
-    const memory = await driver.readRadio(connection.serialPortPath, radioProgressIndicator);
-
-    if (memory != undefined) {
-      const program = driver.decodeMemory(memory);
-      mainWindow.webContents.send('renderRadioProgram', program || null);
-    }
-  });
-
-  ipcMain.on('saveRadioProgram', async (_event, program, memory) => {
-    assert(mainWindow);
-    const results = await dialog.showSaveDialog(mainWindow, {});
-
-    if (results.filePath) {
-      fs.writeFileSync(results.filePath, JSON.stringify({ program, memory }, null, 2));
-    }
-  });
-
-  ipcMain.on('getManufacturers', () => {
-    mainWindow?.webContents.send('manufacturers', manufacturers);
-  });
-
-  ipcMain.on('getModels', async (_event, moduleId: string) => {
-    const module = modules.get(moduleId);
-    assert(module);
-    mainWindow?.webContents.send('models', await module.getModels());
-  });
 
   if (process.env.DEBUGGING) {
     // if on DEV or Production with debug enabled
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
   } else {
     // we're on production; no access to devtools pls
     mainWindow.webContents.on('devtools-opened', () => {

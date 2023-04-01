@@ -57,25 +57,29 @@ contextBridge.exposeInMainWorld('serialport', {
   },
 });
 
-contextBridge.exposeInMainWorld('radio', {
+contextBridge.exposeInMainWorld('db', {});
+
+contextBridge.exposeInMainWorld('modules', {
   getManufacturers: () => {
-    ipcRenderer.send('getManufacturers');
+    ipcRenderer.send('modules:getManufacturers');
   },
 
   getModels: (moduleId: string) => {
-    ipcRenderer.send('getModels', moduleId);
+    ipcRenderer.send('modules:getModels', moduleId);
   },
+});
 
+contextBridge.exposeInMainWorld('radio', {
   importFromRadio: (path: string) => {
-    ipcRenderer.send('importFromRadio', path);
+    ipcRenderer.send('radio:read', path);
   },
 
   cancelImport: () => {
-    ipcRenderer.send('radioCancel');
+    ipcRenderer.send('radio:cancel');
   },
 
   save: (program: RadioProgram) => {
-    ipcRenderer.send('saveRadioProgram', program);
+    ipcRenderer.send('radio:saveToFile', program);
   },
 });
 
@@ -84,4 +88,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onModels: (callback) => ipcRenderer.on('models', callback),
   onRenderRadioProgram: (callback) => ipcRenderer.on('renderRadioProgram', callback),
   onRadioProgressIndicator: (callback) => ipcRenderer.on('radioProgressIndicator', callback),
+  onDatabaseConnection: (callback) => ipcRenderer.on('databaseConnection', callback),
 });
