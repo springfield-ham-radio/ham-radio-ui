@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@quasar/app-vite": "1.2.1",
-    "@types/node": "18.15.11",
+    "@types/node": "18.19.67",
     "@typescript-eslint/eslint-plugin": "5.54.1",
     "@typescript-eslint/parser": "5.54.1",
     "autoprefixer": "10.4.20",
@@ -44,6 +44,6 @@
   },
   "packageManager": "yarn@3.5.0",
   "volta": {
-    "node": "18.15.0"
+    "node": "18.20.5"
   }
 }
