@@ -3119,16 +3119,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:23.1.4":
-  version: 23.1.4
-  resolution: "electron@npm:23.1.4"
+"electron@npm:23.3.13":
+  version: 23.3.13
+  resolution: "electron@npm:23.3.13"
   dependencies:
     "@electron/get": ^2.0.0
     "@types/node": ^16.11.26
     extract-zip: ^2.0.1
   bin:
     electron: cli.js
-  checksum: 42e167d5ae4e60b9a2bab191321645cb76b901d3c88dc7ae1551ecad2946aa4ebef9e49c347ca3db76032d84802d878a64a1123111579a270e3b8406c5a18b16
+  checksum: ada215540c2482471aa30293fe415da104e090a28d1fde6e720584bc28a6855a864d7cb977c60d560d0dc26d93c9f52febe33501b764bac21cf4725a299fa886
   languageName: node
   linkType: hard
 
@@ -4396,7 +4396,7 @@ __metadata:
     "@typescript-eslint/eslint-plugin": 5.54.1
     "@typescript-eslint/parser": 5.54.1
     autoprefixer: 10.4.20
-    electron: 23.1.4
+    electron: 23.3.13
     electron-rebuild: 3.2.9
     eslint: 8.35.0
     eslint-config-prettier: 8.7.0
