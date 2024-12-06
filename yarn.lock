@@ -1332,10 +1332,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@quasar/extras@npm:^1.16.14":
-  version: 1.16.14
-  resolution: "@quasar/extras@npm:1.16.14"
-  checksum: 30edd2d29762bbfe9b5c78eb91a53ef99376a180e8894c5086103920ccea952a03d0efb9d02c8947f81906cedd7567d31b91d5586eb8866ad1a3016e117cc5f2
+"@quasar/extras@npm:^1.16.15":
+  version: 1.16.15
+  resolution: "@quasar/extras@npm:1.16.15"
+  checksum: 067324243dcf73deefff115e6017e3e46a84c490c8f9d7b565e2f6308b0452f93c44b2a525c0ddeeb4085a851e17c1b4a03e848b46df960aee10befdb391737a
   languageName: node
   linkType: hard
 
@@ -4389,7 +4389,7 @@ __metadata:
   resolution: "ham-radio-ui@workspace:."
   dependencies:
     "@quasar/app-vite": 1.11.0
-    "@quasar/extras": ^1.16.14
+    "@quasar/extras": ^1.16.15
     "@springfield/baofeng-driver": 3.3.2
     "@springfield/ham-radio-api": ^0.17.0
     "@types/node": 18.19.67
