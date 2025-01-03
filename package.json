@@ -16,7 +16,7 @@
     "@springfield/baofeng-driver": "3.3.2",
     "@springfield/ham-radio-api": "^0.17.0",
     "mongodb": "^5.1.0",
-    "mongodb-memory-server": "^8.12.1",
+    "mongodb-memory-server": "^8.16.1",
     "pinia": "^2.0.33",
     "quasar": "^2.11.9",
     "serialport": "^10.5.0",
