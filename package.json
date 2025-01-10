@@ -17,7 +17,7 @@
     "@springfield/ham-radio-api": "^0.17.0",
     "mongodb": "^5.9.2",
     "mongodb-memory-server": "^8.16.1",
-    "pinia": "^2.0.33",
+    "pinia": "^2.3.0",
     "quasar": "^2.11.9",
     "serialport": "^10.5.0",
     "vue": "^3.2.47",
