@@ -18,7 +18,7 @@
     "mongodb": "^5.9.2",
     "mongodb-memory-server": "^8.16.1",
     "pinia": "^2.3.0",
-    "quasar": "^2.11.9",
+    "quasar": "^2.17.6",
     "serialport": "^10.5.0",
     "vue": "^3.2.47",
     "vue-router": "^4.1.6"
