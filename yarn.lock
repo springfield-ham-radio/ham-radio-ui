@@ -4504,7 +4504,7 @@ __metadata:
     mongodb-memory-server: ^8.16.1
     pinia: ^2.3.0
     prettier: 2.8.8
-    quasar: ^2.11.9
+    quasar: ^2.17.6
     serialport: ^10.5.0
     typescript: 4.9.5
     vue: ^3.2.47
@@ -6162,10 +6162,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"quasar@npm:^2.11.9":
-  version: 2.11.9
-  resolution: "quasar@npm:2.11.9"
-  checksum: d23c0f5ae072fc11afb95d25a8b3b3fa53fce48e780bbe80d1063f6b1e11e2267562517239cbb94f5fb7148398816244f5ffd8ea88baffe61387ca8eeab3c0ad
+"quasar@npm:^2.17.6":
+  version: 2.17.6
+  resolution: "quasar@npm:2.17.6"
+  checksum: e841da3c71573f6a1c3b24af0ac7103dcaa3f3c4671026a98f634f427704237b48c7c7beaefc5a65242113cc00cb733aeb5b595826e9e48d94ad4aae80d91e7f
   languageName: node
   linkType: hard
 
