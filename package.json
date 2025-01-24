@@ -12,7 +12,7 @@
     "test": "echo \"No test specified\" && exit 0"
   },
   "dependencies": {
-    "@quasar/extras": "^1.16.15",
+    "@quasar/extras": "^1.16.16",
     "@springfield/baofeng-driver": "3.3.2",
     "@springfield/ham-radio-api": "^0.17.0",
     "mongodb": "^5.9.2",
