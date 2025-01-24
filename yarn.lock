@@ -1725,12 +1725,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:18.19.71":
-  version: 18.19.71
-  resolution: "@types/node@npm:18.19.71"
+"@types/node@npm:18.19.74":
+  version: 18.19.74
+  resolution: "@types/node@npm:18.19.74"
   dependencies:
     undici-types: ~5.26.4
-  checksum: 4539d57234550df9b919ab9592ce9231e86c60d7703b4a56f12dd7dfcf28dfe44ab5cb7a6c3900a93a3850de126ae25758a94dd27eaaccc4e8acf7158cfa3a59
+  checksum: 99bbddd23b8c397ec82fe89706ae52fcf0647c32f858db776f8dbd8e67d193df58b7179b6879abce73f26b607616af45f352446aee0c6b05d575fbbd528c6d6c
   languageName: node
   linkType: hard
 
@@ -4480,7 +4480,7 @@ __metadata:
     "@quasar/extras": ^1.16.15
     "@springfield/baofeng-driver": 3.3.2
     "@springfield/ham-radio-api": ^0.17.0
-    "@types/node": 18.19.71
+    "@types/node": 18.19.74
     "@typescript-eslint/eslint-plugin": 5.54.1
     "@typescript-eslint/parser": 5.54.1
     autoprefixer: 10.4.20
