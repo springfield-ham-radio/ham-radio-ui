@@ -26,8 +26,8 @@
   "devDependencies": {
     "@quasar/app-vite": "1.11.0",
     "@types/node": "18.19.76",
-    "@typescript-eslint/eslint-plugin": "5.54.1",
-    "@typescript-eslint/parser": "5.54.1",
+    "@typescript-eslint/eslint-plugin": "5.62.0",
+    "@typescript-eslint/parser": "5.62.0",
     "autoprefixer": "10.4.20",
     "electron": "23.3.13",
     "electron-rebuild": "3.2.9",
