@@ -1,11 +1,11 @@
 <template>
   <Button icon="pi pi-upload" rounded @click="showDialog = true" v-tooltip="'Import from radio'" />
 
-  <Dialog v-model:visible="showDialog" modal :style="{ width: '500px' }" header="Import from Radio">
-    <div class="mb-4">
+  <Dialog v-model:visible="showDialog" modal :style="{ width: '600px' }" header="Import from Radio">
+    <div class="mb-8">
       Plug the programming cable for your radio into your computer. Select the serial port, then plug the programming cable into your radio.
     </div>
-    <div class="flex flex-column gap-3">
+    <div class="flex flex-col gap-3">
       <RadioSelector v-model="selectedRadio" />
       <SerialPortSelector v-model="selectedPort" />
     </div>
@@ -34,7 +34,9 @@ const selectedPort = ref<PortInfo>();
 const showDialog = ref(false);
 
 const complete = computed(() => {
-  return selectedRadio.value !== undefined && selectedPort.value !== undefined;
+  const value = selectedRadio.value !== undefined && selectedPort.value !== undefined;
+  console.log('complete', value);
+  return value;
 });
 
 watch(selectedRadio, (newVal) => {

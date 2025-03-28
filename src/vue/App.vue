@@ -14,5 +14,8 @@ import { PortInfo } from '@serialport/bindings-interface';
 
 const selectedPort = ref<PortInfo>();
 const selectedRadio = ref<RadioModel>();
-const selectedRadioConnection = ref<RadioConnection>();
+const selectedRadioConnection = ref<RadioConnection>({
+  modelId: undefined,
+  serialPortPath: undefined,
+});
 </script>

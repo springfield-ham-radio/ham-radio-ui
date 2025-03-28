@@ -1,7 +1,7 @@
 <template>
-  <div class="row items-center">
-    <Select v-model="model" :options="serialPorts" optionLabel="path" placeholder="Select a Serial Port" class="w-full md:w-56" />
-    <Button @click="refresh" icon="pi pi-refresh" v-tooltip="'Refresh serial ports'" />
+  <div class="flex flex-row items-center">
+    <Select class="grow" v-model="model" :options="serialPorts" optionLabel="path" placeholder="Select a Serial Port" />
+    <Button class="ml-2" @click="refresh" icon="pi pi-refresh" v-tooltip="'Refresh serial ports'" />
   </div>
 </template>
 
