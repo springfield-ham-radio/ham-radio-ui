@@ -8,10 +8,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { Button, Select } from 'primevue';
+import { PortInfo } from '@serialport/bindings-interface';
 
 const serialPorts = ref([]);
 
-const model = defineModel<{ path: string }>();
+const model = defineModel<PortInfo>();
 
 async function refresh() {
   serialPorts.value = await window.electron.serialPort.list();
