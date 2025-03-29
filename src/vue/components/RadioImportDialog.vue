@@ -13,7 +13,7 @@
     <template #footer>
       <div class="flex justify-content-end gap-2">
         <Button label="Cancel" @click="showDialog = false" />
-        <Button label="Import" :disabled="!complete" @click="showDialog = false" />
+        <Button label="Import" :disabled="!complete" @click="$emit('import', { modelId: selectedRadio.id, serialPortPath: selectedPort.path })" />
       </div>
     </template>
   </Dialog>
@@ -27,27 +27,17 @@ import { Button, Dialog } from 'primevue';
 import { RadioModel, RadioConnection } from '@springfield/ham-radio-api';
 import { PortInfo } from "@serialport/bindings-interface";
 
-const model = defineModel<RadioConnection>();
+defineEmits<{
+  (e: 'import', connection: RadioConnection): void
+}>();
+
 const selectedRadio = ref<RadioModel>();
 const selectedPort = ref<PortInfo>();
 
 const showDialog = ref(false);
 
 const complete = computed(() => {
-  const value = selectedRadio.value !== undefined && selectedPort.value !== undefined;
-  console.log('complete', value);
-  return value;
+  return selectedRadio.value !== undefined && selectedPort.value !== undefined;
 });
 
-watch(selectedRadio, (newVal) => {
-  if (newVal) {
-    model.value.modelId = newVal.id;
-  }
-});
-
-watch(selectedPort, (newVal) => {
-  if (newVal) {
-    model.value.serialPortPath = newVal.path;
-  }
-});
 </script>
