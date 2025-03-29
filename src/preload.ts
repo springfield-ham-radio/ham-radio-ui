@@ -3,6 +3,11 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
+contextBridge.exposeInMainWorld("modules", {
+  getModels: () => ipcRenderer.invoke("modules:getModels"),
+});
+
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld(

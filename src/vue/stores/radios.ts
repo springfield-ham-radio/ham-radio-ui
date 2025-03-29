@@ -5,7 +5,7 @@ export const useRadioStore = defineStore("radio-drivers", () => {
   const models: RadioModel[] = [];
 
   const initialize = async () => {
-    models.push(...await window.electron.radio.listModels());
+    models.push(...await window.modules.getModels());
   }
 
   return { models, initialize };

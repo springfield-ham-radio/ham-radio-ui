@@ -3,6 +3,7 @@ import path from 'node:path';
 import { SerialPort } from 'serialport';
 import BaofengModule from '@springfield/baofeng-driver';
 import { ConsoleTransport, LogLayer } from 'loglayer';
+import { RadioModuleManager } from './electron/radio-module-manager';
 
 // import started from 'electron-squirrel-startup';
 
@@ -106,6 +107,7 @@ app.on('activate', () => {
   }
 });
 
+new RadioModuleManager(logger);
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
