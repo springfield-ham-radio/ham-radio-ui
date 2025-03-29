@@ -1,8 +1,8 @@
 {
-  "name": "my-app",
-  "productName": "my-app",
+  "name": "@springfield/ham-radio-ui",
+  "productName": "Ham Radio",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Ham radio management application",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",

@@ -2482,6 +2482,46 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@springfield/ham-radio-ui@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@springfield/ham-radio-ui@workspace:."
+  dependencies:
+    "@electron-forge/cli": "npm:^7.8.0"
+    "@electron-forge/maker-deb": "npm:^7.8.0"
+    "@electron-forge/maker-rpm": "npm:^7.8.0"
+    "@electron-forge/maker-squirrel": "npm:^7.8.0"
+    "@electron-forge/maker-zip": "npm:^7.8.0"
+    "@electron-forge/plugin-auto-unpack-natives": "npm:^7.8.0"
+    "@electron-forge/plugin-fuses": "npm:^7.8.0"
+    "@electron-forge/plugin-vite": "npm:^7.8.0"
+    "@electron/fuses": "npm:^1.8.0"
+    "@primeuix/themes": "npm:^1.0.0"
+    "@springfield/baofeng-driver": "npm:^6.0.2"
+    "@springfield/ham-radio-api": "npm:^2.0.0"
+    "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
+    "@typescript-eslint/parser": "npm:^5.62.0"
+    "@vitejs/plugin-vue": "npm:^5.2.3"
+    "@vueuse/electron": "npm:^13.0.0"
+    autoprefixer: "npm:^10.4.21"
+    electron: "npm:35.1.2"
+    electron-squirrel-startup: "npm:^1.0.1"
+    eslint: "npm:^8.57.1"
+    eslint-plugin-import: "npm:^2.31.0"
+    loglayer: "npm:^6.3.2"
+    pinia: "npm:^3.0.1"
+    postcss: "npm:^8.5.3"
+    primeicons: "npm:^7.0.0"
+    primevue: "npm:^4.3.3"
+    serialport: "npm:^13.0.0"
+    tailwindcss: "npm:3"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:~4.5.5"
+    vite: "npm:^6.2.3"
+    vite-plugin-vue-devtools: "npm:^7.7.2"
+    vue: "npm:^3.5.13"
+  languageName: unknown
+  linkType: soft
+
 "@szmarczak/http-timer@npm:^4.0.5":
   version: 4.0.6
   resolution: "@szmarczak/http-timer@npm:4.0.6"
@@ -8215,46 +8255,6 @@ __metadata:
   checksum: 10c0/2cf48a2087175c60c8dcdbc619908b49c07f7adcfc37d29236b0c5c612d6204f789104c98cc44d38acab7b3c96f4a3ec2cfdc4934d0738d876dbefa2a12c69f4
   languageName: node
   linkType: hard
-
-"my-app@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "my-app@workspace:."
-  dependencies:
-    "@electron-forge/cli": "npm:^7.8.0"
-    "@electron-forge/maker-deb": "npm:^7.8.0"
-    "@electron-forge/maker-rpm": "npm:^7.8.0"
-    "@electron-forge/maker-squirrel": "npm:^7.8.0"
-    "@electron-forge/maker-zip": "npm:^7.8.0"
-    "@electron-forge/plugin-auto-unpack-natives": "npm:^7.8.0"
-    "@electron-forge/plugin-fuses": "npm:^7.8.0"
-    "@electron-forge/plugin-vite": "npm:^7.8.0"
-    "@electron/fuses": "npm:^1.8.0"
-    "@primeuix/themes": "npm:^1.0.0"
-    "@springfield/baofeng-driver": "npm:^6.0.2"
-    "@springfield/ham-radio-api": "npm:^2.0.0"
-    "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
-    "@typescript-eslint/parser": "npm:^5.62.0"
-    "@vitejs/plugin-vue": "npm:^5.2.3"
-    "@vueuse/electron": "npm:^13.0.0"
-    autoprefixer: "npm:^10.4.21"
-    electron: "npm:35.1.2"
-    electron-squirrel-startup: "npm:^1.0.1"
-    eslint: "npm:^8.57.1"
-    eslint-plugin-import: "npm:^2.31.0"
-    loglayer: "npm:^6.3.2"
-    pinia: "npm:^3.0.1"
-    postcss: "npm:^8.5.3"
-    primeicons: "npm:^7.0.0"
-    primevue: "npm:^4.3.3"
-    serialport: "npm:^13.0.0"
-    tailwindcss: "npm:3"
-    ts-node: "npm:^10.9.2"
-    typescript: "npm:~4.5.5"
-    vite: "npm:^6.2.3"
-    vite-plugin-vue-devtools: "npm:^7.7.2"
-    vue: "npm:^3.5.13"
-  languageName: unknown
-  linkType: soft
 
 "mz@npm:^2.4.0, mz@npm:^2.7.0":
   version: 2.7.0

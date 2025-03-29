@@ -15,5 +15,11 @@ contextBridge.exposeInMainWorld(
       reset: (path: string) => ipcRenderer.invoke('reset-serialport', path),
       list: () => ipcRenderer.invoke('list-ports'),
     },
+
+    dialog: {
+      onShowImportDialog: (callback: () => void) => {
+        ipcRenderer.on('show-import-dialog', callback);
+      },
+    },
   }
 );
