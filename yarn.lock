@@ -2442,9 +2442,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/baofeng-driver@npm:^6.0.2":
-  version: 6.0.2
-  resolution: "@springfield/baofeng-driver@npm:6.0.2"
+"@springfield/baofeng-driver@npm:^6.0.4":
+  version: 6.0.4
+  resolution: "@springfield/baofeng-driver@npm:6.0.4"
   dependencies:
     "@commitlint/cli": "npm:^19.8.0"
     "@commitlint/config-conventional": "npm:^19.8.0"
@@ -2452,33 +2452,33 @@ __metadata:
     "@semantic-release/git": "npm:^10.0.1"
     "@semantic-release/gitlab": "npm:^13.2.4"
     "@serialport/parser-byte-length": "npm:^13.0.0"
-    "@springfield/ham-radio-api": "npm:2.0.0"
-    "@springfield/ham-radio-driver-utils": "npm:^4.0.1"
+    "@springfield/ham-radio-api": "npm:3.0.0"
+    "@springfield/ham-radio-driver-utils": "npm:^4.0.3"
     husky: "npm:^9.1.7"
-    loglayer: "npm:^6.3.2"
+    loglayer: "npm:^6.3.3"
     semantic-release: "npm:23.1.1"
     semantic-release-yarn: "npm:^3.0.2"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/b6ac8422c48febe4d98add476ea9d1facf10697e2390319fcf3aad7e44b71c1d7b40ef8a17b21d94a38d41e0a05cbcfc290511c2c063b9de5a0d33a83855777b
+  checksum: 10c0/bd160ca95676d08512d852bc501ab6eed51b8ae84d1e5c971c1798fcd8e03e49b4e0d796150b2822944e3544d4f52eac0d1c128ff3fa34aeb177219481504d8c
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:2.0.0, @springfield/ham-radio-api@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "@springfield/ham-radio-api@npm:2.0.0"
-  checksum: 10c0/9dfeb12664bcd19005deda653265af18e29995df8f48c511604eb932788300536a915c70de464e178a46c8e5f8c2a7e0a7e650b4c7e698a6cecbc1a30f733569
+"@springfield/ham-radio-api@npm:3.0.0, @springfield/ham-radio-api@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "@springfield/ham-radio-api@npm:3.0.0"
+  checksum: 10c0/46b9b1229d74c1eab821cfe087094d631913494929363b9442da3462dda5747645445f659d334c037b1c676972dcf3d8dbed397b6a532139728feecfad77cb03
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver-utils@npm:^4.0.1":
-  version: 4.0.1
-  resolution: "@springfield/ham-radio-driver-utils@npm:4.0.1"
+"@springfield/ham-radio-driver-utils@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "@springfield/ham-radio-driver-utils@npm:4.0.3"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^2.0.0"
-    loglayer: "npm:^6.3.2"
+    "@springfield/ham-radio-api": "npm:^3.0.0"
+    loglayer: "npm:^6.3.3"
     serialport: "npm:^13.0.0"
     sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/4657e314eecf8dd6fc08184d75c08f2400c036d8be5990ff4a790e6593242185a0b5e1f2358d829f0ffd6a666191c3a512413df5a4cfec396fa4fbfb9d3cab1c
+  checksum: 10c0/7c8af311af91f253fc7924559e0f4596d5e5a21f4e54672bdd765fe9293845377379f574d25e4de5477d6ac275bc3f4b9cac64a98f3759455198542221fbf7e4
   languageName: node
   linkType: hard
 
@@ -2496,8 +2496,8 @@ __metadata:
     "@electron-forge/plugin-vite": "npm:^7.8.0"
     "@electron/fuses": "npm:^1.8.0"
     "@primeuix/themes": "npm:^1.0.0"
-    "@springfield/baofeng-driver": "npm:^6.0.2"
-    "@springfield/ham-radio-api": "npm:^2.0.0"
+    "@springfield/baofeng-driver": "npm:^6.0.4"
+    "@springfield/ham-radio-api": "npm:^3.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
     "@typescript-eslint/parser": "npm:^5.62.0"
     "@vitejs/plugin-vue": "npm:^5.2.3"
@@ -2507,15 +2507,15 @@ __metadata:
     electron-squirrel-startup: "npm:^1.0.1"
     eslint: "npm:^8.57.1"
     eslint-plugin-import: "npm:^2.31.0"
-    loglayer: "npm:^6.3.2"
+    loglayer: "npm:^6.3.3"
     pinia: "npm:^3.0.1"
     postcss: "npm:^8.5.3"
     primeicons: "npm:^7.0.0"
     primevue: "npm:^4.3.3"
     serialport: "npm:^13.0.0"
-    tailwindcss: "npm:3"
+    tailwindcss: "npm:3.4.17"
     ts-node: "npm:^10.9.2"
-    typescript: "npm:~4.5.5"
+    typescript: "npm:~5.8.2"
     vite: "npm:^6.2.3"
     vite-plugin-vue-devtools: "npm:^7.7.2"
     vue: "npm:^3.5.13"
@@ -7749,15 +7749,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"loglayer@npm:^6.3.2":
-  version: 6.3.2
-  resolution: "loglayer@npm:6.3.2"
+"loglayer@npm:^6.3.3":
+  version: 6.3.3
+  resolution: "loglayer@npm:6.3.3"
   dependencies:
     "@loglayer/context-manager": "npm:1.0.4"
     "@loglayer/plugin": "npm:2.0.4"
     "@loglayer/shared": "npm:2.2.1"
     "@loglayer/transport": "npm:2.1.1"
-  checksum: 10c0/8f8683e21735b6b8428c93068a2d0391ee979e469765ba593c720a3069a2525868cc9ff7c4e2bb7bdcb97d88628205a9d3a9df58f6ae46be449dbf0817eeffb4
+  checksum: 10c0/4b33f5a53233301e960a01a556f09f1881e6080071a9f901af74eec790f4f14606cdee74cf95ad8f28c1741221d8761c669737a0359f3260d7d5212b7415d14d
   languageName: node
   linkType: hard
 
@@ -11092,7 +11092,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tailwindcss@npm:3":
+"tailwindcss@npm:3.4.17":
   version: 3.4.17
   resolution: "tailwindcss@npm:3.4.17"
   dependencies:
@@ -11530,23 +11530,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:~4.5.5":
-  version: 4.5.5
-  resolution: "typescript@npm:4.5.5"
+"typescript@npm:~5.8.2":
+  version: 5.8.2
+  resolution: "typescript@npm:5.8.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/ac15b92f3dcd9a4233cab288a913ccbd96729fc488181396fa93c0297ccef3cd3c2f9a7a63340efb0d07bff3d5026028fc81b9c1ef08076029e057081eb5884b
+  checksum: 10c0/5c4f6fbf1c6389b6928fe7b8fcd5dc73bb2d58cd4e3883f1d774ed5bd83b151cbac6b7ecf11723de56d4676daeba8713894b1e9af56174f2f9780ae7848ec3c6
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A~4.5.5#optional!builtin<compat/typescript>":
-  version: 4.5.5
-  resolution: "typescript@patch:typescript@npm%3A4.5.5#optional!builtin<compat/typescript>::version=4.5.5&hash=f1b8ea"
+"typescript@patch:typescript@npm%3A~5.8.2#optional!builtin<compat/typescript>":
+  version: 5.8.2
+  resolution: "typescript@patch:typescript@npm%3A5.8.2#optional!builtin<compat/typescript>::version=5.8.2&hash=5786d5"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/c699912602518eca36f101f61492608733da8305ba93a82291fbb29508da56e360b10f35f56fd9a53406db9ea2c261d30efd4ec1d9253ff45fdb5541b9d0381c
+  checksum: 10c0/5448a08e595cc558ab321e49d4cac64fb43d1fa106584f6ff9a8d8e592111b373a995a1d5c7f3046211c8a37201eb6d0f1566f15cdb7a62a5e3be01d087848e2
   languageName: node
   linkType: hard
 

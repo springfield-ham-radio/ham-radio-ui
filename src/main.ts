@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import { SerialPort } from 'serialport';
-import BaofengModule from '@springfield/baofeng-driver';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { RadioModuleManager } from './electron/radio-module-manager';
+import { RadioManager } from './electron/radio-manager';
 
 // import started from 'electron-squirrel-startup';
 
@@ -16,6 +16,7 @@ const logger = new LogLayer({
   transport: [
     new ConsoleTransport({
       logger: console,
+      level: 'debug',
     }),
   ],
 });
@@ -29,6 +30,8 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  new RadioManager(new RadioModuleManager(logger), mainWindow, logger);
 
   // Create the application menu
   const template = [
@@ -107,8 +110,6 @@ app.on('activate', () => {
   }
 });
 
-new RadioModuleManager(logger);
-
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 ipcMain.handle("list-ports", async () => {
@@ -129,10 +130,4 @@ ipcMain.handle("reset-serialport", async (_, path: string) => {
     console.error("Error resetting serial port:", error);
     throw error;
   }
-});
-
-const baofengModule = new BaofengModule(logger);
-
-ipcMain.handle("list-radio-models", () => {
-  return baofengModule.getModels();
 });

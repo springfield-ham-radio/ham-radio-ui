@@ -20,7 +20,6 @@ export class RadioModuleManager {
 
     ipcMain.handle("modules:getModels", () => {
       const models = Array.from(this.radioModelsById.values());
-      console.log("getModels main", models);
       return models;
     });
 

@@ -22,10 +22,8 @@ import { computed, ref, onMounted } from 'vue';
 import RadioSelector from './RadioSelector.vue';
 import SerialPortSelector from './SerialPortSelector.vue';
 import { Button, Dialog } from 'primevue';
-import { RadioModel, RadioConnection } from '@springfield/ham-radio-api';
+import { RadioConnection, RadioModel } from '@springfield/ham-radio-api';
 import { PortInfo } from "@serialport/bindings-interface";
-
-const emit =defineEmits<{ (e: 'import', connection: RadioConnection): void }>();
 
 const selectedRadio = ref<RadioModel>();
 const selectedPort = ref<PortInfo>();
@@ -38,7 +36,12 @@ const complete = computed(() => {
 
 const importFromRadio = () => {
   showDialog.value = false;
-  emit('import', { modelId: selectedRadio.value?.id, serialPortPath: selectedPort.value?.path });
+  const connection: RadioConnection = {
+    serialPortPath: selectedPort.value.path,
+    model: { ...selectedRadio.value },
+  };
+
+  window.radio.importFromRadio(connection);
 }
 
 onMounted(() => {
