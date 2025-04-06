@@ -1,9 +1,14 @@
 import { RadioConnection, RadioModel } from '@springfield/ham-radio-api';
 
 interface ElectronAPI {
-  radio: {
-    listModels: () => Promise<RadioModel[]>;
-  },
+  dialog: {
+    onShowImportDialog: (callback: () => void) => void;
+    onShowImportProgressDialog: (callback: () => void) => void;
+    onHideImportProgressDialog: (callback: () => void) => void;
+    onRadioProgressIndicator: (
+      callback: (event: IpcRendererEvent, value: number) => void
+    ) => void;
+  };
 
   serialPort: {
     reset: (path: string) => Promise<void>;

@@ -21,7 +21,11 @@ export class RadioManager {
 
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
       this.logger.withMetadata(connection).debug('ipcMain received radio:read message');
-      return this.read(connection);
+      this.mainWindow.webContents.send("show-import-progress-dialog");
+      const result = await this.read(connection);
+      this.mainWindow.webContents.send("hide-import-progress-dialog");
+
+      return result;
     });
 
     ipcMain.handle("radio:saveToFile", async (_event, memory) => {
@@ -34,9 +38,9 @@ export class RadioManager {
     });
   }
 
-  private async read(connection: RadioConnection) {
+  private async read(connection: RadioConnection): Promise<RadioMemory | string> {
     this.radioProgressIndicator.reset();
-    const module = this.moduleManager.getRadioModule(connection.model.moduleId);
+    const module = this.moduleManager.getRadioModule(connection.model.module);
     const driver = module?.getDriver(connection.model.id);
 
     if (driver == undefined) {

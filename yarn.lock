@@ -1855,6 +1855,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@primeuix/styled@npm:^0.5.1":
+  version: 0.5.1
+  resolution: "@primeuix/styled@npm:0.5.1"
+  dependencies:
+    "@primeuix/utils": "npm:^0.5.3"
+  checksum: 10c0/771b6600a63ada880808b76975de39cc5cb7f2b942d7832f5eb224e292e4da9475732864c8894d55a4ba205f2a694c1f731248e2aa157ee27528830e1d724845
+  languageName: node
+  linkType: hard
+
 "@primeuix/styles@npm:^1.0.0":
   version: 1.0.0
   resolution: "@primeuix/styles@npm:1.0.0"
@@ -1864,12 +1873,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@primeuix/themes@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "@primeuix/themes@npm:1.0.0"
+"@primeuix/themes@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "@primeuix/themes@npm:1.0.1"
   dependencies:
-    "@primeuix/styled": "npm:^0.5.0"
-  checksum: 10c0/9f503b282bcc14a612094efb6792714d5719fa301a1f1bc9e44efd7a43e89761c97846852d676781610f3c26f90b7efe00ab7c48d8cb5ff1a957919b7c45f059
+    "@primeuix/styled": "npm:^0.5.1"
+  checksum: 10c0/bbb252d6e758bc6ecfa85b681fba2fc0d34fa32b5fa609ece3e94d0381f16c524868f7441d530555a26a02eb7c7c1c8e99d9241468579e0d21cddd117ff441ab
   languageName: node
   linkType: hard
 
@@ -1877,6 +1886,13 @@ __metadata:
   version: 0.5.2
   resolution: "@primeuix/utils@npm:0.5.2"
   checksum: 10c0/ff7a1b69b9bb15059cd20f15d3419a7aa866db9398336d95c95abe3c7ed45788baab9cd28316c6b7a0c49e8d68a565aad4588f1cd152ccd70552fa7cf945d6d4
+  languageName: node
+  linkType: hard
+
+"@primeuix/utils@npm:^0.5.3":
+  version: 0.5.3
+  resolution: "@primeuix/utils@npm:0.5.3"
+  checksum: 10c0/a856aedcb07ca6f8301c2d86ce28a38c0552fd938a0a839cf39230043ede9233349206a9eaf85aa9cef08d8af1aae5549d6a3f86bdb14a79c0e9e11883d24c65
   languageName: node
   linkType: hard
 
@@ -2442,9 +2458,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/baofeng-driver@npm:^6.0.4":
-  version: 6.0.4
-  resolution: "@springfield/baofeng-driver@npm:6.0.4"
+"@springfield/baofeng-driver@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "@springfield/baofeng-driver@npm:7.0.0"
   dependencies:
     "@commitlint/cli": "npm:^19.8.0"
     "@commitlint/config-conventional": "npm:^19.8.0"
@@ -2452,33 +2468,36 @@ __metadata:
     "@semantic-release/git": "npm:^10.0.1"
     "@semantic-release/gitlab": "npm:^13.2.4"
     "@serialport/parser-byte-length": "npm:^13.0.0"
-    "@springfield/ham-radio-api": "npm:3.0.0"
-    "@springfield/ham-radio-driver-utils": "npm:^4.0.3"
+    "@springfield/ham-radio-api": "npm:7.0.0"
+    "@springfield/ham-radio-driver-utils": "npm:^5.0.2"
     husky: "npm:^9.1.7"
     loglayer: "npm:^6.3.3"
     semantic-release: "npm:23.1.1"
     semantic-release-yarn: "npm:^3.0.2"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/bd160ca95676d08512d852bc501ab6eed51b8ae84d1e5c971c1798fcd8e03e49b4e0d796150b2822944e3544d4f52eac0d1c128ff3fa34aeb177219481504d8c
+  checksum: 10c0/26bad76aa4d195c21067c7c29264443b0aebcaa2b287b371d355b6afc8b034b4eee1b0f2b1046468864ddd98246c8901965e2594ed0bfae5117fd3ee3877d17e
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:3.0.0, @springfield/ham-radio-api@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@springfield/ham-radio-api@npm:3.0.0"
-  checksum: 10c0/46b9b1229d74c1eab821cfe087094d631913494929363b9442da3462dda5747645445f659d334c037b1c676972dcf3d8dbed397b6a532139728feecfad77cb03
-  languageName: node
-  linkType: hard
-
-"@springfield/ham-radio-driver-utils@npm:^4.0.3":
-  version: 4.0.3
-  resolution: "@springfield/ham-radio-driver-utils@npm:4.0.3"
+"@springfield/ham-radio-api@npm:7.0.0, @springfield/ham-radio-api@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "@springfield/ham-radio-api@npm:7.0.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^3.0.0"
+    ts-brand: "npm:^0.2.0"
+  checksum: 10c0/caa32f099fa7d6e69b3bc818709487f46e34b2155ff7e116f1fd13b74fcc2df9868f1a7980d02af6167b0112d1b05f759294e45e4b594fa029f829be7ae2fee4
+  languageName: node
+  linkType: hard
+
+"@springfield/ham-radio-driver-utils@npm:^5.0.2":
+  version: 5.0.2
+  resolution: "@springfield/ham-radio-driver-utils@npm:5.0.2"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^7.0.0"
+    fishery: "npm:^2.2.3"
     loglayer: "npm:^6.3.3"
     serialport: "npm:^13.0.0"
     sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/7c8af311af91f253fc7924559e0f4596d5e5a21f4e54672bdd765fe9293845377379f574d25e4de5477d6ac275bc3f4b9cac64a98f3759455198542221fbf7e4
+  checksum: 10c0/ddfd54b4d577979d6bd7c6aeebe5f6eaa862c67a490fd385eab2098ea04fabe810fc5fdba1eea26c04b9d5a5e1c0aae00d064198bb38529c9f707651255bdb65
   languageName: node
   linkType: hard
 
@@ -2495,15 +2514,15 @@ __metadata:
     "@electron-forge/plugin-fuses": "npm:^7.8.0"
     "@electron-forge/plugin-vite": "npm:^7.8.0"
     "@electron/fuses": "npm:^1.8.0"
-    "@primeuix/themes": "npm:^1.0.0"
-    "@springfield/baofeng-driver": "npm:^6.0.4"
-    "@springfield/ham-radio-api": "npm:^3.0.0"
+    "@primeuix/themes": "npm:^1.0.1"
+    "@springfield/baofeng-driver": "npm:^7.0.0"
+    "@springfield/ham-radio-api": "npm:^7.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
     "@typescript-eslint/parser": "npm:^5.62.0"
     "@vitejs/plugin-vue": "npm:^5.2.3"
     "@vueuse/electron": "npm:^13.0.0"
     autoprefixer: "npm:^10.4.21"
-    electron: "npm:35.1.2"
+    electron: "npm:35.1.4"
     electron-squirrel-startup: "npm:^1.0.1"
     eslint: "npm:^8.57.1"
     eslint-plugin-import: "npm:^2.31.0"
@@ -2515,8 +2534,8 @@ __metadata:
     serialport: "npm:^13.0.0"
     tailwindcss: "npm:3.4.17"
     ts-node: "npm:^10.9.2"
-    typescript: "npm:~5.8.2"
-    vite: "npm:^6.2.3"
+    typescript: "npm:~5.8.3"
+    vite: "npm:^6.2.5"
     vite-plugin-vue-devtools: "npm:^7.7.2"
     vue: "npm:^3.5.13"
   languageName: unknown
@@ -4739,16 +4758,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:35.1.2":
-  version: 35.1.2
-  resolution: "electron@npm:35.1.2"
+"electron@npm:35.1.4":
+  version: 35.1.4
+  resolution: "electron@npm:35.1.4"
   dependencies:
     "@electron/get": "npm:^2.0.0"
     "@types/node": "npm:^22.7.7"
     extract-zip: "npm:^2.0.1"
   bin:
     electron: cli.js
-  checksum: 10c0/2cd8adb70f669d28fbb1c7dddeb2cbe32b970950f13310b518cfa6aa926eaa6647514ed44fda4af95577c648353a4dd3a3a398bfb8a5f31fcbe48054241c2d14
+  checksum: 10c0/260e206882c96c175165f8c941598e4434534b325af8974ba7412343a4c26b462ff1661cfd463b10b5d8cb09f3989a6f00fdfdb1f41bc8ee3cc9d616f978b6b9
   languageName: node
   linkType: hard
 
@@ -5628,6 +5647,15 @@ __metadata:
     semver-regex: "npm:^4.0.5"
     super-regex: "npm:^1.0.0"
   checksum: 10c0/1e38da3058f389c8657cd6f47fbcf12412051e7d2d14017594b8ca54ec239d19058f2d9dde80f27415726ab62822e32e3ed0a81141cfc206a3b8c8f0d87a5732
+  languageName: node
+  linkType: hard
+
+"fishery@npm:^2.2.3":
+  version: 2.2.3
+  resolution: "fishery@npm:2.2.3"
+  dependencies:
+    lodash.mergewith: "npm:^4.6.2"
+  checksum: 10c0/ffa8aa5074d7bebf009932c202208a7423e7ba05706af885f9799a87d7e76c6b124d7efb1c3cd742e093756f1e35578889dbc77df44c378ab386b5e7d1707726
   languageName: node
   linkType: hard
 
@@ -11330,6 +11358,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ts-brand@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "ts-brand@npm:0.2.0"
+  checksum: 10c0/f568af7c613ab24c0e8e362959c9df249e37477b63a143785e8ea378b6c6a2fcfad1ff286af874f02a1692f18157fb289e5fc6ae3a4b069a253eaf4fc5b4ed6d
+  languageName: node
+  linkType: hard
+
 "ts-interface-checker@npm:^0.1.9":
   version: 0.1.13
   resolution: "ts-interface-checker@npm:0.1.13"
@@ -11530,23 +11565,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:~5.8.2":
-  version: 5.8.2
-  resolution: "typescript@npm:5.8.2"
+"typescript@npm:~5.8.3":
+  version: 5.8.3
+  resolution: "typescript@npm:5.8.3"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/5c4f6fbf1c6389b6928fe7b8fcd5dc73bb2d58cd4e3883f1d774ed5bd83b151cbac6b7ecf11723de56d4676daeba8713894b1e9af56174f2f9780ae7848ec3c6
+  checksum: 10c0/5f8bb01196e542e64d44db3d16ee0e4063ce4f3e3966df6005f2588e86d91c03e1fb131c2581baf0fb65ee79669eea6e161cd448178986587e9f6844446dbb48
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A~5.8.2#optional!builtin<compat/typescript>":
-  version: 5.8.2
-  resolution: "typescript@patch:typescript@npm%3A5.8.2#optional!builtin<compat/typescript>::version=5.8.2&hash=5786d5"
+"typescript@patch:typescript@npm%3A~5.8.3#optional!builtin<compat/typescript>":
+  version: 5.8.3
+  resolution: "typescript@patch:typescript@npm%3A5.8.3#optional!builtin<compat/typescript>::version=5.8.3&hash=5786d5"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/5448a08e595cc558ab321e49d4cac64fb43d1fa106584f6ff9a8d8e592111b373a995a1d5c7f3046211c8a37201eb6d0f1566f15cdb7a62a5e3be01d087848e2
+  checksum: 10c0/39117e346ff8ebd87ae1510b3a77d5d92dae5a89bde588c747d25da5c146603a99c8ee588c7ef80faaf123d89ed46f6dbd918d534d641083177d5fac38b8a1cb
   languageName: node
   linkType: hard
 
@@ -11831,9 +11866,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:^6.2.3":
-  version: 6.2.3
-  resolution: "vite@npm:6.2.3"
+"vite@npm:^6.2.5":
+  version: 6.2.5
+  resolution: "vite@npm:6.2.5"
   dependencies:
     esbuild: "npm:^0.25.0"
     fsevents: "npm:~2.3.3"
@@ -11879,7 +11914,7 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: 10c0/ba6ad7e83e5a63fb0b6f62d3a3963624b8784bdc1bfa2a83e16cf268fb58c76bd9f8e69f39ed34bf8711cdb8fd7702916f878781da53c232c34ef7a85e0600cf
+  checksum: 10c0/226bb3c1875e1982559007007580e8d083b81f5289f18e28841d622ba030599e1bd9926adccc8264879e319e9f9e4f48a38a0dc52a5dfcdf2a9cb7313bfc1816
   languageName: node
   linkType: hard
 
