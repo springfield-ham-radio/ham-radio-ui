@@ -11,7 +11,7 @@ export class ElectronRadioProgressIndicator implements RadioProgressIndicator {
   }
 
   public setValue(value: number): void {
-    this.webContents.send("radio-progress-indicator", value);
+    this.webContents.send("radio:updateProgressIndicator", value);
   }
 
   public reset(): void {

@@ -1,9 +1,9 @@
 <template>
   <RadioImportDialog />
-  <RadioImportProgressDialog />
+  <RadioProgressDialog />
 </template>
 
 <script setup lang="ts">
 import RadioImportDialog from './components/RadioImportDialog.vue';
-import RadioImportProgressDialog from './components/RadioImportProgressDialog.vue';
+import RadioProgressDialog from './components/RadioProgressDialog.vue';
 </script>

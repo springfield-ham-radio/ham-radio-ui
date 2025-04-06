@@ -9,7 +9,7 @@
     </div>
 
     <template #footer>
-      <div class="flex justify-content-end gap-2">
+      <div class="flex gap-2 justify-content-end">
         <Button label="Cancel" @click="showDialog = false" />
         <Button label="Import" :disabled="!complete" @click="importFromRadio" />
       </div>
@@ -46,7 +46,7 @@ const importFromRadio = () => {
 
 onMounted(() => {
   // Listen for menu trigger
-  window.electron.dialog.onShowImportDialog(() => {
+  window.radio.onShowImportDialog(() => {
     showDialog.value = true;
   });
 });

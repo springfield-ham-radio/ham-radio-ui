@@ -3,28 +3,33 @@
 
 import { RadioConnection } from '@springfield/ham-radio-api';
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { ConsoleTransport, LogLayer } from "loglayer";
-
-const logger = new LogLayer({
-  transport: [
-    new ConsoleTransport({
-      logger: console,
-      level: "debug",
-    }),
-  ],
-});
 
 contextBridge.exposeInMainWorld("modules", {
   getModels: () => ipcRenderer.invoke("modules:getModels"),
 });
 
 contextBridge.exposeInMainWorld("radio", {
+  onShowImportDialog: (callback: () => void) => {
+    ipcRenderer.on("radio:showImportDialog", callback);
+  },
+
+  onShowProgressDialog: (callback: () => void) => {
+    ipcRenderer.on("radio:showProgressDialog", callback);
+  },
+
+  onHideProgressDialog: (callback: () => void) => {
+    ipcRenderer.on("radio:hideProgressDialog", callback);
+  },
+
+  onRadioProgressIndicator: (
+    callback: (event: IpcRendererEvent, value: number) => void
+  ) => ipcRenderer.on("radio:updateProgressIndicator", callback),
+
   importFromRadio: (connection: RadioConnection) => {
-    logger.debug('importFromRadio()');
     ipcRenderer.invoke("radio:read", connection);
   },
 
-  cancelImport: () => {
+  cancel: () => {
     ipcRenderer.invoke("radio:cancel");
   },
 });
@@ -38,17 +43,5 @@ contextBridge.exposeInMainWorld("electron", {
   },
 
   dialog: {
-    onShowImportDialog: (callback: () => void) => {
-      ipcRenderer.on("show-import-dialog", callback);
-    },
-    onShowImportProgressDialog: (callback: () => void) => {
-      ipcRenderer.on("show-import-progress-dialog", callback);
-    },
-    onHideImportProgressDialog: (callback: () => void) => {
-      ipcRenderer.on("hide-import-progress-dialog", callback);
-    },
-    onRadioProgressIndicator: (
-      callback: (event: IpcRendererEvent, value: number) => void
-    ) => ipcRenderer.on("radio-progress-indicator", callback),
   },
 });

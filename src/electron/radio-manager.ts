@@ -21,9 +21,9 @@ export class RadioManager {
 
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
       this.logger.withMetadata(connection).debug('ipcMain received radio:read message');
-      this.mainWindow.webContents.send("show-import-progress-dialog");
+      this.mainWindow.webContents.send("radio:showProgressDialog");
       const result = await this.read(connection);
-      this.mainWindow.webContents.send("hide-import-progress-dialog");
+      this.mainWindow.webContents.send("radio:hideProgressDialog");
 
       return result;
     });

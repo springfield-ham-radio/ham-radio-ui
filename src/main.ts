@@ -56,7 +56,7 @@ const createWindow = () => {
           label: 'Import From Radio...',
           accelerator: process.platform === 'darwin' ? 'Cmd+I' : 'Ctrl+I',
           click: () => {
-            mainWindow.webContents.send('show-import-dialog');
+            mainWindow.webContents.send('radio:showImportDialog');
           }
         }
       ]

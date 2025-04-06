@@ -18,22 +18,22 @@ const progress = ref<number>(0);
 
 const cancel = () => {
   showDialog.value = false;
-  window.radio.cancelImport();
+  window.radio.cancel();
 };
 
 onMounted(() => {
   // Listen for trigger from electron
-  window.electron.dialog.onShowImportProgressDialog(() => {
+  window.radio.onShowProgressDialog(() => {
     showDialog.value = true;
   });
 
-  window.electron.dialog.onHideImportProgressDialog(() => {
+  window.radio.onHideProgressDialog(() => {
     progress.value = 0;
     showDialog.value = false;
   });
 
   // Listen for updates from the progress indicator
-  window.electron.dialog.onRadioProgressIndicator((_event, value: number) => {
+  window.radio.onRadioProgressIndicator((_event, value: number) => {
     progress.value = value * 100;
   });
 });
