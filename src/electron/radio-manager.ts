@@ -24,7 +24,7 @@ export class RadioManager {
       this.mainWindow.webContents.send("radio:showProgressDialog");
       const result = await this.read(connection);
       this.mainWindow.webContents.send("radio:hideProgressDialog");
-
+      this.mainWindow.webContents.send("radio:memory", connection.model, result);
       return result;
     });
 

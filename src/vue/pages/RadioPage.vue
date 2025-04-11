@@ -1,17 +1,47 @@
 <template>
-  <div class="card">
-    <DataTable :value="program.channels" tableStyle="min-width: 50rem">
-      <Column field="channelNumber" header="Number"></Column>
-      <Column field="radioChannel.name" header="Name"></Column>
-      <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
-      <Column field="radioChannel.receiveFrequency" header="Receive"></Column>
-    </DataTable>
-  </div>
+  <Tabs value="0">
+    <TabList>
+      <Tab value="0">Channels</Tab>
+      <Tab value="1">Settings</Tab>
+      <Tab value="2">Hex Dump</Tab>
+    </TabList>
+    <TabPanels>
+      <TabPanel value="0">
+        <div class="card">
+          <DataTable :value="program?.channels" tableStyle="min-width: 50rem">
+            <Column field="channelNumber" header="Number"></Column>
+            <Column field="radioChannel.name" header="Name"></Column>
+            <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
+            <Column field="radioChannel.receiveFrequency" header="Receive"></Column>
+          </DataTable>
+        </div>
+      </TabPanel>
+      <TabPanel value="1">
+        Settings
+      </TabPanel>
+      <TabPanel value="2">
+        <div class="card">
+          <HexDump v-if="memory" :memory="memory" />
+        </div>
+      </TabPanel>
+    </TabPanels>
+  </Tabs>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { RadioProgram } from '@springfield/ham-radio-api';
+import { onMounted, ref } from 'vue';
+import { Column, DataTable, Tab, Tabs, TabList, TabPanels, TabPanel } from 'primevue';
+import { RadioMemory, RadioModel, RadioProgram } from '@springfield/ham-radio-api';
+import HexDump from '../components/HexDump.vue';
 
+const model = ref<RadioModel>();
+const memory = ref<RadioMemory>();
 const program = ref<RadioProgram>();
+
+onMounted(() => {
+  window.radio.onRadioMemory((_event, radioModel: RadioModel, radioMemory: RadioMemory) => {
+    model.value = radioModel;
+    memory.value = radioMemory;
+  });
+});
 </script>

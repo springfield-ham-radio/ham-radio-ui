@@ -14,6 +14,9 @@ interface RadioAPI {
   onRadioProgressIndicator: (
     callback: (event: IpcRendererEvent, value: number) => void
   ) => void;
+  onRadioMemory: (
+    callback: (event: IpcRendererEvent, model: RadioModel, memory: RadioMemory) => void
+  ) => void;
   importFromRadio: (connection: RadioConnection) => Promise<void>;
   cancel: () => Promise<void>;
 }

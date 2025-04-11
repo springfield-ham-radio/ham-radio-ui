@@ -15,6 +15,11 @@ app.use(pinia);
 app.use(PrimeVue, {
   theme: {
     preset: Aura,
+    options: {
+      prefix: "p",
+      darkModeSelector: "system",
+      cssLayer: false,
+    },
   },
 });
 
