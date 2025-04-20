@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import { SerialPort } from 'serialport';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import { RadioModuleManager } from './electron/radio-module-manager';
 import { RadioManager } from './electron/radio-manager';
 
 // import started from 'electron-squirrel-startup';
@@ -31,7 +30,7 @@ const createWindow = () => {
     },
   });
 
-  new RadioManager(new RadioModuleManager(logger), mainWindow, logger);
+  new RadioManager(mainWindow, logger);
 
   // Create the application menu
   const template = [

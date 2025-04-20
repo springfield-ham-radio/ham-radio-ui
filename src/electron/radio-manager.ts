@@ -1,22 +1,22 @@
-import { RadioConnection, RadioMemory} from "@springfield/ham-radio-api";
+import { RadioConnection, RadioDriver, RadioMemory, RadioModel, RadioModuleId} from "@springfield/ham-radio-api";
 import { ipcMain, BrowserWindow, dialog } from "electron";
 import { ElectronRadioProgressIndicator } from "./radio-progress-indicator";
 import fs from "fs";
-import { RadioModuleManager } from "./radio-module-manager";
 import { ILogLayer } from 'loglayer';
+import { DriverProvider } from "@springfield/baofeng-driver";
+import { MODULE_ID as BAOFENG_MODULE_ID } from "@springfield/baofeng-module";
 
 export class RadioManager {
-  private moduleManager: RadioModuleManager;
   private mainWindow: BrowserWindow;
   private logger: ILogLayer;
   private radioProgressIndicator: ElectronRadioProgressIndicator;
-
-  constructor(moduleManger: RadioModuleManager, mainWindow: BrowserWindow, logger: ILogLayer) {
+  private driverProvidersByModuleId: Map<RadioModuleId, DriverProvider> = new Map();
+  constructor(mainWindow: BrowserWindow, logger: ILogLayer) {
     logger.debug('RadioManager');
-    this.moduleManager = moduleManger;
     this.mainWindow = mainWindow;
     this.logger = logger;
 
+    this.driverProvidersByModuleId.set(BAOFENG_MODULE_ID, new DriverProvider(logger));
     this.radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
 
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
@@ -40,17 +40,9 @@ export class RadioManager {
 
   private async read(connection: RadioConnection): Promise<RadioMemory | string> {
     this.radioProgressIndicator.reset();
-    const module = this.moduleManager.getRadioModule(connection.model.module);
-    const driver = module?.getDriver(connection.model.id);
+    const driver = this.getDriver(connection.model);
 
-    if (driver == undefined) {
-      return "No driver found";
-    }
-
-    const memory = await driver.readRadio(
-      connection.serialPortPath,
-      this.radioProgressIndicator
-    );
+    const memory = await driver.readRadio(connection.serialPortPath, this.radioProgressIndicator);
 
     if (memory == undefined) {
       return "Canceled";
@@ -63,14 +55,21 @@ export class RadioManager {
     const results = await dialog.showSaveDialog(this.mainWindow, {});
 
     if (results.filePath) {
-      fs.writeFileSync(
-        results.filePath,
-        JSON.stringify(memory, null, 2)
-      );
+      fs.writeFileSync(results.filePath, JSON.stringify(memory, null, 2));
     }
   }
 
   private cancelRadioOperation() {
     this.radioProgressIndicator.isCanceled = true;
+  }
+
+  private getDriver(model: RadioModel): RadioDriver {
+    const driverProvider = this.driverProvidersByModuleId.get(model.getModuleId());
+
+    if (driverProvider == undefined) {
+      throw new Error(`Driver provider for module ${model.getModuleId()} not found`);
+    }
+
+    return driverProvider.getDriver(model.getId());
   }
 }
