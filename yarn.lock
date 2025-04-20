@@ -2458,9 +2458,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/baofeng-driver@npm:^9.0.0":
-  version: 9.0.0
-  resolution: "@springfield/baofeng-driver@npm:9.0.0"
+"@springfield/baofeng-driver@npm:^9.0.1":
+  version: 9.0.1
+  resolution: "@springfield/baofeng-driver@npm:9.0.1"
   dependencies:
     "@commitlint/cli": "npm:^19.8.0"
     "@commitlint/config-conventional": "npm:^19.8.0"
@@ -2468,49 +2468,49 @@ __metadata:
     "@semantic-release/git": "npm:^10.0.1"
     "@semantic-release/gitlab": "npm:^13.2.4"
     "@serialport/parser-byte-length": "npm:^13.0.0"
-    "@springfield/baofeng-module": "npm:^1.0.1"
-    "@springfield/ham-radio-api": "npm:8.0.0"
-    "@springfield/ham-radio-driver-utils": "npm:^6.0.0"
+    "@springfield/baofeng-module": "npm:^2.0.0"
+    "@springfield/ham-radio-api": "npm:9.0.0"
+    "@springfield/ham-radio-driver-utils": "npm:^6.0.1"
     husky: "npm:^9.1.7"
     loglayer: "npm:^6.3.3"
     semantic-release: "npm:23.1.1"
     semantic-release-yarn: "npm:^3.0.2"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/8c61c83fc7cbbc8647f29a2efb9ecbacd13c7b3011f5cda92f9b11e264484056b5203b9ef69acdf926ad486870605eb0ce33dfc7e471293052dba74a815e8a7e
+  checksum: 10c0/2a1843d241d6979d6b7f03ff5c8cd1387d809fc073a5f54cfa9a4ec6c6eac0c3dc14009f48f70054c837efceb9aea1139e8dca2ab6697d286df92eb5c1366d75
   languageName: node
   linkType: hard
 
-"@springfield/baofeng-module@npm:^1.0.1":
-  version: 1.0.1
-  resolution: "@springfield/baofeng-module@npm:1.0.1"
+"@springfield/baofeng-module@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "@springfield/baofeng-module@npm:2.0.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:8.0.0"
-    "@springfield/ham-radio-driver-utils": "npm:^6.0.0"
+    "@springfield/ham-radio-api": "npm:9.0.0"
+    "@springfield/ham-radio-driver-utils": "npm:^6.0.1"
     husky: "npm:^9.1.7"
     loglayer: "npm:^6.3.3"
-  checksum: 10c0/fee651f960450d3e2d67fe9c8c082c0dedf592e21838fd5e51cbc42e100c093611da811c3daf7302e2754f8e66087bd0a5e3ace1d19f3db7357fa4b13ee55695
+  checksum: 10c0/0369511490c0176c43de06847179481a8176ea56924b695e08a60e618e36d88e2133ab6045fd39efcf3c897d96dd9beeda7c863b84216cd863bd0b5bf7344912
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:8.0.0, @springfield/ham-radio-api@npm:^8.0.0":
-  version: 8.0.0
-  resolution: "@springfield/ham-radio-api@npm:8.0.0"
+"@springfield/ham-radio-api@npm:9.0.0, @springfield/ham-radio-api@npm:^9.0.0":
+  version: 9.0.0
+  resolution: "@springfield/ham-radio-api@npm:9.0.0"
   dependencies:
     ts-brand: "npm:^0.2.0"
-  checksum: 10c0/526e256d352f48b822e7ebd1d17329ee0cf416409a4bcadd03406de6d67c7c30db1aea75ca6f2f0ccbeee6cd053205cd36125dcb458d3058418c39dd3c89375e
+  checksum: 10c0/1a1872ab29fd6eb60aae12bd652c6bcbe43dda5f4719cbc3f530042d75ee96bc0f672562f7ba102b289a3f6e9954fe3718076e89aeb0954f0329069d3baccd5d
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver-utils@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "@springfield/ham-radio-driver-utils@npm:6.0.0"
+"@springfield/ham-radio-driver-utils@npm:^6.0.1":
+  version: 6.0.1
+  resolution: "@springfield/ham-radio-driver-utils@npm:6.0.1"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^8.0.0"
+    "@springfield/ham-radio-api": "npm:^9.0.0"
     fishery: "npm:^2.2.3"
     loglayer: "npm:^6.3.3"
     serialport: "npm:^13.0.0"
     sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/e362b524b86d93dce284a904c1277213f3862eaee27376efb27bc6d027535b62c4e1f41ca8b0379d3cccfb38273909ffe16dfeb32d3b3e2da28b724cfe8768f3
+  checksum: 10c0/9144a217e6f1b2563b69696873e86c456370f602ab1e4059158bb800be1c70a3f4c0716a187af655be11d1a79fff99b9f9a8e81f685d3a5182fa177e31b7efeb
   languageName: node
   linkType: hard
 
@@ -2528,9 +2528,9 @@ __metadata:
     "@electron-forge/plugin-vite": "npm:^7.8.0"
     "@electron/fuses": "npm:^1.8.0"
     "@primeuix/themes": "npm:^1.0.3"
-    "@springfield/baofeng-driver": "npm:^9.0.0"
-    "@springfield/baofeng-module": "npm:^1.0.1"
-    "@springfield/ham-radio-api": "npm:^8.0.0"
+    "@springfield/baofeng-driver": "npm:^9.0.1"
+    "@springfield/baofeng-module": "npm:^2.0.0"
+    "@springfield/ham-radio-api": "npm:^9.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
     "@typescript-eslint/parser": "npm:^5.62.0"
     "@vitejs/plugin-vue": "npm:^5.2.3"
