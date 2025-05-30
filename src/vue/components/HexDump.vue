@@ -39,8 +39,8 @@ interface HexRow {
 
 const BYTES_PER_ROW = 16;
 
-function reconstructSegmentedMemory(contents: any): RadioSegmentedMemory {
-  return new RadioSegmentedMemory(contents.segments.values());
+function reconstructSegmentedMemory(contents: RadioMemorySegment[]): RadioSegmentedMemory {
+  return new RadioSegmentedMemory(contents);
 }
 
 const formattedRows = computed(() => {

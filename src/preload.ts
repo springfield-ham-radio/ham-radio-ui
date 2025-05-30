@@ -1,20 +1,8 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
-import { RadioConnection, RadioMemory, RadioModel } from '@springfield/ham-radio-api';
-import { RadioMemorySegment, RadioSegmentedMemory } from '@springfield/ham-radio-driver-utils';
+import { RadioConnection, RadioMemory, RadioId } from '@springfield/ham-radio-api';
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-
-// These interfaces help document the shape of the serialized data
-interface SerializedRadioMemorySegment {
-  startAddress: number;
-  length: number;
-  data: Uint8Array;
-}
-
-interface SerializedRadioSegmentedMemory {
-  segments: SerializedRadioMemorySegment[];
-}
 
 contextBridge.exposeInMainWorld("modules", {
   getModels: () => ipcRenderer.invoke("modules:getModels"),
@@ -38,10 +26,10 @@ contextBridge.exposeInMainWorld("radio", {
   ) => ipcRenderer.on("radio:updateProgressIndicator", callback),
 
   onRadioMemory: (
-    callback: (event: IpcRendererEvent, model: RadioModel, memory: RadioMemory) => void
+    callback: (event: IpcRendererEvent, radioId: RadioId, memory: RadioMemory) => void
   ) => {
-    ipcRenderer.on("radio:memory", (event, model, memory) => {
-      callback(event, model, memory);
+    ipcRenderer.on("radio:memory", (event, radioId, memory) => {
+      callback(event, radioId, memory);
     });
   },
 

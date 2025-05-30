@@ -1,4 +1,4 @@
-import { RadioConnection, RadioDriver, RadioMemory, RadioModel, RadioModuleId} from "@springfield/ham-radio-api";
+import { RadioConnection, RadioDriver, RadioMemory, RadioId, RadioModuleId} from "@springfield/ham-radio-api";
 import { ipcMain, BrowserWindow, dialog } from "electron";
 import { ElectronRadioProgressIndicator } from "./radio-progress-indicator";
 import fs from "fs";
@@ -24,7 +24,7 @@ export class RadioManager {
       this.mainWindow.webContents.send("radio:showProgressDialog");
       const result = await this.read(connection);
       this.mainWindow.webContents.send("radio:hideProgressDialog");
-      this.mainWindow.webContents.send("radio:memory", connection.model, result);
+      this.mainWindow.webContents.send("radio:memory", connection.radio, result);
       return result;
     });
 
@@ -40,7 +40,7 @@ export class RadioManager {
 
   private async read(connection: RadioConnection): Promise<RadioMemory | string> {
     this.radioProgressIndicator.reset();
-    const driver = this.getDriver(connection.model);
+    const driver = this.getDriver(connection.radio);
 
     const memory = await driver.readRadio(connection.serialPortPath, this.radioProgressIndicator);
 
@@ -63,13 +63,13 @@ export class RadioManager {
     this.radioProgressIndicator.isCanceled = true;
   }
 
-  private getDriver(model: RadioModel): RadioDriver {
-    const driverProvider = this.driverProvidersByModuleId.get(model.getModuleId());
+  private getDriver(id: RadioId): RadioDriver {
+    const driverProvider = this.driverProvidersByModuleId.get(id.module);
 
     if (driverProvider == undefined) {
-      throw new Error(`Driver provider for module ${model.getModuleId()} not found`);
+      throw new Error(`Driver provider for module ${id.module} not found`);
     }
 
-    return driverProvider.getDriver(model.getId());
+    return driverProvider.getDriver(id.model);
   }
 }

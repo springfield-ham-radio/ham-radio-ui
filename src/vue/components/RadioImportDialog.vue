@@ -22,10 +22,10 @@ import { computed, ref, onMounted } from 'vue';
 import RadioSelector from './RadioSelector.vue';
 import SerialPortSelector from './SerialPortSelector.vue';
 import { Button, Dialog } from 'primevue';
-import { RadioConnection, RadioModel } from '@springfield/ham-radio-api';
+import { RadioConnection, RadioId } from '@springfield/ham-radio-api';
 import { PortInfo } from "@serialport/bindings-interface";
 
-const selectedRadio = ref<RadioModel>();
+const selectedRadio = ref<RadioId>();
 const selectedPort = ref<PortInfo>();
 
 const showDialog = ref(false);
@@ -38,7 +38,7 @@ const importFromRadio = () => {
   showDialog.value = false;
   const connection: RadioConnection = {
     serialPortPath: selectedPort.value.path,
-    model: { ...selectedRadio.value },
+    radio: { ...selectedRadio.value },
   };
 
   window.radio.importFromRadio(connection);

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { SerialPort } from 'serialport';
 import { ConsoleTransport, LogLayer } from 'loglayer';
@@ -23,8 +23,8 @@ const logger = new LogLayer({
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1000,
+    height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -33,7 +33,7 @@ const createWindow = () => {
   new RadioManager(mainWindow, logger);
 
   // Create the application menu
-  const template = [
+  const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
       submenu: [
@@ -68,7 +68,15 @@ const createWindow = () => {
         { type: 'separator' },
         { role: 'front' },
         { type: 'separator' },
-        { role: 'window' }
+        { role: 'window' },
+        { type: 'separator' },
+        {
+          label: 'Developer Tools',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Shift+I' : 'Ctrl+Shift+I',
+          click: () => {
+            mainWindow.webContents.toggleDevTools();
+          }
+        }
       ]
     }
   ];
@@ -82,9 +90,6 @@ const createWindow = () => {
   } else {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
-
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished

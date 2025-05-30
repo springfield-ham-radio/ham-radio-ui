@@ -8,7 +8,7 @@
     <TabPanels>
       <TabPanel value="0">
         <div class="card">
-          <DataTable :value="program?.channels" tableStyle="min-width: 50rem">
+          <DataTable :value="program?.channels" size="small" tableStyle="min-width: 50rem">
             <Column field="channelNumber" header="Number"></Column>
             <Column field="radioChannel.name" header="Name"></Column>
             <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
@@ -31,17 +31,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { Column, DataTable, Tab, Tabs, TabList, TabPanels, TabPanel } from 'primevue';
-import { RadioMemory, RadioModel, RadioProgram } from '@springfield/ham-radio-api';
+import { RadioMemory, RadioProgram, RadioId } from '@springfield/ham-radio-api';
 import HexDump from '../components/HexDump.vue';
-
-const model = ref<RadioModel>();
+import { useRadioStore } from '../stores/radios';
+const radioId = ref<RadioId>();
 const memory = ref<RadioMemory>();
 const program = ref<RadioProgram>();
+const radioStore = useRadioStore();
 
 onMounted(() => {
-  window.radio.onRadioMemory((_event, radioModel: RadioModel, radioMemory: RadioMemory) => {
-    model.value = radioModel;
+  window.radio.onRadioMemory((_event, radioId: RadioId, radioMemory: RadioMemory) => {
+    console.log('radioMemory', radioId);
+    radioId.value = radioId;
     memory.value = radioMemory;
+    program.value = radioStore.radiosById.get(radioId.model)?.decodeMemory(radioMemory);
   });
 });
 </script>
