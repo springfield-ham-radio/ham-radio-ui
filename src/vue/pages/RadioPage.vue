@@ -10,7 +10,14 @@
         <TabPanels class="h-full">
           <TabPanel value="0" class="h-full p-4 overflow-y-auto">
             <div class="card">
-              <DataTable :value="program?.channels" size="small" tableStyle="min-width: 50rem">
+              <DataTable 
+                :value="program?.channels" 
+                size="small" 
+                tableStyle="min-width: 50rem"
+                scrollable
+                scrollHeight="calc(100vh - 200px)"
+                class="h-full"
+              >
                 <Column field="channelNumber" header="Number"></Column>
                 <Column field="radioChannel.name" header="Name"></Column>
                 <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
