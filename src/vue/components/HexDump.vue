@@ -124,6 +124,7 @@ const formattedRows = computed(() => {
   top: 0;
   z-index: 1;
   flex-shrink: 0;
+  font-family: monospace;
 }
 
 .hex-dump {
@@ -145,17 +146,26 @@ const formattedRows = computed(() => {
   color: #569cd6;
   margin-right: 2rem;
   min-width: 8ch;
+  flex-shrink: 0;
 }
 
 .hex-values {
   margin-right: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 48ch; /* 16 bytes * 3 chars per byte (2 hex + space) */
+  flex-shrink: 0;
 }
 
 .byte {
   margin-right: 0.5rem;
+  width: 2ch;
+  text-align: center;
 }
 
 .ascii {
   color: #ce9178;
+  min-width: 16ch; /* 16 characters */
+  flex-shrink: 0;
 }
 </style>
