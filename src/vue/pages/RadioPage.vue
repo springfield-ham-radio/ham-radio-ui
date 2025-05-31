@@ -1,15 +1,15 @@
 <template>
-  <div class="flex flex-col h-screen">
+  <div class="flex flex-col h-screen overflow-hidden">
     <Tabs value="0" class="flex flex-col h-full">
       <TabList>
         <Tab value="0">Channels</Tab>
         <Tab value="1">Settings</Tab>
         <Tab value="2">Hex Dump</Tab>
       </TabList>
-      <div class="flex-1 overflow-hidden">
+      <div class="flex-1 min-h-0">
         <TabPanels class="h-full">
-          <TabPanel value="0" class="h-full p-4 overflow-y-auto">
-            <div class="card">
+          <TabPanel value="0" class="h-full p-4">
+            <div class="h-full card">
               <DataTable
                 :value="program?.channels"
                 size="small"
@@ -27,11 +27,11 @@
               </DataTable>
             </div>
           </TabPanel>
-          <TabPanel value="1" class="h-full p-4 overflow-y-auto">
+          <TabPanel value="1" class="h-full p-4">
             Settings
           </TabPanel>
-          <TabPanel value="2" class="h-full p-4 overflow-y-auto">
-            <div class="card">
+          <TabPanel value="2" class="h-full p-4">
+            <div class="h-full card">
               <HexDump v-if="memory" :memory="memory" />
             </div>
           </TabPanel>

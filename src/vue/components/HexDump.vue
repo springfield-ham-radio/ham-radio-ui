@@ -1,13 +1,20 @@
 <template>
-  <div class="hex-dump">
-    <div v-for="(row, index) in formattedRows" :key="index" class="hex-row">
-      <div class="address">{{ row.address }}</div>
-      <div class="hex-values">
-        <span v-for="(byte, byteIndex) in row.bytes" :key="byteIndex" class="byte">
-          {{ byte }}
-        </span>
+  <div class="hex-dump-container">
+    <div class="hex-header">
+      <div class="address">Address</div>
+      <div class="hex-values">Data</div>
+      <div class="ascii">ASCII</div>
+    </div>
+    <div class="hex-dump">
+      <div v-for="(row, index) in formattedRows" :key="index" class="hex-row">
+        <div class="address">{{ row.address }}</div>
+        <div class="hex-values">
+          <span v-for="(byte, byteIndex) in row.bytes" :key="byteIndex" class="byte">
+            {{ byte }}
+          </span>
+        </div>
+        <div class="ascii">{{ row.ascii }}</div>
       </div>
-      <div class="ascii">{{ row.ascii }}</div>
     </div>
   </div>
 </template>
@@ -99,13 +106,34 @@ const formattedRows = computed(() => {
 </script>
 
 <style scoped>
+.hex-dump-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hex-header {
+  display: flex;
+  padding: 1rem 1rem 0.5rem 1rem;
+  background-color: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
 .hex-dump {
   font-family: monospace;
   white-space: pre;
-  background-color: #1e1e1e;
   color: #d4d4d4;
   padding: 1rem;
-  border-radius: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .hex-row {
