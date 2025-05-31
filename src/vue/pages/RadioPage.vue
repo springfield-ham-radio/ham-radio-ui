@@ -19,8 +19,16 @@
                 class="h-full">
                 <Column field="channelNumber" header="Number" />
                 <Column field="radioChannel.name" header="Name" />
-                <Column field="radioChannel.transmitFrequency" header="Transmit" />
-                <Column field="radioChannel.receiveFrequency" header="Receive" />
+                <Column field="radioChannel.transmitFrequency" header="Transmit">
+                  <template #body="{ data }">
+                    {{ getFrequencyDisplay(data.radioChannel.transmitFrequency) }}
+                  </template>
+                </Column>
+                <Column field="radioChannel.receiveFrequency" header="Receive">
+                  <template #body="{ data }">
+                    {{ getFrequencyDisplay(data.radioChannel.receiveFrequency) }}
+                  </template>
+                </Column>
                 <template #empty>
                   <div class="text-center text-gray-400">No radio data</div>
                 </template>
@@ -53,12 +61,25 @@ import {
   TabPanel,
 } from "primevue";
 import { RadioMemory, RadioProgram, RadioId } from "@springfield/ham-radio-api";
+import { BandPlan, frequencyDisplay } from "@springfield/ham-radio-utils";
 import HexDump from "../components/HexDump.vue";
 import { useRadioStore } from "../stores/radios";
+
+const bandPlan = new BandPlan();
+
 const radioId = ref<RadioId>();
 const memory = ref<RadioMemory>();
 const program = ref<RadioProgram>();
 const radioStore = useRadioStore();
+
+const getFrequencyDisplay = (frequency: Frequency) => {
+  if (frequency === undefined) {
+    return "N/A";
+  }
+
+  const band = bandPlan.findBandByFrequency(frequency);
+  return band ? frequencyDisplay(frequency, band) : frequency.toString();
+}
 
 onMounted(() => {
   window.radio.onRadioMemory(

@@ -2551,6 +2551,7 @@ __metadata:
     "@springfield/baofeng-driver": "npm:^10.0.9"
     "@springfield/baofeng-module": "npm:^5.0.4"
     "@springfield/ham-radio-api": "npm:^12.0.1"
+    "@springfield/ham-radio-utils": "npm:^1.3.0"
     "@typescript-eslint/eslint-plugin": "npm:^5.62.0"
     "@typescript-eslint/parser": "npm:^5.62.0"
     "@vitejs/plugin-vue": "npm:^5.2.4"
@@ -2574,6 +2575,18 @@ __metadata:
     vue: "npm:^3.5.16"
   languageName: unknown
   linkType: soft
+
+"@springfield/ham-radio-utils@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "@springfield/ham-radio-utils@npm:1.3.0"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^12.0.1"
+    fishery: "npm:^2.3.1"
+    loglayer: "npm:^6.4.2"
+    sprintf-js: "npm:^1.1.3"
+  checksum: 10c0/a7cb3cb3301b9c58ab404da8c018ca945d14eb2b3e5406dad61be2f2b57fd0e4918e8832b16a2b3a6f5f223c13175ac58e1aadc461ace6458d4f49d40be503b0
+  languageName: node
+  linkType: hard
 
 "@szmarczak/http-timer@npm:^4.0.5":
   version: 4.0.6
