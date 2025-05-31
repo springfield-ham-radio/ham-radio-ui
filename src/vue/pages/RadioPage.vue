@@ -1,31 +1,35 @@
 <template>
-  <Tabs value="0">
-    <TabList>
-      <Tab value="0">Channels</Tab>
-      <Tab value="1">Settings</Tab>
-      <Tab value="2">Hex Dump</Tab>
-    </TabList>
-    <TabPanels>
-      <TabPanel value="0">
-        <div class="card">
-          <DataTable :value="program?.channels" size="small" tableStyle="min-width: 50rem">
-            <Column field="channelNumber" header="Number"></Column>
-            <Column field="radioChannel.name" header="Name"></Column>
-            <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
-            <Column field="radioChannel.receiveFrequency" header="Receive"></Column>
-          </DataTable>
-        </div>
-      </TabPanel>
-      <TabPanel value="1">
-        Settings
-      </TabPanel>
-      <TabPanel value="2">
-        <div class="card">
-          <HexDump v-if="memory" :memory="memory" />
-        </div>
-      </TabPanel>
-    </TabPanels>
-  </Tabs>
+  <div class="flex flex-col h-screen">
+    <Tabs value="0" class="flex flex-col h-full">
+      <TabList>
+        <Tab value="0">Channels</Tab>
+        <Tab value="1">Settings</Tab>
+        <Tab value="2">Hex Dump</Tab>
+      </TabList>
+      <div class="flex-1 overflow-hidden">
+        <TabPanels class="h-full">
+          <TabPanel value="0" class="h-full p-4 overflow-y-auto">
+            <div class="card">
+              <DataTable :value="program?.channels" size="small" tableStyle="min-width: 50rem">
+                <Column field="channelNumber" header="Number"></Column>
+                <Column field="radioChannel.name" header="Name"></Column>
+                <Column field="radioChannel.transmitFrequency" header="Transmit"></Column>
+                <Column field="radioChannel.receiveFrequency" header="Receive"></Column>
+              </DataTable>
+            </div>
+          </TabPanel>
+          <TabPanel value="1" class="h-full p-4 overflow-y-auto">
+            Settings
+          </TabPanel>
+          <TabPanel value="2" class="h-full p-4 overflow-y-auto">
+            <div class="card">
+              <HexDump v-if="memory" :memory="memory" />
+            </div>
+          </TabPanel>
+        </TabPanels>
+      </div>
+    </Tabs>
+  </div>
 </template>
 
 <script setup lang="ts">
