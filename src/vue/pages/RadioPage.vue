@@ -29,6 +29,21 @@
                     {{ getFrequencyDisplay(data.radioChannel.receiveFrequency) }}
                   </template>
                 </Column>
+                <Column field="radioChannel.transmitTone" header="TX Tone">
+                  <template #body="{ data }">
+                    {{ getToneDisplay(data.radioChannel.transmitTone) }}
+                  </template>
+                </Column>
+                <Column field="radioChannel.receiveTone" header="RX Tone">
+                  <template #body="{ data }">
+                    {{ getToneDisplay(data.radioChannel.receiveTone) }}
+                  </template>
+                </Column>
+                <Column field="radioChannel.receiveTone" header="Tone Type">
+                  <template #body="{ data }">
+                    {{ getToneTypeDisplay(data.radioChannel.transmitTone) }}
+                  </template>
+                </Column>
                 <template #empty>
                   <div class="text-center text-gray-400">No radio data</div>
                 </template>
@@ -60,7 +75,7 @@ import {
   TabPanels,
   TabPanel,
 } from "primevue";
-import { RadioMemory, RadioProgram, RadioId } from "@springfield/ham-radio-api";
+import { RadioMemory, RadioProgram, RadioId, RadioToneType } from "@springfield/ham-radio-api";
 import { BandPlan, frequencyDisplay } from "@springfield/ham-radio-utils";
 import HexDump from "../components/HexDump.vue";
 import { useRadioStore } from "../stores/radios";
@@ -79,6 +94,22 @@ const getFrequencyDisplay = (frequency: Frequency) => {
 
   const band = bandPlan.findBandByFrequency(frequency);
   return band ? frequencyDisplay(frequency, band) : frequency.toString();
+}
+
+const getToneDisplay = (tone: RadioTone) => {
+  if (!tone || tone.tone === 0) {
+    return "";
+  }
+
+  return tone.type === RadioToneType.CTCSS ? (tone.tone / 10).toFixed(1) : tone.tone.toString();
+}
+
+const getToneTypeDisplay = (tone: RadioTone) => {
+  if (!tone || tone.tone === 0) {
+    return "";
+  }
+
+  return tone.type === RadioToneType.CTCSS ? "CTCSS" : "DCS";
 }
 
 onMounted(() => {
