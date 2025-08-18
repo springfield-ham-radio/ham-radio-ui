@@ -153,7 +153,7 @@ export class ElectronDatabaseManager {
       if (this.client != undefined) {
         await this.client.close();
       }
-    } catch (error) {
+    } catch {
       // do nothing
     }
 
@@ -161,7 +161,7 @@ export class ElectronDatabaseManager {
       if (this.mongod != undefined) {
         await this.mongod.stop();
       }
-    } catch (error) {
+    } catch {
       // do nothing
     }
 

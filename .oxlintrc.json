@@ -1,0 +1,4 @@
+{
+  "plugins": ["import"],
+  "ignorePatterns": ["dist/", "node_modules/", "build/", "coverage/", "test/", "out/", ".vite/"]
+}
