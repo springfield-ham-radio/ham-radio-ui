@@ -8,6 +8,13 @@ contextBridge.exposeInMainWorld("modules", {
   getModels: () => ipcRenderer.invoke("modules:getModels"),
 });
 
+contextBridge.exposeInMainWorld("registry", {
+  discoverConfigurations: () => ipcRenderer.invoke("registry:discover-configurations"),
+  getManufacturers: () => ipcRenderer.invoke("registry:get-manufacturers"),
+  getModelsByManufacturer: (manufacturer: string) => ipcRenderer.invoke("registry:get-models-by-manufacturer", manufacturer),
+  getConfiguration: (modelId: string) => ipcRenderer.invoke("registry:get-configuration", modelId),
+});
+
 contextBridge.exposeInMainWorld("radio", {
   onShowImportDialog: (callback: () => void) => {
     ipcRenderer.on("radio:showImportDialog", callback);

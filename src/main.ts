@@ -3,6 +3,7 @@ import path from 'node:path';
 import { SerialPort } from 'serialport';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { RadioManager } from './electron/radio-manager';
+import { RegistryManager } from './electron/registry-manager';
 
 // import started from 'electron-squirrel-startup';
 
@@ -30,7 +31,8 @@ const createWindow = () => {
     },
   });
 
-  new RadioManager(mainWindow, logger);
+  const registryManager = new RegistryManager(mainWindow, logger);
+  new RadioManager(mainWindow, logger, registryManager);
 
   // Create the application menu
   const template: MenuItemConstructorOptions[] = [

@@ -25,6 +25,10 @@ app.use(PrimeVue, {
 
 app.directive("tooltip", Tooltip);
 
-await useRadioStore().initialize();
+// Initialize the app
+async function initializeApp() {
+  await useRadioStore().initialize();
+  app.mount("#app");
+}
 
-app.mount("#app");
+initializeApp().catch(console.error);

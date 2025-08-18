@@ -1,22 +1,23 @@
-import { RadioConnection, RadioDriver, RadioMemory, RadioId, RadioModuleId} from "@springfield/ham-radio-api";
+import { RadioConnection, RadioMemory, RadioId } from "@springfield/ham-radio-api";
+import { RadioDriver } from "@springfield/ham-radio-driver";
 import { ipcMain, BrowserWindow, dialog } from "electron";
 import { ElectronRadioProgressIndicator } from "./radio-progress-indicator";
 import fs from "fs";
 import { ILogLayer } from 'loglayer';
-import { DriverProvider } from "@springfield/baofeng-driver";
-import { MODULE_ID as BAOFENG_MODULE_ID } from "@springfield/baofeng-module";
+import type { RegistryRadio } from '@springfield/ham-radio-registry';
+import type { RegistryManager } from './registry-manager';
 
 export class RadioManager {
   private mainWindow: BrowserWindow;
   private logger: ILogLayer;
   private radioProgressIndicator: ElectronRadioProgressIndicator;
-  private driverProvidersByModuleId: Map<RadioModuleId, DriverProvider> = new Map();
-  constructor(mainWindow: BrowserWindow, logger: ILogLayer) {
+  private registryManager: RegistryManager;
+  
+  constructor(mainWindow: BrowserWindow, logger: ILogLayer, registryManager: RegistryManager) {
     logger.debug('RadioManager');
     this.mainWindow = mainWindow;
     this.logger = logger;
-
-    this.driverProvidersByModuleId.set(BAOFENG_MODULE_ID, new DriverProvider(logger));
+    this.registryManager = registryManager;
     this.radioProgressIndicator = new ElectronRadioProgressIndicator(mainWindow.webContents);
 
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
@@ -40,13 +41,19 @@ export class RadioManager {
 
   private async read(connection: RadioConnection): Promise<RadioMemory | string> {
     this.radioProgressIndicator.reset();
-    const driver = this.getDriver(connection.radio);
+    const driver = await this.getDriver(connection.radio);
 
-    const memory = await driver.readRadio(connection.serialPortPath, this.radioProgressIndicator);
+    const memoryData = await driver.readRadio(connection.serialPortPath, this.radioProgressIndicator);
 
-    if (memory == undefined) {
+    if (memoryData == undefined) {
       return "Canceled";
     }
+
+    // Convert the Uint8Array to RadioMemory format
+    const memory: RadioMemory = {
+      model: connection.radio.model,
+      contents: memoryData
+    };
 
     return memory;
   }
@@ -63,13 +70,39 @@ export class RadioManager {
     this.radioProgressIndicator.isCanceled = true;
   }
 
-  private getDriver(id: RadioId): RadioDriver {
-    const driverProvider = this.driverProvidersByModuleId.get(id.module);
-
-    if (driverProvider == undefined) {
-      throw new Error(`Driver provider for module ${id.module} not found`);
+  private async getDriver(id: RadioId): Promise<RadioDriver> {
+    try {
+      // Get the radio configuration from the registry manager
+      const registryRadio = await this.registryManager.getConfigurationDirect(id.model);
+      
+      if (!registryRadio) {
+        throw new Error(`Radio configuration for model ${id.model} not found in registry`);
+      }
+      
+      // Convert RegistryRadio to Radio interface expected by RadioDriver
+      const radio = this.convertRegistryRadioToRadio(registryRadio);
+      
+      // Create and return the RadioDriver
+      return new RadioDriver(radio, this.logger);
+      
+    } catch (error) {
+      this.logger.withError(error).error(`Failed to get driver for radio ${id.model}`);
+      throw new Error(`Failed to get driver for radio ${id.model}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
 
-    return driverProvider.getDriver(id.model);
+  private convertRegistryRadioToRadio(registryRadio: RegistryRadio): any {
+    // Convert RegistryRadio to the Radio interface expected by RadioDriver
+    // The RadioDriver expects the same structure, so we can mostly pass it through
+    return {
+      id: registryRadio.id,
+      version: registryRadio.version,
+      description: registryRadio.description,
+      settingsSchema: registryRadio.settingsSchema,
+      memoryConfig: registryRadio.memoryConfig,
+      serialConfig: registryRadio.serialConfig,
+      readMemory: registryRadio.readMemory,
+      writeMemory: registryRadio.writeMemory
+    };
   }
 }

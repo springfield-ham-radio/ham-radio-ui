@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+If the source for a dependency with @springfield scope is changed, further action must be paused until the dependent project is pushed to GitLab and the CI/CD pipeline runs.  After the CI/CD pipeline runs, the dependency may be updated and further action can continue.

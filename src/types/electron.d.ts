@@ -1,4 +1,5 @@
-import { RadioConnection, RadioModel } from '@springfield/ham-radio-api';
+import { RadioConnection, RadioModel, RadioModelId } from '@springfield/ham-radio-api';
+import type { RegistryRadio } from '@springfield/ham-radio-registry/dist/types/radio-config.js';
 
 interface ElectronAPI {
   serialPort: {
@@ -25,11 +26,19 @@ interface RadioModuleAPI {
   getModels: () => Promise<RadioModel[]>
 }
 
+interface RegistryAPI {
+  discoverConfigurations: () => Promise<{ success: boolean; data?: RegistryRadio[]; error?: string }>;
+  getManufacturers: () => Promise<{ success: boolean; data?: string[]; error?: string }>;
+  getModelsByManufacturer: (manufacturer: string) => Promise<{ success: boolean; data?: { id: RadioModelId; name: string; config: RegistryRadio }[]; error?: string }>;
+  getConfiguration: (modelId: RadioModelId) => Promise<{ success: boolean; data?: RegistryRadio; error?: string }>;
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI;
     modules: RadioModuleAPI;
     radio: RadioAPI;
+    registry: RegistryAPI;
   }
 }
 
