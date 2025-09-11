@@ -1,4 +1,4 @@
-import { RadioConnection, RadioMemory, RadioId } from "@springfield/ham-radio-api";
+import { RadioConnection, RadioMemory, RadioId, RadioProgram, RadioModelId } from "@springfield/ham-radio-api";
 import { RadioDriver } from "@springfield/ham-radio-driver";
 import { ipcMain, BrowserWindow, dialog } from "electron";
 import { ElectronRadioProgressIndicator } from "./radio-progress-indicator";
@@ -25,7 +25,15 @@ export class RadioManager {
       this.mainWindow.webContents.send("radio:showProgressDialog");
       const result = await this.read(connection);
       this.mainWindow.webContents.send("radio:hideProgressDialog");
-      this.mainWindow.webContents.send("radio:memory", connection.radio, result);
+      
+      // If memory was successfully read, also decode it
+      if (typeof result !== 'string') {
+        const decodedProgram = await this.decodeMemory(connection.radio.model, result);
+        this.mainWindow.webContents.send("radio:memory", connection.radio, result, decodedProgram);
+      } else {
+        this.mainWindow.webContents.send("radio:memory", connection.radio, result);
+      }
+      
       return result;
     });
 
@@ -68,6 +76,32 @@ export class RadioManager {
 
   private cancelRadioOperation() {
     this.radioProgressIndicator.isCanceled = true;
+  }
+
+  private async decodeMemory(modelId: RadioModelId, memory: RadioMemory): Promise<RadioProgram | undefined> {
+    try {
+      this.logger.withMetadata({ modelId }).info(`🔍 Decoding memory for model: ${modelId}`);
+      
+      const codec = await this.registryManager.getCodecDirect(modelId);
+      if (!codec) {
+        this.logger.withMetadata({ modelId }).warn(`⚠️ No codec found for ${modelId}`);
+        return undefined;
+      }
+      
+      this.logger.withMetadata({ modelId }).info(`✅ Got codec, decoding memory...`);
+      const decodedProgram = codec.decode(memory);
+      
+      this.logger.withMetadata({ 
+        modelId, 
+        channelCount: decodedProgram.channels?.length || 0,
+        settingsKeys: Object.keys(decodedProgram.settings || {}).length
+      }).info(`📻 Successfully decoded memory`);
+      
+      return decodedProgram;
+    } catch (error) {
+      this.logger.withError(error).error(`💥 Failed to decode memory for ${modelId}`);
+      return undefined;
+    }
   }
 
   private async getDriver(id: RadioId): Promise<RadioDriver> {

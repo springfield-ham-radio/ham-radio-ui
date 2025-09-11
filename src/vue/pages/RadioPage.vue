@@ -75,7 +75,7 @@ import {
   TabPanels,
   TabPanel,
 } from "primevue";
-import { RadioMemory, RadioProgram, RadioId, RadioToneType } from "@springfield/ham-radio-api";
+import { RadioMemory, RadioProgram, RadioId, RadioToneType, type RadioTone, type Frequency } from "@springfield/ham-radio-api";
 import { BandPlan, frequencyDisplay } from "@springfield/ham-radio-utils";
 import HexDump from "../components/HexDump.vue";
 import { useRadioStore } from "../stores/radios";
@@ -114,13 +114,20 @@ const getToneTypeDisplay = (tone: RadioTone) => {
 
 onMounted(() => {
   window.radio.onRadioMemory(
-    (_event, radioId: RadioId, radioMemory: RadioMemory) => {
-      console.log("radioMemory", radioId);
-      radioId.value = radioId;
+    (_event, receivedRadioId: RadioId, radioMemory: RadioMemory, decodedProgram?: RadioProgram) => {
+      console.log("📻 Received radio memory event", receivedRadioId);
+      radioId.value = receivedRadioId;
       memory.value = radioMemory;
-      program.value = radioStore.radiosById
-        .get(radioId.model)
-        ?.decodeMemory(radioMemory);
+      program.value = decodedProgram;
+      
+      if (decodedProgram) {
+        console.log("✅ Received decoded radio memory", {
+          channelCount: decodedProgram.channels?.length || 0,
+          settingsKeys: Object.keys(decodedProgram.settings || {})
+        });
+      } else {
+        console.warn("⚠️ No decoded program received - channels tab will be empty");
+      }
     }
   );
 });

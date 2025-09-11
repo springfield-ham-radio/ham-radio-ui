@@ -70,6 +70,6 @@ export const useRadioStore = defineStore("radio-drivers", () => {
     error, 
     initialize, 
     getModelsByManufacturer, 
-    getConfiguration 
+    getConfiguration
   };
 });

@@ -1,7 +1,7 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
-import { RadioConnection, RadioMemory, RadioId } from '@springfield/ham-radio-api';
+import { RadioConnection, RadioMemory, RadioId, RadioProgram } from '@springfield/ham-radio-api';
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 contextBridge.exposeInMainWorld("modules", {
@@ -33,10 +33,10 @@ contextBridge.exposeInMainWorld("radio", {
   ) => ipcRenderer.on("radio:updateProgressIndicator", callback),
 
   onRadioMemory: (
-    callback: (event: IpcRendererEvent, radioId: RadioId, memory: RadioMemory) => void
+    callback: (event: IpcRendererEvent, radioId: RadioId, memory: RadioMemory, program?: RadioProgram) => void
   ) => {
-    ipcRenderer.on("radio:memory", (event, radioId, memory) => {
-      callback(event, radioId, memory);
+    ipcRenderer.on("radio:memory", (event, radioId, memory, program) => {
+      callback(event, radioId, memory, program);
     });
   },
 
