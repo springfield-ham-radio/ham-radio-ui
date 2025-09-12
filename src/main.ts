@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, MenuItemConstructorOptions, dialog } from 'electron';
 import path from 'node:path';
 import { SerialPort } from 'serialport';
 import { ConsoleTransport, LogLayer } from 'loglayer';
@@ -58,6 +58,25 @@ const createWindow = () => {
           accelerator: process.platform === 'darwin' ? 'Cmd+I' : 'Ctrl+I',
           click: () => {
             mainWindow.webContents.send('radio:showImportDialog');
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Open Serial Log...',
+          accelerator: process.platform === 'darwin' ? 'Cmd+O' : 'Ctrl+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              title: 'Open Serial Log File',
+              filters: [
+                { name: 'JSON Files', extensions: ['json'] },
+                { name: 'All Files', extensions: ['*'] }
+              ],
+              properties: ['openFile']
+            });
+            
+            if (!result.canceled && result.filePaths.length > 0) {
+              mainWindow.webContents.send('file-open', { filePath: result.filePaths[0] });
+            }
           }
         }
       ]
@@ -134,6 +153,17 @@ ipcMain.handle("reset-serialport", async (_, path: string) => {
     await port.open();
   } catch (error) {
     console.error("Error resetting serial port:", error);
+    throw error;
+  }
+});
+
+ipcMain.handle("read-file", async (_, filePath: string) => {
+  try {
+    const fs = await import('fs');
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content;
+  } catch (error) {
+    console.error("Error reading file:", error);
     throw error;
   }
 });

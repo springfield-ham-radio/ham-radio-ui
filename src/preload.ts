@@ -59,4 +59,12 @@ contextBridge.exposeInMainWorld("electron", {
 
   dialog: {
   },
+
+  onFileOpen: (callback: (event: IpcRendererEvent, data: { filePath: string }) => void) => {
+    ipcRenderer.on("file-open", callback);
+  },
+
+  readFile: (filePath: string) => {
+    return ipcRenderer.invoke("read-file", filePath);
+  },
 });

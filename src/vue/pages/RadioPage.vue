@@ -1,5 +1,13 @@
 <template>
   <div class="flex flex-col h-screen overflow-hidden">
+    <div class="page-header">
+      <h1>Ham Radio Manager</h1>
+      <Button 
+        label="Serial Log Viewer" 
+        icon="pi pi-file-o" 
+        @click="goToSerialLog"
+      />
+    </div>
     <Tabs value="0" class="flex flex-col h-full">
       <TabList>
         <Tab value="0">Channels</Tab>
@@ -67,6 +75,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import {
+  Button,
   Column,
   DataTable,
   Tab,
@@ -112,6 +121,12 @@ const getToneTypeDisplay = (tone: RadioTone) => {
   return tone.type === RadioToneType.CTCSS ? "CTCSS" : "DCS";
 }
 
+const goToSerialLog = () => {
+  console.log('Navigating to serial log page');
+  // Emit event to parent to navigate to serial log page
+  window.dispatchEvent(new CustomEvent('navigate-to-serial-log'));
+}
+
 onMounted(() => {
   window.radio.onRadioMemory(
     (_event, receivedRadioId: RadioId, radioMemory: RadioMemory, decodedProgram?: RadioProgram) => {
@@ -132,3 +147,22 @@ onMounted(() => {
   );
 });
 </script>
+
+<style scoped>
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #d4d4d4;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+</style>
