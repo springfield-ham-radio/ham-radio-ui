@@ -116,8 +116,16 @@ export class RadioManager {
       // Convert RegistryRadio to Radio interface expected by RadioDriver
       const radio = this.convertRegistryRadioToRadio(registryRadio);
       
-      // Create and return the RadioDriver
-      return new RadioDriver(radio, this.logger);
+      // Create and return the RadioDriver with serial logging enabled
+      const driver = new RadioDriver(radio, this.logger, undefined, true);
+      
+      // Log the serial log file path for user reference
+      const logPath = driver.getSerialLogFilePath();
+      if (logPath) {
+        this.logger.info(`Serial logging enabled. Log file will be saved to: ${logPath}`);
+      }
+      
+      return driver;
       
     } catch (error) {
       this.logger.withError(error).error(`Failed to get driver for radio ${id.model}`);

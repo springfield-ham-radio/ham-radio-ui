@@ -48,10 +48,10 @@
   "dependencies": {
     "@primeuix/themes": "^1.2.3",
     "@springfield/ham-radio-api": "^16.1.3",
-    "@springfield/ham-radio-driver": "^1.3.0",
+    "@springfield/ham-radio-driver": "^1.5.1",
     "@springfield/ham-radio-registry": "^1.0.5",
     "@springfield/ham-radio-utils": "^3.0.0",
-    "@springfield/radio-module-baofeng": "^1.2.2",
+    "@springfield/radio-module-baofeng": "^1.2.5",
     "@vueuse/electron": "^13.9.0",
     "electron-squirrel-startup": "^1.0.1",
     "loglayer": "^6.7.0",
