@@ -6,6 +6,10 @@
     <div class="flex flex-col gap-3">
       <RadioSelector v-model="selectedRadio" />
       <SerialPortSelector v-model="selectedPort" />
+      <div class="flex items-center gap-2">
+        <Checkbox v-model="enableSerialLogging" :binary="true" inputId="serial-logging" />
+        <label for="serial-logging" class="text-sm">Create serial port log</label>
+      </div>
     </div>
 
     <template #footer>
@@ -21,12 +25,13 @@
 import { computed, ref, onMounted } from 'vue';
 import RadioSelector from './RadioSelector.vue';
 import SerialPortSelector from './SerialPortSelector.vue';
-import { Button, Dialog } from 'primevue';
+import { Button, Dialog, Checkbox } from 'primevue';
 import { RadioConnection, RadioId } from '@springfield/ham-radio-api';
 import { PortInfo } from "@serialport/bindings-interface";
 
 const selectedRadio = ref<RadioId>();
 const selectedPort = ref<PortInfo>();
+const enableSerialLogging = ref(false);
 
 const showDialog = ref(false);
 
@@ -39,6 +44,7 @@ const importFromRadio = () => {
   const connection: RadioConnection = {
     serialPortPath: selectedPort.value.path,
     radio: { ...selectedRadio.value },
+    enableSerialLogging: enableSerialLogging.value,
   };
 
   window.radio.importFromRadio(connection);

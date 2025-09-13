@@ -16,6 +16,7 @@
         <div class="ascii">{{ row.ascii }}</div>
       </div>
     </div>
+    <div class="hex-spacer"></div>
   </div>
 </template>
 
@@ -70,11 +71,12 @@ const formattedRows = computed(() => {
   background-color: #1e1e1e;
   border-radius: 4px;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .hex-header {
   display: flex;
-  padding: 1rem 1rem 0.5rem 1rem;
+  padding: 0.75rem 1rem 0.5rem 1rem;
   background-color: #252526;
   border-bottom: 1px solid #3c3c3c;
   position: sticky;
@@ -88,15 +90,16 @@ const formattedRows = computed(() => {
   font-family: monospace;
   white-space: pre;
   color: #d4d4d4;
-  padding: 1rem;
+  padding: 0.5rem 1rem 0.5rem 1rem;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  box-sizing: border-box;
 }
 
 .hex-row {
   display: flex;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .address {
@@ -124,5 +127,11 @@ const formattedRows = computed(() => {
   color: #ce9178;
   min-width: 16ch; /* 16 characters */
   flex-shrink: 0;
+}
+
+.hex-spacer {
+  height: 2rem;
+  flex-shrink: 0;
+  background-color: #1e1e1e;
 }
 </style>

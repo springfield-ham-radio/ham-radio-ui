@@ -1,4 +1,4 @@
-import { RadioConnection, RadioMemory, RadioId, RadioProgram, RadioModelId } from "@springfield/ham-radio-api";
+import { RadioConnection, RadioMemory, RadioProgram, RadioModelId } from "@springfield/ham-radio-api";
 import { RadioDriver } from "@springfield/ham-radio-driver";
 import { ipcMain, BrowserWindow, dialog } from "electron";
 import { ElectronRadioProgressIndicator } from "./radio-progress-indicator";
@@ -23,18 +23,20 @@ export class RadioManager {
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
       this.logger.withMetadata(connection).debug('ipcMain received radio:read message');
       this.mainWindow.webContents.send("radio:showProgressDialog");
-      const result = await this.read(connection);
+      const { memory, driver } = await this.read(connection);
       this.mainWindow.webContents.send("radio:hideProgressDialog");
       
-      // If memory was successfully read, also decode it
-      if (typeof result !== 'string') {
-        const decodedProgram = await this.decodeMemory(connection.radio.model, result);
-        this.mainWindow.webContents.send("radio:memory", connection.radio, result, decodedProgram);
+      // If memory was successfully read, also decode it and get serial log data
+      const serialLogData = driver.getSerialLogData();
+      
+      if (typeof memory !== 'string') {
+        const decodedProgram = await this.decodeMemory(connection.radio.model, memory);
+        this.mainWindow.webContents.send("radio:memory", connection.radio, memory, decodedProgram, serialLogData);
       } else {
-        this.mainWindow.webContents.send("radio:memory", connection.radio, result);
+        this.mainWindow.webContents.send("radio:memory", connection.radio, memory, undefined, serialLogData);
       }
       
-      return result;
+      return memory;
     });
 
     ipcMain.handle("radio:saveToFile", async (_event, memory) => {
@@ -47,23 +49,23 @@ export class RadioManager {
     });
   }
 
-  private async read(connection: RadioConnection): Promise<RadioMemory | string> {
+  private async read(connection: RadioConnection): Promise<{ memory: RadioMemory | string; driver: RadioDriver }> {
     this.radioProgressIndicator.reset();
-    const driver = await this.getDriver(connection.radio);
+    const driver = await this.getDriver(connection);
 
     const memoryData = await driver.readRadio(connection.serialPortPath, this.radioProgressIndicator);
 
     if (memoryData == undefined) {
-      return "Canceled";
+      return { memory: "Canceled", driver };
     }
 
     // Convert the Uint8Array to RadioMemory format
     const memory: RadioMemory = {
-      model: connection.radio.model,
+      radioModel: connection.radio.model,
       contents: memoryData
     };
 
-    return memory;
+    return { memory, driver };
   }
 
   private async saveToFile(memory: RadioMemory) {
@@ -104,32 +106,35 @@ export class RadioManager {
     }
   }
 
-  private async getDriver(id: RadioId): Promise<RadioDriver> {
+  private async getDriver(connection: RadioConnection): Promise<RadioDriver> {
     try {
       // Get the radio configuration from the registry manager
-      const registryRadio = await this.registryManager.getConfigurationDirect(id.model);
+      const registryRadio = await this.registryManager.getConfigurationDirect(connection.radio.model);
       
       if (!registryRadio) {
-        throw new Error(`Radio configuration for model ${id.model} not found in registry`);
+        throw new Error(`Radio configuration for model ${connection.radio.model} not found in registry`);
       }
       
       // Convert RegistryRadio to Radio interface expected by RadioDriver
       const radio = this.convertRegistryRadioToRadio(registryRadio);
       
-      // Create and return the RadioDriver with serial logging enabled
-      const driver = new RadioDriver(radio, this.logger, undefined, true);
+      // Create and return the RadioDriver with serial logging based on connection option
+      const enableSerialLogging = connection.enableSerialLogging ?? false;
+      const driver = new RadioDriver(radio, this.logger, undefined, enableSerialLogging);
       
-      // Log the serial log file path for user reference
-      const logPath = driver.getSerialLogFilePath();
-      if (logPath) {
-        this.logger.info(`Serial logging enabled. Log file will be saved to: ${logPath}`);
+      // Log the serial log file path for user reference if logging is enabled
+      if (enableSerialLogging) {
+        const logPath = driver.getSerialLogFilePath();
+        if (logPath) {
+          this.logger.info(`Serial logging enabled. Log file will be saved to: ${logPath}`);
+        }
       }
       
       return driver;
       
     } catch (error) {
-      this.logger.withError(error).error(`Failed to get driver for radio ${id.model}`);
-      throw new Error(`Failed to get driver for radio ${id.model}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.withError(error).error(`Failed to get driver for radio ${connection.radio.model}`);
+      throw new Error(`Failed to get driver for radio ${connection.radio.model}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

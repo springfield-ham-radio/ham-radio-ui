@@ -2,17 +2,13 @@
   <div class="flex flex-col h-screen overflow-hidden">
     <div class="page-header">
       <h1>Ham Radio Manager</h1>
-      <Button 
-        label="Serial Log Viewer" 
-        icon="pi pi-file-o" 
-        @click="goToSerialLog"
-      />
     </div>
     <Tabs value="0" class="flex flex-col h-full">
       <TabList>
         <Tab value="0">Channels</Tab>
         <Tab value="1">Settings</Tab>
         <Tab value="2">Hex Dump</Tab>
+        <Tab value="3" v-if="serialLogData">Serial Log ({{ serialLogData?.entries?.length || 0 }})</Tab>
       </TabList>
       <div class="flex-1 min-h-0">
         <TabPanels class="h-full">
@@ -66,6 +62,11 @@
               <HexDump v-if="memory" :memory="memory" />
             </div>
           </TabPanel>
+          <TabPanel value="3" class="h-full p-4" v-if="serialLogData">
+            <div class="h-full card">
+              <SerialLogViewer :logData="serialLogData" />
+            </div>
+          </TabPanel>
         </TabPanels>
       </div>
     </Tabs>
@@ -87,6 +88,7 @@ import {
 import { RadioMemory, RadioProgram, RadioId, RadioToneType, type RadioTone, type Frequency } from "@springfield/ham-radio-api";
 import { BandPlan, frequencyDisplay } from "@springfield/ham-radio-utils";
 import HexDump from "../components/HexDump.vue";
+import SerialLogViewer from "../components/SerialLogViewer.vue";
 import { useRadioStore } from "../stores/radios";
 
 const bandPlan = new BandPlan();
@@ -94,6 +96,7 @@ const bandPlan = new BandPlan();
 const radioId = ref<RadioId>();
 const memory = ref<RadioMemory>();
 const program = ref<RadioProgram>();
+const serialLogData = ref<any>(null);
 const radioStore = useRadioStore();
 
 const getFrequencyDisplay = (frequency: Frequency) => {
@@ -121,19 +124,15 @@ const getToneTypeDisplay = (tone: RadioTone) => {
   return tone.type === RadioToneType.CTCSS ? "CTCSS" : "DCS";
 }
 
-const goToSerialLog = () => {
-  console.log('Navigating to serial log page');
-  // Emit event to parent to navigate to serial log page
-  window.dispatchEvent(new CustomEvent('navigate-to-serial-log'));
-}
 
 onMounted(() => {
   window.radio.onRadioMemory(
-    (_event, receivedRadioId: RadioId, radioMemory: RadioMemory, decodedProgram?: RadioProgram) => {
+    (_event, receivedRadioId: RadioId, radioMemory: RadioMemory, decodedProgram?: RadioProgram, logData?: any) => {
       console.log("📻 Received radio memory event", receivedRadioId);
       radioId.value = receivedRadioId;
       memory.value = radioMemory;
       program.value = decodedProgram;
+      serialLogData.value = logData;
       
       if (decodedProgram) {
         console.log("✅ Received decoded radio memory", {
@@ -142,6 +141,10 @@ onMounted(() => {
         });
       } else {
         console.warn("⚠️ No decoded program received - channels tab will be empty");
+      }
+      
+      if (logData) {
+        console.log("📝 Received serial log data with", logData.entries?.length || 0, "entries");
       }
     }
   );
@@ -164,5 +167,16 @@ onMounted(() => {
   color: #d4d4d4;
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+/* Ensure tab panels don't overflow */
+:deep(.p-tabpanel) {
+  height: 100%;
+  overflow: hidden;
+}
+
+:deep(.p-tabpanels) {
+  height: 100%;
+  overflow: hidden;
 }
 </style>

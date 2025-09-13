@@ -1,4 +1,4 @@
-import { RadioConnection, RadioModel, RadioModelId } from '@springfield/ham-radio-api';
+import { RadioConnection, RadioModel, RadioModelId, RadioMemory, RadioProgram } from '@springfield/ham-radio-api';
 import type { RegistryRadio } from '@springfield/ham-radio-registry/dist/types/radio-config.js';
 
 interface ElectronAPI {
@@ -16,7 +16,7 @@ interface RadioAPI {
     callback: (event: IpcRendererEvent, value: number) => void
   ) => void;
   onRadioMemory: (
-    callback: (event: IpcRendererEvent, model: RadioModel, memory: RadioMemory) => void
+    callback: (event: IpcRendererEvent, model: RadioModel, memory: RadioMemory, decodedProgram?: RadioProgram, serialLogData?: any) => void
   ) => void;
   importFromRadio: (connection: RadioConnection) => Promise<void>;
   cancel: () => Promise<void>;

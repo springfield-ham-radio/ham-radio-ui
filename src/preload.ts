@@ -33,10 +33,10 @@ contextBridge.exposeInMainWorld("radio", {
   ) => ipcRenderer.on("radio:updateProgressIndicator", callback),
 
   onRadioMemory: (
-    callback: (event: IpcRendererEvent, radioId: RadioId, memory: RadioMemory, program?: RadioProgram) => void
+    callback: (event: IpcRendererEvent, radioId: RadioId, memory: RadioMemory, program?: RadioProgram, serialLogData?: any) => void
   ) => {
-    ipcRenderer.on("radio:memory", (event, radioId, memory, program) => {
-      callback(event, radioId, memory, program);
+    ipcRenderer.on("radio:memory", (event, radioId, memory, program, serialLogData) => {
+      callback(event, radioId, memory, program, serialLogData);
     });
   },
 
