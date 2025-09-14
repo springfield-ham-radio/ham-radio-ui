@@ -1850,26 +1850,36 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver@npm:^1.7.0":
-  version: 1.7.0
-  resolution: "@springfield/ham-radio-driver@npm:1.7.0"
+"@springfield/ham-radio-api@npm:^16.3.0":
+  version: 16.3.0
+  resolution: "@springfield/ham-radio-api@npm:16.3.0"
   dependencies:
-    "@serialport/parser-byte-length": "npm:^13.0.0"
-    "@springfield/ham-radio-api": "npm:^16.2.0"
-    "@springfield/ham-radio-utils": "npm:^3.1.0"
     loglayer: "npm:^6.7.0"
-    serialport: "npm:^13.0.0"
-  checksum: 10c0/ddbef73812ff576c0ff41ffea27a3d1db1b0a503fbbc4dbff8714013f2021f5e93071b0a98845ee53721cb471be2caf22c73e58d0197645de2559a9d8870e157
+    ts-brand: "npm:^0.2.0"
+  checksum: 10c0/e7fdf636fb2604985f14de3487ad56da07b136d5380e59da30467b7f8751789a6ba60c350dc4ae57ff427ba9aeda8d68307b3ac5ef2b175d52fe26eb22765723
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-registry@npm:^1.0.7":
-  version: 1.0.7
-  resolution: "@springfield/ham-radio-registry@npm:1.0.7"
+"@springfield/ham-radio-driver@npm:^1.8.0":
+  version: 1.8.0
+  resolution: "@springfield/ham-radio-driver@npm:1.8.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^16.2.0"
+    "@serialport/parser-byte-length": "npm:^13.0.0"
+    "@springfield/ham-radio-api": "npm:^16.3.0"
+    "@springfield/ham-radio-utils": "npm:^3.2.0"
     loglayer: "npm:^6.7.0"
-  checksum: 10c0/9604e048d39f1a885fc0ee14045e6589055e55ba45d566576fdfe2db0c0d2670794a6b54115ccf8b18f76e6ccba8cfd17386d5da8aa7253a44b13728f19a1477
+    serialport: "npm:^13.0.0"
+  checksum: 10c0/dceb14c6a327f4cc62b94194eee2791320bbeefea14cf3fff453c9f5ccb98df451b9fbf692453708d98293356dc45dff6bf44df472993d28ad6946f3673edc63
+  languageName: node
+  linkType: hard
+
+"@springfield/ham-radio-registry@npm:^1.0.8":
+  version: 1.0.8
+  resolution: "@springfield/ham-radio-registry@npm:1.0.8"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^16.3.0"
+    loglayer: "npm:^6.7.0"
+  checksum: 10c0/cf8e9e25c616b2a8837c1fcdf808b315c5a90d8a888db0ed03d5981a74ae55aefc4aac66366270d7a29a67f5cd3cb95b5f1c3ccf2072a2e2e11457df06adf770
   languageName: node
   linkType: hard
 
@@ -1887,11 +1897,11 @@ __metadata:
     "@electron-forge/plugin-vite": "npm:^7.9.0"
     "@electron/fuses": "npm:^1.0.0"
     "@primeuix/themes": "npm:^1.2.3"
-    "@springfield/ham-radio-api": "npm:^16.2.0"
-    "@springfield/ham-radio-driver": "npm:^1.7.0"
-    "@springfield/ham-radio-registry": "npm:^1.0.7"
+    "@springfield/ham-radio-api": "npm:^16.3.0"
+    "@springfield/ham-radio-driver": "npm:^1.8.0"
+    "@springfield/ham-radio-registry": "npm:^1.0.8"
     "@springfield/ham-radio-utils": "npm:^3.1.0"
-    "@springfield/radio-module-baofeng": "npm:^1.2.7"
+    "@springfield/radio-module-baofeng": "npm:^1.3.0"
     "@types/node": "npm:^22.18.3"
     "@vitejs/plugin-vue": "npm:^6.0.1"
     "@vueuse/electron": "npm:^13.9.0"
@@ -1928,14 +1938,28 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/radio-module-baofeng@npm:^1.2.7":
-  version: 1.2.7
-  resolution: "@springfield/radio-module-baofeng@npm:1.2.7"
+"@springfield/ham-radio-utils@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "@springfield/ham-radio-utils@npm:3.2.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^16.2.0"
-    "@springfield/ham-radio-utils": "npm:^3.1.0"
+    "@springfield/ham-radio-api": "npm:^16.3.0"
+    ajv: "npm:^8.17.1"
+    ajv-formats: "npm:^3.0.1"
+    fishery: "npm:^2.3.1"
     loglayer: "npm:^6.7.0"
-  checksum: 10c0/1d0207a29f733a7690075d9f4fa8bc84b0898dfff034111a14c79a19150c8eed5653b379c1b4d93daa38b8edd09665156a492ea9a65941222b7b389458374ab1
+    sprintf-js: "npm:^1.1.3"
+  checksum: 10c0/8188ee90d7b4fc185cffe123b9c9ffaec1493a7a03734e616956a68c8a60177cd9da50c19b87d6c92bfc37fa937c47275d135ac61da83d3253fd1d6a521ff59d
+  languageName: node
+  linkType: hard
+
+"@springfield/radio-module-baofeng@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "@springfield/radio-module-baofeng@npm:1.3.0"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^16.3.0"
+    "@springfield/ham-radio-utils": "npm:^3.2.0"
+    loglayer: "npm:^6.7.0"
+  checksum: 10c0/a4ca651f11926f1d3489f1df8d193da398df09f26d530f033aea4e54cb8d520539fe4a0dc88fe38febf55d8d68e5f7986366802d9ea44c2447c77f60bf73647d
   languageName: node
   linkType: hard
 
