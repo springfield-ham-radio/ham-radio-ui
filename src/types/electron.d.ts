@@ -18,6 +18,7 @@ interface RadioAPI {
   onRadioMemory: (
     callback: (event: IpcRendererEvent, model: RadioModel, memory: RadioMemory, decodedProgram?: RadioProgram, serialLogData?: any) => void
   ) => void;
+  onRadioError: (callback: (event: IpcRendererEvent, errorMessage: string) => void) => void;
   importFromRadio: (connection: RadioConnection) => Promise<void>;
   cancel: () => Promise<void>;
 }

@@ -23,20 +23,32 @@ export class RadioManager {
     ipcMain.handle("radio:read", async (_event, connection: RadioConnection) => {
       this.logger.withMetadata(connection).debug('ipcMain received radio:read message');
       this.mainWindow.webContents.send("radio:showProgressDialog");
-      const { memory, driver } = await this.read(connection);
-      this.mainWindow.webContents.send("radio:hideProgressDialog");
-      
-      // If memory was successfully read, also decode it and get serial log data
-      const serialLogData = driver.getSerialLogData();
-      
-      if (typeof memory !== 'string') {
-        const decodedProgram = await this.decodeMemory(connection.radio.model, memory);
-        this.mainWindow.webContents.send("radio:memory", connection.radio, memory, decodedProgram, serialLogData);
-      } else {
-        this.mainWindow.webContents.send("radio:memory", connection.radio, memory, undefined, serialLogData);
+
+      try {
+        const { memory, driver } = await this.read(connection);
+        this.mainWindow.webContents.send("radio:hideProgressDialog");
+        
+        // If memory was successfully read, also decode it and get serial log data
+        const serialLogData = driver.getSerialLogData();
+        
+        if (typeof memory !== 'string') {
+          const decodedProgram = await this.decodeMemory(connection.radio.model, memory);
+          this.mainWindow.webContents.send("radio:memory", connection.radio, memory, decodedProgram, serialLogData);
+        } else {
+          this.mainWindow.webContents.send("radio:memory", connection.radio, memory, undefined, serialLogData);
+        }
+        
+        return memory;
+      } catch (error) {
+        this.mainWindow.webContents.send("radio:hideProgressDialog");
+        this.logger.withError(error).error('Failed to read radio');
+        this.logger.withMetadata(connection).error('Failed to read radio');
+
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred while reading radio';
+        this.mainWindow.webContents.send("radio:error", errorMessage);
+
+        throw error;
       }
-      
-      return memory;
     });
 
     ipcMain.handle("radio:saveToFile", async (_event, memory) => {

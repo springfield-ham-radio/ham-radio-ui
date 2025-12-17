@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld("radio", {
     });
   },
 
+  onRadioError: (callback: (event: IpcRendererEvent, errorMessage: string) => void) => {
+    ipcRenderer.on("radio:error", callback);
+  },
+
   importFromRadio: (connection: RadioConnection) => {
     ipcRenderer.invoke("radio:read", connection);
   },
