@@ -8,6 +8,13 @@ export {
   radioAddressToBufferOffset,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-codec.js';
 export {
+  bindingsToChannels,
+  decodeRadioProgram,
+  encodeRadioProgram,
+  programToChannelSettings,
+  settingsWithoutChannels,
+} from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-channels.js';
+export {
   collectMemoryMapUiFields,
   groupMemoryMapUiFields,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-ui.js';
