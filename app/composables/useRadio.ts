@@ -1,6 +1,15 @@
-import type { Radio, RadioChannel, RadioCodec, RadioId, RadioProgressIndicator } from '@springfield/ham-radio-api';
+import type {
+  Radio,
+  RadioChannel,
+  RadioCodec,
+  RadioId,
+  RadioMemoryMap,
+  RadioProgram,
+  RadioProgressIndicator,
+  RadioSettings,
+} from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
-import { CodecFactory } from '@springfield/radio-module-baofeng';
+import { CodecFactory, baofengMemoryMap, type BaofengConfig } from '@springfield/radio-module-baofeng';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import uv5rConfig from '#baofeng-uv5r';
 
@@ -47,6 +56,9 @@ export function useRadio() {
   const canceled = useState('radio-canceled', () => false);
   const memory = useState<Uint8Array | undefined>('radio-memory', () => undefined);
   const channels = useState<ChannelRow[]>('radio-channels', () => []);
+  const program = useState<RadioProgram | undefined>('radio-program', () => undefined);
+  const settingsMemoryMap = useState<RadioMemoryMap | undefined>('radio-settings-memory-map', () => undefined);
+  const activeRadioId = useState<RadioId | undefined>('radio-active-id', () => undefined);
 
   async function initialize(): Promise<void> {
     if (configurations.value.length > 0 || isLoading.value) {
@@ -121,13 +133,17 @@ export function useRadio() {
       }
 
       memory.value = memoryData;
+      activeRadioId.value = radioId;
       const codec = await getCodec(radioId);
-      const program = codec?.decode({
+      const decoded = codec?.decode({
         radioModel: radioId.model,
         contents: memoryData,
       });
 
-      channels.value = (program?.channels ?? []).flatMap((channel) => {
+      program.value = decoded;
+      settingsMemoryMap.value = baofengMemoryMap((config.codec?.config ?? {}) as BaofengConfig);
+
+      channels.value = (decoded?.channels ?? []).flatMap((channel) => {
         if (typeof channel.radioChannel === 'string') {
           return [];
         }
@@ -142,6 +158,32 @@ export function useRadio() {
       console.error('Failed to read radio', cause);
       logger.withError(cause).error('Failed to read radio');
     }
+  }
+
+  async function updateSettings(nextSettings: RadioSettings): Promise<void> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      return;
+    }
+
+    const nextProgram: RadioProgram = {
+      ...program.value,
+      settings: nextSettings,
+    };
+
+    program.value = nextProgram;
+
+    const codec = await getCodec(activeRadioId.value);
+
+    if (!codec) {
+      return;
+    }
+
+    const encoded = codec.encode(nextProgram, {
+      radioModel: activeRadioId.value.model,
+      contents: memory.value,
+    });
+
+    memory.value = encoded.contents;
   }
 
   function cancelImport(): void {
@@ -161,9 +203,12 @@ export function useRadio() {
     progressStartedAt,
     memory,
     channels,
+    program,
+    settingsMemoryMap,
     initialize,
     getModelsByManufacturer,
     importFromRadio,
+    updateSettings,
     cancelImport,
   };
 }
@@ -178,6 +223,7 @@ function toRadio(config: LoadedRadioConfig): Radio {
     serialConfig: config.serialConfig,
     readMemory: config.readMemory,
     writeMemory: config.writeMemory,
+    memoryMap: config.memoryMap,
   };
 }
 

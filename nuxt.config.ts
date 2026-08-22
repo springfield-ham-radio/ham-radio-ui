@@ -34,7 +34,7 @@ export default defineNuxtConfig({
   },
 
   alias: {
-    '#baofeng-uv5r': stub('./node_modules/@springfield/radio-module-baofeng/configs/baofeng-uv5r.json'),
+    '#baofeng-uv5r': stub('../../drivers/radio-module-baofeng/configs/baofeng-uv5r.json'),
   },
 
   vite: {

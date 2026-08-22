@@ -4,7 +4,7 @@ import type { TableColumn } from '@nuxt/ui';
 import type { ChannelRow } from '~/composables/useRadio';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
-const { channels, memory } = useRadio();
+const { channels, memory, program, settingsMemoryMap, updateSettings } = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 
 interface DisplayChannelRow extends ChannelRow {
@@ -65,11 +65,11 @@ const hexMemory = computed(() => {
       class="flex min-h-0 flex-1 flex-col"
       :unmount-on-hide="false"
       :ui="{
-        list: 'w-full gap-0.5 border-b border-default',
+        list: 'w-full shrink-0 gap-0.5 border-b border-default',
         trigger: 'grow-0 px-3 data-[state=inactive]:text-muted data-[state=active]:text-primary',
         leadingIcon: 'text-current',
         indicator: 'bg-primary h-0.5 rounded-full',
-        content: 'min-h-0 flex-1 focus-visible:outline-none',
+        content: 'flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none',
       }"
     >
       <template #channels>
@@ -116,7 +116,15 @@ const hexMemory = computed(() => {
         </div>
       </template>
       <template #settings>
-        <p class="pt-4 text-sm text-muted">Radio settings will appear here after a radio is imported.</p>
+        <div class="min-h-0 flex-1 overflow-y-auto pt-2">
+          <RadioSettingsForm
+            v-if="settingsMemoryMap && program"
+            :memory-map="settingsMemoryMap"
+            :settings="program.settings"
+            @update:settings="updateSettings"
+          />
+          <p v-else class="pt-2 text-sm text-muted">Radio settings will appear here after a radio is imported.</p>
+        </div>
       </template>
       <template #hex>
         <div class="min-h-0 flex-1 pt-4">
