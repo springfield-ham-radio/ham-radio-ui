@@ -2,6 +2,10 @@
 
 Desktop app for reading and managing ham radio memory.
 
+## Usage
+
+Open and save a radio memory image as JSON from **File → Open Memory…** (`⌘O` / `Ctrl+O`) and **File → Save Memory…** (`⌘S` / `Ctrl+S`). Import a live image from a connected radio with **File → Import from Radio…**.
+
 ## Development
 
 This project uses [Node.js](https://nodejs.dev) 24 (see `.nvmrc`) and [Yarn](https://yarnpkg.com) 4 via Corepack.

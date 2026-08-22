@@ -159,7 +159,7 @@ const hexMemory = computed(() => {
             :settings="program.settings"
             @update:settings="updateSettings"
           />
-          <p v-else class="pt-2 text-sm text-muted">Radio settings will appear here after a radio is imported.</p>
+          <p v-else class="pt-2 text-sm text-muted">Radio settings will appear here after you open a memory file or import from a radio.</p>
         </div>
       </template>
       <template #hex>

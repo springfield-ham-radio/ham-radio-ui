@@ -12,6 +12,8 @@ import { RadioToneType } from '@springfield/ham-radio-api';
 import { CodecFactory, baofengMemoryMap, type BaofengConfig } from '@springfield/radio-module-baofeng';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import uv5rConfig from '#baofeng-uv5r';
+import { defaultMemoryFileName, parseRadioMemoryFile, serializeRadioMemoryFile } from '~/utils/radio-memory-file';
+import { readTextFileWithPicker, writeTextFileWithPicker } from '~/utils/radio-memory-file-io';
 
 interface LoadedRadioConfig extends Radio {
   codec?: {
@@ -46,6 +48,7 @@ export interface ChannelRow {
 }
 
 export function useRadio() {
+  const toast = useToast();
   const configurations = useState<LoadedRadioConfig[]>('radio-configurations', () => []);
   const manufacturers = useState<string[]>('radio-manufacturers', () => []);
   const isLoading = useState('radio-loading', () => false);
@@ -134,25 +137,7 @@ export function useRadio() {
         return;
       }
 
-      memory.value = memoryData;
-      activeRadioId.value = radioId;
-      const codec = await getCodec(radioId);
-      const decoded = codec?.decode({
-        radioModel: radioId.model,
-        contents: memoryData,
-      });
-
-      program.value = decoded;
-      settingsMemoryMap.value = baofengMemoryMap((config.codec?.config ?? {}) as BaofengConfig);
-
-      channels.value = (decoded?.channels ?? []).flatMap((channel) => {
-        if (typeof channel.radioChannel === 'string') {
-          return [];
-        }
-
-        return [toChannelRow(channel.channelNumber, channel.radioChannel, channel.settings)];
-      });
-
+      await applyLoadedMemory(memoryData, radioId);
       progressOpen.value = false;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
@@ -193,6 +178,98 @@ export function useRadio() {
     progressOpen.value = false;
   }
 
+  async function openMemoryFile(): Promise<void> {
+    try {
+      const text = await readTextFileWithPicker();
+
+      if (text === undefined) {
+        return;
+      }
+
+      const loaded = parseRadioMemoryFile(text);
+      await applyLoadedMemory(loaded.contents, loaded.radioId);
+      toast.add({
+        title: 'Memory opened',
+        description: `${loaded.radioId.name} (${loaded.contents.length} bytes)`,
+        color: 'success',
+        icon: 'i-lucide-folder-open',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to open radio memory';
+      logger.withError(cause).error('Failed to open radio memory');
+      toast.add({
+        title: 'Could not open memory',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
+  }
+
+  async function saveMemoryFile(): Promise<void> {
+    if (!memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to save',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    try {
+      const contents = serializeRadioMemoryFile(activeRadioId.value, memory.value);
+      const saved = await writeTextFileWithPicker(contents, defaultMemoryFileName(activeRadioId.value));
+
+      if (!saved) {
+        return;
+      }
+
+      toast.add({
+        title: 'Memory saved',
+        description: `${activeRadioId.value.name} (${memory.value.length} bytes)`,
+        color: 'success',
+        icon: 'i-lucide-save',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to save radio memory';
+      logger.withError(cause).error('Failed to save radio memory');
+      toast.add({
+        title: 'Could not save memory',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
+  }
+
+  async function applyLoadedMemory(memoryData: Uint8Array, radioId: RadioId): Promise<void> {
+    const config = getConfiguration(radioId);
+
+    if (!config) {
+      throw new Error(`No configuration found for ${radioId.manufacturer} ${radioId.name}`);
+    }
+
+    memory.value = memoryData;
+    activeRadioId.value = radioId;
+    const codec = await getCodec(radioId);
+    const decoded = codec?.decode({
+      radioModel: radioId.model,
+      contents: memoryData,
+    });
+
+    program.value = decoded;
+    settingsMemoryMap.value = baofengMemoryMap((config.codec?.config ?? {}) as BaofengConfig);
+
+    channels.value = (decoded?.channels ?? []).flatMap((channel) => {
+      if (typeof channel.radioChannel === 'string') {
+        return [];
+      }
+
+      return [toChannelRow(channel.channelNumber, channel.radioChannel, channel.settings)];
+    });
+  }
+
   return {
     configurations,
     manufacturers,
@@ -212,6 +289,8 @@ export function useRadio() {
     importFromRadio,
     updateSettings,
     cancelImport,
+    openMemoryFile,
+    saveMemoryFile,
   };
 }
 

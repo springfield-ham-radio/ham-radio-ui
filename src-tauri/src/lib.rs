@@ -3,6 +3,9 @@ use tauri::Emitter;
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
+    let open_memory = MenuItem::with_id(app, "open-memory", "Open Memory...", true, Some("CmdOrCtrl+O"))?;
+    let save_memory = MenuItem::with_id(app, "save-memory", "Save Memory...", true, Some("CmdOrCtrl+S"))?;
+    let import_from_radio = MenuItem::with_id(app, "import-from-radio", "Import from Radio...", true, None::<&str>)?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -38,7 +41,19 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        let file_menu = Submenu::with_items(app, "File", true, &[&PredefinedMenuItem::close_window(app, None)?])?;
+        let file_menu = Submenu::with_items(
+            app,
+            "File",
+            true,
+            &[
+                &open_memory,
+                &save_memory,
+                &PredefinedMenuItem::separator(app)?,
+                &import_from_radio,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::close_window(app, None)?,
+            ],
+        )?;
 
         let window_menu = Submenu::with_items(
             app,
@@ -61,11 +76,36 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             app,
             "File",
             true,
-            &[&preferences, &PredefinedMenuItem::separator(app)?, &PredefinedMenuItem::quit(app, None)?],
+            &[
+                &open_memory,
+                &save_memory,
+                &PredefinedMenuItem::separator(app)?,
+                &import_from_radio,
+                &PredefinedMenuItem::separator(app)?,
+                &preferences,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::quit(app, None)?,
+            ],
         )?;
 
         Menu::with_items(app, &[&file_menu, &edit_menu])
     }
+}
+
+fn emit_menu_event(app: &tauri::AppHandle, event_name: &str) {
+    if let Err(error) = app.emit(event_name, ()) {
+        log::error!("Failed to emit {event_name}: {error}");
+    }
+}
+
+#[tauri::command]
+fn save_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn load_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|error| error.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,12 +114,15 @@ pub fn run() {
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![save_text_file, load_text_file])
         .menu(build_menu)
         .on_menu_event(|app, event| {
-            if event.id() == "preferences" {
-                if let Err(error) = app.emit("open-preferences", ()) {
-                    log::error!("Failed to emit open-preferences: {error}");
-                }
+            match event.id().as_ref() {
+                "preferences" => emit_menu_event(app, "open-preferences"),
+                "open-memory" => emit_menu_event(app, "open-memory"),
+                "save-memory" => emit_menu_event(app, "save-memory"),
+                "import-from-radio" => emit_menu_event(app, "import-from-radio"),
+                _ => {}
             }
         })
         .setup(|app| {
