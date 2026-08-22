@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
-import type { TableColumn } from '@nuxt/ui';
+import type { TableColumn, TableRow } from '@nuxt/ui';
 import type { RadioSettingValue } from '@springfield/ham-radio-api';
 import {
   collectChannelMemoryMapUiFields,
@@ -10,7 +10,7 @@ import {
 import type { ChannelRow } from '~/composables/useRadio';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
-const { channels, memory, program, settingsMemoryMap, activeRadioId, updateSettings } = useRadio();
+const { channels, memory, program, settingsMemoryMap, activeRadioId, updateSettings, updateChannel } = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 
 interface DisplayChannelRow extends ChannelRow {
@@ -74,8 +74,39 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
     accessorFn: (row) => row.extras[field.fieldId] ?? '',
   }));
 
-  return [...core, ...dynamic];
+  return [
+    ...core,
+    ...dynamic,
+    {
+      id: 'edit',
+      header: '',
+    },
+  ];
 });
+
+const editorOpen = ref(false);
+const editingChannelNumber = ref<number | undefined>();
+
+const editingChannel = computed(() => {
+  return program.value?.channels.find((channel) => channel.channelNumber === editingChannelNumber.value);
+});
+
+function openChannelEditor(channelNumber: number): void {
+  editingChannelNumber.value = channelNumber;
+  editorOpen.value = true;
+}
+
+function onSelectChannel(_event: Event, row: TableRow<DisplayChannelRow>): void {
+  openChannelEditor(row.original.channelNumber);
+}
+
+function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
+  if (editingChannelNumber.value === undefined) {
+    return;
+  }
+
+  void updateChannel(editingChannelNumber.value, patch);
+}
 
 const outOfClassCount = computed(() => displayChannels.value.filter((channel) => channel.privilegeWarning).length);
 
@@ -129,6 +160,8 @@ const hexMemory = computed(() => {
               tbody: 'divide-y-0',
               empty: 'py-4 text-center text-xs text-muted',
             }"
+            empty="Open a memory file or import from a radio to edit channels."
+            @select="onSelectChannel"
           >
             <template #privilege-cell="{ row }">
               <UTooltip
@@ -148,7 +181,18 @@ const hexMemory = computed(() => {
                 </template>
               </UTooltip>
             </template>
+            <template #edit-cell="{ row }">
+              <UButton
+                icon="i-lucide-pencil"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                aria-label="Edit channel"
+                @click.stop="openChannelEditor(row.original.channelNumber)"
+              />
+            </template>
           </UTable>
+          <p v-if="channels.length > 0" class="mt-2 text-xs text-muted">Click a channel to edit it. Changes are saved into the loaded memory.</p>
         </div>
       </template>
       <template #settings>
@@ -169,5 +213,11 @@ const hexMemory = computed(() => {
         </div>
       </template>
     </UTabs>
+    <RadioChannelEditor
+      v-model:open="editorOpen"
+      :channel="editingChannel"
+      :memory-map="settingsMemoryMap"
+      @update:channel="onChannelPatch"
+    />
   </div>
 </template>

@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
   const router = useRouter();
-  const { importOpen, openMemoryFile, saveMemoryFile } = useRadio();
+  const { importOpen, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
 
   void (async () => {
     try {
@@ -14,6 +14,9 @@ export default defineNuxtPlugin(() => {
       });
       await listen('save-memory', () => {
         void saveMemoryFile();
+      });
+      await listen('save-memory-as', () => {
+        void saveMemoryFileAs();
       });
       await listen('import-from-radio', () => {
         void router.push('/');

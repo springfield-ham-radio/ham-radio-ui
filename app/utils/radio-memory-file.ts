@@ -65,6 +65,33 @@ export function defaultMemoryFileName(radioId: RadioId): string {
   return `${String(radioId.model)}.json`;
 }
 
+/**
+ * Last path segment for display in the window title and toasts.
+ */
+export function memoryFileDisplayName(path: string): string {
+  const normalized = path.replaceAll('\\', '/');
+  const segments = normalized.split('/');
+  return segments[segments.length - 1] || path;
+}
+
+/**
+ * Save writes in place when a path is already known; Save As always asks for a destination.
+ */
+export function shouldPromptForSavePath(currentPath: string | undefined, saveAs: boolean): boolean {
+  return saveAs || currentPath === undefined || currentPath.length === 0;
+}
+
+/**
+ * Ensure a save destination ends with `.json` so the file type stays obvious.
+ */
+export function withJsonExtension(path: string): string {
+  if (path.toLowerCase().endsWith('.json')) {
+    return path;
+  }
+
+  return `${path}.json`;
+}
+
 function parseRadioId(value: unknown): RadioId {
   if (!isRecord(value) || typeof value.model !== 'string' || typeof value.name !== 'string' || typeof value.manufacturer !== 'string') {
     throw new Error('Memory file is missing radio identity');

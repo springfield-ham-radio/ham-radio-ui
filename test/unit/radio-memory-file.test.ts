@@ -3,8 +3,11 @@ import { expect } from 'chai';
 import { RadioModelId, type RadioId } from '@springfield/ham-radio-api';
 import {
   defaultMemoryFileName,
+  memoryFileDisplayName,
   parseRadioMemoryFile,
   serializeRadioMemoryFile,
+  shouldPromptForSavePath,
+  withJsonExtension,
 } from '../../app/utils/radio-memory-file.ts';
 
 const radioId: RadioId = {
@@ -111,5 +114,43 @@ describe('parseRadioMemoryFile', () => {
 describe('defaultMemoryFileName', () => {
   it('uses the radio model as the file name', () => {
     expect(defaultMemoryFileName(radioId)).to.equal('baofeng-uv5r.json');
+  });
+});
+
+describe('memoryFileDisplayName', () => {
+  it('returns the last path segment', () => {
+    expect(memoryFileDisplayName('/Users/me/Radios/uv5r.json')).to.equal('uv5r.json');
+  });
+
+  it('handles Windows-style paths', () => {
+    expect(memoryFileDisplayName('C:\\Radios\\uv5r.json')).to.equal('uv5r.json');
+  });
+
+  it('returns the original value when there is no separator', () => {
+    expect(memoryFileDisplayName('uv5r.json')).to.equal('uv5r.json');
+  });
+});
+
+describe('shouldPromptForSavePath', () => {
+  it('reuses the current path for Save', () => {
+    expect(shouldPromptForSavePath('/Radios/uv5r.json', false)).to.equal(false);
+  });
+
+  it('prompts when Save has no current path', () => {
+    expect(shouldPromptForSavePath(undefined, false)).to.equal(true);
+  });
+
+  it('always prompts for Save As', () => {
+    expect(shouldPromptForSavePath('/Radios/uv5r.json', true)).to.equal(true);
+  });
+});
+
+describe('withJsonExtension', () => {
+  it('leaves an existing .json suffix alone', () => {
+    expect(withJsonExtension('/Radios/uv5r.json')).to.equal('/Radios/uv5r.json');
+  });
+
+  it('appends .json when the path has no extension', () => {
+    expect(withJsonExtension('/Radios/uv5r')).to.equal('/Radios/uv5r.json');
   });
 });

@@ -12,12 +12,23 @@
 </template>
 
 <script setup lang="ts">
-const { initialize, activeRadioId } = useRadio();
+import { memoryFileDisplayName } from '~/utils/radio-memory-file';
+
+const { initialize, activeRadioId, memoryFilePath } = useRadio();
 const router = useRouter();
 
 useHead({
   titleTemplate: (title) => (title && title !== 'Ham Radio' ? `${title} · Ham Radio` : 'Ham Radio'),
-  title: computed(() => activeRadioId.value?.name ?? 'Ham Radio'),
+  title: computed(() => {
+    const radioName = activeRadioId.value?.name;
+    const fileName = memoryFilePath.value ? memoryFileDisplayName(memoryFilePath.value) : undefined;
+
+    if (fileName && radioName) {
+      return `${fileName} · ${radioName}`;
+    }
+
+    return radioName ?? 'Ham Radio';
+  }),
 });
 
 defineShortcuts({

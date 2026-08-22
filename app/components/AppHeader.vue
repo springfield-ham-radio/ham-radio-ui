@@ -1,14 +1,45 @@
 <script setup lang="ts">
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
-const { importOpen, openMemoryFile, saveMemoryFile, activeRadioId } = useRadio();
+const { importOpen, openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const showBrowserFileActions = ref(false);
+const currentFileName = computed(() => {
+  return memoryFilePath.value ? memoryFileDisplayName(memoryFilePath.value) : undefined;
+});
 
 onMounted(() => {
   showBrowserFileActions.value = !isTauriRuntime();
+});
+
+defineShortcuts({
+  meta_o: {
+    usingInput: true,
+    handler: () => {
+      if (showBrowserFileActions.value && !isPreferences.value) {
+        void openMemoryFile();
+      }
+    },
+  },
+  meta_s: {
+    usingInput: true,
+    handler: () => {
+      if (showBrowserFileActions.value && !isPreferences.value) {
+        void saveMemoryFile();
+      }
+    },
+  },
+  meta_shift_s: {
+    usingInput: true,
+    handler: () => {
+      if (showBrowserFileActions.value && !isPreferences.value) {
+        void saveMemoryFileAs();
+      }
+    },
+  },
 });
 </script>
 
@@ -39,6 +70,16 @@ onMounted(() => {
           class="max-w-56 truncate"
         />
       </UTooltip>
+      <UTooltip v-if="!isPreferences && currentFileName" :text="memoryFilePath">
+        <UBadge
+          :label="currentFileName"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          icon="i-lucide-file"
+          class="max-w-56 truncate"
+        />
+      </UTooltip>
     </div>
 
     <div v-if="!isPreferences" class="flex items-center gap-1.5">
@@ -48,7 +89,7 @@ onMounted(() => {
           color="neutral"
           variant="outline"
           size="sm"
-          label="Open Memory"
+          label="Open"
           @click="openMemoryFile"
         />
         <UButton
@@ -56,8 +97,16 @@ onMounted(() => {
           color="neutral"
           variant="outline"
           size="sm"
-          label="Save Memory"
+          label="Save"
           @click="saveMemoryFile"
+        />
+        <UButton
+          icon="i-lucide-save-all"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          label="Save As"
+          @click="saveMemoryFileAs"
         />
         <UButton
           icon="i-lucide-download"

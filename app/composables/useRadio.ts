@@ -12,8 +12,20 @@ import { RadioToneType } from '@springfield/ham-radio-api';
 import { CodecFactory, baofengMemoryMap, type BaofengConfig } from '@springfield/radio-module-baofeng';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import uv5rConfig from '#baofeng-uv5r';
-import { defaultMemoryFileName, parseRadioMemoryFile, serializeRadioMemoryFile } from '~/utils/radio-memory-file';
-import { readTextFileWithPicker, writeTextFileWithPicker } from '~/utils/radio-memory-file-io';
+import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
+import {
+  defaultMemoryFileName,
+  memoryFileDisplayName,
+  parseRadioMemoryFile,
+  serializeRadioMemoryFile,
+  shouldPromptForSavePath,
+} from '~/utils/radio-memory-file';
+import {
+  clearBrowserFileHandle,
+  readTextFileWithPicker,
+  writeTextFile,
+  writeTextFileWithPicker,
+} from '~/utils/radio-memory-file-io';
 
 interface LoadedRadioConfig extends Radio {
   codec?: {
@@ -33,6 +45,7 @@ const logger = new LogLayer({
 });
 
 const codecFactory = new CodecFactory();
+let persistQueue: Promise<void> = Promise.resolve();
 
 export interface ChannelRow {
   channelNumber: number;
@@ -43,6 +56,7 @@ export interface ChannelRow {
   rxTone: string;
   toneType: string;
   transmitFrequencyHz?: number;
+  receiveFrequencyHz?: number;
   /** Radio-specific channel extras from the memory map (power, mode, scan, …). */
   settings?: RadioSettings;
 }
@@ -64,6 +78,7 @@ export function useRadio() {
   const program = useState<RadioProgram | undefined>('radio-program', () => undefined);
   const settingsMemoryMap = useState<RadioMemoryMap | undefined>('radio-settings-memory-map', () => undefined);
   const activeRadioId = useState<RadioId | undefined>('radio-active-id', () => undefined);
+  const memoryFilePath = useState<string | undefined>('radio-memory-file-path', () => undefined);
 
   async function initialize(): Promise<void> {
     if (configurations.value.length > 0 || isLoading.value) {
@@ -138,6 +153,8 @@ export function useRadio() {
       }
 
       await applyLoadedMemory(memoryData, radioId);
+      memoryFilePath.value = undefined;
+      clearBrowserFileHandle();
       progressOpen.value = false;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
@@ -152,25 +169,55 @@ export function useRadio() {
       return;
     }
 
-    const nextProgram: RadioProgram = {
+    persistProgram({
       ...program.value,
       settings: nextSettings,
-    };
+    });
+  }
 
-    program.value = nextProgram;
-
-    const codec = await getCodec(activeRadioId.value);
-
-    if (!codec) {
+  async function updateChannel(channelNumber: number, patch: ChannelPatch): Promise<void> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
       return;
     }
 
-    const encoded = codec.encode(nextProgram, {
-      radioModel: activeRadioId.value.model,
-      contents: memory.value,
-    });
+    const nameMaxLength = channelNameMaxLength(settingsMemoryMap.value);
+    persistProgram({
+      ...program.value,
+      channels: program.value.channels.map((programmed) => {
+        if (programmed.channelNumber !== channelNumber) {
+          return programmed;
+        }
 
-    memory.value = encoded.contents;
+        return applyChannelPatch(programmed, patch, { nameMaxLength });
+      }),
+    });
+  }
+
+  function persistProgram(nextProgram: RadioProgram): void {
+    program.value = nextProgram;
+    channels.value = rowsFromProgram(nextProgram);
+    persistQueue = persistQueue
+      .then(async () => {
+        if (!program.value || !memory.value || !activeRadioId.value) {
+          return;
+        }
+
+        const codec = await getCodec(activeRadioId.value);
+
+        if (!codec) {
+          return;
+        }
+
+        const encoded = codec.encode(program.value, {
+          radioModel: activeRadioId.value.model,
+          contents: memory.value,
+        });
+
+        memory.value = encoded.contents;
+      })
+      .catch((cause) => {
+        logger.withError(cause).error('Failed to encode radio program');
+      });
   }
 
   function cancelImport(): void {
@@ -180,17 +227,18 @@ export function useRadio() {
 
   async function openMemoryFile(): Promise<void> {
     try {
-      const text = await readTextFileWithPicker();
+      const picked = await readTextFileWithPicker();
 
-      if (text === undefined) {
+      if (picked === undefined) {
         return;
       }
 
-      const loaded = parseRadioMemoryFile(text);
+      const loaded = parseRadioMemoryFile(picked.text);
       await applyLoadedMemory(loaded.contents, loaded.radioId);
+      memoryFilePath.value = picked.path;
       toast.add({
         title: 'Memory opened',
-        description: `${loaded.radioId.name} (${loaded.contents.length} bytes)`,
+        description: `${memoryFileDisplayName(picked.path)} · ${loaded.radioId.name} (${loaded.contents.length} bytes)`,
         color: 'success',
         icon: 'i-lucide-folder-open',
       });
@@ -207,6 +255,14 @@ export function useRadio() {
   }
 
   async function saveMemoryFile(): Promise<void> {
+    await saveMemory(false);
+  }
+
+  async function saveMemoryFileAs(): Promise<void> {
+    await saveMemory(true);
+  }
+
+  async function saveMemory(saveAs: boolean): Promise<void> {
     if (!memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to save',
@@ -218,16 +274,34 @@ export function useRadio() {
     }
 
     try {
-      const contents = serializeRadioMemoryFile(activeRadioId.value, memory.value);
-      const saved = await writeTextFileWithPicker(contents, defaultMemoryFileName(activeRadioId.value));
+      await persistQueue;
 
-      if (!saved) {
+      if (!memory.value || !activeRadioId.value) {
         return;
       }
 
+      const contents = serializeRadioMemoryFile(activeRadioId.value, memory.value);
+      const currentPath = memoryFilePath.value;
+      let destination: string;
+
+      if (shouldPromptForSavePath(currentPath, saveAs) || currentPath === undefined) {
+        const suggestedPath = currentPath ?? defaultMemoryFileName(activeRadioId.value);
+        const picked = await writeTextFileWithPicker(contents, suggestedPath);
+
+        if (picked === undefined) {
+          return;
+        }
+
+        destination = picked;
+      } else {
+        destination = currentPath;
+        await writeTextFile(destination, contents);
+      }
+
+      memoryFilePath.value = destination;
       toast.add({
-        title: 'Memory saved',
-        description: `${activeRadioId.value.name} (${memory.value.length} bytes)`,
+        title: saveAs ? 'Memory saved as' : 'Memory saved',
+        description: `${memoryFileDisplayName(destination)} (${memory.value.length} bytes)`,
         color: 'success',
         icon: 'i-lucide-save',
       });
@@ -244,6 +318,8 @@ export function useRadio() {
   }
 
   async function applyLoadedMemory(memoryData: Uint8Array, radioId: RadioId): Promise<void> {
+    await persistQueue;
+
     const config = getConfiguration(radioId);
 
     if (!config) {
@@ -260,14 +336,7 @@ export function useRadio() {
 
     program.value = decoded;
     settingsMemoryMap.value = baofengMemoryMap((config.codec?.config ?? {}) as BaofengConfig);
-
-    channels.value = (decoded?.channels ?? []).flatMap((channel) => {
-      if (typeof channel.radioChannel === 'string') {
-        return [];
-      }
-
-      return [toChannelRow(channel.channelNumber, channel.radioChannel, channel.settings)];
-    });
+    channels.value = rowsFromProgram(decoded);
   }
 
   return {
@@ -285,13 +354,16 @@ export function useRadio() {
     program,
     settingsMemoryMap,
     activeRadioId,
+    memoryFilePath,
     initialize,
     getModelsByManufacturer,
     importFromRadio,
     updateSettings,
+    updateChannel,
     cancelImport,
     openMemoryFile,
     saveMemoryFile,
+    saveMemoryFileAs,
   };
 }
 
@@ -309,6 +381,16 @@ function toRadio(config: LoadedRadioConfig): Radio {
   };
 }
 
+function rowsFromProgram(decoded: RadioProgram | undefined): ChannelRow[] {
+  return (decoded?.channels ?? []).flatMap((channel) => {
+    if (typeof channel.radioChannel === 'string') {
+      return [];
+    }
+
+    return [toChannelRow(channel.channelNumber, channel.radioChannel, channel.settings)];
+  });
+}
+
 function toChannelRow(
   channelNumber: number,
   radioChannel: RadioChannel,
@@ -323,6 +405,7 @@ function toChannelRow(
     rxTone: formatToneValue(radioChannel.receiveTone?.tone, radioChannel.receiveTone?.type),
     toneType: formatToneType(radioChannel.transmitTone?.tone, radioChannel.transmitTone?.type),
     transmitFrequencyHz: radioChannel.transmitFrequency,
+    receiveFrequencyHz: radioChannel.receiveFrequency,
     settings,
   };
 }

@@ -4,7 +4,8 @@ use tauri::Emitter;
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
     let open_memory = MenuItem::with_id(app, "open-memory", "Open Memory...", true, Some("CmdOrCtrl+O"))?;
-    let save_memory = MenuItem::with_id(app, "save-memory", "Save Memory...", true, Some("CmdOrCtrl+S"))?;
+    let save_memory = MenuItem::with_id(app, "save-memory", "Save", true, Some("CmdOrCtrl+S"))?;
+    let save_memory_as = MenuItem::with_id(app, "save-memory-as", "Save As...", true, Some("CmdOrCtrl+Shift+S"))?;
     let import_from_radio = MenuItem::with_id(app, "import-from-radio", "Import from Radio...", true, None::<&str>)?;
 
     let edit_menu = Submenu::with_items(
@@ -48,6 +49,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             &[
                 &open_memory,
                 &save_memory,
+                &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &import_from_radio,
                 &PredefinedMenuItem::separator(app)?,
@@ -79,6 +81,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             &[
                 &open_memory,
                 &save_memory,
+                &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &import_from_radio,
                 &PredefinedMenuItem::separator(app)?,
@@ -121,6 +124,7 @@ pub fn run() {
                 "preferences" => emit_menu_event(app, "open-preferences"),
                 "open-memory" => emit_menu_event(app, "open-memory"),
                 "save-memory" => emit_menu_event(app, "save-memory"),
+                "save-memory-as" => emit_menu_event(app, "save-memory-as"),
                 "import-from-radio" => emit_menu_event(app, "import-from-radio"),
                 _ => {}
             }
