@@ -10,7 +10,7 @@ import {
 import type { ChannelRow } from '~/composables/useRadio';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
-const { channels, memory, program, settingsMemoryMap, updateSettings } = useRadio();
+const { channels, memory, program, settingsMemoryMap, activeRadioId, updateSettings } = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 
 interface DisplayChannelRow extends ChannelRow {
@@ -80,12 +80,12 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
 const outOfClassCount = computed(() => displayChannels.value.filter((channel) => channel.privilegeWarning).length);
 
 const hexMemory = computed(() => {
-  if (!memory.value) {
+  if (!memory.value || !activeRadioId.value) {
     return undefined;
   }
 
   return {
-    radioModel: 'baofeng-uv5r' as const,
+    radioModel: activeRadioId.value.model,
     contents: memory.value,
   };
 });

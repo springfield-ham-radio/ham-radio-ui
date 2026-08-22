@@ -12,12 +12,12 @@
 </template>
 
 <script setup lang="ts">
-const { initialize } = useRadio();
+const { initialize, activeRadioId } = useRadio();
 const router = useRouter();
 
 useHead({
   titleTemplate: (title) => (title && title !== 'Ham Radio' ? `${title} · Ham Radio` : 'Ham Radio'),
-  title: 'Ham Radio',
+  title: computed(() => activeRadioId.value?.name ?? 'Ham Radio'),
 });
 
 defineShortcuts({

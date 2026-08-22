@@ -2,7 +2,7 @@
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const route = useRoute();
-const { importOpen, openMemoryFile, saveMemoryFile } = useRadio();
+const { importOpen, openMemoryFile, saveMemoryFile, activeRadioId } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const showBrowserFileActions = ref(false);
@@ -26,6 +26,19 @@ onMounted(() => {
       <h1 class="truncate px-1 text-sm font-semibold text-highlighted">
         {{ isPreferences ? 'Preferences' : 'Ham Radio' }}
       </h1>
+      <UTooltip
+        v-if="!isPreferences && activeRadioId"
+        :text="`${activeRadioId.manufacturer} · ${activeRadioId.model}`"
+      >
+        <UBadge
+          :label="activeRadioId.name"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          icon="i-lucide-radio"
+          class="max-w-56 truncate"
+        />
+      </UTooltip>
     </div>
 
     <div v-if="!isPreferences" class="flex items-center gap-1.5">

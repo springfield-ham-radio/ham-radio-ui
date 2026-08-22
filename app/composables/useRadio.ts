@@ -284,6 +284,7 @@ export function useRadio() {
     channels,
     program,
     settingsMemoryMap,
+    activeRadioId,
     initialize,
     getModelsByManufacturer,
     importFromRadio,
