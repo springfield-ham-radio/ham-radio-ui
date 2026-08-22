@@ -42,6 +42,7 @@ export function useRadio() {
   const progressOpen = useState('radio-progress-open', () => false);
   const progress = useState('radio-progress', () => 0);
   const progressError = useState<string | null>('radio-progress-error', () => null);
+  const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
   const canceled = useState('radio-canceled', () => false);
   const memory = useState<Uint8Array | undefined>('radio-memory', () => undefined);
   const channels = useState<ChannelRow[]>('radio-channels', () => []);
@@ -93,6 +94,7 @@ export function useRadio() {
     canceled.value = false;
     progress.value = 0;
     progressError.value = null;
+    progressStartedAt.value = Date.now();
     progressOpen.value = true;
 
     const progressIndicator: RadioProgressIndicator = {
@@ -155,6 +157,7 @@ export function useRadio() {
     progressOpen,
     progress,
     progressError,
+    progressStartedAt,
     memory,
     channels,
     initialize,
