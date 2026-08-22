@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { TableColumn } from '@nuxt/ui';
+import type { RadioSettingValue } from '@springfield/ham-radio-api';
+import {
+  collectChannelMemoryMapUiFields,
+  formatMemoryMapFieldValue,
+  type RadioMemoryMapUiField,
+} from '@springfield/ham-radio-utils';
 import type { ChannelRow } from '~/composables/useRadio';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
@@ -10,6 +16,8 @@ const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext 
 interface DisplayChannelRow extends ChannelRow {
   privilegeWarning?: ReturnType<typeof getTransmitPrivilegeWarning>;
   band: string;
+  /** Formatted memory-map channel extras keyed by field id. */
+  extras: Record<string, string>;
 }
 
 const items = computed<TabsItem[]>(() => [
@@ -18,28 +26,56 @@ const items = computed<TabsItem[]>(() => [
   { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
 ]);
 
-const displayChannels = computed<DisplayChannelRow[]>(() => {
-  return channels.value.map((channel) => ({
-    ...channel,
-    privilegeWarning: getTransmitPrivilegeWarning(channel.transmitFrequencyHz),
-    band: bandNameForFrequency(channel.transmitFrequencyHz),
-  }));
+const channelUiFields = computed<RadioMemoryMapUiField[]>(() => {
+  if (!settingsMemoryMap.value) {
+    return [];
+  }
+
+  return collectChannelMemoryMapUiFields(settingsMemoryMap.value);
 });
 
-const columns: TableColumn<DisplayChannelRow>[] = [
-  {
-    id: 'privilege',
-    header: '',
-  },
-  { accessorKey: 'channelNumber', header: '#' },
-  { accessorKey: 'name', header: 'Name' },
-  { accessorKey: 'band', header: 'Band' },
-  { accessorKey: 'transmit', header: 'TX' },
-  { accessorKey: 'receive', header: 'RX' },
-  { accessorKey: 'txTone', header: 'TX Tone' },
-  { accessorKey: 'rxTone', header: 'RX Tone' },
-  { accessorKey: 'toneType', header: 'Type' },
-];
+const displayChannels = computed<DisplayChannelRow[]>(() => {
+  return channels.value.map((channel) => {
+    const extras: Record<string, string> = {};
+
+    for (const field of channelUiFields.value) {
+      const raw = channel.settings?.[field.fieldId] as RadioSettingValue | undefined;
+      extras[field.fieldId] = formatMemoryMapFieldValue(raw, field);
+    }
+
+    return {
+      ...channel,
+      privilegeWarning: getTransmitPrivilegeWarning(channel.transmitFrequencyHz),
+      band: bandNameForFrequency(channel.transmitFrequencyHz),
+      extras,
+    };
+  });
+});
+
+const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
+  const core: TableColumn<DisplayChannelRow>[] = [
+    {
+      id: 'privilege',
+      header: '',
+    },
+    { accessorKey: 'channelNumber', header: '#' },
+    { accessorKey: 'name', header: 'Name' },
+    { accessorKey: 'band', header: 'Band' },
+    { accessorKey: 'transmit', header: 'TX' },
+    { accessorKey: 'receive', header: 'RX' },
+    { accessorKey: 'txTone', header: 'TX Tone' },
+    { accessorKey: 'rxTone', header: 'RX Tone' },
+    { accessorKey: 'toneType', header: 'Type' },
+  ];
+
+  const dynamic: TableColumn<DisplayChannelRow>[] = channelUiFields.value.map((field) => ({
+    id: field.fieldId,
+    header: field.ui.label,
+    accessorFn: (row) => row.extras[field.fieldId] ?? '',
+  }));
+
+  return [...core, ...dynamic];
+});
 
 const outOfClassCount = computed(() => displayChannels.value.filter((channel) => channel.privilegeWarning).length);
 

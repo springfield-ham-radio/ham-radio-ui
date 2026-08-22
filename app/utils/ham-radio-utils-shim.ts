@@ -15,7 +15,9 @@ export {
   settingsWithoutChannels,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-channels.js';
 export {
+  collectChannelMemoryMapUiFields,
   collectMemoryMapUiFields,
+  formatMemoryMapFieldValue,
   groupMemoryMapUiFields,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-ui.js';
 export type { RadioMemoryMapUiField } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-ui.js';

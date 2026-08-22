@@ -41,6 +41,8 @@ export interface ChannelRow {
   rxTone: string;
   toneType: string;
   transmitFrequencyHz?: number;
+  /** Radio-specific channel extras from the memory map (power, mode, scan, …). */
+  settings?: RadioSettings;
 }
 
 export function useRadio() {
@@ -148,7 +150,7 @@ export function useRadio() {
           return [];
         }
 
-        return [toChannelRow(channel.channelNumber, channel.radioChannel)];
+        return [toChannelRow(channel.channelNumber, channel.radioChannel, channel.settings)];
       });
 
       progressOpen.value = false;
@@ -227,7 +229,11 @@ function toRadio(config: LoadedRadioConfig): Radio {
   };
 }
 
-function toChannelRow(channelNumber: number, radioChannel: RadioChannel): ChannelRow {
+function toChannelRow(
+  channelNumber: number,
+  radioChannel: RadioChannel,
+  settings?: RadioSettings,
+): ChannelRow {
   return {
     channelNumber,
     name: radioChannel.name ?? '',
@@ -237,6 +243,7 @@ function toChannelRow(channelNumber: number, radioChannel: RadioChannel): Channe
     rxTone: formatToneValue(radioChannel.receiveTone?.tone, radioChannel.receiveTone?.type),
     toneType: formatToneType(radioChannel.transmitTone?.tone, radioChannel.transmitTone?.type),
     transmitFrequencyHz: radioChannel.transmitFrequency,
+    settings,
   };
 }
 
