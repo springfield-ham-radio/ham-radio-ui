@@ -12,13 +12,13 @@ const items = computed<TabsItem[]>(() => [
 ]);
 
 const columns: TableColumn<ChannelRow>[] = [
-  { accessorKey: 'channelNumber', header: 'Number' },
+  { accessorKey: 'channelNumber', header: '#' },
   { accessorKey: 'name', header: 'Name' },
-  { accessorKey: 'transmit', header: 'Transmit' },
-  { accessorKey: 'receive', header: 'Receive' },
+  { accessorKey: 'transmit', header: 'TX' },
+  { accessorKey: 'receive', header: 'RX' },
   { accessorKey: 'txTone', header: 'TX Tone' },
   { accessorKey: 'rxTone', header: 'RX Tone' },
-  { accessorKey: 'toneType', header: 'Tone Type' },
+  { accessorKey: 'toneType', header: 'Type' },
 ];
 
 const hexMemory = computed(() => {
@@ -51,8 +51,20 @@ const hexMemory = computed(() => {
       }"
     >
       <template #channels>
-        <div class="min-h-0 flex-1 overflow-auto pt-4">
-          <UTable :data="channels" :columns="columns" sticky class="max-h-[calc(100vh-10rem)]" />
+        <div class="min-h-0 flex-1 overflow-auto pt-2">
+          <UTable
+            :data="channels"
+            :columns="columns"
+            sticky
+            class="channel-table max-h-[calc(100vh-8rem)]"
+            :ui="{
+              thead: 'bg-default',
+              th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
+              td: 'h-7 px-2 py-0 text-xs tabular-nums align-middle',
+              tbody: 'divide-y-0',
+              empty: 'py-4 text-center text-xs text-muted',
+            }"
+          />
         </div>
       </template>
       <template #settings>

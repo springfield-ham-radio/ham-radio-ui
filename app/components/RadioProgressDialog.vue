@@ -36,11 +36,11 @@ const description = computed(() =>
     : 'Keep the programming cable connected until this finishes.',
 );
 
-const statusText = computed(() => {
-  const percent = Math.round(progress.value * 100);
-  const remaining = formatTimeRemaining(progress.value, progressStartedAt.value, now.value);
-  return remaining ? `${percent}% · ${remaining}` : `${percent}%`;
-});
+const percentValue = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
+
+const remainingText = computed(() =>
+  formatTimeRemaining(progress.value, progressStartedAt.value, now.value),
+);
 
 function formatTimeRemaining(fraction: number, startedAt: number | null, currentTime: number): string | null {
   if (startedAt == null || fraction < 0.02) {
@@ -66,10 +66,6 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
   const seconds = totalSeconds % 60;
   return seconds === 0 ? `about ${minutes}m left` : `about ${minutes}m ${seconds}s left`;
 }
-
-function close(): void {
-  progressOpen.value = false;
-}
 </script>
 
 <template>
@@ -91,8 +87,16 @@ function close(): void {
         :description="progressError"
       />
       <div v-else class="flex flex-col gap-3">
-        <UProgress :value="progress * 100" color="neutral" />
-        <p class="text-sm text-muted">{{ statusText }}</p>
+        <UProgress
+          :model-value="percentValue"
+          :max="100"
+          color="primary"
+          :ui="{ indicator: 'bg-primary/55' }"
+        />
+        <p class="flex gap-2 text-sm text-muted">
+          <span class="w-10 shrink-0 tabular-nums">{{ percentValue }}%</span>
+          <span v-if="remainingText" class="min-w-0 tabular-nums">{{ remainingText }}</span>
+        </p>
       </div>
     </template>
 

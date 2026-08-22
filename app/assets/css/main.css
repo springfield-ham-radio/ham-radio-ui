@@ -37,3 +37,17 @@ body {
     cursor: pointer;
   }
 }
+
+.channel-table tbody td {
+  height: 1.75rem;
+  padding-block: 0;
+  vertical-align: middle;
+}
+
+.channel-table tbody tr:nth-child(odd) td {
+  background-color: var(--ui-bg-elevated);
+}
+
+.channel-table tbody tr:nth-child(even) td {
+  background-color: var(--ui-bg-accented);
+}
