@@ -91,3 +91,9 @@ typings/
 
 # Electron-Forge
 out/
+
+# Nuxt / Tauri
+.nuxt
+.output
+dist
+src-tauri/target

@@ -1,25 +1,23 @@
-# Ham Delux (ham-radio-ui)
+# Ham Radio
 
-Ham radio goodness
+Desktop app for reading and managing ham radio memory.
 
-## Development Environment
+## Development
 
-If you develop with [VS Code](https://code.visualstudio.com), settings and extension recommendations are pre-configured.
+This project uses [Node.js](https://nodejs.dev) 24 (see `.nvmrc`) and [Yarn](https://yarnpkg.com) 4 via Corepack.
 
-This project is based on [NodeJS](https://nodejs.dev) 18.  It is recommended, but not required, to install NodeJS with [Volta](https://volta.sh).  The version of NodeJS is pinned in the package.json with Volta.
+```
+corepack enable
+git clone https://github.com/springfield-ham-radio/ham-radio-ui.git
+cd ham-radio-ui
+yarn install
+yarn tauri:dev
+```
 
-You will also need [yarn](https://yarnpkg.com).  If you are using Volta, you can install yarn with:
+Rust and the Tauri CLI prerequisites are required for `yarn tauri:dev` and `yarn tauri:build`. See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-- volta install yarn
+## Contributing
 
+Report bugs and feature requests at: https://github.com/springfield-ham-radio/ham-radio-ui/issues
 
-## Running From Source
-
-- git clone https://gitlab.com/springfield-ham-radio/app/ham-radio-ui.git
-- yarn install
-- yarn dev
-
-## Contrbuting
-
-Report bugs and feature requests to: https://gitlab.com/springfield-ham-radio/app/ham-radio-ui/-/issues
-For source contributions, please open a merge request: https://gitlab.com/springfield-ham-radio/app/ham-radio-ui/-/merge_requests
+For source contributions, open a pull request: https://github.com/springfield-ham-radio/ham-radio-ui/pulls
