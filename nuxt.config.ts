@@ -64,8 +64,12 @@ export default defineNuxtConfig({
             return stub('./app/utils/json-default-stub.ts');
           }
 
-          if (id.includes('bands.json') || id.includes('license-classes.json')) {
-            return stub('./app/utils/json-array-stub.ts');
+          if (id.includes('bands.json')) {
+            return stub('./node_modules/@springfield/ham-radio-utils/dist/db/bands.json');
+          }
+
+          if (id.includes('license-classes.json')) {
+            return stub('./node_modules/@springfield/ham-radio-utils/dist/db/license-classes.json');
           }
 
           return undefined;

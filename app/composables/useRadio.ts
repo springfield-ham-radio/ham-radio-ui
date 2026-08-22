@@ -31,6 +31,7 @@ export interface ChannelRow {
   txTone: string;
   rxTone: string;
   toneType: string;
+  transmitFrequencyHz?: number;
 }
 
 export function useRadio() {
@@ -189,6 +190,7 @@ function toChannelRow(channelNumber: number, radioChannel: RadioChannel): Channe
     txTone: formatToneValue(radioChannel.transmitTone?.tone, radioChannel.transmitTone?.type),
     rxTone: formatToneValue(radioChannel.receiveTone?.tone, radioChannel.receiveTone?.type),
     toneType: formatToneType(radioChannel.transmitTone?.tone, radioChannel.transmitTone?.type),
+    transmitFrequencyHz: radioChannel.transmitFrequency,
   };
 }
 

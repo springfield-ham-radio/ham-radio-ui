@@ -2636,11 +2636,12 @@ __metadata:
     "@nuxt/ui": "npm:3"
     "@springfield/ham-radio-api": "npm:^17.0.0"
     "@springfield/ham-radio-driver": "npm:^3.0.1"
-    "@springfield/ham-radio-utils": "npm:^4.0.0"
+    "@springfield/ham-radio-utils": "npm:^4.1.1"
     "@springfield/radio-module-baofeng": "npm:^2.0.0"
     "@tauri-apps/api": "npm:^2.10.1"
     "@tauri-apps/cli": "npm:^2.10.1"
     "@tauri-apps/plugin-dialog": "npm:^2.7.0"
+    "@tauri-apps/plugin-opener": "npm:^2.5.4"
     buffer: "npm:^6.0.3"
     eventemitter3: "npm:^5.0.1"
     loglayer: "npm:^9.4.0"
@@ -2665,6 +2666,20 @@ __metadata:
     loglayer: "npm:^9.4.0"
     sprintf-js: "npm:^1.1.3"
   checksum: 10c0/a22a162966b1058fa8c4be634eafdd9f4dbc0a1d9acd76f80b039b467e924cb3c7d8eff8863737e36dc2fff5f6a055321aa95f1a6e30cb622fff2ea3da526e0d
+  languageName: node
+  linkType: hard
+
+"@springfield/ham-radio-utils@npm:^4.1.1":
+  version: 4.1.1
+  resolution: "@springfield/ham-radio-utils@npm:4.1.1"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^17.0.0"
+    ajv: "npm:^8.20.0"
+    ajv-formats: "npm:^3.0.1"
+    fishery: "npm:^2.4.0"
+    loglayer: "npm:^9.4.0"
+    sprintf-js: "npm:^1.1.3"
+  checksum: 10c0/0e31660a052c301e669d1e980d274f5ab81ab73e7b02eb8aae07865055d83009e643207bf4fb0d1a3ae952055b2efd075f2bac9d71141c66282b10a1f06ca4c5
   languageName: node
   linkType: hard
 
@@ -3042,6 +3057,15 @@ __metadata:
   dependencies:
     "@tauri-apps/api": "npm:^2.11.0"
   checksum: 10c0/cab9e336547f335f8145b32616cff518be4789507526a4bea3e0386f98040bb3b0c7b5a20d261bfeb098a2365434bb7dd42000fe8cfab4ca4cab524dbbbe51cc
+  languageName: node
+  linkType: hard
+
+"@tauri-apps/plugin-opener@npm:^2.5.4":
+  version: 2.5.4
+  resolution: "@tauri-apps/plugin-opener@npm:2.5.4"
+  dependencies:
+    "@tauri-apps/api": "npm:^2.11.0"
+  checksum: 10c0/9d5b8893680e776d4ae91f2be8ba9a49c56a3163307b4ad10ff71ffdaf67d07f7a7d4335c465cf32f499582d4589a04d9a66064de117e761b2588254b5202d53
   languageName: node
   linkType: hard
 
