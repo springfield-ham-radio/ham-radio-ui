@@ -9,6 +9,16 @@ import {
 } from 'tauri-plugin-serialplugin';
 
 type WriteCallback = (error?: Error | null) => void;
+type PipedDestination = { write: (chunk: Buffer) => unknown };
+
+/**
+ * `tauri-plugin-serialplugin` only emits received bytes after this many
+ * milliseconds (`start_listening` in desktop_api.rs). The plugin default is
+ * 200 ms, which serializes every clone round-trip. 1 ms is the minimum the
+ * plugin accepts, so replies reach the protocol parser as soon as the
+ * listener thread wakes.
+ */
+const SERIAL_LISTENER_FLUSH_MS = 1;
 
 function toDataBits(value: number | undefined): DataBits {
   switch (value) {
@@ -61,6 +71,8 @@ export class TauriNodeSerialPort extends EventEmitter {
 
   private readonly tauriPort: TauriSerialPort;
   private unlisten: (() => void) | undefined;
+  private pipedDestination: PipedDestination | undefined;
+  private pipedHandler: ((chunk: Buffer) => void) | undefined;
 
   constructor(options: { path: string; baudRate: number; dataBits?: number; stopBits?: number; parity?: string }) {
     super();
@@ -72,18 +84,39 @@ export class TauriNodeSerialPort extends EventEmitter {
       stopBits: toStopBits(options.stopBits),
       parity: toParity(options.parity),
       flowControl: FlowControl.None,
+      timeout: SERIAL_LISTENER_FLUSH_MS,
     };
 
     this.tauriPort = new TauriSerialPort(serialOptions);
     void this.openPort();
   }
 
-  pipe<T extends { write: (chunk: Buffer) => unknown }>(destination: T): T {
-    this.on('data', (chunk: Buffer) => {
-      destination.write(chunk);
-    });
+  pipe<T extends PipedDestination>(destination: T): T {
+    this.unpipe();
 
+    const handler = (chunk: Buffer) => {
+      destination.write(chunk);
+    };
+
+    this.pipedDestination = destination;
+    this.pipedHandler = handler;
+    this.on('data', handler);
     return destination;
+  }
+
+  unpipe<T extends PipedDestination>(destination?: T): this {
+    if (!this.pipedHandler) {
+      return this;
+    }
+
+    if (destination !== undefined && destination !== this.pipedDestination) {
+      return this;
+    }
+
+    this.off('data', this.pipedHandler);
+    this.pipedHandler = undefined;
+    this.pipedDestination = undefined;
+    return this;
   }
 
   write(data: Uint8Array | Buffer | number[] | string, encodingOrCallback?: BufferEncoding | WriteCallback, callback?: WriteCallback): boolean {
@@ -127,6 +160,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   }
 
   private async closePort(): Promise<void> {
+    this.unpipe();
     this.unlisten?.();
     this.unlisten = undefined;
 
