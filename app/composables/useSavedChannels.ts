@@ -9,6 +9,11 @@ import {
   updateSavedChannel,
   type SavedChannel,
 } from '~/utils/saved-channels-db';
+import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
+import {
+  readChannelLibraryCsvWithPicker,
+  saveChannelLibraryCsvWithPicker,
+} from '~/utils/saved-channels-csv-io';
 
 export function useSavedChannels() {
   const toast = useToast();
@@ -137,6 +142,84 @@ export function useSavedChannels() {
     }
   }
 
+
+  async function exportLibraryCsv(): Promise<void> {
+    try {
+      const csv = serializeSavedChannelsCsv(channels.value);
+      const destination = await saveChannelLibraryCsvWithPicker(csv);
+
+      if (!destination) {
+        return;
+      }
+
+      toast.add({
+        title: 'Library exported',
+        description:
+          channels.value.length === 1
+            ? '1 channel was exported to CSV.'
+            : `${channels.value.length} channels were exported to CSV.`,
+        color: 'success',
+        icon: 'i-lucide-file-down',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to export channel library';
+      toast.add({
+        title: 'Could not export library',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
+  async function importLibraryCsv(): Promise<number> {
+    try {
+      const text = await readChannelLibraryCsvWithPicker();
+
+      if (text === undefined) {
+        return 0;
+      }
+
+      const parsed = parseSavedChannelsCsv(text);
+
+      if (parsed.channels.length === 0) {
+        toast.add({
+          title: 'Nothing to import',
+          description: 'The CSV file did not contain any channels.',
+          color: 'warning',
+          icon: 'i-lucide-file-up',
+        });
+        return 0;
+      }
+
+      const models = parsed.channels.map((channel, index) =>
+        radioChannelToSavedChannel(channel, { notes: parsed.notes[index] }),
+      );
+      await insertSavedChannelModels(models);
+      channels.value = await listSavedChannels();
+      toast.add({
+        title: 'Library imported',
+        description:
+          models.length === 1
+            ? '1 channel was imported from CSV.'
+            : `${models.length} channels were imported from CSV.`,
+        color: 'success',
+        icon: 'i-lucide-file-up',
+      });
+      return models.length;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to import channel library';
+      toast.add({
+        title: 'Could not import library',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
   return {
     channels,
     filteredChannels,
@@ -148,5 +231,7 @@ export function useSavedChannels() {
     createChannel,
     updateChannel,
     removeChannel,
+    exportLibraryCsv,
+    importLibraryCsv,
   };
 }

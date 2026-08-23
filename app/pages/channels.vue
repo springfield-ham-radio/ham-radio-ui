@@ -6,8 +6,21 @@ import { formatSavedTone, type SavedChannel } from '~/utils/saved-channels-db';
 
 useHead({ title: 'Channels' });
 
-const { filteredChannels, isLoading, error, search, refresh, createChannel, updateChannel, removeChannel } =
-  useSavedChannels();
+const {
+  filteredChannels,
+  isLoading,
+  error,
+  search,
+  refresh,
+  createChannel,
+  updateChannel,
+  removeChannel,
+  exportLibraryCsv,
+  importLibraryCsv,
+} = useSavedChannels();
+
+const isExporting = ref(false);
+const isImporting = ref(false);
 
 const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
@@ -82,6 +95,30 @@ async function onSave(payload: {
   }
 }
 
+async function onExportCsv(): Promise<void> {
+  isExporting.value = true;
+
+  try {
+    await exportLibraryCsv();
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isExporting.value = false;
+  }
+}
+
+async function onImportCsv(): Promise<void> {
+  isImporting.value = true;
+
+  try {
+    await importLibraryCsv();
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isImporting.value = false;
+  }
+}
+
 onMounted(() => {
   void refresh();
 });
@@ -94,14 +131,37 @@ onMounted(() => {
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
         <p class="text-xs text-muted">Reusable portable channels stored in the app database.</p>
       </div>
-      <UButton
-        icon="i-lucide-plus"
-        color="primary"
-        size="sm"
-        label="Add channel"
-        class="shrink-0"
-        @click="openCreate"
-      />
+      <div class="flex shrink-0 items-center gap-1.5">
+        <UTooltip text="Export CSV">
+          <UButton
+            icon="i-lucide-file-down"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Export channel library to CSV"
+            :loading="isExporting"
+            @click="onExportCsv"
+          />
+        </UTooltip>
+        <UTooltip text="Import CSV">
+          <UButton
+            icon="i-lucide-file-up"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Import channel library from CSV"
+            :loading="isImporting"
+            @click="onImportCsv"
+          />
+        </UTooltip>
+        <UButton
+          icon="i-lucide-plus"
+          color="primary"
+          size="sm"
+          label="Add channel"
+          @click="openCreate"
+        />
+      </div>
     </div>
 
     <UInput
