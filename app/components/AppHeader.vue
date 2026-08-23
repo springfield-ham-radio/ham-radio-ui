@@ -3,7 +3,7 @@ import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
-const { importOpen, openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } = useRadio();
+const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const showBrowserFileActions = ref(false);
@@ -115,6 +115,14 @@ defineShortcuts({
           size="sm"
           label="Import From Radio"
           @click="importOpen = true"
+        />
+        <UButton
+          icon="i-lucide-upload"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          label="Write To Radio"
+          @click="openWriteToRadio"
         />
       </template>
       <UTooltip text="Preferences">

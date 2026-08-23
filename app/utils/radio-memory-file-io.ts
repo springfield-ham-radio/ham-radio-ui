@@ -94,6 +94,40 @@ export async function writeTextFileWithPicker(contents: string, defaultPath: str
   return destination;
 }
 
+export interface SaveJsonFileOptions {
+  title: string;
+  filterName: string;
+}
+
+/**
+ * Prompt for a JSON destination without replacing the open memory file handle.
+ */
+export async function saveJsonFileWithPicker(
+  contents: string,
+  defaultPath: string,
+  options: SaveJsonFileOptions,
+): Promise<string | undefined> {
+  if (!isTauriRuntime()) {
+    return saveStandaloneJsonFileInBrowser(contents, defaultPath, options.filterName);
+  }
+
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const { invoke } = await import('@tauri-apps/api/core');
+  const path = await save({
+    title: options.title,
+    defaultPath,
+    filters: [{ name: options.filterName, extensions: ['json'] }],
+  });
+
+  if (path == null) {
+    return undefined;
+  }
+
+  const destination = withJsonExtension(path);
+  await invoke('save_text_file', { path: destination, contents });
+  return destination;
+}
+
 async function pickTextFileInBrowser(): Promise<PickedTextFile | undefined> {
   const picker = window as Window & BrowserSaveFilePicker;
 
@@ -153,6 +187,43 @@ function pickTextFileWithInput(): Promise<PickedTextFile | undefined> {
 
     input.click();
   });
+}
+
+async function saveStandaloneJsonFileInBrowser(
+  contents: string,
+  defaultPath: string,
+  filterName: string,
+): Promise<string | undefined> {
+  const picker = window as Window & BrowserSaveFilePicker;
+  const suggestedName = withJsonExtension(memoryFileDisplayName(defaultPath));
+
+  if (picker.showSaveFilePicker) {
+    try {
+      const handle = await picker.showSaveFilePicker({
+        suggestedName,
+        types: [
+          {
+            description: filterName,
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+
+      const writable = await handle.createWritable();
+      await writable.write(contents);
+      await writable.close();
+      return handle.name;
+    } catch (error) {
+      if (isAbortError(error)) {
+        return undefined;
+      }
+
+      throw error;
+    }
+  }
+
+  downloadTextFile(contents, suggestedName);
+  return suggestedName;
 }
 
 async function saveTextFileInBrowser(contents: string, defaultPath: string): Promise<string | undefined> {

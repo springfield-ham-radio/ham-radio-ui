@@ -7,6 +7,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
     let save_memory = MenuItem::with_id(app, "save-memory", "Save", true, Some("CmdOrCtrl+S"))?;
     let save_memory_as = MenuItem::with_id(app, "save-memory-as", "Save As...", true, Some("CmdOrCtrl+Shift+S"))?;
     let import_from_radio = MenuItem::with_id(app, "import-from-radio", "Import from Radio...", true, None::<&str>)?;
+    let write_to_radio = MenuItem::with_id(app, "write-to-radio", "Write to Radio...", true, None::<&str>)?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -52,6 +53,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &import_from_radio,
+                &write_to_radio,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::close_window(app, None)?,
             ],
@@ -84,6 +86,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &import_from_radio,
+                &write_to_radio,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
                 &PredefinedMenuItem::separator(app)?,
@@ -126,6 +129,7 @@ pub fn run() {
                 "save-memory" => emit_menu_event(app, "save-memory"),
                 "save-memory-as" => emit_menu_event(app, "save-memory-as"),
                 "import-from-radio" => emit_menu_event(app, "import-from-radio"),
+                "write-to-radio" => emit_menu_event(app, "write-to-radio"),
                 _ => {}
             }
         })

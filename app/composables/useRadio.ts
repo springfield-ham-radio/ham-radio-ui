@@ -23,9 +23,16 @@ import {
 import {
   clearBrowserFileHandle,
   readTextFileWithPicker,
+  saveJsonFileWithPicker,
   writeTextFile,
   writeTextFileWithPicker,
 } from '~/utils/radio-memory-file-io';
+import {
+  defaultSerialLogFileName,
+  serializeSerialLogFile,
+  serialLogEntryCount,
+  type SerialLogOperation,
+} from '~/utils/serial-log-file';
 
 interface LoadedRadioConfig extends Radio {
   codec?: {
@@ -46,6 +53,16 @@ const logger = new LogLayer({
 
 const codecFactory = new CodecFactory();
 let persistQueue: Promise<void> = Promise.resolve();
+
+interface CapturedSerialLog {
+  fileName: string;
+  contents: string;
+  entryCount: number;
+}
+
+interface SerialLoggedDriver {
+  getSerialLogData(): unknown;
+}
 
 export interface ChannelRow {
   channelNumber: number;
@@ -68,7 +85,9 @@ export function useRadio() {
   const isLoading = useState('radio-loading', () => false);
   const error = useState<string | null>('radio-error', () => null);
   const importOpen = useState('radio-import-open', () => false);
+  const writeOpen = useState('radio-write-open', () => false);
   const progressOpen = useState('radio-progress-open', () => false);
+  const progressKind = useState<'import' | 'write'>('radio-progress-kind', () => 'import');
   const progress = useState('radio-progress', () => 0);
   const progressError = useState<string | null>('radio-progress-error', () => null);
   const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
@@ -79,6 +98,7 @@ export function useRadio() {
   const settingsMemoryMap = useState<RadioMemoryMap | undefined>('radio-settings-memory-map', () => undefined);
   const activeRadioId = useState<RadioId | undefined>('radio-active-id', () => undefined);
   const memoryFilePath = useState<string | undefined>('radio-memory-file-path', () => undefined);
+  const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
 
   async function initialize(): Promise<void> {
     if (configurations.value.length > 0 || isLoading.value) {
@@ -117,20 +137,15 @@ export function useRadio() {
     return codecFactory.createCodec(radioId.model, config.codec.config, logger);
   }
 
-  async function importFromRadio(serialPortPath: string, radioId: RadioId): Promise<void> {
-    const config = getConfiguration(radioId);
-
-    if (!config) {
-      throw new Error(`Radio configuration for ${radioId.model} was not found`);
-    }
-
+  function startProgress(kind: 'import' | 'write'): RadioProgressIndicator {
     canceled.value = false;
     progress.value = 0;
     progressError.value = null;
     progressStartedAt.value = Date.now();
+    progressKind.value = kind;
     progressOpen.value = true;
 
-    const progressIndicator: RadioProgressIndicator = {
+    return {
       get isCanceled() {
         return canceled.value;
       },
@@ -141,26 +156,153 @@ export function useRadio() {
         progress.value = value;
       },
     };
+  }
+
+  function isCancelledTransfer(cause: unknown): boolean {
+    return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
+  }
+
+  async function importFromRadio(serialPortPath: string, radioId: RadioId): Promise<void> {
+    const config = getConfiguration(radioId);
+
+    if (!config) {
+      throw new Error(`Radio configuration for ${radioId.model} was not found`);
+    }
+
+    const progressIndicator = startProgress('import');
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    let outcome: 'success' | 'canceled' | 'error' = 'success';
+    let importedBytes = 0;
 
     try {
-      const { RadioDriver } = await import('@springfield/ham-radio-driver');
-      const driver = new RadioDriver(toRadio(config), logger);
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
 
       if (memoryData == undefined) {
-        progressOpen.value = false;
-        return;
+        outcome = 'canceled';
+      } else {
+        importedBytes = memoryData.length;
+        await applyLoadedMemory(memoryData, radioId);
+        memoryFilePath.value = undefined;
+        clearBrowserFileHandle();
       }
-
-      await applyLoadedMemory(memoryData, radioId);
-      memoryFilePath.value = undefined;
-      clearBrowserFileHandle();
-      progressOpen.value = false;
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
-      progressError.value = message;
-      console.error('Failed to read radio', cause);
-      logger.withError(cause).error('Failed to read radio');
+      if (isCancelledTransfer(cause)) {
+        outcome = 'canceled';
+      } else {
+        outcome = 'error';
+        const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
+        progressError.value = message;
+        console.error('Failed to read radio', cause);
+        logger.withError(cause).error('Failed to read radio');
+      }
+    } finally {
+      captureSerialLog(driver, 'import', radioId, serialPortPath);
+    }
+
+    if (outcome === 'success') {
+      progressOpen.value = false;
+      toast.add({
+        title: 'Imported from radio',
+        description: `${radioId.name} (${importedBytes} bytes)`,
+        color: 'success',
+        icon: 'i-lucide-download',
+        actions: serialLogSaveActions(),
+      });
+      return;
+    }
+
+    if (outcome === 'canceled') {
+      progressOpen.value = false;
+      offerSerialLogSave('Import canceled');
+    }
+  }
+
+  function openWriteToRadio(): void {
+    if (!memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to write',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    writeOpen.value = true;
+  }
+
+  async function writeToRadio(serialPortPath: string): Promise<void> {
+    if (!memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to write',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    const radioId = activeRadioId.value;
+    const config = getConfiguration(radioId);
+
+    if (!config) {
+      throw new Error(`Radio configuration for ${radioId.model} was not found`);
+    }
+
+    if (!config.writeMemory) {
+      toast.add({
+        title: 'Write not supported',
+        description: `${radioId.name} does not support writing memory to the radio.`,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return;
+    }
+
+    await persistQueue;
+
+    if (!memory.value || !activeRadioId.value) {
+      return;
+    }
+
+    const progressIndicator = startProgress('write');
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    let outcome: 'success' | 'canceled' | 'error' = 'success';
+    const writtenBytes = memory.value.length;
+
+    try {
+      await driver.writeRadio(serialPortPath, memory.value, progressIndicator);
+    } catch (cause) {
+      if (isCancelledTransfer(cause)) {
+        outcome = 'canceled';
+      } else {
+        outcome = 'error';
+        const message = cause instanceof Error ? cause.message : 'Unknown error occurred while writing radio';
+        progressError.value = message;
+        console.error('Failed to write radio', cause);
+        logger.withError(cause).error('Failed to write radio');
+      }
+    } finally {
+      captureSerialLog(driver, 'write', radioId, serialPortPath);
+    }
+
+    if (outcome === 'success') {
+      progressOpen.value = false;
+      toast.add({
+        title: 'Wrote to radio',
+        description: `${radioId.name} (${writtenBytes} bytes)`,
+        color: 'success',
+        icon: 'i-lucide-upload',
+        actions: serialLogSaveActions(),
+      });
+      return;
+    }
+
+    if (outcome === 'canceled') {
+      progressOpen.value = false;
+      offerSerialLogSave('Write canceled');
     }
   }
 
@@ -220,9 +362,107 @@ export function useRadio() {
       });
   }
 
-  function cancelImport(): void {
+  function cancelTransfer(): void {
     canceled.value = true;
     progressOpen.value = false;
+  }
+
+  function captureSerialLog(
+    driver: SerialLoggedDriver,
+    operation: SerialLogOperation,
+    radioId: RadioId,
+    serialPortPath: string,
+  ): void {
+    const log = driver.getSerialLogData();
+    const entryCount = serialLogEntryCount(log);
+
+    if (entryCount === 0) {
+      serialLog.value = undefined;
+      return;
+    }
+
+    serialLog.value = {
+      fileName: defaultSerialLogFileName(operation, radioId),
+      contents: serializeSerialLogFile({
+        operation,
+        radioId,
+        serialPortPath,
+        log,
+      }),
+      entryCount,
+    };
+  }
+
+  function serialLogSaveActions(): Array<{ label: string; color: 'neutral'; variant: 'outline'; onClick: () => void }> {
+    if (!serialLog.value) {
+      return [];
+    }
+
+    return [
+      {
+        label: 'Save serial log',
+        color: 'neutral',
+        variant: 'outline',
+        onClick: () => {
+          void saveSerialLog();
+        },
+      },
+    ];
+  }
+
+  function offerSerialLogSave(title: string): void {
+    if (!serialLog.value) {
+      return;
+    }
+
+    toast.add({
+      title,
+      description: `${serialLog.value.entryCount} serial frames captured.`,
+      color: 'neutral',
+      icon: 'i-lucide-file-text',
+      actions: serialLogSaveActions(),
+    });
+  }
+
+  async function saveSerialLog(): Promise<void> {
+    const captured = serialLog.value;
+
+    if (!captured) {
+      toast.add({
+        title: 'No serial log',
+        description: 'Import from or write to a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    try {
+      const destination = await saveJsonFileWithPicker(captured.contents, captured.fileName, {
+        title: 'Save Serial Log',
+        filterName: 'Serial Log',
+      });
+
+      if (destination === undefined) {
+        return;
+      }
+
+      toast.add({
+        title: 'Serial log saved',
+        description: `${memoryFileDisplayName(destination)} · ${captured.entryCount} frames`,
+        color: 'success',
+        icon: 'i-lucide-file-text',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to save serial log';
+      logger.withError(cause).error('Failed to save serial log');
+      toast.add({
+        title: 'Could not save serial log',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
   }
 
   async function openMemoryFile(): Promise<void> {
@@ -345,7 +585,9 @@ export function useRadio() {
     isLoading,
     error,
     importOpen,
+    writeOpen,
     progressOpen,
+    progressKind,
     progress,
     progressError,
     progressStartedAt,
@@ -355,12 +597,16 @@ export function useRadio() {
     settingsMemoryMap,
     activeRadioId,
     memoryFilePath,
+    serialLog,
     initialize,
     getModelsByManufacturer,
     importFromRadio,
+    openWriteToRadio,
+    writeToRadio,
     updateSettings,
     updateChannel,
-    cancelImport,
+    cancelTransfer,
+    saveSerialLog,
     openMemoryFile,
     saveMemoryFile,
     saveMemoryFileAs,

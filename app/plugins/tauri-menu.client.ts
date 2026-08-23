@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
   const router = useRouter();
-  const { importOpen, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
+  const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
 
   void (async () => {
     try {
@@ -21,6 +21,10 @@ export default defineNuxtPlugin(() => {
       await listen('import-from-radio', () => {
         void router.push('/');
         importOpen.value = true;
+      });
+      await listen('write-to-radio', () => {
+        void router.push('/');
+        openWriteToRadio();
       });
     } catch {
       // Running in a browser without the Tauri runtime.

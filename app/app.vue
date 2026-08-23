@@ -7,6 +7,7 @@
       </main>
     </div>
     <RadioImportDialog />
+    <RadioWriteDialog />
     <RadioProgressDialog />
   </UApp>
 </template>

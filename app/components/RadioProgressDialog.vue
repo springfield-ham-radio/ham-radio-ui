@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { progressOpen, progress, progressError, progressStartedAt, cancelImport } = useRadio();
+const { progressOpen, progressKind, progress, progressError, progressStartedAt, serialLog, cancelTransfer, saveSerialLog } =
+  useRadio();
 
 const now = ref(Date.now());
 
@@ -29,12 +30,22 @@ onBeforeUnmount(() => {
   }
 });
 
-const title = computed(() => (progressError.value ? 'Import failed' : 'Importing from radio'));
+const isWrite = computed(() => progressKind.value === 'write');
+const title = computed(() => {
+  if (progressError.value) {
+    return isWrite.value ? 'Write failed' : 'Import failed';
+  }
+
+  return isWrite.value ? 'Writing to radio' : 'Importing from radio';
+});
 const description = computed(() =>
   progressError.value
-    ? 'The radio could not be read. Check the cable connection and try again.'
+    ? isWrite.value
+      ? 'The radio could not be written. Check the cable connection and try again.'
+      : 'The radio could not be read. Check the cable connection and try again.'
     : 'Keep the programming cable connected until this finishes.',
 );
+const errorTitle = computed(() => (isWrite.value ? 'Could not write radio' : 'Could not read radio'));
 
 const percentValue = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
 
@@ -83,9 +94,12 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
         color="error"
         variant="subtle"
         icon="i-lucide-circle-alert"
-        title="Could not read radio"
+        :title="errorTitle"
         :description="progressError"
       />
+      <p v-if="progressError && serialLog" class="mt-3 text-sm text-muted">
+        {{ serialLog.entryCount }} serial frame{{ serialLog.entryCount === 1 ? '' : 's' }} captured. Save the log to debug the protocol.
+      </p>
       <div v-else class="flex flex-col gap-3">
         <UProgress
           :model-value="percentValue"
@@ -101,7 +115,15 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
     </template>
 
     <template #footer="{ close: dismiss }">
-      <div class="flex w-full justify-end">
+      <div class="flex w-full justify-end gap-2">
+        <UButton
+          v-if="progressError && serialLog"
+          color="neutral"
+          variant="outline"
+          label="Save serial log"
+          icon="i-lucide-file-text"
+          @click="saveSerialLog"
+        />
         <UButton
           v-if="progressError"
           color="neutral"
@@ -109,7 +131,7 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
           label="Close"
           @click="dismiss"
         />
-        <UButton v-else color="neutral" variant="outline" label="Cancel" @click="cancelImport" />
+        <UButton v-else color="neutral" variant="outline" label="Cancel" @click="cancelTransfer" />
       </div>
     </template>
   </UModal>
