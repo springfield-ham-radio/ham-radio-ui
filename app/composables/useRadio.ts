@@ -9,10 +9,18 @@ import type {
   RadioSettings,
 } from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
-import { CodecFactory, baofengMemoryMap, type BaofengConfig } from '@springfield/radio-module-baofeng';
+import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import uv5rConfig from '#baofeng-uv5r';
+import { createBundledUv5rRadio } from '~/utils/bundled-uv5r';
 import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
+import { pickAndLoadRadioConfig } from '~/utils/load-radio-config';
+import {
+  type LoadedRadioConfig,
+  listRadioCatalogRecords,
+  listRadioManufacturers,
+  memoryMapFromConfig,
+  upsertRadioCatalogRecord,
+} from '~/utils/radio-catalog-db';
 import {
   defaultMemoryFileName,
   memoryFileDisplayName,
@@ -34,14 +42,6 @@ import {
   type SerialLogOperation,
 } from '~/utils/serial-log-file';
 
-interface LoadedRadioConfig extends Radio {
-  codec?: {
-    type: string;
-    reference?: string;
-    config?: Record<string, unknown>;
-  };
-}
-
 const logger = new LogLayer({
   transport: [
     new ConsoleTransport({
@@ -51,7 +51,6 @@ const logger = new LogLayer({
   ],
 });
 
-const codecFactory = new CodecFactory();
 let persistQueue: Promise<void> = Promise.resolve();
 
 interface CapturedSerialLog {
@@ -100,6 +99,12 @@ export function useRadio() {
   const memoryFilePath = useState<string | undefined>('radio-memory-file-path', () => undefined);
   const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
 
+  async function refreshCatalogState(): Promise<void> {
+    const records = await listRadioCatalogRecords();
+    configurations.value = records.map((record) => record.config);
+    manufacturers.value = await listRadioManufacturers();
+  }
+
   async function initialize(): Promise<void> {
     if (configurations.value.length > 0 || isLoading.value) {
       return;
@@ -109,13 +114,42 @@ export function useRadio() {
     error.value = null;
 
     try {
-      const config = uv5rConfig as LoadedRadioConfig;
-      configurations.value = [config];
-      manufacturers.value = [...new Set(configurations.value.map((item) => item.id.manufacturer))].sort();
+      const bundled = createBundledUv5rRadio();
+      await upsertRadioCatalogRecord(bundled, 'bundled');
+      await refreshCatalogState();
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Failed to load radio configurations';
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  async function addRadioFromFile(): Promise<void> {
+    try {
+      const picked = await pickAndLoadRadioConfig();
+
+      if (!picked) {
+        return;
+      }
+
+      await upsertRadioCatalogRecord(picked.radio, 'user', { sourcePath: picked.path });
+      await refreshCatalogState();
+
+      toast.add({
+        title: 'Radio added',
+        description: `${picked.radio.id.manufacturer} ${picked.radio.id.name}`,
+        color: 'success',
+        icon: 'i-lucide-radio',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to add radio configuration';
+      logger.withError(cause).error('Failed to add radio configuration');
+      toast.add({
+        title: 'Could not add radio',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
     }
   }
 
@@ -129,12 +163,18 @@ export function useRadio() {
 
   async function getCodec(radioId: RadioId): Promise<RadioCodec | undefined> {
     const config = getConfiguration(radioId);
+    const memoryMap = config ? memoryMapFromConfig(config) : undefined;
 
-    if (!config?.codec?.config) {
+    if (!config || !memoryMap) {
       return undefined;
     }
 
-    return codecFactory.createCodec(radioId.model, config.codec.config, logger);
+    return createMemoryMapCodec({
+      radioModel: radioId.model,
+      memoryMap,
+      memoryConfig: config.memoryConfig,
+      logger,
+    });
   }
 
   function startProgress(kind: 'import' | 'write'): RadioProgressIndicator {
@@ -575,7 +615,7 @@ export function useRadio() {
     });
 
     program.value = decoded;
-    settingsMemoryMap.value = baofengMemoryMap((config.codec?.config ?? {}) as BaofengConfig);
+    settingsMemoryMap.value = memoryMapFromConfig(config);
     channels.value = rowsFromProgram(decoded);
   }
 
@@ -599,6 +639,7 @@ export function useRadio() {
     memoryFilePath,
     serialLog,
     initialize,
+    addRadioFromFile,
     getModelsByManufacturer,
     importFromRadio,
     openWriteToRadio,

@@ -21,6 +21,12 @@ export {
   groupMemoryMapUiFields,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-ui.js';
 export type { RadioMemoryMapUiField } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-ui.js';
+export {
+  createEmptyMemoryImage,
+  createMemoryMapCodec,
+  memoryImageSize,
+  MemoryMapRadioCodec,
+} from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-radio-codec.js';
 export { default as licenseClasses } from '../../node_modules/@springfield/ham-radio-utils/dist/db/license-classes.json' with { type: 'json' };
 export { default as bands } from '../../node_modules/@springfield/ham-radio-utils/dist/db/bands.json' with { type: 'json' };
 

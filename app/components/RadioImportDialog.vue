@@ -3,13 +3,22 @@ import type { RadioId } from '@springfield/ham-radio-api';
 import { SerialPort } from 'tauri-plugin-serialplugin';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 
-const { manufacturers, isLoading, error, getModelsByManufacturer, importFromRadio, importOpen } = useRadio();
+const {
+  manufacturers,
+  isLoading,
+  error,
+  getModelsByManufacturer,
+  importFromRadio,
+  importOpen,
+  addRadioFromFile,
+} = useRadio();
 
 const selectedManufacturer = ref<string | undefined>();
 const selectedRadio = ref<RadioId | undefined>();
 const selectedPort = ref<string | undefined>();
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = ref(false);
+const addingRadio = ref(false);
 const models = computed(() => {
   if (!selectedManufacturer.value) {
     return [];
@@ -67,6 +76,23 @@ async function importRadio(): Promise<void> {
   await importFromRadio(serialPortPath, radioId);
 }
 
+async function addRadio(): Promise<void> {
+  addingRadio.value = true;
+
+  try {
+    const previousManufacturer = selectedManufacturer.value;
+    await addRadioFromFile();
+
+    if (!selectedManufacturer.value && manufacturers.value.length === 1) {
+      selectedManufacturer.value = manufacturers.value[0];
+    } else if (previousManufacturer && manufacturers.value.includes(previousManufacturer)) {
+      selectedManufacturer.value = previousManufacturer;
+    }
+  } finally {
+    addingRadio.value = false;
+  }
+}
+
 watch(importOpen, (open) => {
   if (open) {
     void loadPorts();
@@ -104,13 +130,24 @@ watch(importOpen, (open) => {
 
       <div class="flex flex-col gap-4">
         <UFormField label="Manufacturer">
-          <USelectMenu
-            v-model="selectedManufacturer"
-            :items="manufacturers"
-            :loading="isLoading"
-            placeholder="Select manufacturer"
-            class="w-full"
-          />
+          <div class="flex gap-2">
+            <USelectMenu
+              v-model="selectedManufacturer"
+              :items="manufacturers"
+              :loading="isLoading"
+              placeholder="Select manufacturer"
+              class="w-full"
+            />
+            <UTooltip text="Add radio configuration JSON">
+              <UButton
+                icon="i-lucide-plus"
+                color="neutral"
+                variant="outline"
+                :loading="addingRadio"
+                @click="addRadio"
+              />
+            </UTooltip>
+          </div>
         </UFormField>
 
         <UFormField label="Model">

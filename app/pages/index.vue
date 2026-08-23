@@ -207,13 +207,13 @@ const hexMemory = computed(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col px-4 pb-4 pt-1">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-4 pt-1">
     <UTabs
       color="primary"
       variant="link"
       default-value="channels"
       :items="items"
-      class="flex min-h-0 flex-1 flex-col"
+      class="flex min-h-0 flex-1 flex-col overflow-hidden"
       :unmount-on-hide="false"
       :ui="{
         list: 'w-full shrink-0 gap-0.5 border-b border-default',
@@ -224,8 +224,8 @@ const hexMemory = computed(() => {
       }"
     >
       <template #channels>
-        <div class="min-h-0 flex-1 overflow-auto pt-2">
-          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
+          <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div class="min-w-0">
               <p v-if="hasPrivilegeContext && outOfClassCount > 0" class="text-xs text-warning">
                 {{ outOfClassCount }} channel{{ outOfClassCount === 1 ? '' : 's' }} have transmit frequencies outside your
@@ -246,53 +246,55 @@ const hexMemory = computed(() => {
               @click="saveSelectedToLibrary"
             />
           </div>
-          <UTable
-            v-model:row-selection="rowSelection"
-            :data="displayChannels"
-            :columns="columns"
-            :get-row-id="(row) => String(row.channelNumber)"
-            sticky
-            class="channel-table max-h-[calc(100vh-8rem)]"
-            :ui="{
-              thead: 'bg-default',
-              th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
-              td: 'h-7 px-2 py-0 text-xs tabular-nums align-middle',
-              tbody: 'divide-y-0',
-              empty: 'py-4 text-center text-xs text-muted',
-            }"
-            empty="Open a memory file or import from a radio to edit channels."
-            @select="onSelectChannel"
-          >
-            <template #privilege-cell="{ row }">
-              <UTooltip
-                v-if="row.original.privilegeWarning"
-                :delay-duration="200"
-                :content="{ side: 'right', align: 'center', sideOffset: 10 }"
-                :ui="{
-                  content:
-                    'h-auto max-w-72 flex-col items-start gap-1 bg-elevated px-3 py-2.5 text-xs text-highlighted shadow-lg ring ring-default',
-                }"
-              >
-                <UIcon name="i-lucide-triangle-alert" class="size-3.5 text-warning" />
-                <template #content>
-                  <p class="font-medium text-highlighted">{{ row.original.privilegeWarning.title }}</p>
-                  <p class="text-toned">{{ row.original.privilegeWarning.bandLabel }}</p>
-                  <p class="whitespace-normal text-pretty text-highlighted">{{ row.original.privilegeWarning.detail }}</p>
-                </template>
-              </UTooltip>
-            </template>
-            <template #edit-cell="{ row }">
-              <UButton
-                icon="i-lucide-pencil"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                aria-label="Edit channel"
-                @click.stop="openChannelEditor(row.original.channelNumber)"
-              />
-            </template>
-          </UTable>
-          <p v-if="channels.length > 0" class="mt-2 text-xs text-muted">
+          <div class="min-h-0 flex-1 overflow-hidden">
+            <UTable
+              v-model:row-selection="rowSelection"
+              :data="displayChannels"
+              :columns="columns"
+              :get-row-id="(row) => String(row.channelNumber)"
+              sticky
+              class="channel-table h-full"
+              :ui="{
+                thead: 'bg-default',
+                th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
+                td: 'h-7 px-2 py-0 text-xs tabular-nums align-middle',
+                tbody: 'divide-y-0',
+                empty: 'py-4 text-center text-xs text-muted',
+              }"
+              empty="Open a memory file or import from a radio to edit channels."
+              @select="onSelectChannel"
+            >
+              <template #privilege-cell="{ row }">
+                <UTooltip
+                  v-if="row.original.privilegeWarning"
+                  :delay-duration="200"
+                  :content="{ side: 'right', align: 'center', sideOffset: 10 }"
+                  :ui="{
+                    content:
+                      'h-auto max-w-72 flex-col items-start gap-1 bg-elevated px-3 py-2.5 text-xs text-highlighted shadow-lg ring ring-default',
+                  }"
+                >
+                  <UIcon name="i-lucide-triangle-alert" class="size-3.5 text-warning" />
+                  <template #content>
+                    <p class="font-medium text-highlighted">{{ row.original.privilegeWarning.title }}</p>
+                    <p class="text-toned">{{ row.original.privilegeWarning.bandLabel }}</p>
+                    <p class="whitespace-normal text-pretty text-highlighted">{{ row.original.privilegeWarning.detail }}</p>
+                  </template>
+                </UTooltip>
+              </template>
+              <template #edit-cell="{ row }">
+                <UButton
+                  icon="i-lucide-pencil"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Edit channel"
+                  @click.stop="openChannelEditor(row.original.channelNumber)"
+                />
+              </template>
+            </UTable>
+          </div>
+          <p class="mt-2 shrink-0 text-xs text-muted">
             Select channels and choose Save to library to store portable name, frequencies, and tones. Click a row to edit
             the loaded memory.
           </p>

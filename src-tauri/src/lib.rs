@@ -117,10 +117,11 @@ fn load_text_file(path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "create_saved_channels",
-        sql: r#"
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "create_saved_channels",
+            sql: r#"
 CREATE TABLE saved_channels (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT,
@@ -137,8 +138,31 @@ CREATE TABLE saved_channels (
 CREATE INDEX idx_saved_channels_name ON saved_channels(name);
 CREATE INDEX idx_saved_channels_rx ON saved_channels(receive_frequency);
 "#,
-        kind: MigrationKind::Up,
-    }];
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "create_radio_models",
+            sql: r#"
+CREATE TABLE radio_models (
+  model_id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  manufacturer TEXT NOT NULL,
+  version TEXT NOT NULL,
+  description TEXT NOT NULL,
+  capabilities TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_path TEXT,
+  config_json TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
+"#,
+            kind: MigrationKind::Up,
+        },
+    ];
 
     tauri::Builder::default()
         .plugin(tauri_plugin_serialplugin::init())

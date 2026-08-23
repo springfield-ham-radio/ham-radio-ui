@@ -2649,6 +2649,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@springfield/ham-radio-registry@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "@springfield/ham-radio-registry@npm:1.2.0"
+  dependencies:
+    "@springfield/ham-radio-api": "npm:^17.3.0"
+    "@springfield/ham-radio-utils": "npm:^4.6.0"
+    loglayer: "npm:^9.4.0"
+  checksum: 10c0/a255d65fa7e377bbd2e77943ffc6c71ae69531ea3a555cb9f52ccc224c3f59331ad2e8a1b5533eff00169379b6d5b2b887417b67b3883a39a4d6191cf5808775
+  languageName: node
+  linkType: hard
+
 "@springfield/ham-radio-ui@workspace:.":
   version: 0.0.0-use.local
   resolution: "@springfield/ham-radio-ui@workspace:."
@@ -2656,8 +2667,9 @@ __metadata:
     "@nuxt/ui": "npm:3"
     "@springfield/ham-radio-api": "npm:^17.3.0"
     "@springfield/ham-radio-driver": "npm:^3.1.0"
-    "@springfield/ham-radio-utils": "npm:^4.5.0"
-    "@springfield/radio-module-baofeng": "npm:^2.4.0"
+    "@springfield/ham-radio-registry": "npm:^1.2.0"
+    "@springfield/ham-radio-utils": "npm:^4.6.0"
+    "@springfield/radio-module-baofeng": "npm:^3.0.0"
     "@tauri-apps/api": "npm:^2.10.1"
     "@tauri-apps/cli": "npm:^2.10.1"
     "@tauri-apps/plugin-dialog": "npm:^2.7.0"
@@ -2680,7 +2692,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@springfield/ham-radio-utils@npm:^4.1.1, @springfield/ham-radio-utils@npm:^4.5.0":
+"@springfield/ham-radio-utils@npm:^4.1.1":
   version: 4.5.0
   resolution: "@springfield/ham-radio-utils@npm:4.5.0"
   dependencies:
@@ -2694,28 +2706,24 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-utils@npm:^4.3.0":
-  version: 4.3.0
-  resolution: "@springfield/ham-radio-utils@npm:4.3.0"
+"@springfield/ham-radio-utils@npm:^4.6.0":
+  version: 4.6.0
+  resolution: "@springfield/ham-radio-utils@npm:4.6.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^17.2.0"
+    "@springfield/ham-radio-api": "npm:^17.3.0"
     ajv: "npm:^8.20.0"
     ajv-formats: "npm:^3.0.1"
     fishery: "npm:^2.4.0"
     loglayer: "npm:^9.4.0"
     sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/8124e1d12210130c1f98c2a8c17edf83a9cef30bc7a1f6305cc398550890ed937bdc4b5c05d720ea93e2eef8341746d72a66c259503a8c3ff8d5638e29e97613
+  checksum: 10c0/ae3f25588a5df03588f1071ea05cb4a8795055b0ec955428a8550bb49071e6df0aa1206abc9419ddeba45403e81cfd381862e97e3f0ce0ca61e07bf5c91b0d3e
   languageName: node
   linkType: hard
 
-"@springfield/radio-module-baofeng@npm:^2.4.0":
-  version: 2.4.0
-  resolution: "@springfield/radio-module-baofeng@npm:2.4.0"
-  dependencies:
-    "@springfield/ham-radio-api": "npm:^17.2.0"
-    "@springfield/ham-radio-utils": "npm:^4.3.0"
-    loglayer: "npm:^9.4.0"
-  checksum: 10c0/10976d74b47070c76690e6deb49c6642300e4bf398492ec0bf7c523455a4c01f5789c8dbd3e01f75c68014775360e7832172b64c60916ecf80491e536efe8d07
+"@springfield/radio-module-baofeng@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "@springfield/radio-module-baofeng@npm:3.0.0"
+  checksum: 10c0/912a4fd11c7538b5708f603ca9cc4555a2907313d40687ffdadcf93a9d635cf508e8219bdb7ece2d84bf8b120f2c3d827ede9337a7f475febd0276342b6a4402
   languageName: node
   linkType: hard
 

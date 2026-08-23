@@ -60,7 +60,7 @@ defineShortcuts({
 </script>
 
 <template>
-  <header class="relative flex items-center justify-between border-b border-default bg-default px-3 py-2">
+  <header class="relative flex shrink-0 items-center justify-between border-b border-default bg-default px-3 py-2">
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <UButton
         v-if="isPreferences"

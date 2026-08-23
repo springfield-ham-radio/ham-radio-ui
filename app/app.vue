@@ -1,8 +1,8 @@
 <template>
   <UApp>
-    <div class="flex h-full flex-col bg-muted text-highlighted">
+    <div class="flex h-dvh min-h-0 flex-col overflow-hidden bg-muted text-highlighted">
       <AppHeader />
-      <main class="min-h-0 flex-1">
+      <main class="min-h-0 flex-1 overflow-hidden">
         <NuxtPage />
       </main>
     </div>

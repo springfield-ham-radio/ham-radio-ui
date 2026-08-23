@@ -1,9 +1,13 @@
 import { describe, it } from 'node:test';
 import { expect } from 'chai';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   CTCSS,
   DCS,
   Frequency,
+  type RadioMemoryConfig,
   type RadioMemoryMap,
   type RadioModelId,
   type RadioProgram,
@@ -11,7 +15,7 @@ import {
   RadioToneType,
 } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { CodecFactory } from '@springfield/radio-module-baofeng';
+import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { MockLogLayer } from 'loglayer';
 import {
   applyChannelPatch,
@@ -227,28 +231,30 @@ describe('channel extras', () => {
 });
 
 describe('channel edit codec round-trip', () => {
-  it('persists a patched name and frequencies through the Baofeng codec', async () => {
-    const factory = new CodecFactory();
-    const modelId = 'baofeng-uv5r' as RadioModelId;
-    const codec = await factory.createCodec(
-      modelId,
-      {
-        channelMemorySegment: { endAddress: 6143, startAddress: 0 },
-        channelSettingsSchemaPath: 'shared/schemas/channel-schema.json',
-        channelSize: 16,
-        magicNumber: [80, 187, 255, 32, 18, 7, 37],
-        memorySegmentSize: 64,
-        numberChannels: 128,
-        powerOffset: 12,
-        radioSettingsSchemaPath: 'shared/schemas/settings-schema.json',
-        receiveFrequencyOffset: 0,
-        receiveToneOffset: 8,
-        settingsMemorySegment: { endAddress: 8191, startAddress: 7872 },
-        transmitFrequencyOffset: 4,
-        transmitToneOffset: 10,
+  it('persists a patched name and frequencies through the memory-map codec', async () => {
+    const rootDirectory = join(dirname(fileURLToPath(import.meta.url)), '../..');
+    const memoryMap = JSON.parse(
+      readFileSync(
+        join(rootDirectory, 'node_modules/@springfield/radio-module-baofeng/src/shared/memory-maps/uv5r-settings.json'),
+        'utf8',
+      ),
+    ) as RadioMemoryMap;
+    const memoryConfig: RadioMemoryConfig = {
+      chunkSize: 64,
+      addressSize: 2,
+      addressEndianness: 'big',
+      segments: {
+        channels: { startAddress: 0, endAddress: 6143 },
+        settings: { startAddress: 7872, endAddress: 8191 },
       },
-      new MockLogLayer(),
-    );
+    };
+    const modelId = 'baofeng-uv5r' as RadioModelId;
+    const codec = createMemoryMapCodec({
+      radioModel: modelId,
+      memoryMap,
+      memoryConfig,
+      logger: new MockLogLayer(),
+    });
 
     const originalProgram: RadioProgram = {
       channels: [programmedChannel({ channelNumber: 0 })],
