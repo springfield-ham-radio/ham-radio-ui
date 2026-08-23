@@ -1,3 +1,9 @@
+## [0.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.0...v0.1.1) (2026-08-23)
+
+### Bug Fixes
+
+* chain Tauri installer builds from the CI release job ([56d45af](https://github.com/springfield-ham-radio/ham-radio-ui/commit/56d45af4f567b13ed09fd58cda7846548091d396))
+
 ## [0.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.0.0...v0.1.0) (2026-08-23)
 
 ### Features
