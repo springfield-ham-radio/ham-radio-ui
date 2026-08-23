@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { TableColumn, TableRow } from '@nuxt/ui';
-import type { RadioSettingValue } from '@springfield/ham-radio-api';
+import type { RadioChannel, RadioSettingValue } from '@springfield/ham-radio-api';
 import {
   collectChannelMemoryMapUiFields,
   formatMemoryMapFieldValue,
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
+import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
+const UCheckbox = resolveComponent('UCheckbox');
+
 const { channels, memory, program, settingsMemoryMap, activeRadioId, updateSettings, updateChannel } = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
+const { saveChannels } = useSavedChannels();
 
 interface DisplayChannelRow extends ChannelRow {
   privilegeWarning?: ReturnType<typeof getTransmitPrivilegeWarning>;
@@ -52,8 +56,45 @@ const displayChannels = computed<DisplayChannelRow[]>(() => {
   });
 });
 
+const rowSelection = ref<Record<string, boolean>>({});
+const isSavingToLibrary = ref(false);
+
+const selectedChannelNumbers = computed(() => {
+  return Object.entries(rowSelection.value)
+    .filter(([, selected]) => selected)
+    .map(([key]) => Number(key))
+    .filter((channelNumber) => Number.isFinite(channelNumber));
+});
+
+const selectedCount = computed(() => selectedChannelNumbers.value.length);
+
 const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
   const core: TableColumn<DisplayChannelRow>[] = [
+    {
+      id: 'select',
+      header: ({ table }) =>
+        h(UCheckbox, {
+          modelValue: table.getIsSomePageRowsSelected() ? 'indeterminate' : table.getIsAllPageRowsSelected(),
+          'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+            table.toggleAllPageRowsSelected(!!value);
+          },
+          'aria-label': 'Select all channels',
+          onClick: (event: Event) => {
+            event.stopPropagation();
+          },
+        }),
+      cell: ({ row }) =>
+        h(UCheckbox, {
+          modelValue: row.getIsSelected(),
+          'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+            row.toggleSelected(!!value);
+          },
+          'aria-label': `Select channel ${row.original.channelNumber}`,
+          onClick: (event: Event) => {
+            event.stopPropagation();
+          },
+        }),
+    },
     {
       id: 'privilege',
       header: '',
@@ -96,7 +137,13 @@ function openChannelEditor(channelNumber: number): void {
   editorOpen.value = true;
 }
 
-function onSelectChannel(_event: Event, row: TableRow<DisplayChannelRow>): void {
+function onSelectChannel(event: Event, row: TableRow<DisplayChannelRow>): void {
+  const target = event.target;
+
+  if (target instanceof Element && target.closest('button, input, [role="checkbox"]')) {
+    return;
+  }
+
   openChannelEditor(row.original.channelNumber);
 }
 
@@ -106,6 +153,43 @@ function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
   }
 
   void updateChannel(editingChannelNumber.value, patch);
+}
+
+function portableChannelFromMemory(channelNumber: number): RadioChannel | undefined {
+  const programmed = program.value?.channels.find((channel) => channel.channelNumber === channelNumber);
+
+  if (!programmed || typeof programmed.radioChannel === 'string') {
+    return undefined;
+  }
+
+  return {
+    name: programmed.radioChannel.name,
+    transmitFrequency: programmed.radioChannel.transmitFrequency,
+    receiveFrequency: programmed.radioChannel.receiveFrequency,
+    transmitTone: programmed.radioChannel.transmitTone,
+    receiveTone: programmed.radioChannel.receiveTone,
+  };
+}
+
+async function saveSelectedToLibrary(): Promise<void> {
+  const portableChannels = selectedChannelNumbers.value
+    .map((channelNumber) => portableChannelFromMemory(channelNumber))
+    .filter((channel): channel is RadioChannel => channel !== undefined);
+
+  if (portableChannels.length === 0) {
+    return;
+  }
+
+  isSavingToLibrary.value = true;
+
+  try {
+    await saveChannels(portableChannels);
+    rowSelection.value = {};
+  } catch {
+    // Toast is shown by useSavedChannels.
+  } finally {
+    isSavingToLibrary.value = false;
+  }
 }
 
 const outOfClassCount = computed(() => displayChannels.value.filter((channel) => channel.privilegeWarning).length);
@@ -141,16 +225,32 @@ const hexMemory = computed(() => {
     >
       <template #channels>
         <div class="min-h-0 flex-1 overflow-auto pt-2">
-          <p v-if="hasPrivilegeContext && outOfClassCount > 0" class="mb-2 text-xs text-warning">
-            {{ outOfClassCount }} channel{{ outOfClassCount === 1 ? '' : 's' }} have transmit frequencies outside your
-            {{ privilegeLicenseLabel }} privileges.
-          </p>
-          <p v-else-if="!hasPrivilegeContext && channels.length > 0" class="mb-2 text-xs text-muted">
-            Set your amateur or GMRS call sign in Preferences to flag channels outside your license privileges.
-          </p>
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="min-w-0">
+              <p v-if="hasPrivilegeContext && outOfClassCount > 0" class="text-xs text-warning">
+                {{ outOfClassCount }} channel{{ outOfClassCount === 1 ? '' : 's' }} have transmit frequencies outside your
+                {{ privilegeLicenseLabel }} privileges.
+              </p>
+              <p v-else-if="!hasPrivilegeContext && channels.length > 0" class="text-xs text-muted">
+                Set your amateur or GMRS call sign in Preferences to flag channels outside your license privileges.
+              </p>
+            </div>
+            <UButton
+              icon="i-lucide-bookmark"
+              color="primary"
+              variant="soft"
+              size="sm"
+              label="Save to library"
+              :disabled="selectedCount === 0 || isSavingToLibrary"
+              :loading="isSavingToLibrary"
+              @click="saveSelectedToLibrary"
+            />
+          </div>
           <UTable
+            v-model:row-selection="rowSelection"
             :data="displayChannels"
             :columns="columns"
+            :get-row-id="(row) => String(row.channelNumber)"
             sticky
             class="channel-table max-h-[calc(100vh-8rem)]"
             :ui="{
@@ -192,7 +292,10 @@ const hexMemory = computed(() => {
               />
             </template>
           </UTable>
-          <p v-if="channels.length > 0" class="mt-2 text-xs text-muted">Click a channel to edit it. Changes are saved into the loaded memory.</p>
+          <p v-if="channels.length > 0" class="mt-2 text-xs text-muted">
+            Select channels and choose Save to library to store portable name, frequencies, and tones. Click a row to edit
+            the loaded memory.
+          </p>
         </div>
       </template>
       <template #settings>

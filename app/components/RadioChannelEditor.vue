@@ -16,6 +16,7 @@ import {
   toneToKey,
   type ChannelPatch,
 } from '~/utils/channel-edit';
+import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
   open: boolean;
@@ -29,12 +30,14 @@ const emit = defineEmits<{
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
+const { filteredChannels, search, refresh, isLoading } = useSavedChannels();
 
 const name = ref('');
 const receiveMHz = ref('');
 const transmitMHz = ref('');
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
+const libraryOpen = ref(false);
 
 const radioChannel = computed(() => {
   if (!props.channel || typeof props.channel.radioChannel === 'string') {
@@ -77,7 +80,32 @@ watch(
 );
 
 function close(): void {
+  libraryOpen.value = false;
   emit('update:open', false);
+}
+
+async function openLibrary(): Promise<void> {
+  libraryOpen.value = true;
+  search.value = '';
+  await refresh();
+}
+
+function applyLibraryChannel(channel: SavedChannel): void {
+  name.value = nameMaxLength.value === undefined ? (channel.name ?? '') : (channel.name ?? '').slice(0, nameMaxLength.value);
+  receiveMHz.value = formatFrequencyMHz(channel.receiveFrequency);
+  transmitMHz.value = formatFrequencyMHz(channel.transmitFrequency);
+  receiveError.value = undefined;
+  transmitError.value = undefined;
+
+  emit('update:channel', {
+    name: name.value,
+    receiveFrequencyHz: channel.receiveFrequency,
+    transmitFrequencyHz: channel.transmitFrequency,
+    receiveTone: channel.receiveTone,
+    transmitTone: channel.transmitTone,
+  });
+
+  libraryOpen.value = false;
 }
 
 function commitName(): void {
@@ -309,7 +337,43 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
     </template>
 
     <template #footer>
-      <UButton color="neutral" variant="outline" label="Done" @click="close" />
+      <div class="flex w-full items-center justify-between gap-2">
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-library"
+          label="Load from library"
+          :disabled="!radioChannel"
+          @click="openLibrary"
+        />
+        <UButton color="neutral" variant="outline" label="Done" @click="close" />
+      </div>
     </template>
   </USlideover>
+
+  <UModal v-model:open="libraryOpen" title="Load from library" description="Apply a portable saved channel to this memory slot.">
+    <template #body>
+      <div class="space-y-3">
+        <UInput v-model="search" icon="i-lucide-search" placeholder="Search saved channels" />
+        <div class="max-h-80 space-y-1 overflow-y-auto">
+          <p v-if="isLoading" class="px-1 py-4 text-sm text-muted">Loading library…</p>
+          <p v-else-if="filteredChannels.length === 0" class="px-1 py-4 text-sm text-muted">
+            No saved channels match. Save channels from the Radio page first.
+          </p>
+          <button
+            v-for="channel in filteredChannels"
+            :key="channel.id"
+            type="button"
+            class="flex w-full flex-col rounded-md px-2 py-2 text-left hover:bg-elevated"
+            @click="applyLibraryChannel(channel)"
+          >
+            <span class="text-sm font-medium text-highlighted">{{ channel.name || 'Untitled channel' }}</span>
+            <span class="text-xs tabular-nums text-muted">
+              TX {{ formatFrequencyMHz(channel.transmitFrequency) }} · RX {{ formatFrequencyMHz(channel.receiveFrequency) }}
+            </span>
+          </button>
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>

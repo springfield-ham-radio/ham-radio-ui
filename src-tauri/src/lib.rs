@@ -1,5 +1,6 @@
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
@@ -116,10 +117,38 @@ fn load_text_file(path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let migrations = vec![Migration {
+        version: 1,
+        description: "create_saved_channels",
+        sql: r#"
+CREATE TABLE saved_channels (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT,
+  transmit_frequency INTEGER NOT NULL,
+  receive_frequency INTEGER NOT NULL,
+  transmit_tone INTEGER NOT NULL,
+  transmit_tone_type TEXT NOT NULL,
+  receive_tone INTEGER NOT NULL,
+  receive_tone_type TEXT NOT NULL,
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_saved_channels_name ON saved_channels(name);
+CREATE INDEX idx_saved_channels_rx ON saved_channels(receive_frequency);
+"#,
+        kind: MigrationKind::Up,
+    }];
+
     tauri::Builder::default()
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:ham-radio.db", migrations)
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![save_text_file, load_text_file])
         .menu(build_menu)
         .on_menu_event(|app, event| {

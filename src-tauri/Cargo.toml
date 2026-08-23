@@ -24,3 +24,4 @@ tauri-plugin-serialplugin = "2.21.1"
 tauri-plugin-mcp-bridge = "0.8.0"
 tauri-plugin-dialog = "2.7.0"
 tauri-plugin-opener = "2.5.4"
+tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
