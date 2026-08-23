@@ -2,6 +2,14 @@
 
 Desktop app for reading and managing ham radio memory.
 
+## Downloads
+
+Installers for macOS (Apple Silicon), Windows, and Linux are published on [GitHub Releases](https://github.com/springfield-ham-radio/ham-radio-ui/releases).
+
+Builds are **unsigned**. macOS Gatekeeper and Windows SmartScreen may show a warning; you can still open the app (macOS: right-click → Open; Windows: More info → Run anyway).
+
+App versions come from [conventional commits](https://www.conventionalcommits.org/) via semantic-release. See [docs/releasing.md](docs/releasing.md).
+
 ## Usage
 
 Open and save a radio memory image as JSON from **File → Open Memory…** (`⌘O` / `Ctrl+O`), **File → Save** (`⌘S` / `Ctrl+S`), and **File → Save As…** (`⇧⌘S` / `Ctrl+Shift+S`). Save writes back to the current file when one is open; Save As always asks for a destination. Import a live image from a connected radio with **File → Import from Radio…**. Write the loaded image to a connected radio with **File → Write to Radio…**; the radio type comes from the memory document, and you only choose the serial port. Every import and write captures serial bytes in and out; save that log from the success toast, the cancel toast, or **Save serial log** if the transfer fails. Click a channel in the Channels table to edit its name, frequencies, tones, and radio-specific settings; changes are written into the loaded memory image.
