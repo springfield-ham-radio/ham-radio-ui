@@ -97,7 +97,8 @@
       [
         "@semantic-release/exec",
         {
-          "prepareCmd": "node scripts/set-cargo-version.mjs ${nextRelease.version}"
+          "prepareCmd": "node scripts/set-cargo-version.mjs ${nextRelease.version}",
+          "successCmd": "echo \"v${nextRelease.version}\" > .released-tag"
         }
       ],
       "@semantic-release/github",

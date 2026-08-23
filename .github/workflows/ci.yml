@@ -26,6 +26,8 @@ jobs:
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.released.outputs.tag }}
     permissions:
       contents: write
       issues: write
@@ -43,3 +45,18 @@ jobs:
       - run: yarn release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: released
+        run: |
+          if [ -f .released-tag ]; then
+            echo "tag=$(cat .released-tag)" >> "$GITHUB_OUTPUT"
+          fi
+
+  tauri:
+    needs: release
+    if: needs.release.outputs.tag != ''
+    uses: ./.github/workflows/release-tauri.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: write

@@ -1,20 +1,26 @@
 name: Release Tauri
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Git tag to build (e.g. v0.1.0)
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
         description: Git tag to rebuild (e.g. v0.1.0)
         required: true
         type: string
+  release:
+    types: [published]
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-tauri-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-tauri-${{ inputs.tag || github.event.release.tag_name }}
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -62,9 +68,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: Ham Radio v__VERSION__
+          tagName: ${{ inputs.tag || github.event.release.tag_name }}
+          releaseName: Ham Radio ${{ inputs.tag || github.event.release.tag_name }}
           releaseBody: See the assets to download this version and install.
           releaseDraft: false
-          prerelease: ${{ contains(github.event.release.tag_name || inputs.tag, '-') }}
+          prerelease: ${{ contains(inputs.tag || github.event.release.tag_name, '-') }}
           args: ${{ matrix.args }}

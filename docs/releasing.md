@@ -18,7 +18,9 @@ The `beta` branch publishes prereleases (`0.2.0-beta.1`).
 
 1. Merge a PR with conventional commits into `main` (or `beta`).
 2. The CI `release` job runs semantic-release: changelog, git tag `vX.Y.Z`, and a GitHub Release.
-3. The **Release Tauri** workflow builds installers for each platform and uploads them to that release.
+3. CI then calls the **Release Tauri** workflow (same run) to build installers and upload them to that release.
+
+GitHub does not start new workflows from events created with `GITHUB_TOKEN`, so installer builds are chained from CI via `workflow_call` rather than the `release` event alone.
 
 You can rebuild installers for an existing tag from the Actions UI (**Release Tauri** → Run workflow → enter the tag).
 
