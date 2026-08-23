@@ -2626,16 +2626,26 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver@npm:^3.0.1":
-  version: 3.0.1
-  resolution: "@springfield/ham-radio-driver@npm:3.0.1"
+"@springfield/ham-radio-api@npm:^17.3.0":
+  version: 17.3.0
+  resolution: "@springfield/ham-radio-api@npm:17.3.0"
+  dependencies:
+    loglayer: "npm:^8.5.0"
+    ts-brand: "npm:^0.2.0"
+  checksum: 10c0/b17559d2f8bd8c84a7cd6033a88616b406050a4b5468779dbd34d4b6d73e80bc41fa43c67b1978fd04b5659b0871999aeda7ab6de54779be0047407b597c2daf
+  languageName: node
+  linkType: hard
+
+"@springfield/ham-radio-driver@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "@springfield/ham-radio-driver@npm:3.1.0"
   dependencies:
     "@serialport/parser-byte-length": "npm:^13.0.0"
     "@springfield/ham-radio-api": "npm:^17.0.0"
-    "@springfield/ham-radio-utils": "npm:^4.0.0"
+    "@springfield/ham-radio-utils": "npm:^4.1.1"
     loglayer: "npm:^9.4.0"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/cae687242c6db999117a7b914535b030f99b7d82370f84b1fa78879fe5e16b4d87cf9113010ba4f1b93bdf8163fd493a8706c4560a55d3fac5d0d7ee74723bb9
+  checksum: 10c0/c56effb9a74ce30ed8849ef1cdce5f0466fa0a22662bca4d5a283070a9060ef39c3b53a97f4bb7523c2f7ab96f2f722775ed29d2d5ede486f39ccdd73aebdf59
   languageName: node
   linkType: hard
 
@@ -2644,10 +2654,10 @@ __metadata:
   resolution: "@springfield/ham-radio-ui@workspace:."
   dependencies:
     "@nuxt/ui": "npm:3"
-    "@springfield/ham-radio-api": "npm:^17.2.0"
-    "@springfield/ham-radio-driver": "npm:^3.0.1"
-    "@springfield/ham-radio-utils": "npm:^4.4.0"
-    "@springfield/radio-module-baofeng": "npm:^2.3.0"
+    "@springfield/ham-radio-api": "npm:^17.3.0"
+    "@springfield/ham-radio-driver": "npm:^3.1.0"
+    "@springfield/ham-radio-utils": "npm:^4.5.0"
+    "@springfield/radio-module-baofeng": "npm:^2.4.0"
     "@tauri-apps/api": "npm:^2.10.1"
     "@tauri-apps/cli": "npm:^2.10.1"
     "@tauri-apps/plugin-dialog": "npm:^2.7.0"
@@ -2669,17 +2679,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@springfield/ham-radio-utils@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "@springfield/ham-radio-utils@npm:4.0.0"
+"@springfield/ham-radio-utils@npm:^4.1.1, @springfield/ham-radio-utils@npm:^4.5.0":
+  version: 4.5.0
+  resolution: "@springfield/ham-radio-utils@npm:4.5.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^17.0.0"
+    "@springfield/ham-radio-api": "npm:^17.2.0"
     ajv: "npm:^8.20.0"
     ajv-formats: "npm:^3.0.1"
     fishery: "npm:^2.4.0"
     loglayer: "npm:^9.4.0"
     sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/a22a162966b1058fa8c4be634eafdd9f4dbc0a1d9acd76f80b039b467e924cb3c7d8eff8863737e36dc2fff5f6a055321aa95f1a6e30cb622fff2ea3da526e0d
+  checksum: 10c0/74dce5883ffe6e82fb1dd5b3c0b6f76509ea05b041ffd659972b06e43b193fff34f54c3627549ade6017c12a37fb4aa670d569e97cd371c4fad89b86dc1c3be6
   languageName: node
   linkType: hard
 
@@ -2697,28 +2707,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-utils@npm:^4.4.0":
-  version: 4.4.0
-  resolution: "@springfield/ham-radio-utils@npm:4.4.0"
-  dependencies:
-    "@springfield/ham-radio-api": "npm:^17.2.0"
-    ajv: "npm:^8.20.0"
-    ajv-formats: "npm:^3.0.1"
-    fishery: "npm:^2.4.0"
-    loglayer: "npm:^9.4.0"
-    sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/84986fbb604df17e1afced09590e3e8f27ed9036a288c6c7ab0ecac97b96f1fe5c2aa2781bdb9be54155a7ad5f23f6227aff57d8c99ada2b0934584c6b853982
-  languageName: node
-  linkType: hard
-
-"@springfield/radio-module-baofeng@npm:^2.3.0":
-  version: 2.3.0
-  resolution: "@springfield/radio-module-baofeng@npm:2.3.0"
+"@springfield/radio-module-baofeng@npm:^2.4.0":
+  version: 2.4.0
+  resolution: "@springfield/radio-module-baofeng@npm:2.4.0"
   dependencies:
     "@springfield/ham-radio-api": "npm:^17.2.0"
     "@springfield/ham-radio-utils": "npm:^4.3.0"
     loglayer: "npm:^9.4.0"
-  checksum: 10c0/61b4ac771ed09277108ffcf6f6bafc7eb4bf801566202d045e30bbe7c977390ea711b67bd7e7cc556f7b26c9fc3a2c2f47f2d92a5d0c217ebc856f61f1a14a52
+  checksum: 10c0/10976d74b47070c76690e6deb49c6642300e4bf398492ec0bf7c523455a4c01f5789c8dbd3e01f75c68014775360e7832172b64c60916ecf80491e536efe8d07
   languageName: node
   linkType: hard
 
