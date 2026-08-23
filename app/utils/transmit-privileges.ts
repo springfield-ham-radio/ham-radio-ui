@@ -1,35 +1,10 @@
-import { bands, licenseClasses } from '@springfield/ham-radio-utils';
+import type { SpectrumBand } from '@springfield/ham-radio-api';
+import { BandPlan } from '@springfield/ham-radio-utils';
 
-interface LicenseClass {
-  id: string;
-  name: string;
-}
+const bandPlan = new BandPlan();
 
-interface BandChannel {
-  frequency: number;
-}
-
-interface SpectrumBandRecord {
-  name: string;
-  lowerFrequency: number;
-  upperFrequency: number;
-  privileges: string[];
-  channels?: BandChannel[];
-}
-
-const BANDS = bands as SpectrumBandRecord[];
-const LICENSE_CLASSES = licenseClasses as LicenseClass[];
-const FRS_LICENSE_CLASS_ID = LICENSE_CLASSES.find((licenseClass) => licenseClass.name === 'FRS')?.id;
-
-export function findBandByFrequency(frequencyHz: number): SpectrumBandRecord | undefined {
-  const hz = Math.round(frequencyHz);
-  const channelMatch = BANDS.find((band) => band.channels?.some((channel) => channel.frequency === hz));
-
-  if (channelMatch) {
-    return channelMatch;
-  }
-
-  return BANDS.find((band) => hz >= band.lowerFrequency && hz <= band.upperFrequency);
+export function findBandByFrequency(frequencyHz: number): SpectrumBand | undefined {
+  return bandPlan.findBandByFrequency(frequencyHz);
 }
 
 export function displayBandName(name: string): string {
@@ -51,19 +26,9 @@ export function bandNameForFrequency(frequencyHz: number | undefined): string {
 }
 
 export function hasTransmitPrivilege(frequencyHz: number, licenseClassId: string): boolean {
-  const band = findBandByFrequency(frequencyHz);
-
-  if (!band) {
-    return false;
-  }
-
-  if (FRS_LICENSE_CLASS_ID && band.privileges.includes(FRS_LICENSE_CLASS_ID)) {
-    return true;
-  }
-
-  return band.privileges.includes(licenseClassId);
+  return bandPlan.hasPrivilege(frequencyHz, licenseClassId);
 }
 
 export function licenseNameForId(id: string): string | undefined {
-  return LICENSE_CLASSES.find((licenseClass) => licenseClass.id === id)?.name;
+  return bandPlan.findPrivilegeById(id)?.name;
 }
