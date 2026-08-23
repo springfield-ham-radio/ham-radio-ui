@@ -1,3 +1,9 @@
+## [0.1.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.1...v0.1.2) (2026-08-23)
+
+### Bug Fixes
+
+* install libudev-dev for Linux Tauri builds ([e1dee1b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e1dee1b6ba120e8212569aa591a564c5c909adff))
+
 ## [0.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.0...v0.1.1) (2026-08-23)
 
 ### Bug Fixes
