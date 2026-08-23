@@ -34,6 +34,8 @@ Unsigned builds (no Apple notarization or Windows Authenticode yet):
 - **Windows:** NSIS `.exe` and `.msi`
 - **Linux (x64):** `.deb`, `.rpm`, and `.AppImage`
 
+CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
+
 macOS Gatekeeper and Windows SmartScreen will warn. Users can still open the app (macOS: right-click → Open; Windows: More info → Run anyway).
 
 ## Adding code signing later
