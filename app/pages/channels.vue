@@ -3,6 +3,7 @@ import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { TableColumn } from '@nuxt/ui';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import { formatSavedTone, type SavedChannel } from '~/utils/saved-channels-db';
+import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 useHead({ title: 'Channels' });
 
@@ -25,12 +26,24 @@ const isImporting = ref(false);
 const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
 
-const columns: TableColumn<SavedChannel>[] = [
+interface DisplaySavedChannel extends SavedChannel {
+  band: string;
+}
+
+const displayChannels = computed<DisplaySavedChannel[]>(() => {
+  return filteredChannels.value.map((channel) => ({
+    ...channel,
+    band: bandNameForFrequency(channel.transmitFrequency),
+  }));
+});
+
+const columns: TableColumn<DisplaySavedChannel>[] = [
   {
     accessorKey: 'name',
     header: 'Name',
     cell: ({ row }) => row.original.name || '—',
   },
+  { accessorKey: 'band', header: 'Band' },
   {
     id: 'transmit',
     header: 'TX',
@@ -183,7 +196,7 @@ onMounted(() => {
 
     <div class="min-h-0 flex-1 overflow-auto">
       <UTable
-        :data="filteredChannels"
+        :data="displayChannels"
         :columns="columns"
         :loading="isLoading"
         sticky
