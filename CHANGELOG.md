@@ -1,3 +1,9 @@
+## [0.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.2...v0.2.0) (2026-08-27)
+
+### Features
+
+* install official radio modules from catalog or local files ([6022436](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6022436f65a3387ecfffe3ac9ece809d9c5c9c81))
+
 ## [0.1.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.1...v0.1.2) (2026-08-23)
 
 ### Bug Fixes
