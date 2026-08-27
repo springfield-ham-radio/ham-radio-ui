@@ -33,19 +33,6 @@ export default defineNuxtConfig({
     host: '0.0.0.0',
   },
 
-  alias: {
-    '#baofeng-uv5r': stub('./node_modules/@springfield/radio-module-baofeng/configs/baofeng-uv5r.json'),
-    '#baofeng-uv5r-settings-schema': stub(
-      './node_modules/@springfield/radio-module-baofeng/src/shared/schemas/settings-schema.json',
-    ),
-    '#baofeng-uv5r-channel-schema': stub(
-      './node_modules/@springfield/radio-module-baofeng/src/shared/schemas/channel-schema.json',
-    ),
-    '#baofeng-uv5r-memory-map': stub(
-      './node_modules/@springfield/radio-module-baofeng/src/shared/memory-maps/uv5r-settings.json',
-    ),
-  },
-
   vite: {
     clearScreen: false,
     envPrefix: ['VITE_', 'TAURI_'],

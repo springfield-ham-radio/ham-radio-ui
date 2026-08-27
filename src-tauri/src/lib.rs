@@ -1,3 +1,5 @@
+mod radio_modules;
+
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -173,7 +175,13 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
                 .add_migrations("sqlite:ham-radio.db", migrations)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![save_text_file, load_text_file])
+        .invoke_handler(tauri::generate_handler![
+            save_text_file,
+            load_text_file,
+            radio_modules::download_and_install_radio_module,
+            radio_modules::install_radio_module_from_zip,
+            radio_modules::list_installed_radio_module_configs,
+        ])
         .menu(build_menu)
         .on_menu_event(|app, event| {
             match event.id().as_ref() {

@@ -99,7 +99,7 @@ function recordToRadioId(record: RadioCatalogRecord): RadioId {
 
 /**
  * Upsert a hydrated radio into the catalog.
- * Does not overwrite an existing `user` row when inserting `bundled` with a different hash.
+ * Does not overwrite an existing `user` row when inserting `bundled` or `installed` with a different hash.
  */
 export async function upsertRadioCatalogRecord(
   radio: RegistryRadio,
@@ -111,11 +111,25 @@ export async function upsertRadioCatalogRecord(
   const now = Date.now();
   const existing = await getRadioCatalogRecord(metadata.modelId);
 
-  if (existing && source === 'bundled' && existing.source === 'user') {
+  if (existing && (source === 'bundled' || source === 'installed') && existing.source === 'user') {
     return existing;
   }
 
-  if (existing && source === 'bundled' && existing.source === 'bundled' && existing.contentHash === contentHash) {
+  if (
+    existing &&
+    source === 'bundled' &&
+    existing.source === 'bundled' &&
+    existing.contentHash === contentHash
+  ) {
+    return existing;
+  }
+
+  if (
+    existing &&
+    source === 'installed' &&
+    existing.source === 'installed' &&
+    existing.contentHash === contentHash
+  ) {
     return existing;
   }
 

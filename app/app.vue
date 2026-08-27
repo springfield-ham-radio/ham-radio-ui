@@ -9,13 +9,19 @@
     <RadioImportDialog />
     <RadioWriteDialog />
     <RadioProgressDialog />
+    <RadioModulesInstallDialog
+      v-model:open="modulesInstallOpen"
+      :required="modulesInstallRequired"
+      @installed="onModulesInstalled"
+    />
   </UApp>
 </template>
 
 <script setup lang="ts">
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
-const { initialize, activeRadioId, memoryFilePath } = useRadio();
+const { initialize, activeRadioId, memoryFilePath, modulesInstallOpen, modulesInstallRequired, refreshCatalogState } =
+  useRadio();
 const router = useRouter();
 
 useHead({
@@ -37,6 +43,11 @@ defineShortcuts({
     void router.push('/preferences');
   },
 });
+
+async function onModulesInstalled(): Promise<void> {
+  modulesInstallRequired.value = false;
+  await refreshCatalogState();
+}
 
 onMounted(() => {
   void initialize();

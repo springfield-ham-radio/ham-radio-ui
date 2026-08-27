@@ -11,6 +11,7 @@ const {
   importFromRadio,
   importOpen,
   addRadioFromFile,
+  openModulesInstall,
 } = useRadio();
 
 const selectedManufacturer = ref<string | undefined>();
@@ -145,6 +146,14 @@ watch(importOpen, (open) => {
                 variant="outline"
                 :loading="addingRadio"
                 @click="addRadio"
+              />
+            </UTooltip>
+            <UTooltip text="Install radio modules">
+              <UButton
+                icon="i-lucide-download"
+                color="neutral"
+                variant="outline"
+                @click="openModulesInstall()"
               />
             </UTooltip>
           </div>

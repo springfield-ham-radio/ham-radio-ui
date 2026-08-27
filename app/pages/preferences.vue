@@ -49,7 +49,7 @@
           </div>
         </section>
 
-        <section v-else class="flex flex-col gap-4">
+        <section v-else-if="currentSection === 'licenses'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-col gap-4 px-4 py-4">
               <div class="min-w-0">
@@ -237,19 +237,65 @@
             </div>
           </div>
         </section>
+
+        <section v-else-if="currentSection === 'radios'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-4 px-4 py-4">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Installed radios</p>
+                <p class="text-xs text-muted">
+                  Official modules are verified. Local files are marked Unverified and are not updated from the catalog.
+                </p>
+              </div>
+
+              <ul v-if="catalogRecords.length > 0" class="divide-y divide-default rounded-lg bg-muted">
+                <li
+                  v-for="record in catalogRecords"
+                  :key="record.modelId"
+                  class="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate font-medium text-highlighted">
+                      {{ record.manufacturer }} {{ record.name }}
+                    </p>
+                    <p class="truncate text-xs text-muted">v{{ record.version }} · {{ record.modelId }}</p>
+                  </div>
+                  <UBadge
+                    :label="record.source === 'user' ? 'Unverified' : record.source === 'installed' ? 'Official' : 'Bundled'"
+                    :color="record.source === 'user' ? 'warning' : 'success'"
+                    variant="subtle"
+                    size="sm"
+                  />
+                </li>
+              </ul>
+              <p v-else class="text-sm text-muted">No radios installed yet.</p>
+
+              <div>
+                <UButton
+                  label="Install radios…"
+                  color="primary"
+                  icon="i-lucide-download"
+                  @click="openModulesInstall()"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
+import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import { openExternalUrl } from '~/utils/open-external-url';
 
 useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'licenses';
+type PreferenceSection = 'appearance' | 'licenses' | 'radios';
 
 const sections = [
   {
@@ -266,16 +312,29 @@ const sections = [
     icon: 'i-lucide-id-card',
     tileClass: 'bg-amber-500',
   },
+  {
+    id: 'radios' as const,
+    label: 'Radios',
+    description: 'Install official radio modules or add unverified modules from a local file.',
+    icon: 'i-lucide-radio',
+    tileClass: 'bg-emerald-500',
+  },
 ];
 
 const route = useRoute();
 const router = useRouter();
+const { openModulesInstall, configurations } = useRadio();
+const catalogRecords = ref<RadioCatalogRecord[]>([]);
 
 const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
 
-  return section === 'licenses' ? 'licenses' : 'appearance';
+  if (section === 'licenses' || section === 'radios') {
+    return section;
+  }
+
+  return 'appearance';
 });
 
 const activeSection = computed(() => {
@@ -290,6 +349,34 @@ function selectSection(section: PreferenceSection): void {
 
   void router.replace({ path: '/preferences', query: { section } });
 }
+
+async function refreshInstalledRadios(): Promise<void> {
+  try {
+    catalogRecords.value = await listRadioCatalogRecords();
+  } catch {
+    catalogRecords.value = [];
+  }
+}
+
+watch(
+  currentSection,
+  (section) => {
+    if (section === 'radios') {
+      void refreshInstalledRadios();
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  configurations,
+  () => {
+    if (currentSection.value === 'radios') {
+      void refreshInstalledRadios();
+    }
+  },
+  { deep: true },
+);
 
 const {
   license,

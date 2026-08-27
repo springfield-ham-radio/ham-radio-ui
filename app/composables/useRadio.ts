@@ -11,7 +11,6 @@ import type {
 import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import { createBundledUv5rRadio } from '~/utils/bundled-uv5r';
 import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
 import { pickAndLoadRadioConfig } from '~/utils/load-radio-config';
 import {
@@ -98,6 +97,8 @@ export function useRadio() {
   const activeRadioId = useState<RadioId | undefined>('radio-active-id', () => undefined);
   const memoryFilePath = useState<string | undefined>('radio-memory-file-path', () => undefined);
   const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
+  const modulesInstallOpen = useState('radio-modules-install-open', () => false);
+  const modulesInstallRequired = useState('radio-modules-install-required', () => false);
 
   async function refreshCatalogState(): Promise<void> {
     const records = await listRadioCatalogRecords();
@@ -106,7 +107,7 @@ export function useRadio() {
   }
 
   async function initialize(): Promise<void> {
-    if (configurations.value.length > 0 || isLoading.value) {
+    if (isLoading.value) {
       return;
     }
 
@@ -114,14 +115,22 @@ export function useRadio() {
     error.value = null;
 
     try {
-      const bundled = createBundledUv5rRadio();
-      await upsertRadioCatalogRecord(bundled, 'bundled');
       await refreshCatalogState();
+
+      if (configurations.value.length === 0) {
+        modulesInstallRequired.value = true;
+        modulesInstallOpen.value = true;
+      }
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Failed to load radio configurations';
     } finally {
       isLoading.value = false;
     }
+  }
+
+  function openModulesInstall(options: { required?: boolean } = {}): void {
+    modulesInstallRequired.value = options.required ?? false;
+    modulesInstallOpen.value = true;
   }
 
   async function addRadioFromFile(): Promise<void> {
@@ -638,7 +647,11 @@ export function useRadio() {
     activeRadioId,
     memoryFilePath,
     serialLog,
+    modulesInstallOpen,
+    modulesInstallRequired,
     initialize,
+    refreshCatalogState,
+    openModulesInstall,
     addRadioFromFile,
     getModelsByManufacturer,
     importFromRadio,
