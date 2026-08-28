@@ -1,3 +1,9 @@
+## [0.3.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.2.0...v0.3.0) (2026-08-28)
+
+### Features
+
+* add automatic app updates and radio module uninstall ([3936034](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3936034a3dfe473cb11605b84e9d680a3ec07095))
+
 ## [0.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.1.2...v0.2.0) (2026-08-27)
 
 ### Features
