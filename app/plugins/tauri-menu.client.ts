@@ -1,12 +1,16 @@
 export default defineNuxtPlugin(() => {
   const router = useRouter();
   const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
+  const { checkForUpdate } = useAppUpdater();
 
   void (async () => {
     try {
       const { listen } = await import('@tauri-apps/api/event');
       await listen('open-preferences', () => {
         void router.push('/preferences');
+      });
+      await listen('check-for-updates', () => {
+        void checkForUpdate('manual');
       });
       await listen('open-memory', () => {
         void router.push('/');

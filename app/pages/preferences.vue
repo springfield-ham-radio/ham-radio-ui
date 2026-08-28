@@ -49,6 +49,62 @@
           </div>
         </section>
 
+        <section v-else-if="currentSection === 'updates'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Automatic updates</p>
+                <p class="text-xs text-muted">
+                  Check GitHub Releases on launch and every few hours, then download updates in the background.
+                </p>
+              </div>
+              <USwitch
+                :model-value="autoUpdateEnabled"
+                @update:model-value="setAutoUpdateEnabled"
+              />
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-4 px-4 py-4">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-highlighted">Version</p>
+                  <p class="text-xs text-muted">{{ versionLabel }}</p>
+                </div>
+                <UButton
+                  label="Check now"
+                  color="primary"
+                  icon="i-lucide-refresh-cw"
+                  :loading="status === 'checking' || status === 'downloading'"
+                  :disabled="status === 'checking' || status === 'downloading'"
+                  @click="checkForUpdate('manual')"
+                />
+              </div>
+
+              <p class="text-sm" :class="status === 'error' ? 'text-error' : 'text-muted'">
+                {{ updaterStatusLabel }}
+              </p>
+
+              <UProgress
+                v-if="status === 'downloading'"
+                :model-value="downloadPercent"
+                :max="100"
+                size="sm"
+              />
+
+              <div v-if="status === 'ready'" class="flex justify-end">
+                <UButton
+                  label="Restart to update"
+                  color="primary"
+                  icon="i-lucide-rotate-cw"
+                  @click="applyUpdateAndRelaunch"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="currentSection === 'licenses'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-col gap-4 px-4 py-4">
@@ -260,12 +316,23 @@
                     </p>
                     <p class="truncate text-xs text-muted">v{{ record.version }} · {{ record.modelId }}</p>
                   </div>
-                  <UBadge
-                    :label="record.source === 'user' ? 'Unverified' : record.source === 'installed' ? 'Official' : 'Bundled'"
-                    :color="record.source === 'user' ? 'warning' : 'success'"
-                    variant="subtle"
-                    size="sm"
-                  />
+                  <div class="flex shrink-0 items-center gap-2">
+                    <UBadge
+                      :label="record.source === 'user' ? 'Unverified' : record.source === 'installed' ? 'Official' : 'Bundled'"
+                      :color="record.source === 'user' ? 'warning' : 'success'"
+                      variant="subtle"
+                      size="sm"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-trash-2"
+                      size="xs"
+                      aria-label="Remove radio"
+                      :disabled="removingModelId === record.modelId"
+                      @click="requestRemoveRadio(record)"
+                    />
+                  </div>
                 </li>
               </ul>
               <p v-else class="text-sm text-muted">No radios installed yet.</p>
@@ -284,18 +351,41 @@
       </div>
     </div>
   </div>
+
+  <UModal v-model:open="removeConfirmOpen" :ui="{ content: 'sm:max-w-md' }">
+    <template #content>
+      <div class="flex flex-col gap-4 p-5">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">Remove radio?</h2>
+          <p class="mt-2 text-sm text-muted">
+            {{ removeConfirmMessage }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="cancelRemoveRadio" />
+          <UButton
+            label="Remove"
+            color="error"
+            :loading="removingModelId !== undefined"
+            @click="confirmRemoveRadio"
+          />
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>
 
 <script setup lang="ts">
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
+import { isModuleInstallPath } from '~/utils/radio-module-install';
 import { openExternalUrl } from '~/utils/open-external-url';
 
 useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'licenses' | 'radios';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios';
 
 const sections = [
   {
@@ -304,6 +394,13 @@ const sections = [
     description: 'Choose how Ham Radio looks on this computer.',
     icon: 'i-lucide-palette',
     tileClass: 'bg-indigo-500',
+  },
+  {
+    id: 'updates' as const,
+    label: 'Updates',
+    description: 'Keep Ham Radio current with signed releases from GitHub.',
+    icon: 'i-lucide-refresh-cw',
+    tileClass: 'bg-sky-500',
   },
   {
     id: 'licenses' as const,
@@ -323,14 +420,80 @@ const sections = [
 
 const route = useRoute();
 const router = useRouter();
-const { openModulesInstall, configurations } = useRadio();
+const { openModulesInstall, uninstallRadio, configurations } = useRadio();
+const {
+  status,
+  autoUpdateEnabled,
+  currentVersion,
+  availableVersion,
+  downloadPercent,
+  lastError,
+  lastCheckAt,
+  isPackagedDesktopApp,
+  checkForUpdate,
+  applyUpdateAndRelaunch,
+  setAutoUpdateEnabled,
+} = useAppUpdater();
 const catalogRecords = ref<RadioCatalogRecord[]>([]);
+const removeConfirmOpen = ref(false);
+const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
+const removingModelId = ref<string | undefined>();
+
+const removeConfirmMessage = computed(() => {
+  const record = pendingRemoveRecord.value;
+
+  if (!record) {
+    return '';
+  }
+
+  if (record.sourcePath && (record.source === 'installed' || isModuleInstallPath(record.sourcePath))) {
+    const related = catalogRecords.value.filter((candidate) => candidate.sourcePath === record.sourcePath);
+    const names = related.map((candidate) => `${candidate.manufacturer} ${candidate.name}`).join(', ');
+
+    if (related.length > 1) {
+      return `Remove the installed module and delete ${names} from your catalog? This also removes the module files from this computer.`;
+    }
+
+    return `Remove ${record.manufacturer} ${record.name} from your catalog? This also deletes the installed module files from this computer.`;
+  }
+
+  return `Remove ${record.manufacturer} ${record.name} from your catalog? The original file on disk is not deleted.`;
+});
+
+function requestRemoveRadio(record: RadioCatalogRecord): void {
+  pendingRemoveRecord.value = record;
+  removeConfirmOpen.value = true;
+}
+
+function cancelRemoveRadio(): void {
+  removeConfirmOpen.value = false;
+  pendingRemoveRecord.value = undefined;
+}
+
+async function confirmRemoveRadio(): Promise<void> {
+  const record = pendingRemoveRecord.value;
+
+  if (!record) {
+    return;
+  }
+
+  removingModelId.value = record.modelId;
+  removeConfirmOpen.value = false;
+
+  try {
+    await uninstallRadio(record);
+    await refreshInstalledRadios();
+  } finally {
+    removingModelId.value = undefined;
+    pendingRemoveRecord.value = undefined;
+  }
+}
 
 const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
 
-  if (section === 'licenses' || section === 'radios') {
+  if (section === 'licenses' || section === 'radios' || section === 'updates') {
     return section;
   }
 
@@ -349,6 +512,42 @@ function selectSection(section: PreferenceSection): void {
 
   void router.replace({ path: '/preferences', query: { section } });
 }
+
+const versionLabel = computed(() => {
+  if (currentVersion.value) {
+    return `Ham Radio ${currentVersion.value}`;
+  }
+
+  return 'Version is shown in packaged desktop builds.';
+});
+
+const updaterStatusLabel = computed(() => {
+  if (status.value === 'checking') {
+    return 'Checking for updates…';
+  }
+
+  if (status.value === 'downloading') {
+    return `Downloading update… ${downloadPercent.value}%`;
+  }
+
+  if (status.value === 'ready' && availableVersion.value) {
+    return `Version ${availableVersion.value} is downloaded. Restart to finish installing.`;
+  }
+
+  if (status.value === 'error') {
+    return lastError.value ?? 'Update check failed.';
+  }
+
+  if (!isPackagedDesktopApp()) {
+    return 'Automatic updates run in packaged desktop builds.';
+  }
+
+  if (lastCheckAt.value) {
+    return `Last checked ${new Date(lastCheckAt.value).toLocaleString()}.`;
+  }
+
+  return 'Not checked yet.';
+});
 
 async function refreshInstalledRadios(): Promise<void> {
   try {

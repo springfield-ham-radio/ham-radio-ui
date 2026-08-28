@@ -38,6 +38,31 @@ CI builds installers in the same workflow run after semantic-release (via `workf
 
 macOS Gatekeeper and Windows SmartScreen will warn. Users can still open the app (macOS: right-click → Open; Windows: More info → Run anyway).
 
+## Auto-update
+
+Packaged builds use the [Tauri updater](https://v2.tauri.app/plugin/updater/). They fetch [`latest.json`](https://github.com/springfield-ham-radio/ham-radio-ui/releases/latest/download/latest.json) from GitHub Releases, verify a minisign signature, download the matching installer, then ask the user to restart. The app does not relaunch by itself.
+
+`tauri-action` writes `latest.json` when `bundle.createUpdaterArtifacts` is true and the signing key is present. Artifacts are signed with a private key that must never be committed.
+
+### GitHub Actions secrets
+
+Add these repository secrets before the next installer build. Without them, `createUpdaterArtifacts` fails the Release Tauri job.
+
+| Secret | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of the updater private key file |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password, or empty if the key has none |
+
+Generate a key pair with `yarn tauri signer generate -w ~/.tauri/ham-radio-ui.key`. Put only the public key in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `plugins.updater.pubkey`. Keep the private key in a password manager and in the GitHub secret.
+
+Local `yarn tauri:build` also needs the key:
+
+```
+export TAURI_SIGNING_PRIVATE_KEY_PATH="$HOME/.tauri/ham-radio-ui.key"
+```
+
+Users on a build from before updater support was added must install one updater-enabled release by hand. Later versions then update themselves.
+
 ## Adding code signing later
 
 Store Apple and/or Windows signing credentials as GitHub Actions secrets, then pass them into the Tauri build steps in [`.github/workflows/release-tauri.yml`](../.github/workflows/release-tauri.yml). See the [Tauri signing docs](https://v2.tauri.app/distribute/) for certificate and notarization setup.

@@ -97,3 +97,7 @@ out/
 .output
 dist
 src-tauri/target
+
+# Tauri updater signing keys — never commit the private key
+*.key
+*.key.pub

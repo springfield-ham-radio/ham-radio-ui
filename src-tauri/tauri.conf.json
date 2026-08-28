@@ -25,6 +25,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -37,6 +38,15 @@
   "plugins": {
     "sql": {
       "preload": ["sqlite:ham-radio.db"]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ0QzEyOTBGNjcyRDY5M0YKUldRL2FTMW5EeW5CMUIxbXh6Rk82Q28rYkNVWStGWFQ1TXlCdEkyZnd2UWtvbGFDRXdIUkZER3cK",
+      "endpoints": [
+        "https://github.com/springfield-ham-radio/ham-radio-ui/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

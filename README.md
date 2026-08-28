@@ -4,7 +4,7 @@ Desktop app for reading and managing ham radio memory.
 
 ## Downloads
 
-Installers for macOS (Apple Silicon), Windows, and Linux are published on [GitHub Releases](https://github.com/springfield-ham-radio/ham-radio-ui/releases).
+Installers for macOS (Apple Silicon), Windows, and Linux are published on [GitHub Releases](https://github.com/springfield-ham-radio/ham-radio-ui/releases). Packaged desktop builds check that feed on launch and every few hours, download updates in the background, and prompt you to restart. Turn this off under **Preferences → Updates**.
 
 Builds are **unsigned**. macOS Gatekeeper and Windows SmartScreen may show a warning; you can still open the app (macOS: right-click → Open; Windows: More info → Run anyway).
 

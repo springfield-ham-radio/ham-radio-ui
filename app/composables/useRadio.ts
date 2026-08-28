@@ -18,8 +18,10 @@ import {
   listRadioCatalogRecords,
   listRadioManufacturers,
   memoryMapFromConfig,
+  type RadioCatalogRecord,
   upsertRadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
+import { uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
 import {
   defaultMemoryFileName,
   memoryFileDisplayName,
@@ -131,6 +133,49 @@ export function useRadio() {
   function openModulesInstall(options: { required?: boolean } = {}): void {
     modulesInstallRequired.value = options.required ?? false;
     modulesInstallOpen.value = true;
+  }
+
+  async function uninstallRadio(record: RadioCatalogRecord): Promise<void> {
+    try {
+      const removedModelIds = await uninstallRadioCatalogRecord(record);
+      const activeModel = activeRadioId.value?.model;
+
+      if (activeModel && removedModelIds.includes(activeModel)) {
+        activeRadioId.value = undefined;
+        memory.value = undefined;
+        channels.value = [];
+        program.value = undefined;
+        settingsMemoryMap.value = undefined;
+        memoryFilePath.value = undefined;
+      }
+
+      await refreshCatalogState();
+
+      if (configurations.value.length === 0) {
+        modulesInstallRequired.value = true;
+      }
+
+      const description =
+        removedModelIds.length === 1
+          ? record.name
+          : `${removedModelIds.length} radios removed`;
+
+      toast.add({
+        title: 'Radio removed',
+        description,
+        color: 'success',
+        icon: 'i-lucide-check',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to remove radio';
+      logger.withError(cause).error('Failed to remove radio');
+      toast.add({
+        title: 'Could not remove radio',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
   }
 
   async function addRadioFromFile(): Promise<void> {
@@ -652,6 +697,7 @@ export function useRadio() {
     initialize,
     refreshCatalogState,
     openModulesInstall,
+    uninstallRadio,
     addRadioFromFile,
     getModelsByManufacturer,
     importFromRadio,

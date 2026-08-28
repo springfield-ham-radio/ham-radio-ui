@@ -11,6 +11,8 @@
     "dialog:default",
     "opener:default",
     "sql:default",
-    "sql:allow-execute"
+    "sql:allow-execute",
+    "updater:default",
+    "process:default"
   ]
 }

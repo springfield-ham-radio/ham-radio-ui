@@ -240,6 +240,31 @@ export async function listRadioModelsByManufacturer(manufacturer: string): Promi
     .map(recordToRadioId);
 }
 
+export async function deleteRadioCatalogRecord(modelId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    memoryCatalog.delete(modelId);
+    return;
+  }
+
+  const database = await getRadioCatalogDatabase();
+  await database.execute('DELETE FROM radio_models WHERE model_id = $1', [modelId]);
+}
+
+export async function deleteRadioCatalogRecordsBySourcePath(sourcePath: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    for (const [modelId, record] of memoryCatalog.entries()) {
+      if (record.sourcePath === sourcePath) {
+        memoryCatalog.delete(modelId);
+      }
+    }
+
+    return;
+  }
+
+  const database = await getRadioCatalogDatabase();
+  await database.execute('DELETE FROM radio_models WHERE source_path = $1', [sourcePath]);
+}
+
 export async function getRadioCatalogRecord(modelId: string): Promise<RadioCatalogRecord | undefined> {
   if (!isTauriRuntime()) {
     return memoryCatalog.get(modelId);

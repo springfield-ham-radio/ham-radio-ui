@@ -22,6 +22,7 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const { initialize, activeRadioId, memoryFilePath, modulesInstallOpen, modulesInstallRequired, refreshCatalogState } =
   useRadio();
+const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
 
 useHead({
@@ -51,5 +52,6 @@ async function onModulesInstalled(): Promise<void> {
 
 onMounted(() => {
   void initialize();
+  startAppUpdater();
 });
 </script>

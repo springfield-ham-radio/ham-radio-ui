@@ -6,7 +6,13 @@ import type {
 } from '@springfield/ham-radio-registry';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
 import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
-import { upsertRadioCatalogRecord } from '~/utils/radio-catalog-db';
+import {
+  deleteRadioCatalogRecord,
+  deleteRadioCatalogRecordsBySourcePath,
+  listRadioCatalogRecords,
+  type RadioCatalogRecord,
+  upsertRadioCatalogRecord,
+} from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 /** Official catalog served via GitHub Pages. */
 export const OFFICIAL_MODULE_CATALOG_URL =
@@ -222,4 +228,64 @@ export async function installPickedLocalModuleFile(
 
   const fileName = basename(picked.path);
   return installLocalModuleZip(picked.path, moduleIdFromZipName(fileName), versionFromZipName(fileName));
+}
+
+const MODULE_INSTALL_PATH_PATTERN = /\/radio-modules\/([^/]+)\/([^/]+)\/?$/;
+
+/** True when `sourcePath` points at an extracted module directory under app data. */
+export function isModuleInstallPath(sourcePath: string): boolean {
+  return MODULE_INSTALL_PATH_PATTERN.test(sourcePath.replace(/\\/g, '/'));
+}
+
+/** Parse module id and version from an app-data module install directory. */
+export function parseModuleInstallPath(
+  sourcePath: string,
+): { moduleId: string; version: string } | undefined {
+  const match = sourcePath.replace(/\\/g, '/').match(MODULE_INSTALL_PATH_PATTERN);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    moduleId: match[1]!,
+    version: match[2]!,
+  };
+}
+
+function usesModuleInstallDirectory(record: RadioCatalogRecord): boolean {
+  return record.source === 'installed' || (record.sourcePath !== undefined && isModuleInstallPath(record.sourcePath));
+}
+
+/**
+ * Remove a radio (or whole installed module) from the catalog and filesystem.
+ * Returns the model ids removed from the catalog.
+ */
+export async function uninstallRadioCatalogRecord(record: RadioCatalogRecord): Promise<string[]> {
+  if (!isTauriRuntime()) {
+    throw new Error('Removing radio modules requires the Tauri desktop app.');
+  }
+
+  const allRecords = await listRadioCatalogRecords();
+  const recordsToRemove =
+    record.sourcePath && usesModuleInstallDirectory(record)
+      ? allRecords.filter((candidate) => candidate.sourcePath === record.sourcePath)
+      : [record];
+
+  if (record.sourcePath && usesModuleInstallDirectory(record)) {
+    const parsed = parseModuleInstallPath(record.sourcePath);
+
+    if (parsed) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('uninstall_radio_module', {
+        moduleId: parsed.moduleId,
+        version: parsed.version,
+      });
+    }
+
+    await deleteRadioCatalogRecordsBySourcePath(record.sourcePath);
+  } else {
+    await deleteRadioCatalogRecord(record.modelId);
+  }
+
+  return recordsToRemove.map((candidate) => candidate.modelId);
 }

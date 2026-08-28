@@ -252,3 +252,30 @@ pub fn list_installed_radio_module_configs(
     let install_path = install_directory(&app, &module_id, &version)?;
     list_config_paths(&install_path)
 }
+
+#[tauri::command]
+pub fn uninstall_radio_module(
+    app: AppHandle,
+    module_id: String,
+    version: String,
+) -> Result<(), String> {
+    let install_path = install_directory(&app, &module_id, &version)?;
+
+    if !install_path.exists() {
+        return Ok(());
+    }
+
+    fs::remove_dir_all(&install_path).map_err(|error| error.to_string())?;
+
+    if let Some(module_dir) = install_path.parent() {
+        if module_dir
+            .read_dir()
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_dir(module_dir);
+        }
+    }
+
+    Ok(())
+}

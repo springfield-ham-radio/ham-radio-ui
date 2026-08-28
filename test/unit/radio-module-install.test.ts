@@ -1,7 +1,11 @@
 import { describe, it } from 'node:test';
 import { expect } from 'chai';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
-import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
+import {
+  APP_HAM_RADIO_API_VERSION,
+  isModuleInstallPath,
+  parseModuleInstallPath,
+} from '../../app/utils/radio-module-install.ts';
 
 describe('radio module install helpers', () => {
   it('should parse a catalog entry shape used by the installer', () => {
@@ -26,5 +30,20 @@ describe('radio module install helpers', () => {
 
     expect(catalog.modules[0]?.id).to.equal('baofeng');
     expect(isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, catalog.modules[0]!.minApiVersion)).to.be.true;
+  });
+
+  it('should detect module install directories', () => {
+    expect(
+      isModuleInstallPath('/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/baofeng/3.1.0'),
+    ).to.be.true;
+    expect(isModuleInstallPath('/tmp/baofeng-config.json')).to.be.false;
+  });
+
+  it('should parse module id and version from install paths', () => {
+    expect(
+      parseModuleInstallPath(
+        'C:\\Users\\me\\AppData\\Roaming\\com.springfield.ham-radio\\radio-modules\\baofeng\\3.1.0',
+      ),
+    ).to.deep.equal({ moduleId: 'baofeng', version: '3.1.0' });
   });
 });

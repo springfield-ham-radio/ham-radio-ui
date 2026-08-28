@@ -6,6 +6,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
+    let check_updates = MenuItem::with_id(app, "check-for-updates", "Check for Updates...", true, None::<&str>)?;
     let open_memory = MenuItem::with_id(app, "open-memory", "Open Memory...", true, Some("CmdOrCtrl+O"))?;
     let save_memory = MenuItem::with_id(app, "save-memory", "Save", true, Some("CmdOrCtrl+S"))?;
     let save_memory_as = MenuItem::with_id(app, "save-memory-as", "Save As...", true, Some("CmdOrCtrl+Shift+S"))?;
@@ -37,6 +38,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &PredefinedMenuItem::about(app, None, None)?,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
+                &check_updates,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::hide(app, None)?,
                 &PredefinedMenuItem::hide_others(app, None)?,
@@ -92,6 +94,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &write_to_radio,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
+                &check_updates,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::quit(app, None)?,
             ],
@@ -170,6 +173,8 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:ham-radio.db", migrations)
@@ -181,11 +186,13 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
             radio_modules::download_and_install_radio_module,
             radio_modules::install_radio_module_from_zip,
             radio_modules::list_installed_radio_module_configs,
+            radio_modules::uninstall_radio_module,
         ])
         .menu(build_menu)
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
                 "preferences" => emit_menu_event(app, "open-preferences"),
+                "check-for-updates" => emit_menu_event(app, "check-for-updates"),
                 "open-memory" => emit_menu_event(app, "open-memory"),
                 "save-memory" => emit_menu_event(app, "save-memory"),
                 "save-memory-as" => emit_menu_event(app, "save-memory-as"),
