@@ -348,6 +348,170 @@
             </div>
           </div>
         </section>
+
+        <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-4 px-4 py-4">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Connection</p>
+                <p class="text-xs text-muted">
+                  Sniffer URL is enough for normal use. Install and run ham-radio-sniffer yourself, then point the app at its HTTP origin.
+                </p>
+              </div>
+
+              <UFormField label="Sniffer URL" class="w-full">
+                <UInput
+                  v-model="snifferBaseUrlInput"
+                  placeholder="http://127.0.0.1:3010"
+                  class="w-full"
+                  @keydown.enter.prevent="saveSnifferSettings"
+                />
+              </UFormField>
+
+              <div class="flex justify-end">
+                <UButton
+                  label="Save"
+                  color="primary"
+                  :disabled="snifferBaseUrlInput.trim() === ''"
+                  @click="saveSnifferSettings"
+                />
+              </div>
+
+              <p v-if="snifferSettingsError" class="text-xs text-error">{{ snifferSettingsError }}</p>
+              <p v-else-if="snifferSettingsSaved" class="text-xs text-muted">Saved. The Sniffer page reconnects automatically.</p>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-4 px-4 py-4">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Remote SSH (optional)</p>
+                <p class="text-xs text-muted">
+                  Leave the host blank to keep SSH disabled. When set, the desktop app can check Node on the host, upload the bundled sniffer sources, build them remotely, and start the process with a local port forward. Uses SSH keys or your agent only (no passwords). The app never installs Node for you.
+                </p>
+              </div>
+
+              <UAlert
+                v-if="!isDesktopSnifferSsh"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-monitor"
+                title="Desktop app required"
+                description="Check, install, start, and stop run only in the packaged Tauri app, where the bundled sniffer tree and local ssh/scp are available."
+              />
+
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <UFormField label="SSH host" class="w-full sm:col-span-2">
+                  <UInput
+                    v-model="snifferSshHostInput"
+                    placeholder="pi@raspberrypi.local"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+
+                <UFormField label="SSH port" class="w-full">
+                  <UInput
+                    v-model.number="snifferSshPortInput"
+                    type="number"
+                    min="1"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+
+                <UFormField label="Remote directory" class="w-full">
+                  <UInput
+                    v-model="snifferRemoteDirectoryInput"
+                    placeholder="~/ham-radio-sniffer"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+
+                <UFormField label="Remote start command" class="w-full sm:col-span-2">
+                  <UInput
+                    v-model="snifferRemoteStartCommandInput"
+                    placeholder="yarn start"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+
+                <UFormField label="Local forward port" class="w-full">
+                  <UInput
+                    v-model.number="snifferLocalPortInput"
+                    type="number"
+                    min="1"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+
+                <UFormField label="Remote sniffer port" class="w-full">
+                  <UInput
+                    v-model.number="snifferRemotePortInput"
+                    type="number"
+                    min="1"
+                    class="w-full"
+                    @keydown.enter.prevent="saveSnifferSettings"
+                  />
+                </UFormField>
+              </div>
+
+              <div class="flex flex-wrap justify-end gap-2">
+                <UButton
+                  label="Save"
+                  color="neutral"
+                  variant="outline"
+                  @click="saveSnifferSettings"
+                />
+                <UButton
+                  label="Check host"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-shield-check"
+                  :loading="snifferSshBusy === 'check'"
+                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
+                  @click="onCheckRemoteSniffer"
+                />
+                <UButton
+                  label="Install / update"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-upload"
+                  :loading="snifferSshBusy === 'install'"
+                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
+                  @click="onInstallRemoteSniffer"
+                />
+                <UButton
+                  label="Start remote"
+                  color="primary"
+                  icon="i-lucide-play"
+                  :loading="snifferSshBusy === 'start'"
+                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
+                  @click="onStartRemoteSniffer"
+                />
+                <UButton
+                  label="Stop remote"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-square"
+                  :loading="snifferSshBusy === 'stop'"
+                  :disabled="!isDesktopSnifferSsh || snifferSshBusy !== undefined"
+                  @click="onStopRemoteSniffer"
+                />
+              </div>
+
+              <p v-if="snifferSshStatusLabel" class="text-xs" :class="snifferSshError ? 'text-error' : 'text-muted'">
+                {{ snifferSshStatusLabel }}
+              </p>
+              <ul v-if="snifferSshCheckMessages.length > 0" class="list-disc space-y-1 pl-5 text-xs text-muted">
+                <li v-for="(message, index) in snifferSshCheckMessages" :key="index">{{ message }}</li>
+              </ul>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -380,12 +544,20 @@ import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import { isModuleInstallPath } from '~/utils/radio-module-install';
 import { openExternalUrl } from '~/utils/open-external-url';
+import { parseSnifferSettings, readSnifferSettings, snifferLocalForwardBaseUrl, writeSnifferSettings } from '~/utils/sniffer-settings';
+import {
+  checkRemoteSnifferHost,
+  installRemoteSniffer,
+  startRemoteSniffer,
+  stopRemoteSniffer,
+} from '~/utils/sniffer-remote';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'sniffer';
 
 const sections = [
   {
@@ -416,6 +588,13 @@ const sections = [
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
   },
+  {
+    id: 'sniffer' as const,
+    label: 'Sniffer',
+    description: 'Point Ham Radio at a sniffer URL, or optionally install and start one over SSH.',
+    icon: 'i-lucide-audio-lines',
+    tileClass: 'bg-violet-500',
+  },
 ];
 
 const route = useRoute();
@@ -438,6 +617,146 @@ const catalogRecords = ref<RadioCatalogRecord[]>([]);
 const removeConfirmOpen = ref(false);
 const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
 const removingModelId = ref<string | undefined>();
+const initialSnifferSettings = readSnifferSettings();
+const snifferBaseUrlInput = ref(initialSnifferSettings.baseUrl);
+const snifferSshHostInput = ref(initialSnifferSettings.sshHost);
+const snifferSshPortInput = ref(initialSnifferSettings.sshPort);
+const snifferRemoteDirectoryInput = ref(initialSnifferSettings.remoteDirectory);
+const snifferRemoteStartCommandInput = ref(initialSnifferSettings.remoteStartCommand);
+const snifferLocalPortInput = ref(initialSnifferSettings.localPort);
+const snifferRemotePortInput = ref(initialSnifferSettings.remotePort);
+const snifferSettingsError = ref('');
+const snifferSettingsSaved = ref(false);
+const snifferSshBusy = ref<'check' | 'install' | 'start' | 'stop'>();
+const snifferSshStatusLabel = ref('');
+const snifferSshError = ref(false);
+const snifferSshCheckMessages = ref<string[]>([]);
+
+const isDesktopSnifferSsh = computed(() => isTauriRuntime());
+
+const canRunSnifferSshActions = computed(() => {
+  return isDesktopSnifferSsh.value && snifferSshHostInput.value.trim().length > 0;
+});
+
+function draftSnifferSettings() {
+  return parseSnifferSettings(
+    JSON.stringify({
+      baseUrl: snifferBaseUrlInput.value,
+      sshHost: snifferSshHostInput.value,
+      sshPort: snifferSshPortInput.value,
+      remoteDirectory: snifferRemoteDirectoryInput.value,
+      remoteStartCommand: snifferRemoteStartCommandInput.value,
+      localPort: snifferLocalPortInput.value,
+      remotePort: snifferRemotePortInput.value,
+    }),
+  );
+}
+
+function saveSnifferSettings(): void {
+  const parsed = draftSnifferSettings();
+  const normalized = parsed.baseUrl;
+  const entered = snifferBaseUrlInput.value.trim().replace(/\/+$/, '');
+
+  if (entered && entered !== normalized) {
+    snifferSettingsError.value = 'Enter an http or https URL, for example http://127.0.0.1:3010';
+    snifferSettingsSaved.value = false;
+    return;
+  }
+
+  writeSnifferSettings(parsed);
+  snifferBaseUrlInput.value = parsed.baseUrl;
+  snifferSshHostInput.value = parsed.sshHost;
+  snifferSshPortInput.value = parsed.sshPort;
+  snifferRemoteDirectoryInput.value = parsed.remoteDirectory;
+  snifferRemoteStartCommandInput.value = parsed.remoteStartCommand;
+  snifferLocalPortInput.value = parsed.localPort;
+  snifferRemotePortInput.value = parsed.remotePort;
+  snifferSettingsError.value = '';
+  snifferSettingsSaved.value = true;
+}
+
+function remoteActionError(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+async function onCheckRemoteSniffer(): Promise<void> {
+  saveSnifferSettings();
+  snifferSshBusy.value = 'check';
+  snifferSshCheckMessages.value = [];
+  snifferSshError.value = false;
+
+  try {
+    const result = await checkRemoteSnifferHost(draftSnifferSettings());
+    snifferSshCheckMessages.value = result.messages;
+    snifferSshError.value = !result.ok;
+    snifferSshStatusLabel.value = result.ok
+      ? 'Remote host looks ready for install or start.'
+      : 'Remote host check failed. Fix the issues below, then try again.';
+  } catch (error) {
+    snifferSshError.value = true;
+    snifferSshStatusLabel.value = remoteActionError(error);
+  } finally {
+    snifferSshBusy.value = undefined;
+  }
+}
+
+async function onInstallRemoteSniffer(): Promise<void> {
+  saveSnifferSettings();
+  snifferSshBusy.value = 'install';
+  snifferSshError.value = false;
+
+  try {
+    const result = await installRemoteSniffer(draftSnifferSettings());
+    snifferSshError.value = !result.ok;
+    snifferSshStatusLabel.value = result.message;
+  } catch (error) {
+    snifferSshError.value = true;
+    snifferSshStatusLabel.value = remoteActionError(error);
+  } finally {
+    snifferSshBusy.value = undefined;
+  }
+}
+
+async function onStartRemoteSniffer(): Promise<void> {
+  saveSnifferSettings();
+  snifferSshBusy.value = 'start';
+  snifferSshError.value = false;
+
+  try {
+    const settings = draftSnifferSettings();
+    const result = await startRemoteSniffer(settings);
+    snifferSshError.value = !result.ok;
+    snifferSshStatusLabel.value = result.message;
+
+    if (result.ok) {
+      const forwardUrl = snifferLocalForwardBaseUrl(settings.localPort);
+      writeSnifferSettings({ ...settings, baseUrl: forwardUrl });
+      snifferBaseUrlInput.value = forwardUrl;
+      snifferSettingsSaved.value = true;
+    }
+  } catch (error) {
+    snifferSshError.value = true;
+    snifferSshStatusLabel.value = remoteActionError(error);
+  } finally {
+    snifferSshBusy.value = undefined;
+  }
+}
+
+async function onStopRemoteSniffer(): Promise<void> {
+  snifferSshBusy.value = 'stop';
+  snifferSshError.value = false;
+
+  try {
+    const result = await stopRemoteSniffer();
+    snifferSshError.value = !result.ok;
+    snifferSshStatusLabel.value = result.message;
+  } catch (error) {
+    snifferSshError.value = true;
+    snifferSshStatusLabel.value = remoteActionError(error);
+  } finally {
+    snifferSshBusy.value = undefined;
+  }
+}
 
 const removeConfirmMessage = computed(() => {
   const record = pendingRemoveRecord.value;
@@ -493,7 +812,7 @@ const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
 
-  if (section === 'licenses' || section === 'radios' || section === 'updates') {
+  if (section === 'licenses' || section === 'radios' || section === 'updates' || section === 'sniffer') {
     return section;
   }
 

@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../.output/public",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "yarn dev",
-    "beforeBuildCommand": "yarn generate"
+    "beforeDevCommand": "yarn bundle:sniffer && yarn dev",
+    "beforeBuildCommand": "yarn bundle:sniffer && yarn generate"
   },
   "app": {
     "windows": [
@@ -27,6 +27,9 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
+    "resources": [
+      "resources/ham-radio-sniffer/**/*"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

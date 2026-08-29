@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "nuxt build",
+    "bundle:sniffer": "node scripts/bundle-sniffer-resources.mjs",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "lint": "oxlint",
@@ -23,7 +24,9 @@
     "test": "yarn test:unit",
     "test:unit": "tsx --test test/unit/**/*.test.ts",
     "tauri": "tauri",
+    "pretauri:dev": "yarn bundle:sniffer",
     "tauri:dev": "tauri dev",
+    "pretauri:build": "yarn bundle:sniffer",
     "tauri:build": "tauri build",
     "release": "semantic-release"
   },

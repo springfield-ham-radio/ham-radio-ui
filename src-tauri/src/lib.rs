@@ -1,4 +1,5 @@
 mod radio_modules;
+mod sniffer_ssh;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
@@ -170,6 +171,7 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
     ];
 
     tauri::Builder::default()
+        .manage(sniffer_ssh::RemoteSnifferState::default())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -187,6 +189,11 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
             radio_modules::install_radio_module_from_zip,
             radio_modules::list_installed_radio_module_configs,
             radio_modules::uninstall_radio_module,
+            sniffer_ssh::check_remote_sniffer_host,
+            sniffer_ssh::install_remote_sniffer,
+            sniffer_ssh::start_remote_sniffer,
+            sniffer_ssh::stop_remote_sniffer,
+            sniffer_ssh::remote_sniffer_status,
         ])
         .menu(build_menu)
         .on_menu_event(|app, event| {

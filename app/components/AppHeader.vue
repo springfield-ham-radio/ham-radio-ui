@@ -18,12 +18,33 @@ const currentFileName = computed(() => {
 const sectionItems = computed<TabsItem[]>(() => [
   { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
+  { label: 'Sniffer', icon: 'i-lucide-audio-lines', value: 'sniffer' },
 ]);
 
 const activeSection = computed({
-  get: () => (route.path.startsWith('/channels') ? 'channels' : 'radio'),
+  get: () => {
+    if (route.path.startsWith('/channels')) {
+      return 'channels';
+    }
+
+    if (route.path.startsWith('/sniffer')) {
+      return 'sniffer';
+    }
+
+    return 'radio';
+  },
   set: (value: string | number) => {
-    void router.push(value === 'channels' ? '/channels' : '/');
+    if (value === 'channels') {
+      void router.push('/channels');
+      return;
+    }
+
+    if (value === 'sniffer') {
+      void router.push('/sniffer');
+      return;
+    }
+
+    void router.push('/');
   },
 });
 
