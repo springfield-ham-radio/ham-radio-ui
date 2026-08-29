@@ -1,3 +1,13 @@
+## [0.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.4.0...v0.5.0) (2026-08-29)
+
+### Features
+
+* polish sniffer UX and remote SSH assist ([a2cba7f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/a2cba7f8817d36740c71ec482482e688f5add5b4))
+
+### Bug Fixes
+
+* compact preferences headers and use a remote sniffer switch ([654ae07](https://github.com/springfield-ham-radio/ham-radio-ui/commit/654ae0757a7261ed1975adf5522527dc33bed73d))
+
 ## [0.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.3.1...v0.4.0) (2026-08-29)
 
 ### Features
