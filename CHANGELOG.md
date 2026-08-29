@@ -1,3 +1,9 @@
+## [0.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.6.0...v0.7.0) (2026-08-29)
+
+### Features
+
+* add a SQLite station log with ADIF import and export ([2581e5b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2581e5bbefe2e5f60ea4f79c96c6fa17bf10041d))
+
 ## [0.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.5.0...v0.6.0) (2026-08-29)
 
 ### Features
