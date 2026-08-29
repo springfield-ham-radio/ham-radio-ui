@@ -2,14 +2,14 @@ import { describe, it } from 'node:test';
 import { expect } from 'chai';
 import {
   DEFAULT_SNIFFER_BASE_URL,
-  DEFAULT_SNIFFER_LOCAL_PORT,
+  DEFAULT_SNIFFER_PORT,
   DEFAULT_SNIFFER_REMOTE_DIRECTORY,
-  DEFAULT_SNIFFER_REMOTE_PORT,
   DEFAULT_SNIFFER_REMOTE_START_COMMAND,
   DEFAULT_SNIFFER_SSH_PORT,
   isSnifferSshConfigured,
   parseSnifferSettings,
   quoteRemoteShellArg,
+  remoteDirectoryAssignmentRhs,
   serializeSnifferSettings,
   snifferApiUrl,
   snifferLocalForwardBaseUrl,
@@ -23,8 +23,7 @@ describe('sniffer settings', () => {
       sshPort: DEFAULT_SNIFFER_SSH_PORT,
       remoteDirectory: DEFAULT_SNIFFER_REMOTE_DIRECTORY,
       remoteStartCommand: DEFAULT_SNIFFER_REMOTE_START_COMMAND,
-      localPort: DEFAULT_SNIFFER_LOCAL_PORT,
-      remotePort: DEFAULT_SNIFFER_REMOTE_PORT,
+      port: DEFAULT_SNIFFER_PORT,
     });
     expect(isSnifferSshConfigured(parseSnifferSettings(null))).to.equal(false);
   });
@@ -45,8 +44,7 @@ describe('sniffer settings', () => {
           sshPort: 2222,
           remoteDirectory: '/opt/sniffer',
           remoteStartCommand: 'yarn start',
-          localPort: 3010,
-          remotePort: 3010,
+          port: 3010,
         }),
       ),
     ).to.deep.equal({
@@ -55,9 +53,20 @@ describe('sniffer settings', () => {
       sshPort: 2222,
       remoteDirectory: '/opt/sniffer',
       remoteStartCommand: 'yarn start',
-      localPort: 3010,
-      remotePort: 3010,
+      port: 3010,
     });
+  });
+
+  it('should migrate legacy localPort/remotePort storage into a single port', () => {
+    expect(
+      parseSnifferSettings(
+        JSON.stringify({
+          baseUrl: 'http://127.0.0.1:3010',
+          localPort: 4010,
+          remotePort: 5010,
+        }),
+      ).port,
+    ).to.equal(4010);
   });
 
   it('should join API paths onto the base URL', () => {
@@ -72,6 +81,12 @@ describe('sniffer settings', () => {
     expect(quoteRemoteShellArg(`/tmp/o'sniffer`)).to.equal(`'/tmp/o'\\''sniffer'`);
   });
 
+  it('should expand a leading tilde for remote directory assignments', () => {
+    expect(remoteDirectoryAssignmentRhs('~')).to.equal('"$HOME"');
+    expect(remoteDirectoryAssignmentRhs('~/ham-radio-sniffer')).to.equal('"$HOME/ham-radio-sniffer"');
+    expect(remoteDirectoryAssignmentRhs('/opt/sniffer')).to.equal("'/opt/sniffer'");
+  });
+
   it('should round-trip settings through serialize and parse', () => {
     const settings = {
       baseUrl: 'http://127.0.0.1:3010',
@@ -79,8 +94,7 @@ describe('sniffer settings', () => {
       sshPort: 22,
       remoteDirectory: '~/ham-radio-sniffer',
       remoteStartCommand: 'yarn start',
-      localPort: 3010,
-      remotePort: 3010,
+      port: 3010,
     };
 
     expect(parseSnifferSettings(serializeSnifferSettings(settings))).to.deep.equal(settings);

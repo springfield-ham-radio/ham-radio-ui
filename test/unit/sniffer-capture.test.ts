@@ -6,6 +6,7 @@ import {
   defaultSnifferCaptureFileName,
   serializeSnifferCaptureFile,
   snifferCaptureEntryCount,
+  snifferPacketsFromSerialLog,
 } from '../../app/utils/sniffer-capture.ts';
 import type { SnifferPacket, SnifferStatus } from '../../app/utils/sniffer-api.ts';
 
@@ -75,5 +76,51 @@ describe('snifferCaptureEntryCount', () => {
 
   it('should fall back to packet count when the log is missing', () => {
     expect(snifferCaptureEntryCount(undefined, packets)).to.equal(1);
+  });
+});
+
+describe('snifferPacketsFromSerialLog', () => {
+  it('should coalesce consecutive same-direction byte entries into frames', () => {
+    const result = snifferPacketsFromSerialLog({
+      metadata: log.metadata,
+      entries: [
+        { timestamp: '000.010', elapsedMs: 10, direction: 'SEND', data: [0x50] },
+        { timestamp: '000.011', elapsedMs: 11, direction: 'SEND', data: [0xbb] },
+        { timestamp: '000.020', elapsedMs: 20, direction: 'RECV', data: [0x06] },
+        { timestamp: '000.030', elapsedMs: 30, direction: 'SEND', data: [0x01, 0x02] },
+      ],
+    });
+
+    expect(result).to.deep.equal([
+      {
+        id: 1,
+        timestamp: '000.010',
+        elapsedMs: 10,
+        direction: 'COMPUTER->RADIO',
+        data: [0x50, 0xbb],
+        description: undefined,
+      },
+      {
+        id: 2,
+        timestamp: '000.020',
+        elapsedMs: 20,
+        direction: 'RADIO->COMPUTER',
+        data: [0x06],
+        description: undefined,
+      },
+      {
+        id: 3,
+        timestamp: '000.030',
+        elapsedMs: 30,
+        direction: 'COMPUTER->RADIO',
+        data: [0x01, 0x02],
+        description: undefined,
+      },
+    ]);
+  });
+
+  it('should return an empty list when the log has no entries', () => {
+    expect(snifferPacketsFromSerialLog(undefined)).to.deep.equal([]);
+    expect(snifferPacketsFromSerialLog({})).to.deep.equal([]);
   });
 });

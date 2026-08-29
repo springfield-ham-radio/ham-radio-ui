@@ -3,8 +3,8 @@ export const DEFAULT_SNIFFER_BASE_URL = 'http://127.0.0.1:3010';
 export const DEFAULT_SNIFFER_SSH_PORT = 22;
 export const DEFAULT_SNIFFER_REMOTE_DIRECTORY = '~/ham-radio-sniffer';
 export const DEFAULT_SNIFFER_REMOTE_START_COMMAND = 'yarn start';
-export const DEFAULT_SNIFFER_LOCAL_PORT = 3010;
-export const DEFAULT_SNIFFER_REMOTE_PORT = 3010;
+/** Shared local-forward and remote-listen port for SSH assist. */
+export const DEFAULT_SNIFFER_PORT = 3010;
 export const MINIMUM_SNIFFER_NODE_MAJOR = 24;
 
 export interface SnifferSettings {
@@ -14,8 +14,11 @@ export interface SnifferSettings {
   sshPort: number;
   remoteDirectory: string;
   remoteStartCommand: string;
-  localPort: number;
-  remotePort: number;
+  /**
+   * Port used for both the local SSH forward and the remote sniffer listen
+   * address (`PORT` / `NITRO_PORT`).
+   */
+  port: number;
 }
 
 /**
@@ -28,8 +31,7 @@ export function defaultSnifferSettings(): SnifferSettings {
     sshPort: DEFAULT_SNIFFER_SSH_PORT,
     remoteDirectory: DEFAULT_SNIFFER_REMOTE_DIRECTORY,
     remoteStartCommand: DEFAULT_SNIFFER_REMOTE_START_COMMAND,
-    localPort: DEFAULT_SNIFFER_LOCAL_PORT,
-    remotePort: DEFAULT_SNIFFER_REMOTE_PORT,
+    port: DEFAULT_SNIFFER_PORT,
   };
 }
 
@@ -66,6 +68,27 @@ function readOptionalString(value: unknown, fallback: string): string {
 }
 
 /**
+ * Resolve the shared sniffer port from current or legacy storage shapes.
+ *
+ * Prefers `port`, then falls back to older `localPort` / `remotePort` fields.
+ */
+function readSnifferPort(record: Record<string, unknown>, fallback: number): number {
+  if (Object.prototype.hasOwnProperty.call(record, 'port')) {
+    return readPositiveInt(record.port, fallback);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, 'localPort')) {
+    return readPositiveInt(record.localPort, fallback);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, 'remotePort')) {
+    return readPositiveInt(record.remotePort, fallback);
+  }
+
+  return fallback;
+}
+
+/**
  * True when optional SSH install/start controls should be offered.
  */
 export function isSnifferSshConfigured(settings: Pick<SnifferSettings, 'sshHost'>): boolean {
@@ -75,8 +98,8 @@ export function isSnifferSshConfigured(settings: Pick<SnifferSettings, 'sshHost'
 /**
  * Local URL the UI should use while an SSH local forward is active.
  */
-export function snifferLocalForwardBaseUrl(localPort: number): string {
-  return `http://127.0.0.1:${localPort}`;
+export function snifferLocalForwardBaseUrl(port: number): string {
+  return `http://127.0.0.1:${port}`;
 }
 
 /**
@@ -102,6 +125,7 @@ export function parseSnifferSettings(raw: string | null): SnifferSettings {
 
     const record = parsed as Record<string, unknown>;
     const baseUrl = typeof record.baseUrl === 'string' ? normalizeSnifferBaseUrl(record.baseUrl) : '';
+    const port = readSnifferPort(record, defaults.port);
 
     if (!isHttpUrl(baseUrl)) {
       return {
@@ -111,8 +135,7 @@ export function parseSnifferSettings(raw: string | null): SnifferSettings {
         remoteDirectory: readOptionalString(record.remoteDirectory, defaults.remoteDirectory) || defaults.remoteDirectory,
         remoteStartCommand:
           readOptionalString(record.remoteStartCommand, defaults.remoteStartCommand) || defaults.remoteStartCommand,
-        localPort: readPositiveInt(record.localPort, defaults.localPort),
-        remotePort: readPositiveInt(record.remotePort, defaults.remotePort),
+        port,
       };
     }
 
@@ -123,8 +146,7 @@ export function parseSnifferSettings(raw: string | null): SnifferSettings {
       remoteDirectory: readOptionalString(record.remoteDirectory, defaults.remoteDirectory) || defaults.remoteDirectory,
       remoteStartCommand:
         readOptionalString(record.remoteStartCommand, defaults.remoteStartCommand) || defaults.remoteStartCommand,
-      localPort: readPositiveInt(record.localPort, defaults.localPort),
-      remotePort: readPositiveInt(record.remotePort, defaults.remotePort),
+      port,
     };
   } catch {
     return defaults;
@@ -138,8 +160,7 @@ export function serializeSnifferSettings(settings: SnifferSettings): string {
     sshPort: settings.sshPort,
     remoteDirectory: settings.remoteDirectory.trim() || DEFAULT_SNIFFER_REMOTE_DIRECTORY,
     remoteStartCommand: settings.remoteStartCommand.trim() || DEFAULT_SNIFFER_REMOTE_START_COMMAND,
-    localPort: settings.localPort,
-    remotePort: settings.remotePort,
+    port: settings.port,
   });
 }
 
@@ -175,4 +196,29 @@ export function snifferApiUrl(baseUrl: string, path: string): string {
  */
 export function quoteRemoteShellArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * RHS for `DIR=<expr>` on a remote host. Leading `~` becomes `"$HOME"` so tilde
+ * still expands inside a single-quoted `bash -lc` script.
+ */
+export function remoteDirectoryAssignmentRhs(value: string): string {
+  const trimmed = value.trim();
+
+  if (trimmed === '~') {
+    return '"$HOME"';
+  }
+
+  if (trimmed.startsWith('~/')) {
+    const rest = trimmed
+      .slice(2)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+
+    return `"$HOME/${rest}"`;
+  }
+
+  return quoteRemoteShellArg(trimmed);
 }

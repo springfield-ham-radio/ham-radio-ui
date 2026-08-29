@@ -69,6 +69,82 @@ export function snifferCaptureEntryCount(log: unknown, packets: SnifferPacket[])
 }
 
 /**
+ * Build UI packets from a SerialLogger payload.
+ *
+ * Consecutive same-direction SEND/RECV entries (often one byte at a time) are
+ * merged into readable frames for the traffic panel or saved capture.
+ */
+export function snifferPacketsFromSerialLog(log: unknown): SnifferPacket[] {
+  if (!isRecord(log) || !Array.isArray(log.entries)) {
+    return [];
+  }
+
+  const packets: SnifferPacket[] = [];
+  let nextId = 1;
+  let pending:
+    | {
+        direction: SnifferPacket['direction'];
+        data: number[];
+        timestamp: string;
+        elapsedMs: number;
+        description?: string;
+      }
+    | undefined;
+
+  const flush = (): void => {
+    if (!pending || pending.data.length === 0) {
+      pending = undefined;
+      return;
+    }
+
+    packets.push({
+      id: nextId,
+      timestamp: pending.timestamp,
+      elapsedMs: pending.elapsedMs,
+      direction: pending.direction,
+      data: pending.data,
+      description: pending.description,
+    });
+    nextId += 1;
+    pending = undefined;
+  };
+
+  for (const entry of log.entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.data)) {
+      continue;
+    }
+
+    const direction: SnifferPacket['direction'] =
+      entry.direction === 'RECV' ? 'RADIO->COMPUTER' : 'COMPUTER->RADIO';
+    const data = entry.data.filter((byte): byte is number => typeof byte === 'number');
+
+    if (data.length === 0) {
+      continue;
+    }
+
+    if (pending && pending.direction !== direction) {
+      flush();
+    }
+
+    if (!pending) {
+      pending = {
+        direction,
+        data: [...data],
+        timestamp: typeof entry.timestamp === 'string' ? entry.timestamp : new Date().toISOString(),
+        elapsedMs: typeof entry.elapsedMs === 'number' ? entry.elapsedMs : 0,
+        description: typeof entry.description === 'string' ? entry.description : undefined,
+      };
+      continue;
+    }
+
+    pending.data.push(...data);
+  }
+
+  flush();
+  return packets;
+}
+
+/**
  * Build a sniffer capture document for disk and agent review.
  *
  * `log` is the SerialLogger payload from the sniffer API. `packets` are the

@@ -7,36 +7,14 @@
           <UBadge :color="connectionBadgeColor" variant="subtle" size="sm">
             {{ connectionLabel }}
           </UBadge>
-          <UBadge v-if="reachable" :color="bridgeBadgeColor" variant="subtle" size="sm">
+          <UBadge v-if="showBridgeBadge" :color="bridgeBadgeColor" variant="subtle" size="sm">
             {{ bridgeLabel }}
           </UBadge>
-          <span v-if="status.packetCount" class="text-xs text-muted">{{ status.packetCount }} packets</span>
+          <span v-if="reachable && status.packetCount" class="text-xs text-muted">{{ status.packetCount }} packets</span>
         </div>
         <p class="mt-0.5 text-xs text-muted">Bridge two serial ports and watch clone-protocol traffic.</p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
-        <template v-if="showRemoteSshControls">
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="sm"
-            icon="i-lucide-play"
-            label="Start remote"
-            :loading="remoteBusy === 'start'"
-            :disabled="remoteBusy !== undefined"
-            @click="onStartRemote"
-          />
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="sm"
-            icon="i-lucide-square"
-            label="Stop remote"
-            :loading="remoteBusy === 'stop'"
-            :disabled="remoteBusy !== undefined"
-            @click="onStopRemote"
-          />
-        </template>
         <UButton
           color="neutral"
           variant="outline"
@@ -47,16 +25,6 @@
           :disabled="!reachable || (packets.length === 0 && status.packetCount === 0)"
           @click="saveCapture"
         />
-        <UButton
-          color="neutral"
-          variant="outline"
-          size="sm"
-          icon="i-lucide-refresh-cw"
-          label="Refresh ports"
-          :loading="portsPending"
-          :disabled="!reachable"
-          @click="refreshPorts"
-        />
       </div>
     </div>
 
@@ -65,13 +33,25 @@
       color="warning"
       variant="subtle"
       icon="i-lucide-unplug"
-      title="Sniffer is not running"
-      :description="`Start ham-radio-sniffer on ${baseUrl}, then this page will connect automatically.`"
+      title="Sniffer is not reachable"
+      :description="offlineDescription"
     />
 
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)]">
       <div class="flex h-fit flex-col gap-3 rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-        <p class="text-sm font-medium text-highlighted">Bridge</p>
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-medium text-highlighted">Bridge</p>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            icon="i-lucide-refresh-cw"
+            label="Refresh ports"
+            :loading="portsPending"
+            :disabled="!reachable"
+            @click="refreshPorts"
+          />
+        </div>
 
         <form class="flex flex-col gap-3" @submit.prevent="onStart">
           <UFormField label="Computer port" required class="w-full">
@@ -110,12 +90,12 @@
           <p v-if="errorMessage" class="text-sm text-error">{{ errorMessage }}</p>
 
           <div class="flex gap-2">
-            <UButton type="submit" icon="i-lucide-play" label="Start" :disabled="!reachable || status.running" :loading="starting" />
+            <UButton type="submit" icon="i-lucide-play" label="Start bridge" :disabled="!reachable || status.running" :loading="starting" />
             <UButton
               color="neutral"
               variant="outline"
               icon="i-lucide-square"
-              label="Stop"
+              label="Stop bridge"
               :disabled="!reachable || !status.running"
               :loading="stopping"
               @click="stop"
@@ -126,11 +106,11 @@
 
       <div class="flex min-h-0 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
         <div class="flex items-center justify-between gap-2 border-b border-default px-4 py-2">
-          <p class="text-sm font-medium text-highlighted">Live traffic</p>
+          <p class="text-sm font-medium text-highlighted">Traffic</p>
           <UButton color="neutral" variant="ghost" size="xs" label="Clear" :disabled="packets.length === 0" @click="clearPackets" />
         </div>
         <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
-          <p v-if="packets.length === 0" class="text-muted">Start the sniffer to capture serial traffic.</p>
+          <p v-if="packets.length === 0" class="text-muted">Start the bridge to capture serial traffic.</p>
           <div v-for="packet in packets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
             <span class="text-muted">{{ packet.timestamp }}</span>
             <span :class="packet.direction === 'COMPUTER->RADIO' ? 'text-warning' : 'text-success'">
@@ -146,17 +126,8 @@
 
 <script setup lang="ts">
 import { snifferPacketToHex } from '~/utils/sniffer-api';
-import {
-  canUseRemoteSnifferSsh,
-  remoteSnifferStatus,
-  startRemoteSniffer,
-  stopRemoteSniffer,
-} from '~/utils/sniffer-remote';
-import {
-  readSnifferSettings,
-  snifferLocalForwardBaseUrl,
-  writeSnifferSettings,
-} from '~/utils/sniffer-settings';
+import { canUseRemoteSnifferSsh, remoteSnifferStatus } from '~/utils/sniffer-remote';
+import { readSnifferSettings } from '~/utils/sniffer-settings';
 
 useHead({ title: 'Sniffer' });
 
@@ -173,9 +144,7 @@ const baudRateItems = [
 const computerPort = ref<string>();
 const radioPort = ref<string>();
 const baudRate = ref(9600);
-const remoteBusy = ref<'start' | 'stop'>();
 const remoteTunnelRunning = ref(false);
-const toast = useToast();
 
 const {
   baseUrl,
@@ -200,11 +169,13 @@ const {
 const snifferSettings = ref(readSnifferSettings());
 let remoteStatusTimer: ReturnType<typeof setInterval> | undefined;
 
-const showRemoteSshControls = computed(() => canUseRemoteSnifferSsh(snifferSettings.value));
+const sshConfigured = computed(() => canUseRemoteSnifferSsh(snifferSettings.value));
 
 const connectionLabel = computed(() => {
-  if (showRemoteSshControls.value) {
-    if (remoteTunnelRunning.value && reachable.value) {
+  if (sshConfigured.value) {
+    // Prefer API reachability: an orphaned tunnel or URL-only path can still
+    // serve traffic after the app loses track of the SSH child process.
+    if (reachable.value) {
       return 'Remote connected';
     }
 
@@ -219,8 +190,8 @@ const connectionLabel = computed(() => {
 });
 
 const connectionBadgeColor = computed(() => {
-  if (showRemoteSshControls.value) {
-    if (remoteTunnelRunning.value && reachable.value) {
+  if (sshConfigured.value) {
+    if (reachable.value) {
       return 'success';
     }
 
@@ -235,15 +206,25 @@ const connectionBadgeColor = computed(() => {
 });
 
 const bridgeLabel = computed(() => {
-  return status.value.running ? 'Running' : 'Stopped';
+  return status.value.running ? 'Bridge running' : 'Bridge stopped';
 });
 
 const bridgeBadgeColor = computed(() => {
   return status.value.running ? 'success' : 'neutral';
 });
 
+const showBridgeBadge = computed(() => reachable.value);
+
+const offlineDescription = computed(() => {
+  if (sshConfigured.value) {
+    return `Start the remote sniffer under Preferences → Sniffer, then this page will connect to ${baseUrl.value}.`;
+  }
+
+  return `Start ham-radio-sniffer on ${baseUrl.value}, then this page will connect automatically.`;
+});
+
 async function refreshRemoteTunnelStatus(): Promise<void> {
-  if (!showRemoteSshControls.value) {
+  if (!sshConfigured.value) {
     remoteTunnelRunning.value = false;
     return;
   }
@@ -277,63 +258,6 @@ function stopRemoteStatusPolling(): void {
 
 async function onStart(): Promise<void> {
   await start(computerPort.value, radioPort.value, baudRate.value);
-}
-
-async function onStartRemote(): Promise<void> {
-  remoteBusy.value = 'start';
-
-  try {
-    const settings = readSnifferSettings();
-    const result = await startRemoteSniffer(settings);
-
-    if (!result.ok) {
-      toast.add({ title: 'Remote start failed', description: result.message, color: 'error' });
-      await refreshRemoteTunnelStatus();
-      return;
-    }
-
-    const forwardUrl = snifferLocalForwardBaseUrl(settings.localPort);
-    writeSnifferSettings({ ...settings, baseUrl: forwardUrl });
-    baseUrl.value = forwardUrl;
-    snifferSettings.value = readSnifferSettings();
-    await refreshRemoteTunnelStatus();
-    toast.add({ title: 'Remote sniffer started', description: result.message, color: 'success' });
-  } catch (error) {
-    toast.add({
-      title: 'Remote start failed',
-      description: error instanceof Error ? error.message : String(error),
-      color: 'error',
-    });
-    await refreshRemoteTunnelStatus();
-  } finally {
-    remoteBusy.value = undefined;
-  }
-}
-
-async function onStopRemote(): Promise<void> {
-  remoteBusy.value = 'stop';
-
-  try {
-    const result = await stopRemoteSniffer();
-
-    if (!result.ok) {
-      toast.add({ title: 'Remote stop failed', description: result.message, color: 'error' });
-      await refreshRemoteTunnelStatus();
-      return;
-    }
-
-    await refreshRemoteTunnelStatus();
-    toast.add({ title: 'Remote sniffer stopped', description: result.message, color: 'neutral' });
-  } catch (error) {
-    toast.add({
-      title: 'Remote stop failed',
-      description: error instanceof Error ? error.message : String(error),
-      color: 'error',
-    });
-    await refreshRemoteTunnelStatus();
-  } finally {
-    remoteBusy.value = undefined;
-  }
 }
 
 onMounted(() => {

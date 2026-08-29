@@ -5,9 +5,9 @@ Ham Radio talks to a separate headless sniffer process over HTTP. The default wo
 ## URL only (default)
 
 1. Start ham-radio-sniffer on the machine that has both USB serial cables (`yarn start` after build, or `yarn dev` while developing). Default origin: `http://127.0.0.1:3010`.
-2. Open **Preferences → Sniffer** and set **Sniffer URL** if it is not the default.
-3. Open the **Sniffer** tab to pick computer/radio ports and start the bridge. The header shows **Connected** / **Disconnected** (or **Remote connected** / **Remote disconnected** when SSH is configured).
-4. Use **Save capture** to write a JSON file for offline review or driver verification.
+2. Open **Preferences → Sniffer** and set **Sniffer URL** if it is not the default. Changes save automatically.
+3. Open the **Sniffer** tab to pick computer/radio ports and start the bridge. The header shows **Connected** / **Disconnected** (or **Remote connected** / **Remote disconnected** when SSH is configured). Connection badges follow API reachability: if `/api/health` succeeds, the page shows connected even when the app no longer owns the SSH child (for example after an app restart with a leftover tunnel). **Remote tunnel up** means the tracked SSH session is alive but the sniffer API is not answering yet.
+4. Traffic streams live into the Traffic panel over SSE. Use **Save capture** to write a JSON file for offline review or driver verification.
 
 Live traffic arrives as server-sent events. The sniffer itself has no web UI.
 
@@ -15,14 +15,14 @@ Live traffic arrives as server-sent events. The sniffer itself has no web UI.
 
 Leave **SSH host** blank to keep SSH disabled. When a host is set (desktop app only):
 
-1. **Check host** verifies Node.js (major version ≥ 24, matching the sniffer `.nvmrc`), Yarn or Corepack, and write access to the remote directory. The app does **not** install Node for you.
+1. **Check host** verifies Node.js (major version ≥ 24, matching the sniffer `.nvmrc`), Yarn or Corepack, write access to the remote directory, and whether sources/build already exist. Preferences shows **Host ready / Not ready** and **Installed / Sources only / Not installed** badges. The app does **not** install Node for you.
 2. **Install / update** uploads the **bundled sniffer sources** shipped with the app (not a git clone), then runs `yarn install` and `yarn build` on the remote so native `serialport` bindings match that machine’s architecture.
-3. **Start remote** runs the configured remote start command over SSH and opens a local port forward (`localPort` → `127.0.0.1:remotePort` on the host). The Sniffer URL is updated to `http://127.0.0.1:<localPort>`.
+3. **Start remote** runs the configured remote start command over SSH with `PORT`/`HOST` set to the configured port (production Nitro defaults to port 3000 otherwise), opens a local port forward on the same port, and waits until `/api/health` responds. The Sniffer URL is updated to `http://127.0.0.1:<port>`.
 4. **Stop remote** ends the SSH session (and the remote process started with it).
 
 SSH uses key or agent authentication only (`BatchMode=yes`). Password prompts are not supported.
 
-The Sniffer tab shows **Start remote** / **Stop remote** when SSH is configured and you are running in Tauri.
+Start/stop remote lives only under **Preferences → Sniffer**. The Sniffer tab Start/Stop bridge controls open the serial ports once the API is reachable.
 
 ## Capture files
 

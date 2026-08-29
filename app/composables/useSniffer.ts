@@ -38,6 +38,29 @@ export function useSniffer() {
     return await $fetch<T>(snifferApiUrl(baseUrl.value, path), options);
   }
 
+  function applyStatus(nextStatus: SnifferStatus): void {
+    status.value = nextStatus;
+  }
+
+  function disconnectEvents(): void {
+    eventSource?.close();
+    eventSource = undefined;
+  }
+
+  function markUnreachable(): void {
+    reachable.value = false;
+    disconnectEvents();
+
+    // Drop "running" so a stale useState value cannot disagree with the
+    // connection badge after the API drops offline.
+    if (status.value.running) {
+      applyStatus({
+        ...status.value,
+        running: false,
+      });
+    }
+  }
+
   async function refreshPorts(): Promise<void> {
     portsPending.value = true;
 
@@ -46,7 +69,7 @@ export function useSniffer() {
       ports.value = response.ports.map((port) => port.path);
       reachable.value = true;
     } catch (error) {
-      reachable.value = false;
+      markUnreachable();
       ports.value = [];
       errorMessage.value = snifferFetchErrorMessage(error);
     } finally {
@@ -60,13 +83,9 @@ export function useSniffer() {
       reachable.value = true;
       return true;
     } catch {
-      reachable.value = false;
+      markUnreachable();
       return false;
     }
-  }
-
-  function applyStatus(nextStatus: SnifferStatus): void {
-    status.value = nextStatus;
   }
 
   function handleEvent(event: SnifferEvent): void {
@@ -86,11 +105,6 @@ export function useSniffer() {
     }
   }
 
-  function disconnectEvents(): void {
-    eventSource?.close();
-    eventSource = undefined;
-  }
-
   function connectEvents(): void {
     if (!import.meta.client) {
       return;
@@ -105,8 +119,7 @@ export function useSniffer() {
     };
 
     source.onerror = () => {
-      reachable.value = false;
-      disconnectEvents();
+      markUnreachable();
     };
   }
 
@@ -126,6 +139,7 @@ export function useSniffer() {
 
       packets.value = [];
       applyStatus(nextStatus);
+      connectEvents();
     } catch (error) {
       errorMessage.value = snifferFetchErrorMessage(error);
     } finally {
@@ -171,6 +185,7 @@ export function useSniffer() {
 
     try {
       const response = await request<SnifferLogResponse>('/api/sniffer/log');
+      applyStatus(response.status);
       const capturePackets = response.packets.length > 0 ? response.packets : packets.value;
       const entryCount = snifferCaptureEntryCount(response.file.data, capturePackets);
 
@@ -222,12 +237,18 @@ export function useSniffer() {
     const isReachable = await checkHealth();
 
     if (!isReachable) {
-      disconnectEvents();
       return;
     }
 
     errorMessage.value = '';
     await refreshPorts();
+
+    try {
+      applyStatus(await request<SnifferStatus>('/api/sniffer'));
+    } catch {
+      // Health succeeded; status sync is best-effort until SSE connects.
+    }
+
     connectEvents();
   }
 
@@ -239,9 +260,20 @@ export function useSniffer() {
     void connect();
     healthTimer = setInterval(() => {
       const storedUrl = readSnifferSettings().baseUrl;
+      const needsEvents = !eventSource;
 
-      if (storedUrl !== baseUrl.value || !reachable.value || !eventSource) {
+      if (storedUrl !== baseUrl.value || !reachable.value || needsEvents) {
         void connect();
+      } else if (reachable.value) {
+        void checkHealth().then((isReachable) => {
+          if (!isReachable) {
+            return;
+          }
+
+          void request<SnifferStatus>('/api/sniffer')
+            .then(applyStatus)
+            .catch(() => undefined);
+        });
       }
     }, HEALTH_POLL_MS);
   }

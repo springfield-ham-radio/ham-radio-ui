@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 
 const MINIMUM_NODE_MAJOR: u32 = 24;
 const SNIFFER_RESOURCE_RELATIVE: &str = "resources/ham-radio-sniffer";
@@ -34,6 +34,10 @@ pub struct RemoteSnifferCheckResult {
     pub node_version: Option<String>,
     pub yarn_available: bool,
     pub directory_writable: bool,
+    /// `package.json` is present in the remote directory.
+    pub sources_present: bool,
+    /// Built Nitro output is present (`.output/server/index.mjs`).
+    pub build_present: bool,
     pub messages: Vec<String>,
 }
 
@@ -52,18 +56,47 @@ pub struct RemoteSnifferCommandResult {
 
 pub struct RemoteSnifferState {
     pub tunnel: Mutex<Option<Child>>,
+    pub local_port: Mutex<Option<u16>>,
 }
 
 impl Default for RemoteSnifferState {
     fn default() -> Self {
         Self {
             tunnel: Mutex::new(None),
+            local_port: Mutex::new(None),
         }
     }
 }
 
 fn quote_remote_shell_arg(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn escape_double_quoted(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
+        .replace('`', "\\`")
+}
+
+/// RHS for `DIR=<expr>` on the remote host.
+///
+/// Leading `~` must become `"$HOME"` / `"$HOME/…"` because a single-quoted
+/// `~/path` does not expand and creates a literal `~` directory
+/// (e.g. `/home/user/~/path`).
+fn remote_directory_assignment_rhs(remote_directory: &str) -> String {
+    let trimmed = remote_directory.trim();
+
+    if trimmed == "~" {
+        return "\"$HOME\"".to_string();
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("~/") {
+        return format!("\"$HOME/{}\"", escape_double_quoted(rest));
+    }
+
+    quote_remote_shell_arg(trimmed)
 }
 
 fn validate_config(config: &RemoteSnifferConfig) -> Result<(), String> {
@@ -181,7 +214,66 @@ fn stop_tunnel(state: &RemoteSnifferState) -> Result<(), String> {
         let _ = child.wait();
     }
 
+    let local_port = {
+        let mut port_guard = state
+            .local_port
+            .lock()
+            .map_err(|_| "Remote sniffer state is locked".to_string())?;
+        port_guard.take()
+    };
+
+    if let Some(port) = local_port {
+        free_orphaned_local_forward(port);
+    }
+
     Ok(())
+}
+
+/// Kill leftover `ssh -L <port>:…` listeners after the app lost the Child handle
+/// (for example after a Tauri rebuild).
+fn free_orphaned_local_forward(local_port: u16) {
+    let Ok(output) = Command::new("lsof")
+        .args([
+            "-nP",
+            &format!("-iTCP:{local_port}"),
+            "-sTCP:LISTEN",
+            "-t",
+        ])
+        .output()
+    else {
+        return;
+    };
+
+    if !output.status.success() {
+        return;
+    }
+
+    let pids = String::from_utf8_lossy(&output.stdout);
+    for pid_text in pids.split_whitespace() {
+        let Ok(pid) = pid_text.parse::<i32>() else {
+            continue;
+        };
+
+        let Ok(command_output) = Command::new("ps")
+            .args(["-p", &pid.to_string(), "-o", "command="])
+            .output()
+        else {
+            continue;
+        };
+
+        let command = String::from_utf8_lossy(&command_output.stdout);
+        let looks_like_sniffer_forward = command.contains("ssh")
+            && command.contains("-L")
+            && (command.contains(&format!("{local_port}:"))
+                || command.contains(&format!(":{local_port}")));
+
+        if looks_like_sniffer_forward {
+            let _ = Command::new("kill").arg(pid.to_string()).status();
+        }
+    }
+
+    // Brief pause so the OS releases the listen socket before the next bind.
+    std::thread::sleep(Duration::from_millis(200));
 }
 
 fn is_tunnel_running(state: &RemoteSnifferState) -> Result<bool, String> {
@@ -203,25 +295,32 @@ fn is_tunnel_running(state: &RemoteSnifferState) -> Result<bool, String> {
     }
 }
 
+fn empty_check_result(messages: Vec<String>) -> RemoteSnifferCheckResult {
+    RemoteSnifferCheckResult {
+        ok: false,
+        node_version: None,
+        yarn_available: false,
+        directory_writable: false,
+        sources_present: false,
+        build_present: false,
+        messages,
+    }
+}
+
 fn build_check_result(config: &RemoteSnifferConfig) -> RemoteSnifferCheckResult {
     let mut messages = Vec::new();
     let mut node_version = None;
     let mut yarn_available = false;
     let mut directory_writable = false;
+    let mut sources_present = false;
+    let mut build_present = false;
 
     if let Err(error) = validate_config(config) {
-        messages.push(error);
-        return RemoteSnifferCheckResult {
-            ok: false,
-            node_version,
-            yarn_available,
-            directory_writable,
-            messages,
-        };
+        return empty_check_result(vec![error]);
     }
 
     let remote_directory = config.remote_directory.trim();
-    let quoted_directory = quote_remote_shell_arg(remote_directory);
+    let directory_rhs = remote_directory_assignment_rhs(remote_directory);
 
     let check_script = format!(
         "bash -lc {}",
@@ -234,14 +333,25 @@ if command -v yarn >/dev/null 2>&1; then
 elif command -v corepack >/dev/null 2>&1; then
   YARN_OK=1
 fi
-PARENT=$(dirname {quoted_directory})
+DIR={directory_rhs}
+PARENT=$(dirname "$DIR")
 DIR_OK=0
-if mkdir -p "$PARENT" 2>/dev/null && mkdir -p {quoted_directory} 2>/dev/null && test -w {quoted_directory}; then
+if mkdir -p "$PARENT" 2>/dev/null && mkdir -p "$DIR" 2>/dev/null && test -w "$DIR"; then
   DIR_OK=1
+fi
+SOURCES_OK=0
+BUILD_OK=0
+if test -f "$DIR/package.json"; then
+  SOURCES_OK=1
+fi
+if test -f "$DIR/.output/server/index.mjs"; then
+  BUILD_OK=1
 fi
 printf 'NODE=%s\n' "$NODE_VERSION"
 printf 'YARN=%s\n' "$YARN_OK"
 printf 'DIR=%s\n' "$DIR_OK"
+printf 'SOURCES=%s\n' "$SOURCES_OK"
+printf 'BUILD=%s\n' "$BUILD_OK"
 "#
         ))
     );
@@ -265,19 +375,16 @@ printf 'DIR=%s\n' "$DIR_OK"
                         yarn_available = value.trim() == "1";
                     } else if let Some(value) = line.strip_prefix("DIR=") {
                         directory_writable = value.trim() == "1";
+                    } else if let Some(value) = line.strip_prefix("SOURCES=") {
+                        sources_present = value.trim() == "1";
+                    } else if let Some(value) = line.strip_prefix("BUILD=") {
+                        build_present = value.trim() == "1";
                     }
                 }
             }
         }
         Err(error) => {
-            messages.push(error);
-            return RemoteSnifferCheckResult {
-                ok: false,
-                node_version,
-                yarn_available,
-                directory_writable,
-                messages,
-            };
+            return empty_check_result(vec![error]);
         }
     }
 
@@ -287,6 +394,8 @@ printf 'DIR=%s\n' "$DIR_OK"
             node_version,
             yarn_available,
             directory_writable,
+            sources_present,
+            build_present,
             messages,
         };
     }
@@ -329,6 +438,17 @@ printf 'DIR=%s\n' "$DIR_OK"
         ));
     }
 
+    if sources_present && build_present {
+        messages.push("Sniffer is installed and built on the remote host.".into());
+    } else if sources_present {
+        messages.push(
+            "Sniffer sources are present, but the build output is missing. Run Install / update."
+                .into(),
+        );
+    } else {
+        messages.push("Sniffer is not installed on the remote host yet.".into());
+    }
+
     let node_ok = node_version
         .as_deref()
         .and_then(parse_node_major)
@@ -339,6 +459,8 @@ printf 'DIR=%s\n' "$DIR_OK"
         node_version,
         yarn_available,
         directory_writable,
+        sources_present,
+        build_present,
         messages,
     }
 }
@@ -346,7 +468,7 @@ printf 'DIR=%s\n' "$DIR_OK"
 fn upload_bundled_sniffer(app: &AppHandle, config: &RemoteSnifferConfig) -> Result<(), String> {
     let local_path = bundled_sniffer_path(app)?;
     let remote_directory = config.remote_directory.trim();
-    let quoted_directory = quote_remote_shell_arg(remote_directory);
+    let directory_rhs = remote_directory_assignment_rhs(remote_directory);
 
     require_success(
         "Create remote directory",
@@ -354,12 +476,13 @@ fn upload_bundled_sniffer(app: &AppHandle, config: &RemoteSnifferConfig) -> Resu
             config,
             &format!(
                 "bash -lc {}",
-                quote_remote_shell_arg(&format!("mkdir -p {quoted_directory}"))
+                quote_remote_shell_arg(&format!("DIR={directory_rhs}; mkdir -p \"$DIR\""))
             ),
         )?,
     )?;
 
     // Prefer rsync when available; fall back to scp -r.
+    // OpenSSH expands a leading ~ in scp/rsync destinations; keep that form.
     let remote_target = format!("{}:{}", config.ssh_host.trim(), remote_directory);
     let rsync_args = vec![
         "-az".into(),
@@ -420,12 +543,11 @@ fn upload_bundled_sniffer(app: &AppHandle, config: &RemoteSnifferConfig) -> Resu
 }
 
 fn remote_install_and_build(config: &RemoteSnifferConfig) -> Result<(), String> {
-    let remote_directory = config.remote_directory.trim();
-    let quoted_directory = quote_remote_shell_arg(remote_directory);
+    let directory_rhs = remote_directory_assignment_rhs(config.remote_directory.trim());
     let script = format!(
         "bash -lc {}",
         quote_remote_shell_arg(&format!(
-            "set -euo pipefail; cd {quoted_directory}; if command -v corepack >/dev/null 2>&1; then corepack enable; fi; HUSKY=0 yarn install; yarn build"
+            "set -euo pipefail; DIR={directory_rhs}; cd \"$DIR\"; if command -v corepack >/dev/null 2>&1; then corepack enable; fi; HUSKY=0 yarn install; yarn build"
         ))
     );
 
@@ -433,17 +555,11 @@ fn remote_install_and_build(config: &RemoteSnifferConfig) -> Result<(), String> 
     Ok(())
 }
 
-#[tauri::command]
-pub fn check_remote_sniffer_host(config: RemoteSnifferConfig) -> Result<RemoteSnifferCheckResult, String> {
-    Ok(build_check_result(&config))
-}
-
-#[tauri::command]
-pub fn install_remote_sniffer(
-    app: AppHandle,
-    config: RemoteSnifferConfig,
+fn install_remote_sniffer_inner(
+    app: &AppHandle,
+    config: &RemoteSnifferConfig,
 ) -> Result<RemoteSnifferCommandResult, String> {
-    let check = build_check_result(&config);
+    let check = build_check_result(config);
     if !check.ok {
         return Ok(RemoteSnifferCommandResult {
             ok: false,
@@ -460,8 +576,8 @@ pub fn install_remote_sniffer(
         });
     }
 
-    upload_bundled_sniffer(&app, &config)?;
-    remote_install_and_build(&config)?;
+    upload_bundled_sniffer(app, config)?;
+    remote_install_and_build(config)?;
 
     Ok(RemoteSnifferCommandResult {
         ok: true,
@@ -472,14 +588,76 @@ pub fn install_remote_sniffer(
     })
 }
 
-#[tauri::command]
-pub fn start_remote_sniffer(
-    state: State<'_, RemoteSnifferState>,
+fn wait_for_local_sniffer_health(local_port: u16) -> Result<(), String> {
+    use std::io::{Read, Write};
+    use std::net::{SocketAddr, TcpStream};
+
+    let address: SocketAddr = format!("127.0.0.1:{local_port}")
+        .parse()
+        .map_err(|error| format!("Invalid local forward address: {error}"))?;
+    let request = format!(
+        "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{local_port}\r\nConnection: close\r\n\r\n"
+    );
+    let attempts = 30;
+
+    for attempt in 1..=attempts {
+        match TcpStream::connect_timeout(&address, Duration::from_secs(2)) {
+            Ok(mut stream) => {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+
+                if stream.write_all(request.as_bytes()).is_ok() {
+                    let mut buffer = [0_u8; 256];
+                    if let Ok(bytes_read) = stream.read(&mut buffer) {
+                        let response = String::from_utf8_lossy(&buffer[..bytes_read]);
+                        if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200") {
+                            return Ok(());
+                        }
+
+                        if attempt == attempts {
+                            return Err(format!(
+                                "Remote sniffer tunnel is up, but http://127.0.0.1:{local_port}/api/health returned an unexpected response."
+                            ));
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                if attempt == attempts {
+                    return Err(format!(
+                        "Remote sniffer did not become reachable at http://127.0.0.1:{local_port}/api/health ({error}). The remote process may have exited or listened on the wrong port."
+                    ));
+                }
+            }
+        }
+
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    Err(format!(
+        "Timed out waiting for http://127.0.0.1:{local_port}/api/health"
+    ))
+}
+
+fn stop_remote_sniffer_process(config: &RemoteSnifferConfig) {
+    let directory_rhs = remote_directory_assignment_rhs(config.remote_directory.trim());
+    let script = format!(
+        "bash -lc {}",
+        quote_remote_shell_arg(&format!(
+            "DIR={directory_rhs}; export PORT={}; if command -v fuser >/dev/null 2>&1; then fuser -k \"${{PORT}}/tcp\" >/dev/null 2>&1 || true; fi; pkill -f \"$DIR/.output/server/index.mjs\" >/dev/null 2>&1 || true",
+            config.remote_port
+        ))
+    );
+    let _ = run_ssh(config, &script);
+}
+
+fn start_remote_sniffer_inner(
+    state: &RemoteSnifferState,
     config: RemoteSnifferConfig,
 ) -> Result<RemoteSnifferCommandResult, String> {
     validate_config(&config)?;
 
-    if is_tunnel_running(&state)? {
+    if is_tunnel_running(state)? {
         return Ok(RemoteSnifferCommandResult {
             ok: true,
             message: "Remote sniffer SSH session is already running.".into(),
@@ -494,15 +672,21 @@ pub fn start_remote_sniffer(
         });
     }
 
-    stop_tunnel(&state)?;
+    stop_tunnel(state)?;
+    // Also clear orphans for this port when state had no tracked Child/port.
+    free_orphaned_local_forward(config.local_port);
 
     let remote_directory = config.remote_directory.trim();
-    let quoted_directory = quote_remote_shell_arg(remote_directory);
+    let directory_rhs = remote_directory_assignment_rhs(remote_directory);
     let start_command = config.remote_start_command.trim();
+    // Production Nitro ignores nuxt devServer.port and defaults to 3000. Force the
+    // forwarded remote port and loopback bind so the local -L tunnel can reach it.
+    // Also clear any orphaned sniffer left behind when a prior SSH session died.
     let remote_script = format!(
         "bash -lc {}",
         quote_remote_shell_arg(&format!(
-            "set -euo pipefail; cd {quoted_directory}; exec {start_command}"
+            "set -euo pipefail; DIR={directory_rhs}; cd \"$DIR\"; export HOST=127.0.0.1 PORT={} NITRO_HOST=127.0.0.1 NITRO_PORT={}; if command -v fuser >/dev/null 2>&1; then fuser -k \"${{PORT}}/tcp\" >/dev/null 2>&1 || true; fi; pkill -f \"$DIR/.output/server/index.mjs\" >/dev/null 2>&1 || true; sleep 0.4; exec {start_command}",
+            config.remote_port, config.remote_port
         ))
     );
 
@@ -527,7 +711,7 @@ pub fn start_remote_sniffer(
         .arg(config.ssh_host.trim())
         .arg(&remote_script)
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("Failed to start SSH session: {error}"))?;
@@ -552,11 +736,26 @@ pub fn start_remote_sniffer(
         Err(error) => return Err(format!("Unable to poll SSH session: {error}")),
     }
 
+    // Drop stderr so a long-running remote process cannot fill the pipe and stall.
+    drop(child.stderr.take());
+
+    if let Err(error) = wait_for_local_sniffer_health(config.local_port) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+
     let mut guard = state
         .tunnel
         .lock()
         .map_err(|_| "Remote sniffer state is locked".to_string())?;
     *guard = Some(child);
+
+    let mut port_guard = state
+        .local_port
+        .lock()
+        .map_err(|_| "Remote sniffer state is locked".to_string())?;
+    *port_guard = Some(config.local_port);
 
     Ok(RemoteSnifferCommandResult {
         ok: true,
@@ -568,42 +767,101 @@ pub fn start_remote_sniffer(
 }
 
 #[tauri::command]
-pub fn stop_remote_sniffer(
-    state: State<'_, RemoteSnifferState>,
-) -> Result<RemoteSnifferCommandResult, String> {
-    if !is_tunnel_running(&state)? {
-        return Ok(RemoteSnifferCommandResult {
-            ok: true,
-            message: "Remote sniffer SSH session is not running.".into(),
-        });
-    }
-
-    stop_tunnel(&state)?;
-
-    Ok(RemoteSnifferCommandResult {
-        ok: true,
-        message: "Stopped remote sniffer SSH session.".into(),
-    })
+pub async fn check_remote_sniffer_host(
+    config: RemoteSnifferConfig,
+) -> Result<RemoteSnifferCheckResult, String> {
+    tauri::async_runtime::spawn_blocking(move || build_check_result(&config))
+        .await
+        .map_err(|error| format!("Host check task failed: {error}"))
 }
 
 #[tauri::command]
-pub fn remote_sniffer_status(
-    state: State<'_, RemoteSnifferState>,
-) -> Result<RemoteSnifferStatus, String> {
-    Ok(RemoteSnifferStatus {
-        running: is_tunnel_running(&state)?,
+pub async fn install_remote_sniffer(
+    app: AppHandle,
+    config: RemoteSnifferConfig,
+) -> Result<RemoteSnifferCommandResult, String> {
+    tauri::async_runtime::spawn_blocking(move || install_remote_sniffer_inner(&app, &config))
+        .await
+        .map_err(|error| format!("Install task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn start_remote_sniffer(
+    app: AppHandle,
+    config: RemoteSnifferConfig,
+) -> Result<RemoteSnifferCommandResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RemoteSnifferState>();
+        start_remote_sniffer_inner(&state, config)
     })
+    .await
+    .map_err(|error| format!("Start task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn stop_remote_sniffer(
+    app: AppHandle,
+    config: Option<RemoteSnifferConfig>,
+) -> Result<RemoteSnifferCommandResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RemoteSnifferState>();
+        let was_running = is_tunnel_running(&state)?;
+        stop_tunnel(&state)?;
+
+        if let Some(config) = config {
+            free_orphaned_local_forward(config.local_port);
+            stop_remote_sniffer_process(&config);
+        }
+
+        Ok(RemoteSnifferCommandResult {
+            ok: true,
+            message: if was_running {
+                "Stopped remote sniffer SSH session.".into()
+            } else {
+                "Remote sniffer SSH session is not running.".into()
+            },
+        })
+    })
+    .await
+    .map_err(|error| format!("Stop task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn remote_sniffer_status(
+    app: AppHandle,
+) -> Result<RemoteSnifferStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<RemoteSnifferState>();
+        Ok(RemoteSnifferStatus {
+            running: is_tunnel_running(&state)?,
+        })
+    })
+    .await
+    .map_err(|error| format!("Status task failed: {error}"))?
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_node_major, quote_remote_shell_arg};
+    use super::{parse_node_major, quote_remote_shell_arg, remote_directory_assignment_rhs};
 
     #[test]
     fn quotes_single_quotes_for_bash() {
         assert_eq!(
             quote_remote_shell_arg("/tmp/o'sniffer"),
             "'/tmp/o'\\''sniffer'"
+        );
+    }
+
+    #[test]
+    fn expands_home_prefix_for_remote_directory() {
+        assert_eq!(remote_directory_assignment_rhs("~"), "\"$HOME\"");
+        assert_eq!(
+            remote_directory_assignment_rhs("~/ham-radio-sniffer"),
+            "\"$HOME/ham-radio-sniffer\""
+        );
+        assert_eq!(
+            remote_directory_assignment_rhs("/opt/sniffer"),
+            "'/opt/sniffer'"
         );
     }
 

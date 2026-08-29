@@ -12,21 +12,14 @@ import type {
   RemoteSnifferStatus,
 } from '~/utils/sniffer-ssh';
 
-export type {
-  RemoteSnifferCheckResult,
-  RemoteSnifferCommandResult,
-  RemoteSnifferConfig,
-  RemoteSnifferStatus,
-} from '~/utils/sniffer-ssh';
-
 export function snifferSettingsToRemoteConfig(settings: SnifferSettings): RemoteSnifferConfig {
   return {
     sshHost: settings.sshHost.trim(),
     sshPort: settings.sshPort,
     remoteDirectory: settings.remoteDirectory.trim(),
     remoteStartCommand: settings.remoteStartCommand.trim(),
-    localPort: settings.localPort,
-    remotePort: settings.remotePort,
+    localPort: settings.port,
+    remotePort: settings.port,
   };
 }
 
@@ -57,8 +50,16 @@ export async function startRemoteSniffer(settings: SnifferSettings): Promise<Rem
   });
 }
 
-export async function stopRemoteSniffer(): Promise<RemoteSnifferCommandResult> {
-  return invokeRemote<RemoteSnifferCommandResult>('stop_remote_sniffer');
+export async function stopRemoteSniffer(settings?: SnifferSettings): Promise<RemoteSnifferCommandResult> {
+  if (settings) {
+    return invokeRemote<RemoteSnifferCommandResult>('stop_remote_sniffer', {
+      config: snifferSettingsToRemoteConfig(settings),
+    });
+  }
+
+  return invokeRemote<RemoteSnifferCommandResult>('stop_remote_sniffer', {
+    config: null,
+  });
 }
 
 export async function remoteSnifferStatus(): Promise<RemoteSnifferStatus> {
