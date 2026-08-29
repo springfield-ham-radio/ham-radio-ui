@@ -18,6 +18,7 @@ Open and save a radio memory image as JSON from **File → Open Memory…** (`�
 
 - **Radio memory files** are user-chosen JSON documents (File → Open / Save). They hold a hex dump of one radio's EEPROM and are not the app database.
 - **Channel library** data lives in an embedded SQLite database (`ham-radio.db` under the OS app support directory) managed by the Tauri SQL plugin. Export and import the library as CSV from the Channels page. Use the **Channels** header tab to browse saved portable channels (name, band, frequencies, tones). On the **Radio** page, select memory channels and choose **Save to library** to store them for reuse across radios.
+- **Station log** QSO contacts live in the same SQLite database. Use the **Log** header tab to add, edit, search, and delete contacts (callsign, date/time UTC, frequency, mode, RST, and related fields). Import and export the log as ADIF (`.adi`) from that page.
 
 ## Development
 

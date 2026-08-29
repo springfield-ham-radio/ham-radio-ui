@@ -168,6 +168,38 @@ CREATE INDEX idx_radio_models_manufacturer ON radio_models(manufacturer);
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "create_station_log_qsos",
+            sql: r#"
+CREATE TABLE station_log_qsos (
+  id TEXT PRIMARY KEY NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  their_callsign TEXT NOT NULL,
+  frequency_hz INTEGER,
+  band TEXT,
+  mode TEXT NOT NULL,
+  submode TEXT,
+  rst_sent TEXT,
+  rst_received TEXT,
+  their_name TEXT,
+  their_qth TEXT,
+  their_gridsquare TEXT,
+  tx_power_watts REAL,
+  comment TEXT,
+  operator_callsign TEXT,
+  station_callsign TEXT,
+  my_gridsquare TEXT,
+  adif_extra TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_station_log_qsos_started_at ON station_log_qsos(started_at DESC);
+CREATE INDEX idx_station_log_qsos_callsign ON station_log_qsos(their_callsign);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
