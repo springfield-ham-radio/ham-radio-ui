@@ -1,3 +1,9 @@
+## [0.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.5.0...v0.6.0) (2026-08-29)
+
+### Features
+
+* rename the desktop app to HamBench ([1da76ef](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1da76efc0ed1814a69ca67e4ea3f59131c4ca965))
+
 ## [0.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.4.0...v0.5.0) (2026-08-29)
 
 ### Features
