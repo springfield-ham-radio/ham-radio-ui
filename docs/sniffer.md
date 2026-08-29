@@ -1,6 +1,6 @@
 # Sniffer
 
-Ham Radio talks to a separate headless sniffer process over HTTP. The default workflow is **URL only**: install and run the sniffer yourself, then tell the app where it is. Optional SSH assist is available in the desktop app when you want help setting up a remote host (for example a Raspberry Pi) without a separate git checkout.
+HamBench talks to a separate headless sniffer process over HTTP. The default workflow is **URL only**: install and run the sniffer yourself, then tell the app where it is. Optional SSH assist is available in the desktop app when you want help setting up a remote host (for example a Raspberry Pi) without a separate git checkout.
 
 ## URL only (default)
 

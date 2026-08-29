@@ -33,7 +33,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
     {
         let app_menu = Submenu::with_items(
             app,
-            "Ham Radio",
+            "HamBench",
             true,
             &[
                 &PredefinedMenuItem::about(app, None, None)?,

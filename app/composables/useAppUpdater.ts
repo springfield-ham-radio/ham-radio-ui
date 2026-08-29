@@ -1,5 +1,6 @@
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import type { Update } from '@tauri-apps/plugin-updater';
+import { APP_NAME } from '~/utils/app-name';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   DEFAULT_UPDATE_CHECK_INTERVAL_MS,
@@ -67,7 +68,7 @@ export function useAppUpdater() {
   function showReadyToast(version: string): void {
     toast.add({
       id: UPDATE_TOAST_ID,
-      title: `Ham Radio ${version} is ready`,
+      title: `${APP_NAME} ${version} is ready`,
       description: 'Restart to finish installing the update. Do not restart in the middle of a radio transfer.',
       icon: 'i-lucide-download',
       color: 'primary',
@@ -148,7 +149,7 @@ export function useAppUpdater() {
         if (reason === 'manual') {
           toast.add({
             title: "You're up to date",
-            description: currentVersion.value ? `Ham Radio ${currentVersion.value} is the latest version.` : 'No update is available.',
+            description: currentVersion.value ? `${APP_NAME} ${currentVersion.value} is the latest version.` : 'No update is available.',
             icon: 'i-lucide-check',
             color: 'success',
           });

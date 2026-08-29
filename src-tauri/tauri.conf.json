@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ham Radio",
+  "productName": "HamBench",
   "version": "../package.json",
   "identifier": "com.springfield.ham-radio",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Ham Radio",
+        "title": "HamBench",
         "width": 1200,
         "height": 800,
         "resizable": true,

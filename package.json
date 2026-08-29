@@ -1,10 +1,10 @@
 {
   "name": "@springfield/ham-radio-ui",
-  "productName": "Ham Radio",
+  "productName": "HamBench",
   "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Ham radio management application",
+  "description": "HamBench amateur radio management application",
   "author": {
     "name": "Bryan Hunt",
     "email": "bhunt@nvidia.com"

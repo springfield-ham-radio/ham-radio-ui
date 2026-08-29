@@ -18,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import { APP_NAME } from '~/utils/app-name';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const { initialize, activeRadioId, memoryFilePath, modulesInstallOpen, modulesInstallRequired, refreshCatalogState } =
@@ -26,7 +27,7 @@ const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
 
 useHead({
-  titleTemplate: (title) => (title && title !== 'Ham Radio' ? `${title} · Ham Radio` : 'Ham Radio'),
+  titleTemplate: (title) => (title && title !== APP_NAME ? `${title} · ${APP_NAME}` : APP_NAME),
   title: computed(() => {
     const radioName = activeRadioId.value?.name;
     const fileName = memoryFilePath.value ? memoryFileDisplayName(memoryFilePath.value) : undefined;
@@ -35,7 +36,7 @@ useHead({
       return `${fileName} · ${radioName}`;
     }
 
-    return radioName ?? 'Ham Radio';
+    return radioName ?? APP_NAME;
   }),
 });
 

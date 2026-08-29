@@ -1,4 +1,4 @@
-# Releasing Ham Radio UI
+# Releasing HamBench
 
 This app ships as native installers attached to [GitHub Releases](https://github.com/springfield-ham-radio/ham-radio-ui/releases). Versions are set by **semantic-release** from conventional commits. Do not edit version numbers by hand.
 

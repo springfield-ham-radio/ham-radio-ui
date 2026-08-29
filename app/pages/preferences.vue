@@ -545,6 +545,7 @@ import {
   remoteSnifferInstallBadgeColor,
   remoteSnifferInstallLabel,
 } from '~/utils/sniffer-ssh';
+import { APP_NAME } from '~/utils/app-name';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 useHead({
@@ -1028,7 +1029,7 @@ function selectSection(section: PreferenceSection): void {
 
 const versionLabel = computed(() => {
   if (currentVersion.value) {
-    return `Ham Radio ${currentVersion.value}`;
+    return `${APP_NAME} ${currentVersion.value}`;
   }
 
   return 'Version is shown in packaged desktop builds.';

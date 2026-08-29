@@ -1,4 +1,4 @@
-# Ham Radio
+# HamBench
 
 Desktop app for reading and managing ham radio memory.
 

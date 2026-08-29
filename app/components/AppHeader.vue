@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
+import { APP_NAME } from '~/utils/app-name';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
@@ -92,7 +93,7 @@ defineShortcuts({
         aria-label="Back"
       />
       <h1 class="truncate px-1 text-sm font-semibold text-highlighted">
-        {{ isPreferences ? 'Preferences' : 'Ham Radio' }}
+        {{ isPreferences ? 'Preferences' : APP_NAME }}
       </h1>
       <UTooltip
         v-if="isRadioPage && activeRadioId"
