@@ -24,18 +24,13 @@
       </button>
     </nav>
 
-    <div class="min-h-0 flex-1 overflow-y-auto bg-muted">
-      <div class="mx-auto flex w-full max-w-xl flex-col px-6 py-10">
-        <header class="mb-8 flex flex-col items-center text-center">
-          <span
-            class="mb-3 flex size-16 items-center justify-center rounded-2xl text-white shadow-sm"
-            :class="activeSection.tileClass"
-          >
-            <UIcon :name="activeSection.icon" class="size-8" />
-          </span>
-          <h2 class="text-xl font-semibold text-highlighted">{{ activeSection.label }}</h2>
-          <p class="mt-1 max-w-md text-sm text-muted">{{ activeSection.description }}</p>
-        </header>
+    <div class="flex min-h-0 flex-1 flex-col bg-muted">
+      <header class="flex h-11 shrink-0 items-center justify-center px-4">
+        <h2 class="text-sm font-semibold text-highlighted">{{ activeSection.label }}</h2>
+      </header>
+
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="mx-auto flex w-full max-w-xl flex-col px-6 pt-2 pb-10">
 
         <section v-if="currentSection === 'appearance'">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
@@ -450,56 +445,44 @@
                   >
                     {{ remoteInstallLabel }}
                   </UBadge>
-                  <UBadge
-                    v-if="remoteTunnelKnown"
-                    :color="remoteTunnelRunning ? 'success' : 'neutral'"
-                    variant="subtle"
-                    size="sm"
-                  >
-                    {{ remoteTunnelRunning ? 'Tunnel running' : 'Tunnel stopped' }}
-                  </UBadge>
                 </div>
                 <p class="mt-2 text-xs text-muted">
                   {{ remoteStatusSummary }}
                 </p>
               </div>
 
-              <div class="flex flex-wrap justify-end gap-2">
-                <UButton
-                  label="Check host"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-shield-check"
-                  :loading="snifferSshBusy === 'check'"
-                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
-                  @click="onCheckRemoteSniffer"
-                />
-                <UButton
-                  label="Install / update"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-upload"
-                  :loading="snifferSshBusy === 'install'"
-                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
-                  @click="onInstallRemoteSniffer"
-                />
-                <UButton
-                  label="Start remote"
-                  color="primary"
-                  icon="i-lucide-play"
-                  :loading="snifferSshBusy === 'start'"
-                  :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined || !remoteSnifferReadyToStart"
-                  @click="onStartRemoteSniffer"
-                />
-                <UButton
-                  label="Stop remote"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-square"
-                  :loading="snifferSshBusy === 'stop'"
-                  :disabled="!isDesktopSnifferSsh || snifferSshBusy !== undefined"
-                  @click="onStopRemoteSniffer"
-                />
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <UButtonGroup size="sm">
+                  <UButton
+                    label="Check host"
+                    color="neutral"
+                    variant="outline"
+                    icon="i-lucide-shield-check"
+                    :loading="snifferSshBusy === 'check'"
+                    :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
+                    @click="onCheckRemoteSniffer"
+                  />
+                  <UButton
+                    label="Install"
+                    color="neutral"
+                    variant="outline"
+                    icon="i-lucide-upload"
+                    :loading="snifferSshBusy === 'install'"
+                    :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
+                    @click="onInstallRemoteSniffer"
+                  />
+                </UButtonGroup>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-highlighted">Remote</span>
+                  <USwitch
+                    size="sm"
+                    aria-label="Remote sniffer"
+                    :model-value="remoteTunnelRunning"
+                    :disabled="remoteSnifferToggleDisabled"
+                    :loading="snifferSshBusy === 'start' || snifferSshBusy === 'stop'"
+                    @update:model-value="onToggleRemoteSniffer"
+                  />
+                </div>
               </div>
 
               <UAlert
@@ -516,6 +499,7 @@
             </div>
           </div>
         </section>
+        </div>
       </div>
     </div>
   </div>
@@ -573,35 +557,30 @@ const sections = [
   {
     id: 'appearance' as const,
     label: 'Appearance',
-    description: 'Choose how Ham Radio looks on this computer.',
     icon: 'i-lucide-palette',
     tileClass: 'bg-indigo-500',
   },
   {
     id: 'updates' as const,
     label: 'Updates',
-    description: 'Keep Ham Radio current with signed releases from GitHub.',
     icon: 'i-lucide-refresh-cw',
     tileClass: 'bg-sky-500',
   },
   {
     id: 'licenses' as const,
     label: 'Licenses',
-    description: 'Look up amateur and GMRS licenses used for transmit privilege checks.',
     icon: 'i-lucide-id-card',
     tileClass: 'bg-amber-500',
   },
   {
     id: 'radios' as const,
     label: 'Radios',
-    description: 'Install official radio modules or add unverified modules from a local file.',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
   },
   {
     id: 'sniffer' as const,
     label: 'Sniffer',
-    description: 'Point Ham Radio at a sniffer URL, or optionally install and start one over SSH.',
     icon: 'i-lucide-audio-lines',
     tileClass: 'bg-violet-500',
   },
@@ -641,7 +620,6 @@ const snifferSshError = ref(false);
 const snifferSshCheckMessages = ref<string[]>([]);
 const remoteHostCheck = ref<RemoteSnifferCheckResult>();
 const remoteTunnelRunning = ref(false);
-const remoteTunnelKnown = ref(false);
 
 const SNIFFER_AUTOSAVE_MS = 300;
 let snifferAutosaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -689,6 +667,18 @@ const remoteSnifferReadyToStart = computed(() => {
   return Boolean(remoteHostCheck.value?.sourcesPresent && remoteHostCheck.value?.buildPresent);
 });
 
+const remoteSnifferToggleDisabled = computed(() => {
+  if (!isDesktopSnifferSsh.value || snifferSshBusy.value !== undefined) {
+    return true;
+  }
+
+  if (remoteTunnelRunning.value) {
+    return false;
+  }
+
+  return !canRunSnifferSshActions.value || !remoteSnifferReadyToStart.value;
+});
+
 const remoteStatusSummary = computed(() => {
   if (!canRunSnifferSshActions.value) {
     return 'Enter an SSH host, then use Check host to see whether the sniffer is installed.';
@@ -702,6 +692,14 @@ const remoteStatusSummary = computed(() => {
     return 'Checking Node, Yarn, and whether the sniffer is installed…';
   }
 
+  if (snifferSshBusy.value === 'start') {
+    return 'Starting the remote sniffer and opening the SSH tunnel…';
+  }
+
+  if (snifferSshBusy.value === 'stop') {
+    return 'Stopping the remote sniffer…';
+  }
+
   if (!remoteHostCheck.value) {
     return 'Click Check host to verify prerequisites and install state.';
   }
@@ -711,7 +709,7 @@ const remoteStatusSummary = computed(() => {
   }
 
   if (remoteHostCheck.value.sourcesPresent && remoteHostCheck.value.buildPresent) {
-    return 'Remote sniffer is installed and built. You can start it when you are ready.';
+    return 'Remote sniffer is installed and built. Turn on Remote when you are ready.';
   }
 
   if (remoteHostCheck.value.sourcesPresent) {
@@ -825,7 +823,6 @@ function applyHostCheck(result: RemoteSnifferCheckResult): void {
 
 async function refreshRemoteTunnelStatus(): Promise<void> {
   if (!isDesktopSnifferSsh.value) {
-    remoteTunnelKnown.value = false;
     remoteTunnelRunning.value = false;
     return;
   }
@@ -833,9 +830,7 @@ async function refreshRemoteTunnelStatus(): Promise<void> {
   try {
     const status = await remoteSnifferStatus();
     remoteTunnelRunning.value = status.running;
-    remoteTunnelKnown.value = true;
   } catch {
-    remoteTunnelKnown.value = false;
     remoteTunnelRunning.value = false;
   }
 }
@@ -938,6 +933,23 @@ async function onStopRemoteSniffer(): Promise<void> {
   } finally {
     snifferSshBusy.value = undefined;
   }
+}
+
+async function onToggleRemoteSniffer(enabled: boolean): Promise<void> {
+  if (enabled === remoteTunnelRunning.value) {
+    return;
+  }
+
+  if (enabled) {
+    if (!remoteSnifferReadyToStart.value) {
+      return;
+    }
+
+    await onStartRemoteSniffer();
+    return;
+  }
+
+  await onStopRemoteSniffer();
 }
 
 const removeConfirmMessage = computed(() => {
@@ -1063,6 +1075,10 @@ watch(
   (section) => {
     if (section === 'radios') {
       void refreshInstalledRadios();
+    }
+
+    if (section === 'sniffer') {
+      void refreshRemoteTunnelStatus();
     }
   },
   { immediate: true },

@@ -16,13 +16,12 @@ Live traffic arrives as server-sent events. The sniffer itself has no web UI.
 Leave **SSH host** blank to keep SSH disabled. When a host is set (desktop app only):
 
 1. **Check host** verifies Node.js (major version ≥ 24, matching the sniffer `.nvmrc`), Yarn or Corepack, write access to the remote directory, and whether sources/build already exist. Preferences shows **Host ready / Not ready** and **Installed / Sources only / Not installed** badges. The app does **not** install Node for you.
-2. **Install / update** uploads the **bundled sniffer sources** shipped with the app (not a git clone), then runs `yarn install` and `yarn build` on the remote so native `serialport` bindings match that machine’s architecture.
-3. **Start remote** runs the configured remote start command over SSH with `PORT`/`HOST` set to the configured port (production Nitro defaults to port 3000 otherwise), opens a local port forward on the same port, and waits until `/api/health` responds. The Sniffer URL is updated to `http://127.0.0.1:<port>`.
-4. **Stop remote** ends the SSH session (and the remote process started with it).
+2. **Install** uploads the **bundled sniffer sources** shipped with the app (not a git clone), then runs `yarn install` and `yarn build` on the remote so native `serialport` bindings match that machine’s architecture. Use it again to update an existing install.
+3. The **Remote** switch starts the configured remote start command over SSH with `PORT`/`HOST` set to the configured port (production Nitro defaults to port 3000 otherwise), opens a local port forward on the same port, and waits until `/api/health` responds. The Sniffer URL is updated to `http://127.0.0.1:<port>`. Turning it off ends the SSH session (and the remote process started with it).
 
 SSH uses key or agent authentication only (`BatchMode=yes`). Password prompts are not supported.
 
-Start/stop remote lives only under **Preferences → Sniffer**. The Sniffer tab Start/Stop bridge controls open the serial ports once the API is reachable.
+The Remote switch lives only under **Preferences → Sniffer**. The Sniffer tab Start/Stop bridge controls open the serial ports once the API is reachable.
 
 ## Capture files
 
