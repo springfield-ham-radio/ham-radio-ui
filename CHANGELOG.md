@@ -1,3 +1,9 @@
+## [0.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.3.1...v0.4.0) (2026-08-29)
+
+### Features
+
+* add sniffer tab with optional remote SSH assist ([310c80a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/310c80a82357645b1f28a4b58abc7115f5bd4217))
+
 ## [0.3.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.3.0...v0.3.1) (2026-08-28)
 
 ### Bug Fixes
