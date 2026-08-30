@@ -44,13 +44,15 @@ Packaged builds use the [Tauri updater](https://v2.tauri.app/plugin/updater/). T
 
 `tauri-action` writes `latest.json` when `bundle.createUpdaterArtifacts` is true and the signing key is present. Artifacts are signed with a private key that must never be committed.
 
+The Release Tauri job runs [`scripts/prepare-updater-signing.ts`](../scripts/prepare-updater-signing.ts) first. That script accepts the private key as the raw minisign file, the same file with literal `\n` escapes, or base64 of the whole file. If the secret is missing or not a minisign key, the job disables `createUpdaterArtifacts` and still uploads installers. In-app updates stay off until the secret is a valid matching key.
+
 ### GitHub Actions secrets
 
-Add these repository secrets before the next installer build. Without them, `createUpdaterArtifacts` fails the Release Tauri job.
+Add these as **repository** secrets (Settings → Secrets and variables → Actions), not environment secrets. Environment secrets are not visible to this workflow.
 
 | Secret | Value |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Contents of the updater private key file |
+| `TAURI_SIGNING_PRIVATE_KEY` | Full contents of the updater private key file, including the `untrusted comment:` line |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password, or empty if the key has none |
 
 Generate a key pair with `yarn tauri signer generate -w ~/.tauri/ham-radio-ui.key`. Put only the public key in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `plugins.updater.pubkey`. Keep the private key in a password manager and in the GitHub secret.

@@ -64,11 +64,18 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Prepare updater signing
+        id: updater_signing
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: yarn tsx scripts/prepare-updater-signing.ts
+
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key_path }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.updater_signing.outputs.private_key_password }}
         with:
           tagName: ${{ inputs.tag || github.event.release.tag_name }}
           releaseName: HamBench ${{ inputs.tag || github.event.release.tag_name }}
