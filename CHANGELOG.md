@@ -1,3 +1,9 @@
+## [0.7.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.7.0...v0.7.1) (2026-08-30)
+
+### Bug Fixes
+
+* publish installers when the updater signing key is missing ([#2](https://github.com/springfield-ham-radio/ham-radio-ui/issues/2)) ([a616590](https://github.com/springfield-ham-radio/ham-radio-ui/commit/a6165903eaa96a55d01aa9151cb5ccce56c4f596))
+
 ## [0.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.6.0...v0.7.0) (2026-08-29)
 
 ### Features
