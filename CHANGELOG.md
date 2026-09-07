@@ -1,3 +1,9 @@
+## [0.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.7.1...v0.8.0) (2026-09-07)
+
+### Features
+
+* fold sniffer into Radio and simplify host process controls ([23528a1](https://github.com/springfield-ham-radio/ham-radio-ui/commit/23528a18f2020085ead9b93e9185fb126935eef7))
+
 ## [0.7.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.7.0...v0.7.1) (2026-08-30)
 
 ### Bug Fixes
