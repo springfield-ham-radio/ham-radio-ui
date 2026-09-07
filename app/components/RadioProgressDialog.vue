@@ -98,7 +98,7 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
         :description="progressError"
       />
       <p v-if="progressError && serialLog" class="mt-3 text-sm text-muted">
-        {{ serialLog.entryCount }} serial frame{{ serialLog.entryCount === 1 ? '' : 's' }} captured. Save the log to debug the protocol.
+        {{ serialLog.entryCount }} serial frame{{ serialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
       <div v-else class="flex flex-col gap-3">
         <UProgress

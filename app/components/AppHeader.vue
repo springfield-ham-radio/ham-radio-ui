@@ -20,7 +20,6 @@ const sectionItems = computed<TabsItem[]>(() => [
   { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
   { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
-  { label: 'Sniffer', icon: 'i-lucide-audio-lines', value: 'sniffer' },
 ]);
 
 const activeSection = computed({
@@ -33,10 +32,6 @@ const activeSection = computed({
       return 'log';
     }
 
-    if (route.path.startsWith('/sniffer')) {
-      return 'sniffer';
-    }
-
     return 'radio';
   },
   set: (value: string | number) => {
@@ -47,11 +42,6 @@ const activeSection = computed({
 
     if (value === 'log') {
       void router.push('/log');
-      return;
-    }
-
-    if (value === 'sniffer') {
-      void router.push('/sniffer');
       return;
     }
 

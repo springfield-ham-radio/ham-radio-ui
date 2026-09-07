@@ -58,6 +58,8 @@ interface CapturedSerialLog {
   fileName: string;
   contents: string;
   entryCount: number;
+  operation: SerialLogOperation;
+  log: unknown;
 }
 
 interface SerialLoggedDriver {
@@ -301,14 +303,17 @@ export function useRadio() {
         description: `${radioId.name} (${importedBytes} bytes)`,
         color: 'success',
         icon: 'i-lucide-download',
-        actions: serialLogSaveActions(),
       });
       return;
     }
 
     if (outcome === 'canceled') {
       progressOpen.value = false;
-      offerSerialLogSave('Import canceled');
+      toast.add({
+        title: 'Import canceled',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
     }
   }
 
@@ -389,14 +394,17 @@ export function useRadio() {
         description: `${radioId.name} (${writtenBytes} bytes)`,
         color: 'success',
         icon: 'i-lucide-upload',
-        actions: serialLogSaveActions(),
       });
       return;
     }
 
     if (outcome === 'canceled') {
       progressOpen.value = false;
-      offerSerialLogSave('Write canceled');
+      toast.add({
+        title: 'Write canceled',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
     }
   }
 
@@ -484,38 +492,9 @@ export function useRadio() {
         log,
       }),
       entryCount,
+      operation,
+      log,
     };
-  }
-
-  function serialLogSaveActions(): Array<{ label: string; color: 'neutral'; variant: 'outline'; onClick: () => void }> {
-    if (!serialLog.value) {
-      return [];
-    }
-
-    return [
-      {
-        label: 'Save serial log',
-        color: 'neutral',
-        variant: 'outline',
-        onClick: () => {
-          void saveSerialLog();
-        },
-      },
-    ];
-  }
-
-  function offerSerialLogSave(title: string): void {
-    if (!serialLog.value) {
-      return;
-    }
-
-    toast.add({
-      title,
-      description: `${serialLog.value.entryCount} serial frames captured.`,
-      color: 'neutral',
-      icon: 'i-lucide-file-text',
-      actions: serialLogSaveActions(),
-    });
   }
 
   async function saveSerialLog(): Promise<void> {

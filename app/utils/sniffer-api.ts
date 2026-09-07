@@ -27,6 +27,11 @@ export interface SnifferStatus {
   logFile?: string;
   startedAt?: string;
   packetCount: number;
+  bytesComputerToRadio?: number;
+  bytesRadioToComputer?: number;
+  writeErrors?: number;
+  computerPortOpen?: boolean;
+  radioPortOpen?: boolean;
 }
 
 export type SnifferEvent =
@@ -37,6 +42,7 @@ export type SnifferEvent =
 export interface SnifferHealth {
   ok: boolean;
   service: string;
+  version?: string;
 }
 
 export interface SnifferPortsResponse {
@@ -71,4 +77,31 @@ export function snifferFetchErrorMessage(error: unknown): string {
 
 export function snifferPacketToHex(data: number[]): string {
   return data.map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
+
+/** Browser EventSource.CONNECTING — auto-reconnect in progress. */
+export const EVENT_SOURCE_CONNECTING = 0;
+
+/**
+ * Decide what to do when a sniffer SSE stream errors.
+ *
+ * EventSource fires `error` when we close it (stale instance) and while it is
+ * reconnecting. Those must not mark the sniffer unreachable; health polling
+ * owns that. Only drop the handle when this instance is current and no longer
+ * connecting, so the next health tick can open a new stream.
+ */
+export function snifferEventSourceErrorAction(options: {
+  current: object | undefined;
+  source: object;
+  readyState: number;
+}): 'ignore' | 'drop' {
+  if (options.current !== options.source) {
+    return 'ignore';
+  }
+
+  if (options.readyState === EVENT_SOURCE_CONNECTING) {
+    return 'ignore';
+  }
+
+  return 'drop';
 }

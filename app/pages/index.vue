@@ -9,11 +9,14 @@ import {
 } from '@springfield/ham-radio-utils';
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
+import { snifferPacketToHex } from '~/utils/sniffer-api';
+import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 const UCheckbox = resolveComponent('UCheckbox');
 
-const { channels, memory, program, settingsMemoryMap, activeRadioId, updateSettings, updateChannel } = useRadio();
+const { channels, memory, program, settingsMemoryMap, activeRadioId, serialLog, updateSettings, updateChannel, saveSerialLog } =
+  useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 const { saveChannels } = useSavedChannels();
 
@@ -28,7 +31,11 @@ const items = computed<TabsItem[]>(() => [
   { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
   { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
   { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
+  { label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' },
+  { label: 'Sniffer', icon: 'i-lucide-audio-lines', slot: 'sniffer' as const, value: 'sniffer' },
 ]);
+
+const activeTab = ref('channels');
 
 const channelUiFields = computed<RadioMemoryMapUiField[]>(() => {
   if (!settingsMemoryMap.value) {
@@ -204,14 +211,38 @@ const hexMemory = computed(() => {
     contents: memory.value,
   };
 });
+
+const debugPackets = computed(() => snifferPacketsFromSerialLog(serialLog.value?.log));
+
+const debugSummary = computed(() => {
+  if (!serialLog.value) {
+    return 'Serial traffic from the last import or write appears here.';
+  }
+
+  const label = serialLog.value.operation === 'write' ? 'Wrote to radio' : 'Imported from radio';
+  const frames = serialLog.value.entryCount;
+  return `${label} · ${frames} frame${frames === 1 ? '' : 's'}`;
+});
+
+const savingSerialLog = ref(false);
+
+async function onSaveSerialLog(): Promise<void> {
+  savingSerialLog.value = true;
+
+  try {
+    await saveSerialLog();
+  } finally {
+    savingSerialLog.value = false;
+  }
+}
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-4 pt-1">
     <UTabs
+      v-model="activeTab"
       color="primary"
       variant="link"
-      default-value="channels"
       :items="items"
       class="flex min-h-0 flex-1 flex-col overflow-hidden"
       :unmount-on-hide="false"
@@ -316,6 +347,40 @@ const hexMemory = computed(() => {
           <HexDump v-if="hexMemory" :memory="hexMemory" />
           <p v-else class="text-sm text-muted">No radio data</p>
         </div>
+      </template>
+      <template #debug>
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
+          <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <p class="min-w-0 text-xs text-muted">{{ debugSummary }}</p>
+            <UButton
+              icon="i-lucide-file-text"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              label="Save serial log"
+              :disabled="!serialLog || savingSerialLog"
+              :loading="savingSerialLog"
+              @click="onSaveSerialLog"
+            />
+          </div>
+          <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
+              <p v-if="debugPackets.length === 0" class="text-muted">
+                Import from or write to a radio to capture serial traffic.
+              </p>
+              <div v-for="packet in debugPackets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
+                <span class="text-muted">{{ packet.timestamp }}</span>
+                <span :class="packet.direction === 'COMPUTER->RADIO' ? 'text-warning' : 'text-success'">
+                  {{ packet.direction }}
+                </span>
+                <span class="text-highlighted">{{ snifferPacketToHex(packet.data) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #sniffer>
+        <RadioSniffer v-if="activeTab === 'sniffer'" />
       </template>
     </UTabs>
     <RadioChannelEditor

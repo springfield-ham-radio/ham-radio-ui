@@ -203,7 +203,6 @@ CREATE INDEX idx_station_log_qsos_callsign ON station_log_qsos(their_callsign);
     ];
 
     tauri::Builder::default()
-        .manage(sniffer_ssh::RemoteSnifferState::default())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

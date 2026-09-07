@@ -70,12 +70,26 @@ export class TauriNodeSerialPort extends EventEmitter {
   isOpen = false;
 
   private readonly tauriPort: TauriSerialPort;
+  private readonly rts: boolean;
+  private readonly dtr: boolean;
   private unlisten: (() => void) | undefined;
   private pipedDestination: PipedDestination | undefined;
   private pipedHandler: ((chunk: Buffer) => void) | undefined;
 
-  constructor(options: { path: string; baudRate: number; dataBits?: number; stopBits?: number; parity?: string }) {
+  constructor(options: {
+    path: string;
+    baudRate: number;
+    dataBits?: number;
+    stopBits?: number;
+    parity?: string;
+    rtscts?: boolean;
+    rts?: boolean;
+    dtr?: boolean;
+  }) {
     super();
+
+    this.rts = options.rts ?? true;
+    this.dtr = options.dtr ?? true;
 
     const serialOptions: SerialportOptions = {
       path: options.path,
@@ -83,7 +97,7 @@ export class TauriNodeSerialPort extends EventEmitter {
       dataBits: toDataBits(options.dataBits),
       stopBits: toStopBits(options.stopBits),
       parity: toParity(options.parity),
-      flowControl: FlowControl.None,
+      flowControl: options.rtscts ? FlowControl.Hardware : FlowControl.None,
       timeout: SERIAL_LISTENER_FLUSH_MS,
     };
 
@@ -146,8 +160,8 @@ export class TauriNodeSerialPort extends EventEmitter {
   private async openPort(): Promise<void> {
     try {
       await this.tauriPort.open();
-      await this.tauriPort.writeDataTerminalReady(true);
-      await this.tauriPort.writeRequestToSend(true);
+      await this.tauriPort.writeDataTerminalReady(this.dtr);
+      await this.tauriPort.writeRequestToSend(this.rts);
       await this.tauriPort.startListening();
       this.unlisten = await this.tauriPort.listen((incoming: unknown) => {
         this.emit('data', toBuffer(incoming));
