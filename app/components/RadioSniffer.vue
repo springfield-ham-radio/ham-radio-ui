@@ -132,7 +132,7 @@ onBeforeUnmount(() => {
           </UBadge>
           <span v-if="reachable && status.running" class="text-xs text-muted">{{ status.packetCount }} packets</span>
         </div>
-        <p class="mt-0.5 text-xs text-muted">Debug cable from the computer to the sniffer; programming cable from the sniffer to the radio.</p>
+        <p class="mt-0.5 text-xs text-muted">Bridges the computer and radio serial ports so you can watch clone-protocol traffic from a 3rd party application.</p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
         <UButton
