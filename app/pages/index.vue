@@ -30,6 +30,7 @@ interface DisplayChannelRow extends ChannelRow {
 const items = computed<TabsItem[]>(() => [
   { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
   { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
+  { label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' },
   { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
   { label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' },
   { label: 'Sniffer', icon: 'i-lucide-audio-lines', slot: 'sniffer' as const, value: 'sniffer' },
@@ -341,6 +342,9 @@ async function onSaveSerialLog(): Promise<void> {
           />
           <p v-else class="pt-2 text-sm text-muted">Radio settings will appear here after you open a memory file or import from a radio.</p>
         </div>
+      </template>
+      <template #driver>
+        <RadioDriver />
       </template>
       <template #hex>
         <div class="min-h-0 flex-1 pt-4">
