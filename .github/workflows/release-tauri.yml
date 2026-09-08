@@ -74,7 +74,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key_path }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.updater_signing.outputs.private_key_password }}
         with:
           tagName: ${{ inputs.tag || github.event.release.tag_name }}

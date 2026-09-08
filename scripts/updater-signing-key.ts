@@ -17,6 +17,8 @@ export interface PrepareUpdaterSigningResult {
   tauriConfig: string;
   privateKeyFileContents: string | undefined;
   privateKeyPath: string | undefined;
+  /** Base64 of the minisign secret-key file. `tauri build` decodes this env value. */
+  privateKeyForTauri: string;
   password: string;
   githubOutput: string;
 }
@@ -76,22 +78,27 @@ export function setCreateUpdaterArtifacts(configJson: string, enabled: boolean):
 
 /**
  * Decide whether this CI run can sign updater artifacts. A usable key is
- * written to `keyFilePath` by the caller; an unusable key disables updater
- * artifacts so `tauri build` still uploads installers.
+ * written to `keyFilePath` by the caller; GitHub output `private_key` is the
+ * base64 encoding `tauri build` expects in `TAURI_SIGNING_PRIVATE_KEY`. An
+ * unusable key disables updater artifacts so installers still publish.
  */
 export function prepareUpdaterSigning(input: PrepareUpdaterSigningInput): PrepareUpdaterSigningResult {
   const prepared = normalizeUpdaterSigningKey(input.rawPrivateKey);
 
   if (prepared.usable && prepared.privateKey !== undefined) {
+    const privateKeyForTauri = Buffer.from(prepared.privateKey, 'utf8').toString('base64');
+
     return {
       usable: true,
       reason: prepared.reason,
       tauriConfig: input.tauriConfig,
       privateKeyFileContents: prepared.privateKey,
       privateKeyPath: input.keyFilePath,
+      privateKeyForTauri,
       password: input.rawPassword ?? '',
       githubOutput: formatGitHubOutput({
         usable: 'true',
+        private_key: privateKeyForTauri,
         private_key_path: input.keyFilePath,
         private_key_password: input.rawPassword ?? '',
       }),
@@ -104,9 +111,11 @@ export function prepareUpdaterSigning(input: PrepareUpdaterSigningInput): Prepar
     tauriConfig: setCreateUpdaterArtifacts(input.tauriConfig, false),
     privateKeyFileContents: undefined,
     privateKeyPath: undefined,
+    privateKeyForTauri: '',
     password: '',
     githubOutput: formatGitHubOutput({
       usable: 'false',
+      private_key: '',
       private_key_path: '',
       private_key_password: '',
     }),

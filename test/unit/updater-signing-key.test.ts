@@ -102,10 +102,12 @@ describe('updater signing key', () => {
       expect(result.tauriConfig).to.equal(SAMPLE_TAURI_CONFIG);
       expect(result.privateKeyFileContents).to.equal(SAMPLE_SECRET_KEY);
       expect(result.privateKeyPath).to.equal('/tmp/ham-radio-ui.key');
+      expect(result.privateKeyForTauri).to.equal(Buffer.from(SAMPLE_SECRET_KEY, 'utf8').toString('base64'));
       expect(result.password).to.equal('secret');
       expect(result.githubOutput).to.equal(
         formatGitHubOutput({
           usable: 'true',
+          private_key: result.privateKeyForTauri,
           private_key_path: '/tmp/ham-radio-ui.key',
           private_key_password: 'secret',
         }),
@@ -125,10 +127,12 @@ describe('updater signing key', () => {
       expect(result.tauriConfig).to.include('"createUpdaterArtifacts": false');
       expect(result.privateKeyFileContents).to.equal(undefined);
       expect(result.privateKeyPath).to.equal(undefined);
+      expect(result.privateKeyForTauri).to.equal('');
       expect(result.password).to.equal('');
       expect(result.githubOutput).to.equal(
         formatGitHubOutput({
           usable: 'false',
+          private_key: '',
           private_key_path: '',
           private_key_password: '',
         }),

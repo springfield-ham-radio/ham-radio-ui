@@ -44,7 +44,7 @@ Packaged builds use the [Tauri updater](https://v2.tauri.app/plugin/updater/). T
 
 `tauri-action` writes `latest.json` when `bundle.createUpdaterArtifacts` is true and the signing key is present. Artifacts are signed with a private key that must never be committed.
 
-The Release Tauri job runs [`scripts/prepare-updater-signing.ts`](../scripts/prepare-updater-signing.ts) first. That script accepts the private key as the raw minisign file, the same file with literal `\n` escapes, or base64 of the whole file. If the secret is missing or not a minisign key, the job disables `createUpdaterArtifacts` and still uploads installers. In-app updates stay off until the secret is a valid matching key.
+The Release Tauri job runs [`scripts/prepare-updater-signing.ts`](../scripts/prepare-updater-signing.ts) first. That script accepts the private key as the raw minisign file, the same file with literal `\n` escapes, or base64 of the whole file. It then sets `TAURI_SIGNING_PRIVATE_KEY` to base64 of that file, which is the encoding `tauri build` decodes. Passing the raw minisign text or a file path fails with `Invalid symbol 32, offset 9`. If the secret is missing or not a minisign key, the job disables `createUpdaterArtifacts` and still uploads installers. In-app updates stay off until the secret is a valid matching key.
 
 ### GitHub Actions secrets
 
@@ -52,7 +52,7 @@ Add these as **repository** secrets (Settings → Secrets and variables → Acti
 
 | Secret | Value |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Full contents of the updater private key file, including the `untrusted comment:` line |
+| `TAURI_SIGNING_PRIVATE_KEY` | Full contents of the updater private key file, including the `untrusted comment:` line (raw text or base64 of that file) |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password, or empty if the key has none |
 
 Generate a key pair with `yarn tauri signer generate -w ~/.tauri/ham-radio-ui.key`. Put only the public key in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `plugins.updater.pubkey`. Keep the private key in a password manager and in the GitHub secret.
