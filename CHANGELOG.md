@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.9.0...v0.9.1) (2026-09-08)
+
+### Bug Fixes
+
+* pass the updater signing key as base64 to tauri build ([018aca1](https://github.com/springfield-ham-radio/ham-radio-ui/commit/018aca1b50e67967ff25cfedf79d4ec049701e8d))
+* update [@springfield](https://github.com/springfield) packages to API 17.5.0, utils 4.9.0, and driver 3.3.0 ([6714c2c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6714c2ce46d70d614968f035c0e47603307d33b1))
+
 ## [0.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.8.0...v0.9.0) (2026-09-08)
 
 ### Features
