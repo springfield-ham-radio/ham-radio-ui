@@ -1,7 +1,21 @@
 import { describe, it } from 'node:test';
 import { expect } from 'chai';
-import type { RadioMemoryMap } from '@springfield/ham-radio-api';
-import { describeMemoryMap, filterMemoryConfig, filterMemoryMap, formatCodecJson, groupLayoutBands, layoutStructFields } from '../../app/utils/codec-display.ts';
+import type { RadioMemoryConfig, RadioMemoryMap } from '@springfield/ham-radio-api';
+import {
+  bufferOffsetToRadioAddress,
+  codecHitAtOffset,
+  codecInstanceLabel,
+  codecSelectionOffsets,
+  codecStructInstanceAddress,
+  collectCodecByteHits,
+  describeMemoryMap,
+  filterMemoryConfig,
+  filterMemoryMap,
+  formatCodecJson,
+  formatCodecSettingValue,
+  groupLayoutBands,
+  layoutStructFields,
+} from '../../app/utils/codec-display.ts';
 
 const channelMap: RadioMemoryMap = {
   version: '1.0.0',
@@ -142,6 +156,101 @@ describe('codec-display', () => {
 
       expect(json).to.include('"id": "channels"');
       expect(json).to.include('"channelBindings"');
+    });
+  });
+
+  describe('codecStructInstanceAddress', () => {
+    it('should stride records and apply grouped pad bytes', () => {
+      const described = describeMemoryMap(channelMap);
+      const channels = described.structs[0]!;
+
+      expect(codecStructInstanceAddress(channels, 0)).to.equal(0);
+      expect(codecStructInstanceAddress(channels, 2)).to.equal(32);
+
+      const grouped = {
+        ...channels,
+        groupSize: 2,
+        groupPad: 8,
+        stride: 16,
+      };
+
+      expect(codecStructInstanceAddress(grouped, 0)).to.equal(0);
+      expect(codecStructInstanceAddress(grouped, 1)).to.equal(16);
+      expect(codecStructInstanceAddress(grouped, 2)).to.equal(40);
+    });
+  });
+
+  describe('collectCodecByteHits', () => {
+    const memoryConfig: RadioMemoryConfig = {
+      chunkSize: 64,
+      addressSize: 2,
+      addressEndianness: 'big',
+      segments: {
+        channels: { startAddress: 0, endAddress: 0x1fff },
+      },
+    };
+
+    it('should map hex-dump offsets to channel fields', () => {
+      const described = describeMemoryMap(channelMap);
+      const hits = collectCodecByteHits(described, 0x2000, memoryConfig);
+      const channelTwo = codecHitAtOffset(hits, 32);
+
+      expect(channelTwo).to.include({
+        structId: 'channels',
+        instanceIndex: 2,
+        fieldId: 'rxfreq',
+      });
+
+      const nameByte = codecHitAtOffset(hits, 32 + 13);
+      expect(nameByte?.fieldId).to.equal('name');
+
+      const selected = codecSelectionOffsets(
+        described,
+        { structId: 'channels', instanceIndex: 2, fieldId: 'txfreq' },
+        0x2000,
+        memoryConfig,
+      );
+
+      expect(selected.instance).to.deep.equal([32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]);
+      expect(selected.field).to.deep.equal([36, 37, 38, 39]);
+    });
+
+    it('should map packed settings offsets back to EEPROM addresses', () => {
+      const packedConfig: RadioMemoryConfig = {
+        chunkSize: 64,
+        addressSize: 2,
+        addressEndianness: 'big',
+        segments: {
+          channels: { startAddress: 0, endAddress: 6143 },
+          settings: { startAddress: 7872, endAddress: 8191 },
+        },
+      };
+      const packedSize = 6144 + 320;
+
+      expect(bufferOffsetToRadioAddress(6144, packedConfig, packedSize)).to.equal(7872);
+      expect(bufferOffsetToRadioAddress(0x1ee0, packedConfig, 8192)).to.equal(0x1ee0);
+    });
+  });
+
+  describe('formatCodecSettingValue', () => {
+    it('should format frequencies, tones, and booleans', () => {
+      const freqSlot = { id: 'rxfreq', offset: 0, size: 4, reserved: false, typeLabel: 'lbcd×4', valueKind: 'lbcd' };
+      const toneSlot = { id: 'rxtone', offset: 8, size: 2, reserved: false, typeLabel: 'tone', valueKind: 'tone' };
+      const scanSlot = { id: 'scan', offset: 12, size: 1, reserved: false, typeLabel: '1b', valueKind: 'boolean' };
+
+      expect(formatCodecSettingValue(146_520_000, freqSlot)).to.equal('146.5200 MHz');
+      expect(formatCodecSettingValue({ mode: 'ctcss', value: 885 }, toneSlot)).to.equal('CTCSS 88.5');
+      expect(formatCodecSettingValue({ mode: 'none' }, toneSlot)).to.equal('None');
+      expect(formatCodecSettingValue(true, scanSlot)).to.equal('On');
+    });
+  });
+
+  describe('codecInstanceLabel', () => {
+    it('should call channel-bound structs Channel', () => {
+      const described = describeMemoryMap(channelMap);
+
+      expect(codecInstanceLabel(described.structs[0]!)).to.equal('Channel');
+      expect(codecInstanceLabel(described.structs[2]!)).to.equal('squelch');
     });
   });
 });

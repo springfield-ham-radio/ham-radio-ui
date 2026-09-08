@@ -4,8 +4,9 @@ import type {
   RadioMemoryMapChannelBindings,
   RadioMemoryMapField,
   RadioMemoryMapStruct,
+  RadioSettingValue,
 } from '@springfield/ham-radio-api';
-import { parseSeekAddress } from '@springfield/ham-radio-utils';
+import { parseSeekAddress, radioAddressToBufferOffset } from '@springfield/ham-radio-utils';
 
 export type CodecFieldRole = 'records' | 'names' | 'extras';
 
@@ -36,10 +37,26 @@ export interface CodecStructView {
   seek: number;
   count: number;
   stride?: number;
+  groupSize?: number;
+  groupPad?: number;
   role?: CodecFieldRole;
   span: CodecAddressSpan;
   layout: CodecStructLayout;
   notes: string[];
+}
+
+export interface CodecSelection {
+  structId: string;
+  instanceIndex: number;
+  fieldId?: string;
+}
+
+export interface CodecByteHit {
+  structId: string;
+  instanceIndex: number;
+  fieldId: string;
+  slotIndex: number;
+  reserved: boolean;
 }
 
 export interface CodecMemoryMapView {
@@ -292,6 +309,8 @@ export function describeMemoryMap(memoryMap: RadioMemoryMap): CodecMemoryMapView
         seek: parseSeekAddress(struct.seek),
         count: struct.count ?? 1,
         stride: struct.stride,
+        groupSize: struct.groupSize,
+        groupPad: struct.groupPad,
         role: roles.get(struct.id),
         span: structSpan(struct, layout.recordSize),
         layout,
@@ -391,4 +410,329 @@ export function filterMemoryConfig(
   }
 
   return { ...config, segments };
+}
+
+/**
+ * Radio EEPROM address of one struct instance, including Kenwood-style grouped stride.
+ */
+export function codecStructInstanceAddress(struct: CodecStructView, instanceIndex: number): number {
+  const stride = struct.stride ?? struct.layout.recordSize;
+  const groupSize = struct.groupSize;
+
+  if (!groupSize) {
+    return struct.seek + instanceIndex * stride;
+  }
+
+  const groupPad = struct.groupPad ?? 0;
+  const groupIndex = Math.floor(instanceIndex / groupSize);
+  const indexInGroup = instanceIndex % groupSize;
+
+  return struct.seek + groupIndex * (stride * groupSize + groupPad) + indexInGroup * stride;
+}
+
+/**
+ * Maps a packed or sparse buffer offset back to a radio EEPROM address.
+ */
+export function bufferOffsetToRadioAddress(
+  bufferOffset: number,
+  memoryConfig: RadioMemoryConfig,
+  bufferLength: number,
+): number | undefined {
+  const segments = Object.values(memoryConfig.segments);
+
+  if (segments.length === 0 || bufferOffset < 0 || bufferOffset >= bufferLength) {
+    return undefined;
+  }
+  const maxEndAddress = Math.max(...segments.map((segment) => segment.endAddress));
+
+  if (bufferLength >= maxEndAddress + 1) {
+    return bufferOffset;
+  }
+
+  let offset = 0;
+
+  for (const segment of segments) {
+    const length = segment.endAddress - segment.startAddress + 1;
+
+    if (bufferOffset >= offset && bufferOffset < offset + length) {
+      return segment.startAddress + (bufferOffset - offset);
+    }
+
+    offset += length;
+  }
+
+  return undefined;
+}
+
+function toBufferOffset(
+  radioAddress: number,
+  bufferLength: number,
+  memoryConfig?: RadioMemoryConfig,
+): number | undefined {
+  if (!memoryConfig) {
+    return radioAddress >= 0 && radioAddress < bufferLength ? radioAddress : undefined;
+  }
+
+  try {
+    const offset = radioAddressToBufferOffset(radioAddress, memoryConfig, bufferLength);
+    return offset >= 0 && offset < bufferLength ? offset : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Indexes every mapped buffer byte to the struct instance and field that encode it.
+ */
+export function collectCodecByteHits(
+  view: CodecMemoryMapView,
+  bufferLength: number,
+  memoryConfig?: RadioMemoryConfig,
+): Map<number, CodecByteHit[]> {
+  const hits = new Map<number, CodecByteHit[]>();
+
+  for (const struct of view.structs) {
+    for (let instanceIndex = 0; instanceIndex < struct.count; instanceIndex += 1) {
+      const base = codecStructInstanceAddress(struct, instanceIndex);
+
+      for (const [slotIndex, slot] of struct.layout.slots.entries()) {
+        const size = Math.max(slot.size, 1);
+
+        for (let byteIndex = 0; byteIndex < size; byteIndex += 1) {
+          const bufferOffset = toBufferOffset(base + slot.offset + byteIndex, bufferLength, memoryConfig);
+
+          if (bufferOffset === undefined) {
+            continue;
+          }
+
+          const existing = hits.get(bufferOffset) ?? [];
+          existing.push({
+            structId: struct.id,
+            instanceIndex,
+            fieldId: slot.id,
+            slotIndex,
+            reserved: slot.reserved,
+          });
+          hits.set(bufferOffset, existing);
+        }
+      }
+    }
+  }
+
+  return hits;
+}
+
+/**
+ * Picks the most useful field hit at a buffer offset (non-reserved when possible).
+ */
+export function codecHitAtOffset(hits: Map<number, CodecByteHit[]>, offset: number): CodecByteHit | undefined {
+  const atOffset = hits.get(offset);
+
+  if (!atOffset || atOffset.length === 0) {
+    return undefined;
+  }
+
+  return atOffset.find((hit) => !hit.reserved) ?? atOffset[0];
+}
+
+/**
+ * Buffer offsets that belong to the selected instance and field.
+ */
+export function codecSelectionOffsets(
+  view: CodecMemoryMapView,
+  selection: CodecSelection,
+  bufferLength: number,
+  memoryConfig?: RadioMemoryConfig,
+): { instance: number[]; field: number[] } {
+  const struct = view.structs.find((entry) => entry.id === selection.structId);
+  const instance: number[] = [];
+  const field: number[] = [];
+
+  if (!struct) {
+    return { instance, field };
+  }
+
+  const base = codecStructInstanceAddress(struct, selection.instanceIndex);
+  const recordSize = Math.max(struct.layout.recordSize, 1);
+
+  for (let byteIndex = 0; byteIndex < recordSize; byteIndex += 1) {
+    const offset = toBufferOffset(base + byteIndex, bufferLength, memoryConfig);
+
+    if (offset !== undefined) {
+      instance.push(offset);
+    }
+  }
+
+  const slot = selection.fieldId
+    ? struct.layout.slots.find((entry) => entry.id === selection.fieldId)
+    : undefined;
+
+  if (slot) {
+    const size = Math.max(slot.size, 1);
+
+    for (let byteIndex = 0; byteIndex < size; byteIndex += 1) {
+      const offset = toBufferOffset(base + slot.offset + byteIndex, bufferLength, memoryConfig);
+
+      if (offset !== undefined) {
+        field.push(offset);
+      }
+    }
+  }
+
+  return { instance, field };
+}
+
+export const CODEC_FIELD_TONES = [
+  'bg-primary/15 text-primary ring-primary/25',
+  'bg-info/15 text-info ring-info/25',
+  'bg-warning/15 text-warning ring-warning/25',
+  'bg-success/15 text-success ring-success/25',
+] as const;
+
+export const CODEC_BYTE_TONES = [
+  'bg-primary/20 text-primary',
+  'bg-info/20 text-info',
+  'bg-warning/20 text-warning',
+  'bg-success/20 text-success',
+] as const;
+
+export const CODEC_BYTE_FIELD_TONES = [
+  'bg-primary/40 text-primary',
+  'bg-info/40 text-info',
+  'bg-warning/40 text-warning',
+  'bg-success/40 text-success',
+] as const;
+
+/**
+ * Tailwind classes for a layout slot on the codec map.
+ */
+export function codecSlotTone(slot: CodecFieldSlot, index: number): string {
+  if (slot.reserved) {
+    return 'bg-elevated text-muted ring-default';
+  }
+
+  return CODEC_FIELD_TONES[index % CODEC_FIELD_TONES.length] ?? CODEC_FIELD_TONES[0];
+}
+
+/**
+ * Formats a decoded memory-map value for the hex-dump inspector.
+ */
+export function formatCodecSettingValue(value: RadioSettingValue | undefined, slot: CodecFieldSlot): string {
+  if (value === undefined || value === null) {
+    return '—';
+  }
+
+  if (slot.valueKind === 'lbcd' || slot.valueKind === 'bbcd' || slot.valueKind === 'digits') {
+    if (typeof value === 'number' && value >= 1_000_000) {
+      return `${(value / 1_000_000).toFixed(4)} MHz`;
+    }
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'mode' in value) {
+    const tone = value as { mode?: string; value?: number; code?: number; polarity?: string };
+
+    if (tone.mode === 'none') {
+      return 'None';
+    }
+
+    if (tone.mode === 'ctcss' && typeof tone.value === 'number') {
+      return `CTCSS ${(tone.value / 10).toFixed(1)}`;
+    }
+
+    if (tone.mode === 'dcs' && typeof tone.code === 'number') {
+      return `DCS ${String(tone.code).padStart(3, '0')}${tone.polarity === 'R' ? 'R' : 'N'}`;
+    }
+  }
+
+  if (typeof value === 'boolean') {
+    if (slot.id === 'wide') {
+      return value ? 'Wide' : 'Narrow';
+    }
+
+    return value ? 'On' : 'Off';
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value);
+  }
+
+  return '—';
+}
+
+/**
+ * Hex bytes for one field in the memory image.
+ */
+export function formatCodecFieldHex(
+  contents: Uint8Array,
+  struct: CodecStructView,
+  instanceIndex: number,
+  slot: CodecFieldSlot,
+  memoryConfig?: RadioMemoryConfig,
+): string {
+  const base = codecStructInstanceAddress(struct, instanceIndex);
+  const size = Math.max(slot.size, 1);
+  const bytes: string[] = [];
+
+  for (let byteIndex = 0; byteIndex < size; byteIndex += 1) {
+    const offset = toBufferOffset(base + slot.offset + byteIndex, contents.length, memoryConfig);
+
+    if (offset === undefined) {
+      bytes.push('??');
+      continue;
+    }
+
+    bytes.push((contents[offset] ?? 0).toString(16).padStart(2, '0').toUpperCase());
+  }
+
+  return bytes.join(' ');
+}
+
+/**
+ * Decoded record for one struct instance, or null when the slot is empty.
+ */
+export function codecDecodedRecord(
+  decoded: Record<string, RadioSettingValue> | undefined,
+  struct: CodecStructView,
+  instanceIndex: number,
+): Record<string, RadioSettingValue> | null | undefined {
+  if (!decoded) {
+    return undefined;
+  }
+
+  const value = decoded[struct.id];
+
+  if (struct.count > 1) {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+
+    const item = value[instanceIndex];
+
+    if (item === null) {
+      return null;
+    }
+
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      return item as Record<string, RadioSettingValue>;
+    }
+
+    return undefined;
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, RadioSettingValue>;
+  }
+
+  return undefined;
+}
+
+/**
+ * Label for prev/next instance navigation on the hex-dump map.
+ */
+export function codecInstanceLabel(struct: CodecStructView): string {
+  if (struct.role === 'records' || struct.role === 'names' || struct.role === 'extras') {
+    return 'Channel';
+  }
+
+  return struct.id;
 }

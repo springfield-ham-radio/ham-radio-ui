@@ -104,8 +104,9 @@ async function copyJson(): Promise<void> {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-    <p v-if="!selectedConfig" class="pt-2 text-sm text-muted">
-      The radio driver will appear here after you open a memory file or import from a radio.
+    <RadioMemoryEmpty v-if="!activeRadioId" />
+    <p v-else-if="!selectedConfig" class="pt-2 text-sm text-muted">
+      No driver configuration is installed for this radio.
     </p>
 
     <template v-else>

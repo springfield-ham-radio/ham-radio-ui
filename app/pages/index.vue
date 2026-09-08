@@ -256,7 +256,8 @@ async function onSaveSerialLog(): Promise<void> {
       }"
     >
       <template #channels>
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
+        <RadioMemoryEmpty v-if="!activeRadioId" />
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <div class="min-w-0">
               <p v-if="hasPrivilegeContext && outOfClassCount > 0" class="text-xs text-warning">
@@ -293,7 +294,7 @@ async function onSaveSerialLog(): Promise<void> {
                 tbody: 'divide-y-0',
                 empty: 'py-4 text-center text-xs text-muted',
               }"
-              empty="Open a memory file or import from a radio to edit channels."
+              empty="No channels in this memory."
               @select="onSelectChannel"
             >
               <template #privilege-cell="{ row }">
@@ -333,27 +334,30 @@ async function onSaveSerialLog(): Promise<void> {
         </div>
       </template>
       <template #settings>
-        <div class="min-h-0 flex-1 overflow-y-auto pt-2">
+        <RadioMemoryEmpty v-if="!activeRadioId" />
+        <div v-else class="min-h-0 flex-1 overflow-y-auto pt-2">
           <RadioSettingsForm
             v-if="settingsMemoryMap && program"
             :memory-map="settingsMemoryMap"
             :settings="program.settings"
             @update:settings="updateSettings"
           />
-          <p v-else class="pt-2 text-sm text-muted">Radio settings will appear here after you open a memory file or import from a radio.</p>
+          <p v-else class="pt-2 text-sm text-muted">This radio has no settings to display.</p>
         </div>
       </template>
       <template #driver>
         <RadioDriver />
       </template>
       <template #hex>
-        <div class="min-h-0 flex-1 pt-4">
-          <HexDump v-if="hexMemory" :memory="hexMemory" />
-          <p v-else class="text-sm text-muted">No radio data</p>
+        <RadioMemoryEmpty v-if="!activeRadioId" />
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <RadioHexDump v-if="hexMemory && activeTab === 'hex'" :memory="hexMemory" />
+          <p v-else-if="!hexMemory" class="pt-2 text-sm text-muted">No radio data</p>
         </div>
       </template>
       <template #debug>
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
+        <RadioMemoryEmpty v-if="!activeRadioId && debugPackets.length === 0" />
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
             <p class="min-w-0 text-xs text-muted">{{ debugSummary }}</p>
             <UButton

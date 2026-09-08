@@ -1,6 +1,6 @@
 # Driver
 
-The **Radio → Driver** tab shows how HamBench talks to the loaded radio. Sub-tabs cover **Read**, **Write**, **Channels**, and **Settings**. The tab stays empty until you open a memory file or import from a radio.
+The **Radio → Driver** tab shows how HamBench talks to the loaded radio. Sub-tabs cover **Read**, **Write**, **Channels**, and **Settings**. Until a memory file is opened or a radio is imported, the tab offers **Import from Radio** and **Open Memory**.
 
 ## Read and write
 
