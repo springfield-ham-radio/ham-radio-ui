@@ -1,3 +1,10 @@
+## [0.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.8.0...v0.9.0) (2026-09-08)
+
+### Features
+
+* add a Radio Driver tab for protocol and memory-map inspection ([9507ff8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9507ff817154f859c6837c87c65981f4505229eb))
+* split Hex Dump with an interactive memory map ([127e103](https://github.com/springfield-ham-radio/ham-radio-ui/commit/127e103a203ae31e52ba66a726ff0d1e58c6509e))
+
 ## [0.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.7.1...v0.8.0) (2026-09-07)
 
 ### Features
