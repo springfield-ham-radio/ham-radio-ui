@@ -1,3 +1,9 @@
+## [0.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.10.1...v0.11.0) (2026-09-11)
+
+### Features
+
+* add a serial port filter preference ([25cdc2c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/25cdc2cc15fcaf42b8e945c29911dcc237ee9014))
+
 ## [0.10.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.10.0...v0.10.1) (2026-09-11)
 
 ### Bug Fixes
