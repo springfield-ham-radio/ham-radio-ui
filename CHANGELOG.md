@@ -1,3 +1,9 @@
+## [0.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.13.1...v0.14.0) (2026-09-11)
+
+### Features
+
+* drag radio channels to reorder occupied memory slots ([1b4e79c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1b4e79c65cba9e6d093bd81cb49a90f2e4e7beae))
+
 ## [0.13.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.13.0...v0.13.1) (2026-09-11)
 
 ### Bug Fixes
