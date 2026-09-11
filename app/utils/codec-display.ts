@@ -622,8 +622,8 @@ export function formatCodecSettingValue(value: RadioSettingValue | undefined, sl
     return '—';
   }
 
-  if (slot.valueKind === 'lbcd' || slot.valueKind === 'bbcd' || slot.valueKind === 'digits') {
-    if (typeof value === 'number' && value >= 1_000_000) {
+  if (typeof value === 'number' && (slot.id === 'freq' || slot.id === 'offset' || slot.valueKind === 'lbcd' || slot.valueKind === 'bbcd' || slot.valueKind === 'digits')) {
+    if (value >= 1_000) {
       return `${(value / 1_000_000).toFixed(4)} MHz`;
     }
   }

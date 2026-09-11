@@ -239,6 +239,8 @@ describe('codec-display', () => {
       const scanSlot = { id: 'scan', offset: 12, size: 1, reserved: false, typeLabel: '1b', valueKind: 'boolean' };
 
       expect(formatCodecSettingValue(146_520_000, freqSlot)).to.equal('146.5200 MHz');
+      expect(formatCodecSettingValue(162_550_000, { id: 'freq', offset: 0, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).to.equal('162.5500 MHz');
+      expect(formatCodecSettingValue(600_000, { id: 'offset', offset: 10, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).to.equal('0.6000 MHz');
       expect(formatCodecSettingValue({ mode: 'ctcss', value: 885 }, toneSlot)).to.equal('CTCSS 88.5');
       expect(formatCodecSettingValue({ mode: 'none' }, toneSlot)).to.equal('None');
       expect(formatCodecSettingValue(true, scanSlot)).to.equal('On');
