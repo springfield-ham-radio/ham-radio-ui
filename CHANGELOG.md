@@ -1,3 +1,9 @@
+## [0.10.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.10.0...v0.10.1) (2026-09-11)
+
+### Bug Fixes
+
+* show amateur band names instead of Kenwood band codes ([786f21e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/786f21e02100687bef267997781790d2138c5f90))
+
 ## [0.10.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.9.1...v0.10.0) (2026-09-11)
 
 ### Features
