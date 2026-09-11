@@ -311,6 +311,68 @@ export function assignLibraryChannelsToSlots(
   };
 }
 
+export interface ChannelReorder {
+  channels: RadioProgrammedChannel[];
+  /** Previous memory slot → slot after the move, for visible (decoded) channels. */
+  previousToNext: Map<number, number>;
+}
+
+function isVisibleProgrammedChannel(channel: RadioProgrammedChannel): boolean {
+  return typeof channel.radioChannel !== 'string';
+}
+
+/**
+ * Move one occupied row in the Channels table.
+ *
+ * Occupied slot numbers stay put so gaps are preserved; only the channel data
+ * is permuted into the new order. Unresolved records are left in their slots.
+ */
+export function reorderProgrammedChannels(
+  channels: RadioProgrammedChannel[],
+  fromIndex: number,
+  toIndex: number,
+): ChannelReorder {
+  const visible = channels
+    .filter(isVisibleProgrammedChannel)
+    .sort((left, right) => left.channelNumber - right.channelNumber);
+  const hidden = channels.filter((channel) => !isVisibleProgrammedChannel(channel));
+
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= visible.length ||
+    toIndex >= visible.length
+  ) {
+    return { channels, previousToNext: new Map() };
+  }
+
+  const slotNumbers = visible.map((channel) => channel.channelNumber);
+  const reordered = [...visible];
+  const [moved] = reordered.splice(fromIndex, 1);
+
+  if (moved === undefined) {
+    return { channels, previousToNext: new Map() };
+  }
+
+  reordered.splice(toIndex, 0, moved);
+
+  const previousToNext = new Map<number, number>();
+  const nextVisible = reordered.map((channel, index) => {
+    const nextNumber = slotNumbers[index]!;
+    previousToNext.set(channel.channelNumber, nextNumber);
+    return {
+      ...channel,
+      channelNumber: nextNumber,
+    };
+  });
+
+  return {
+    channels: [...nextVisible, ...hidden].sort((left, right) => left.channelNumber - right.channelNumber),
+    previousToNext,
+  };
+}
+
 /**
  * Apply an edit to one programmed channel.
  *

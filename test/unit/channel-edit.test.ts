@@ -31,6 +31,7 @@ import {
   parseChannelFieldValue,
   parseFrequencyMHz,
   patchFromDuplex,
+  reorderProgrammedChannels,
   serializeChannelFieldValue,
   toneToKey,
 } from '../../app/utils/channel-edit.ts';
@@ -152,6 +153,92 @@ describe('nextAvailableChannelNumber', () => {
   it('returns undefined when every slot is occupied', () => {
     expect(nextAvailableChannelNumber([0, 1], 2)).to.equal(undefined);
     expect(nextAvailableChannelNumber([], 0)).to.equal(undefined);
+  });
+});
+
+describe('reorderProgrammedChannels', () => {
+  function namedChannel(channelNumber: number, name: string): RadioProgrammedChannel {
+    return programmedChannel({
+      channelNumber,
+      radioChannel: {
+        name,
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_520_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      },
+    });
+  }
+
+  function namesBySlot(channels: RadioProgrammedChannel[]): Record<number, string> {
+    return Object.fromEntries(
+      channels.map((channel) => {
+        const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+        return [channel.channelNumber, name];
+      }),
+    );
+  }
+
+  it('moves channel data among occupied slots and keeps those slot numbers', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(5, 'CHARLIE')];
+    const result = reorderProgrammedChannels(original, 2, 0);
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'CHARLIE',
+      1: 'ALPHA',
+      5: 'BRAVO',
+    });
+    expect(result.previousToNext.get(5)).to.equal(0);
+    expect(result.previousToNext.get(0)).to.equal(1);
+    expect(result.previousToNext.get(1)).to.equal(5);
+    expect(namesBySlot(original)).to.deep.equal({
+      0: 'ALPHA',
+      1: 'BRAVO',
+      5: 'CHARLIE',
+    });
+  });
+
+  it('moves a channel down the occupied list', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(2, 'CHARLIE')],
+      0,
+      2,
+    );
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'BRAVO',
+      1: 'CHARLIE',
+      2: 'ALPHA',
+    });
+  });
+
+  it('returns the original list when the drop index does not move the row', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(4, 'BRAVO')];
+    const result = reorderProgrammedChannels(original, 1, 1);
+
+    expect(result.channels).to.equal(original);
+    expect(result.previousToNext.size).to.equal(0);
+  });
+
+  it('returns the original list when an index is out of range', () => {
+    const original = [namedChannel(0, 'ALPHA')];
+
+    expect(reorderProgrammedChannels(original, -1, 0).channels).to.equal(original);
+    expect(reorderProgrammedChannels(original, 0, 3).channels).to.equal(original);
+  });
+
+  it('leaves unresolved channel records in their original slots', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 3,
+      radioChannel: 'SKIP',
+    };
+    const result = reorderProgrammedChannels([namedChannel(0, 'ALPHA'), unresolved, namedChannel(1, 'BRAVO')], 1, 0);
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'BRAVO',
+      1: 'ALPHA',
+      3: 'SKIP',
+    });
   });
 });
 

@@ -7,6 +7,7 @@ import {
   formatMemoryMapFieldValue,
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
+import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
 import { extraChannelTableFields } from '~/utils/channel-table';
@@ -17,8 +18,20 @@ import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 const UCheckbox = resolveComponent('UCheckbox');
 
-const { channels, memory, program, settingsMemoryMap, activeRadioId, serialLog, updateSettings, updateChannel, addChannel, removeChannels, saveSerialLog } =
-  useRadio();
+const {
+  channels,
+  memory,
+  program,
+  settingsMemoryMap,
+  activeRadioId,
+  serialLog,
+  updateSettings,
+  updateChannel,
+  addChannel,
+  reorderChannels,
+  removeChannels,
+  saveSerialLog,
+} = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 const { saveChannels } = useSavedChannels();
 
@@ -81,6 +94,16 @@ const selectedCount = computed(() => selectedChannelNumbers.value.length);
 const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
   const core: TableColumn<DisplayChannelRow>[] = [
     {
+      id: 'drag',
+      header: '',
+      meta: {
+        class: {
+          th: 'w-6 px-1',
+          td: 'w-6 px-1',
+        },
+      },
+    },
+    {
       id: 'select',
       header: ({ table }) =>
         h(UCheckbox, {
@@ -139,6 +162,8 @@ const editorOpen = ref(false);
 const editingChannelNumber = ref<number | undefined>();
 const removeOpen = ref(false);
 const pendingRemoveNumbers = ref<number[]>([]);
+const isReorderingChannels = ref(false);
+const sortableRows = ref<DisplayChannelRow[]>([]);
 
 const occupiedChannelNumbers = computed(() => program.value?.channels.map((channel) => channel.channelNumber) ?? []);
 const radioChannelCapacity = computed(() => channelCapacity(settingsMemoryMap.value));
@@ -197,15 +222,77 @@ function openAddChannel(): void {
   editorOpen.value = true;
 }
 
-function onSelectChannel(event: Event, row: TableRow<DisplayChannelRow>): void {
-  const target = event.target;
+function isChannelTableRow(value: unknown): value is TableRow<DisplayChannelRow> {
+  return typeof value === 'object' && value !== null && 'original' in value && typeof (value as TableRow<DisplayChannelRow>).original?.channelNumber === 'number';
+}
 
-  if (target instanceof Element && target.closest('button, input, [role="checkbox"]')) {
+function onSelectChannel(first: unknown, second?: unknown): void {
+  if (isReorderingChannels.value) {
     return;
   }
 
-  openChannelEditor(row.original.channelNumber);
+  const row = [first, second].find(isChannelTableRow);
+  const event = [first, second].find((value): value is Event => value instanceof Event);
+  const target = event?.target;
+
+  if (target instanceof Element && target.closest('button, input, [role="checkbox"], .channel-drag-handle')) {
+    return;
+  }
+
+  if (row) {
+    openChannelEditor(row.original.channelNumber);
+  }
 }
+
+async function applyChannelReorder(fromIndex: number, toIndex: number): Promise<void> {
+  const mapping = await reorderChannels(fromIndex, toIndex);
+  const previous = editingChannelNumber.value;
+
+  if (previous !== undefined) {
+    editingChannelNumber.value = mapping.get(previous) ?? previous;
+  }
+}
+
+const { start: startChannelSortable, stop: stopChannelSortable } = useSortable('.channel-table-tbody', sortableRows, {
+  animation: 150,
+  draggable: 'tr',
+  handle: '.channel-drag-handle',
+  ghostClass: 'channel-row-ghost',
+  chosenClass: 'channel-row-chosen',
+  forceFallback: true,
+  onStart() {
+    isReorderingChannels.value = true;
+  },
+  onUpdate(event) {
+    const fromIndex = event.oldIndex;
+    const toIndex = event.newIndex;
+
+    if (fromIndex === undefined || toIndex === undefined || fromIndex === toIndex) {
+      return;
+    }
+
+    if (event.item && event.from) {
+      removeNode(event.item);
+      insertNodeAt(event.from, event.item, fromIndex);
+    }
+
+    void applyChannelReorder(fromIndex, toIndex);
+  },
+  onEnd() {
+    window.setTimeout(() => {
+      isReorderingChannels.value = false;
+    }, 0);
+  },
+});
+
+watch(
+  () => [activeRadioId.value, displayChannels.value.length] as const,
+  async () => {
+    stopChannelSortable();
+    await nextTick();
+    startChannelSortable();
+  },
+);
 
 function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
   if (editingChannelNumber.value === undefined) {
@@ -394,12 +481,21 @@ async function onSaveSerialLog(): Promise<void> {
                 thead: 'bg-default',
                 th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
                 td: 'h-7 px-2 py-0 text-xs tabular-nums align-middle',
-                tbody: 'divide-y-0',
+                tbody: 'channel-table-tbody divide-y-0',
                 empty: 'py-4 text-center text-xs text-muted',
               }"
               empty="No channels in this memory."
               @select="onSelectChannel"
             >
+              <template #drag-cell>
+                <span
+                  class="channel-drag-handle inline-flex text-muted"
+                  aria-label="Drag to reorder channel"
+                  @click.stop
+                >
+                  <UIcon name="i-lucide-grip-vertical" class="pointer-events-none size-3.5" />
+                </span>
+              </template>
               <template #privilege-cell="{ row }">
                 <UTooltip
                   v-if="row.original.privilegeWarning"
@@ -441,9 +537,10 @@ async function onSaveSerialLog(): Promise<void> {
             </UTable>
           </div>
           <p class="mt-2 shrink-0 text-xs text-muted">
-            Select channels to save them to the library or remove them from this radio. Add a channel to the next unused
-            memory slot, or select saved channels on the Channels page and choose Add to radio. Click a row to edit the
-            loaded memory.
+            Drag the handle to move a channel into another occupied memory slot. Empty slots stay empty. Select
+            channels to save them to the library or remove them from this radio. Add a channel to the next unused
+            memory slot, or select saved channels on the Channels page and choose Add to radio. Click a row to edit
+            the loaded memory.
           </p>
         </div>
       </template>

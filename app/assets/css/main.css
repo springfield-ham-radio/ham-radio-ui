@@ -51,3 +51,19 @@ body {
 .channel-table tbody tr:nth-child(even) td {
   background-color: var(--ui-bg-accented);
 }
+
+.channel-table .channel-drag-handle {
+  cursor: grab;
+}
+
+.channel-table .channel-drag-handle:active {
+  cursor: grabbing;
+}
+
+.channel-table tbody tr.channel-row-ghost td {
+  opacity: 0.45;
+}
+
+.channel-table tbody tr.channel-row-chosen td {
+  background-color: color-mix(in oklab, var(--ui-primary, #00c16a) 14%, var(--ui-bg-elevated));
+}

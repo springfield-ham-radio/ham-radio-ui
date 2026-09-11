@@ -16,6 +16,7 @@ import {
   applyChannelPatch,
   channelCapacity,
   channelNameMaxLength,
+  reorderProgrammedChannels,
   type ChannelPatch,
 } from '~/utils/channel-edit';
 import {
@@ -510,6 +511,25 @@ export function useRadio() {
     return accepted.length;
   }
 
+  async function reorderChannels(fromIndex: number, toIndex: number): Promise<Map<number, number>> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      return new Map();
+    }
+
+    const result = reorderProgrammedChannels(program.value.channels, fromIndex, toIndex);
+
+    if (result.previousToNext.size === 0) {
+      return result.previousToNext;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: result.channels,
+    });
+
+    return result.previousToNext;
+  }
+
   async function removeChannels(channelNumbers: number[]): Promise<void> {
     if (!program.value || !memory.value || !activeRadioId.value || channelNumbers.length === 0) {
       return;
@@ -780,6 +800,7 @@ export function useRadio() {
     updateChannel,
     addChannel,
     addChannels,
+    reorderChannels,
     removeChannels,
     cancelTransfer,
     saveSerialLog,
