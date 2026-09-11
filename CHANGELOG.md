@@ -1,3 +1,9 @@
+## [0.13.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.12.0...v0.13.0) (2026-09-11)
+
+### Features
+
+* add and remove radio memory channels from the editor and library ([54a422d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/54a422d9526f41bd9ebea3565e44cb822bcde250))
+
 ## [0.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.11.0...v0.12.0) (2026-09-11)
 
 ### Features
