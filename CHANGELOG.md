@@ -1,3 +1,13 @@
+## [0.10.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.9.1...v0.10.0) (2026-09-11)
+
+### Features
+
+* switch radio settings from accordion sections to a left nav ([1295bb7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1295bb73e4698dda4c381a15068aab7580ec5bf3))
+
+### Bug Fixes
+
+* format integer VFO frequencies and offsets as MHz ([9db3f2b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9db3f2b19f283bfc4362ca4ade115e418b9b28b3))
+
 ## [0.9.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.9.0...v0.9.1) (2026-09-08)
 
 ### Bug Fixes
