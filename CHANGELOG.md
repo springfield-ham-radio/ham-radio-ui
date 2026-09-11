@@ -1,3 +1,13 @@
+## [0.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.11.0...v0.12.0) (2026-09-11)
+
+### Features
+
+* let import and write pick a programming baud rate ([ea8822e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ea8822e4a66ac6efc9c0ca0b5190cb9a09f2d7f3))
+
+### Bug Fixes
+
+* apply settings form edits on Vue reactive state ([d3ab63a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d3ab63ac359dfb7154feaf10c6e896b62a3916c7))
+
 ## [0.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.10.1...v0.11.0) (2026-09-11)
 
 ### Features
