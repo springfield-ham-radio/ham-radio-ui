@@ -19,7 +19,7 @@ import {
   memoryMapFromConfig,
   type RadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
-import { uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
+import { reloadUserJsonCatalogRecords, uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
 import {
   defaultMemoryFileName,
   memoryFileDisplayName,
@@ -103,6 +103,7 @@ export function useRadio() {
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
 
   async function refreshCatalogState(): Promise<void> {
+    await reloadUserJsonCatalogRecords();
     const records = await listRadioCatalogRecords();
     configurations.value = records.map((record) => record.config);
     manufacturers.value = await listRadioManufacturers();
@@ -227,7 +228,7 @@ export function useRadio() {
     return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
-  async function importFromRadio(serialPortPath: string, radioId: RadioId): Promise<void> {
+  async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
     const config = getConfiguration(radioId);
 
     if (!config) {
@@ -236,7 +237,7 @@ export function useRadio() {
 
     const progressIndicator = startProgress('import');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     let importedBytes = 0;
 
@@ -300,7 +301,7 @@ export function useRadio() {
     writeOpen.value = true;
   }
 
-  async function writeToRadio(serialPortPath: string): Promise<void> {
+  async function writeToRadio(serialPortPath: string, baudRate?: number): Promise<void> {
     if (!memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to write',
@@ -336,7 +337,7 @@ export function useRadio() {
 
     const progressIndicator = startProgress('write');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     const writtenBytes = memory.value.length;
 
@@ -660,14 +661,14 @@ export function useRadio() {
   };
 }
 
-function toRadio(config: LoadedRadioConfig): Radio {
+function toRadio(config: LoadedRadioConfig, baudRate?: number): Radio {
   return {
     id: config.id,
     version: config.version,
     description: config.description,
     settingsSchema: config.settingsSchema,
     memoryConfig: config.memoryConfig,
-    serialConfig: config.serialConfig,
+    serialConfig: baudRate === undefined ? config.serialConfig : { ...config.serialConfig, baudRate },
     readMemory: config.readMemory,
     writeMemory: config.writeMemory,
     memoryMap: config.memoryMap,

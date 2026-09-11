@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import type { RadioId } from '@springfield/ham-radio-api';
 import { SerialPort } from 'tauri-plugin-serialplugin';
+import {
+  programmingBaudRateSelectItems,
+  readRememberedBaudRate,
+  resolveProgrammingBaudRate,
+  shouldSelectProgrammingBaudRate,
+  writeRememberedBaudRate,
+} from '~/utils/radio-baud-rate';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const {
+  configurations,
   manufacturers,
   isLoading,
   error,
@@ -13,11 +21,13 @@ const {
   importFromRadio,
   importOpen,
   openModulesInstall,
+  refreshCatalogState,
 } = useRadio();
 
 const selectedManufacturer = ref<string | undefined>();
 const selectedRadio = ref<RadioId | undefined>();
 const selectedPort = ref<string | undefined>();
+const selectedBaudRate = ref<number | undefined>();
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = ref(false);
 const models = computed(() => {
@@ -31,11 +41,51 @@ const models = computed(() => {
   }));
 });
 
-const canImport = computed(() => Boolean(selectedRadio.value && selectedPort.value));
+const selectedConfig = computed(() => {
+  if (!selectedRadio.value) {
+    return undefined;
+  }
+
+  return configurations.value.find((config) => config.id.model === selectedRadio.value?.model);
+});
+
+const baudRateItems = computed(() => {
+  if (!selectedConfig.value) {
+    return [];
+  }
+
+  return programmingBaudRateSelectItems(selectedConfig.value.serialConfig);
+});
+
+const showBaudRate = computed(() => {
+  if (!selectedConfig.value) {
+    return false;
+  }
+
+  return shouldSelectProgrammingBaudRate(selectedConfig.value.serialConfig);
+});
+
+const canImport = computed(() => Boolean(selectedRadio.value && selectedPort.value && selectedBaudRate.value));
 
 watch(selectedManufacturer, () => {
   selectedRadio.value = undefined;
 });
+
+watch(
+  selectedConfig,
+  (config) => {
+    if (!config || !selectedRadio.value) {
+      selectedBaudRate.value = undefined;
+      return;
+    }
+
+    selectedBaudRate.value = resolveProgrammingBaudRate(
+      config.serialConfig,
+      readRememberedBaudRate(selectedRadio.value.model),
+    );
+  },
+  { immediate: true },
+);
 
 watch(selectedPort, (path) => {
   void holdSerialPortInactive(path).catch((cause) => {
@@ -69,20 +119,23 @@ async function loadPorts(): Promise<void> {
 }
 
 async function importRadio(): Promise<void> {
-  if (!selectedRadio.value || !selectedPort.value) {
+  if (!selectedRadio.value || !selectedPort.value || selectedBaudRate.value === undefined) {
     return;
   }
 
   const serialPortPath = selectedPort.value;
   const radioId = selectedRadio.value;
+  const baudRate = selectedBaudRate.value;
 
+  writeRememberedBaudRate(radioId.model, baudRate);
   await releaseSerialPortHold();
   importOpen.value = false;
-  await importFromRadio(serialPortPath, radioId);
+  await importFromRadio(serialPortPath, radioId, baudRate);
 }
 
 watch(importOpen, (open) => {
   if (open) {
+    void refreshCatalogState();
     void loadPorts();
     return;
   }
@@ -138,6 +191,20 @@ watch(importOpen, (open) => {
             value-key="value"
             :disabled="!selectedManufacturer"
             placeholder="Select model"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField
+          v-if="showBaudRate"
+          label="Baud rate"
+          description="Match the radio's PC port speed"
+        >
+          <USelect
+            v-model="selectedBaudRate"
+            :items="baudRateItems"
+            value-key="value"
+            placeholder="Select baud rate"
             class="w-full"
           />
         </UFormField>
