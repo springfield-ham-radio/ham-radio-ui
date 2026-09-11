@@ -344,6 +344,42 @@
           </div>
         </section>
 
+        <section v-else-if="currentSection === 'serial'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Hide common system ports</p>
+                <p class="text-xs text-muted">
+                  Skip Bluetooth Incoming, debug-console, and wlan-debug in Import, Write, and Sniffer. Programming cables stay in the list.
+                </p>
+              </div>
+              <USwitch
+                :model-value="filterCommonPorts"
+                aria-label="Hide common system ports"
+                @update:model-value="setFilterCommonPorts"
+              />
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-3 px-4 py-4">
+              <UFormField
+                label="Hide named ports"
+                description="Enter device names to omit from serial-port lists, for example BryansHeadphones. Press Return after each name."
+                class="w-full"
+              >
+                <UInputTags
+                  v-model="excludedPortNames"
+                  placeholder="BryansHeadphones"
+                  add-on-blur
+                  add-on-tab
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-col gap-4 px-4 py-4">
@@ -514,6 +550,7 @@ import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import { isModuleInstallPath } from '~/utils/radio-module-install';
 import { openExternalUrl } from '~/utils/open-external-url';
+import { normalizeExcludedPortNames, readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
 import { parseSnifferSettings, readSnifferSettings, snifferSshTarget, writeSnifferSettings } from '~/utils/sniffer-settings';
 import {
   checkRemoteSnifferHost,
@@ -534,7 +571,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -562,6 +599,12 @@ const sections = [
     tileClass: 'bg-emerald-500',
   },
   {
+    id: 'serial' as const,
+    label: 'Serial ports',
+    icon: 'i-lucide-usb',
+    tileClass: 'bg-orange-500',
+  },
+  {
     id: 'sniffer' as const,
     label: 'Sniffer',
     icon: 'i-lucide-audio-lines',
@@ -585,6 +628,9 @@ const {
   applyUpdateAndRelaunch,
   setAutoUpdateEnabled,
 } = useAppUpdater();
+const initialSerialPortSettings = readSerialPortSettings();
+const filterCommonPorts = ref(initialSerialPortSettings.filterCommonPorts);
+const excludedPortNames = ref([...initialSerialPortSettings.excludedPortNames]);
 const catalogRecords = ref<RadioCatalogRecord[]>([]);
 const removeConfirmOpen = ref(false);
 const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
@@ -1076,7 +1122,13 @@ const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
 
-  if (section === 'licenses' || section === 'radios' || section === 'updates' || section === 'sniffer') {
+  if (
+    section === 'licenses' ||
+    section === 'radios' ||
+    section === 'serial' ||
+    section === 'updates' ||
+    section === 'sniffer'
+  ) {
     return section;
   }
 
@@ -1086,6 +1138,40 @@ const currentSection = computed<PreferenceSection>(() => {
 const activeSection = computed(() => {
   return sections.find((section) => section.id === currentSection.value) ?? sections[0];
 });
+
+let persistingSerialPortSettings = false;
+
+function persistSerialPortSettings(): void {
+  if (persistingSerialPortSettings) {
+    return;
+  }
+
+  persistingSerialPortSettings = true;
+
+  try {
+    const names = normalizeExcludedPortNames(excludedPortNames.value);
+    excludedPortNames.value = names;
+    writeSerialPortSettings({
+      filterCommonPorts: filterCommonPorts.value,
+      excludedPortNames: names,
+    });
+  } finally {
+    persistingSerialPortSettings = false;
+  }
+}
+
+function setFilterCommonPorts(enabled: boolean): void {
+  filterCommonPorts.value = enabled;
+  persistSerialPortSettings();
+}
+
+watch(
+  excludedPortNames,
+  () => {
+    persistSerialPortSettings();
+  },
+  { deep: true },
+);
 
 function selectSection(section: PreferenceSection): void {
   if (section === 'appearance') {

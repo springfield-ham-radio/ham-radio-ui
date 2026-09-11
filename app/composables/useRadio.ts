@@ -12,14 +12,12 @@ import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
-import { pickAndLoadRadioConfig } from '~/utils/load-radio-config';
 import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
   listRadioManufacturers,
   memoryMapFromConfig,
   type RadioCatalogRecord,
-  upsertRadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
 import { uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
 import {
@@ -173,35 +171,6 @@ export function useRadio() {
       logger.withError(cause).error('Failed to remove radio');
       toast.add({
         title: 'Could not remove radio',
-        description: message,
-        color: 'error',
-        icon: 'i-lucide-circle-alert',
-      });
-    }
-  }
-
-  async function addRadioFromFile(): Promise<void> {
-    try {
-      const picked = await pickAndLoadRadioConfig();
-
-      if (!picked) {
-        return;
-      }
-
-      await upsertRadioCatalogRecord(picked.radio, 'user', { sourcePath: picked.path });
-      await refreshCatalogState();
-
-      toast.add({
-        title: 'Radio added',
-        description: `${picked.radio.id.manufacturer} ${picked.radio.id.name}`,
-        color: 'success',
-        icon: 'i-lucide-radio',
-      });
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Failed to add radio configuration';
-      logger.withError(cause).error('Failed to add radio configuration');
-      toast.add({
-        title: 'Could not add radio',
         description: message,
         color: 'error',
         icon: 'i-lucide-circle-alert',
@@ -677,7 +646,6 @@ export function useRadio() {
     refreshCatalogState,
     openModulesInstall,
     uninstallRadio,
-    addRadioFromFile,
     getModelsByManufacturer,
     importFromRadio,
     openWriteToRadio,

@@ -7,6 +7,8 @@ import {
 } from '~/utils/sniffer-capture';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 import { saveJsonFileWithPicker } from '~/utils/radio-memory-file-io';
+import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { readSnifferSettings, snifferApiUrl, snifferHttpUrl } from '~/utils/sniffer-settings';
 
 const MAX_LIVE_PACKETS = 2000;
@@ -76,7 +78,10 @@ export function useSniffer() {
 
     try {
       const response = await request<SnifferPortsResponse>('/api/ports');
-      ports.value = response.ports.map((port) => port.path);
+      ports.value = serialPortSelectItems(
+        response.ports.map((port) => port.path),
+        readSerialPortSettings(),
+      ).map((port) => port.value);
       reachable.value = true;
     } catch (error) {
       markUnreachable();

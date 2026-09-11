@@ -2,6 +2,8 @@
 import type { RadioId } from '@springfield/ham-radio-api';
 import { SerialPort } from 'tauri-plugin-serialplugin';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
+import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const {
   manufacturers,
@@ -10,7 +12,6 @@ const {
   getModelsByManufacturer,
   importFromRadio,
   importOpen,
-  addRadioFromFile,
   openModulesInstall,
 } = useRadio();
 
@@ -19,7 +20,6 @@ const selectedRadio = ref<RadioId | undefined>();
 const selectedPort = ref<string | undefined>();
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = ref(false);
-const addingRadio = ref(false);
 const models = computed(() => {
   if (!selectedManufacturer.value) {
     return [];
@@ -47,20 +47,24 @@ async function loadPorts(): Promise<void> {
   loadingPorts.value = true;
 
   try {
+    await releaseSerialPortHold();
     const availablePorts = await SerialPort.available_ports();
-    const isMacOS = navigator.userAgent.includes('Mac');
+    ports.value = serialPortSelectItems(Object.keys(availablePorts), readSerialPortSettings());
 
-    ports.value = Object.keys(availablePorts)
-      .filter((path) => !isMacOS || path.startsWith('/dev/cu.'))
-      .map((path) => ({
-        label: isMacOS ? path.replace('/dev/cu.', '') : path,
-        value: path,
-      }));
+    if (selectedPort.value && !ports.value.some((port) => port.value === selectedPort.value)) {
+      selectedPort.value = undefined;
+    }
   } catch (cause) {
     console.error('Failed to list serial ports', cause);
     ports.value = [];
   } finally {
     loadingPorts.value = false;
+
+    if (importOpen.value && selectedPort.value) {
+      void holdSerialPortInactive(selectedPort.value).catch((holdCause) => {
+        console.error('Failed to hold serial port inactive', holdCause);
+      });
+    }
   }
 }
 
@@ -77,33 +81,9 @@ async function importRadio(): Promise<void> {
   await importFromRadio(serialPortPath, radioId);
 }
 
-async function addRadio(): Promise<void> {
-  addingRadio.value = true;
-
-  try {
-    const previousManufacturer = selectedManufacturer.value;
-    await addRadioFromFile();
-
-    if (!selectedManufacturer.value && manufacturers.value.length === 1) {
-      selectedManufacturer.value = manufacturers.value[0];
-    } else if (previousManufacturer && manufacturers.value.includes(previousManufacturer)) {
-      selectedManufacturer.value = previousManufacturer;
-    }
-  } finally {
-    addingRadio.value = false;
-  }
-}
-
 watch(importOpen, (open) => {
   if (open) {
     void loadPorts();
-
-    if (selectedPort.value) {
-      void holdSerialPortInactive(selectedPort.value).catch((cause) => {
-        console.error('Failed to hold serial port inactive', cause);
-      });
-    }
-
     return;
   }
 
@@ -139,20 +119,12 @@ watch(importOpen, (open) => {
               placeholder="Select manufacturer"
               class="w-full"
             />
-            <UTooltip text="Add radio configuration JSON">
-              <UButton
-                icon="i-lucide-plus"
-                color="neutral"
-                variant="outline"
-                :loading="addingRadio"
-                @click="addRadio"
-              />
-            </UTooltip>
-            <UTooltip text="Install radio modules">
+            <UTooltip text="Install radios">
               <UButton
                 icon="i-lucide-download"
                 color="neutral"
                 variant="outline"
+                aria-label="Install radios"
                 @click="openModulesInstall()"
               />
             </UTooltip>
@@ -178,9 +150,17 @@ watch(importOpen, (open) => {
               value-key="value"
               placeholder="Select a serial port"
               class="w-full"
+              :loading="loadingPorts"
             />
             <UTooltip text="Refresh serial ports">
-              <UButton icon="i-lucide-refresh-cw" color="neutral" variant="outline" :loading="loadingPorts" @click="loadPorts" />
+              <UButton
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="outline"
+                :disabled="loadingPorts"
+                aria-label="Refresh serial ports"
+                @click="loadPorts"
+              />
             </UTooltip>
           </div>
         </UFormField>
