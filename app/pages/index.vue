@@ -9,6 +9,7 @@ import {
 } from '@springfield/ham-radio-utils';
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
+import { extraChannelTableFields } from '~/utils/channel-table';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
@@ -109,7 +110,7 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
     },
     { accessorKey: 'channelNumber', header: '#' },
     { accessorKey: 'name', header: 'Name' },
-    { accessorKey: 'band', header: 'Band' },
+    { id: 'bandName', accessorKey: 'band', header: 'Band' },
     { accessorKey: 'transmit', header: 'TX' },
     { accessorKey: 'receive', header: 'RX' },
     { accessorKey: 'txTone', header: 'TX Tone' },
@@ -117,7 +118,7 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
     { accessorKey: 'toneType', header: 'Type' },
   ];
 
-  const dynamic: TableColumn<DisplayChannelRow>[] = channelUiFields.value.map((field) => ({
+  const dynamic: TableColumn<DisplayChannelRow>[] = extraChannelTableFields(channelUiFields.value).map((field) => ({
     id: field.fieldId,
     header: field.ui.label,
     accessorFn: (row) => row.extras[field.fieldId] ?? '',

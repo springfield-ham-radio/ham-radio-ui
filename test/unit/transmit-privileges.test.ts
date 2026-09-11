@@ -21,6 +21,10 @@ describe('transmit-privileges', () => {
       expect(bandNameForFrequency(446_000_000)).to.equal('70 Centimeter');
     });
 
+    it('resolves NOAA weather channels by name', () => {
+      expect(bandNameForFrequency(162_550_000)).to.equal('Weather Radio');
+    });
+
     it('uses exact channel matches and a display name without the split suffix', () => {
       expect(bandNameForFrequency(462_562_500)).to.equal('FRS/GMRS');
       expect(bandNameForFrequency(467_550_000)).to.equal('GMRS');
