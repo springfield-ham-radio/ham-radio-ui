@@ -12,6 +12,20 @@ import {
 } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 
+/** Encode derives these from frequencies/tones; do not seed them on a new channel. */
+const DERIVED_CHANNEL_SETTING_IDS = new Set([
+  'band',
+  'cross_mode',
+  'ctcss_mode',
+  'dtcs_code',
+  'dtcs_mode',
+  'duplex',
+  'offset',
+  'split',
+  'tone_mode',
+  'used',
+]);
+
 export interface ChannelPatch {
   name?: string;
   receiveFrequencyHz?: number;
@@ -33,6 +47,11 @@ export type ChannelFieldEditor =
   | { kind: 'text' };
 
 const UHF_THRESHOLD_HZ = 300_000_000;
+const VHF_REPEATER_OFFSET_HZ = 600_000;
+const UHF_REPEATER_OFFSET_HZ = 5_000_000;
+
+/** USelect cannot use an empty string as an item value (that means "unselected"). */
+export const DUPLEX_OFF_SELECT_VALUE = 'off';
 
 export function formatFrequencyMHz(frequencyHz: number | undefined): string {
   if (frequencyHz === undefined) {
@@ -123,6 +142,176 @@ export function channelNameMaxLength(memoryMap: RadioMemoryMap | undefined): num
 }
 
 /**
+ * Number of memory slots the radio's channel-records struct can hold.
+ */
+export function channelCapacity(memoryMap: RadioMemoryMap | undefined): number {
+  const records = memoryMap?.channelBindings?.records;
+
+  if (!records) {
+    return 0;
+  }
+
+  const struct = memoryMap?.structs.find((entry) => entry.id === records);
+  return struct?.count ?? 0;
+}
+
+/**
+ * Unused memory slot indexes, in order.
+ */
+export function availableChannelNumbers(occupied: Iterable<number>, capacity: number): number[] {
+  if (capacity <= 0) {
+    return [];
+  }
+
+  const used = new Set(occupied);
+  const slots: number[] = [];
+
+  for (let channelNumber = 0; channelNumber < capacity; channelNumber += 1) {
+    if (!used.has(channelNumber)) {
+      slots.push(channelNumber);
+    }
+  }
+
+  return slots;
+}
+
+/**
+ * Lowest unused slot index, or `undefined` when the radio is full.
+ */
+export function nextAvailableChannelNumber(occupied: Iterable<number>, capacity: number): number | undefined {
+  return availableChannelNumbers(occupied, capacity)[0];
+}
+
+export function blankRadioChannel(): RadioChannel {
+  return {
+    name: '',
+    receiveFrequency: Frequency(146_520_000),
+    transmitFrequency: Frequency(146_520_000),
+    receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+    transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+  };
+}
+
+/**
+ * Radio-specific extras for a newly programmed slot (power, mode, scan, …).
+ */
+export function defaultChannelSettings(memoryMap: RadioMemoryMap | undefined): RadioSettings {
+  const settings: RadioSettings = {};
+  const bindings = memoryMap?.channelBindings;
+
+  if (!memoryMap || !bindings) {
+    return settings;
+  }
+
+  const boundIds = new Set(
+    [bindings.receiveFrequency, bindings.transmitFrequency, bindings.receiveTone, bindings.transmitTone, bindings.nameField ?? 'name'].filter(
+      (id): id is string => Boolean(id),
+    ),
+  );
+  const recordsStruct = memoryMap.structs.find((entry) => entry.id === bindings.records);
+  const extrasStruct = bindings.extras ? memoryMap.structs.find((entry) => entry.id === bindings.extras) : undefined;
+
+  for (const struct of [recordsStruct, extrasStruct]) {
+    if (!struct) {
+      continue;
+    }
+
+    for (const field of struct.fields) {
+      if (field.reserved || boundIds.has(field.id) || field.id.startsWith('_') || DERIVED_CHANNEL_SETTING_IDS.has(field.id)) {
+        continue;
+      }
+
+      const editorField: RadioMemoryMapUiField = {
+        path: field.id,
+        structId: struct.id,
+        fieldId: field.id,
+        ui: field.ui ?? { group: 'channel', label: field.id, widget: 'text' },
+        value: field.value,
+      };
+      const editor = channelFieldEditor(editorField);
+
+      if (field.id === 'lowpower') {
+        settings.lowpower = 0;
+        continue;
+      }
+
+      if (field.id === 'wide') {
+        settings.wide = true;
+        continue;
+      }
+
+      if (field.id === 'scan') {
+        settings.scan = true;
+        continue;
+      }
+
+      if (editor.kind === 'switch') {
+        settings[field.id] = false;
+        continue;
+      }
+
+      if (editor.kind === 'integer') {
+        settings[field.id] = editor.min ?? 0;
+        continue;
+      }
+
+      if (editor.kind === 'select' && editor.items[0]) {
+        settings[field.id] = parseChannelFieldValue(editorField, editor.items[0].value);
+      }
+    }
+  }
+
+  return syncChannelSettingAliases(settings);
+}
+
+export function createProgrammedChannel(options: {
+  channelNumber: number;
+  memoryMap?: RadioMemoryMap;
+  source?: Partial<RadioChannel>;
+}): RadioProgrammedChannel {
+  const blank = blankRadioChannel();
+  const source = options.source;
+  const programmed: RadioProgrammedChannel = {
+    channelNumber: options.channelNumber,
+    radioChannel: {
+      name: source?.name ?? blank.name,
+      receiveFrequency: source?.receiveFrequency ?? blank.receiveFrequency,
+      transmitFrequency: source?.transmitFrequency ?? blank.transmitFrequency,
+      receiveTone: source?.receiveTone ?? blank.receiveTone,
+      transmitTone: source?.transmitTone ?? blank.transmitTone,
+    },
+    settings: defaultChannelSettings(options.memoryMap),
+  };
+
+  return applyChannelPatch(programmed, {}, { nameMaxLength: channelNameMaxLength(options.memoryMap) });
+}
+
+/**
+ * Fill unused radio slots from portable saved channels, in order.
+ * Extra sources are skipped when the radio is full.
+ */
+export function assignLibraryChannelsToSlots(
+  sources: Array<Partial<RadioChannel>>,
+  occupied: Iterable<number>,
+  memoryMap: RadioMemoryMap | undefined,
+): { programmed: RadioProgrammedChannel[]; skipped: number } {
+  const slots = availableChannelNumbers(occupied, channelCapacity(memoryMap));
+  const take = Math.min(sources.length, slots.length);
+  const programmed = sources.slice(0, take).map((source, index) =>
+    createProgrammedChannel({
+      channelNumber: slots[index]!,
+      memoryMap,
+      source,
+    }),
+  );
+
+  return {
+    programmed,
+    skipped: sources.length - take,
+  };
+}
+
+/**
  * Apply an edit to one programmed channel.
  *
  * Truncates the name, merges settings extras, and keeps encode aliases
@@ -158,6 +347,10 @@ export function applyChannelPatch(
     ...(patch.settings ?? {}),
   });
 
+  if ('duplex' in settings && settings.split !== true && settings.duplex !== 'split') {
+    settings.duplex = duplexFromFrequencies(radioChannel.receiveFrequency, radioChannel.transmitFrequency);
+  }
+
   if ('isuhf' in settings) {
     settings.isuhf = radioChannel.receiveFrequency >= UHF_THRESHOLD_HZ;
   }
@@ -167,6 +360,110 @@ export function applyChannelPatch(
     radioChannel,
     settings: Object.keys(settings).length > 0 ? settings : undefined,
   };
+}
+
+export function defaultRepeaterOffsetHz(receiveFrequencyHz: number): number {
+  return receiveFrequencyHz >= UHF_THRESHOLD_HZ ? UHF_REPEATER_OFFSET_HZ : VHF_REPEATER_OFFSET_HZ;
+}
+
+export function duplexFromFrequencies(
+  receiveHz: number,
+  transmitHz: number,
+  settings?: RadioSettings,
+): string {
+  if (settings?.duplex === 'split' || settings?.split === true) {
+    return 'split';
+  }
+
+  if (transmitHz === receiveHz) {
+    return '';
+  }
+
+  return transmitHz > receiveHz ? '+' : '-';
+}
+
+export function duplexToSelectValue(value: RadioSettingValue | undefined): string {
+  if (value === undefined || value === null || value === '' || value === DUPLEX_OFF_SELECT_VALUE) {
+    return DUPLEX_OFF_SELECT_VALUE;
+  }
+
+  return String(value);
+}
+
+export function duplexFromSelectValue(value: string): string {
+  if (!value || value === DUPLEX_OFF_SELECT_VALUE) {
+    return '';
+  }
+
+  return value;
+}
+
+/**
+ * Update TX frequency and duplex/split extras when the operator picks Off / + / - / Split.
+ */
+export function patchFromDuplex(receiveHz: number, transmitHz: number, duplex: string): ChannelPatch {
+  const mode = duplexFromSelectValue(duplex);
+  const offset = Math.abs(transmitHz - receiveHz) || defaultRepeaterOffsetHz(receiveHz);
+
+  if (mode === '') {
+    return {
+      transmitFrequencyHz: receiveHz,
+      settings: { duplex: '', split: false },
+    };
+  }
+
+  if (mode === '+') {
+    return {
+      transmitFrequencyHz: receiveHz + offset,
+      settings: { duplex: '+', split: false },
+    };
+  }
+
+  if (mode === '-') {
+    return {
+      transmitFrequencyHz: receiveHz - offset,
+      settings: { duplex: '-', split: false },
+    };
+  }
+
+  return {
+    settings: { duplex: mode, split: mode === 'split' },
+  };
+}
+
+function enumSelectItems(fieldId: string, values: string[]): ChannelFieldSelectItem[] {
+  const items: ChannelFieldSelectItem[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of values) {
+    const value = entry === '' ? (fieldId === 'duplex' ? DUPLEX_OFF_SELECT_VALUE : entry) : entry;
+
+    if (!value || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    items.push({
+      label: enumSelectLabel(fieldId, entry),
+      value,
+    });
+  }
+
+  return items;
+}
+
+function enumSelectLabel(fieldId: string, entry: string): string {
+  if (fieldId === 'duplex') {
+    if (entry === '') {
+      return 'Off';
+    }
+
+    if (entry === 'split') {
+      return 'Split';
+    }
+  }
+
+  return entry;
 }
 
 export function channelFieldEditor(field: RadioMemoryMapUiField): ChannelFieldEditor {
@@ -193,7 +490,7 @@ export function channelFieldEditor(field: RadioMemoryMapUiField): ChannelFieldEd
   if (field.value?.kind === 'enum') {
     return {
       kind: 'select',
-      items: field.value.values.map((entry) => ({ label: entry, value: entry })),
+      items: enumSelectItems(field.fieldId, field.value.values),
     };
   }
 
@@ -218,6 +515,10 @@ export function serializeChannelFieldValue(
   field: RadioMemoryMapUiField,
   value: RadioSettingValue | undefined,
 ): string {
+  if (field.fieldId === 'duplex') {
+    return duplexToSelectValue(value);
+  }
+
   if (value === undefined || value === null) {
     return '';
   }
@@ -236,6 +537,10 @@ export function serializeChannelFieldValue(
 }
 
 export function parseChannelFieldValue(field: RadioMemoryMapUiField, input: string | number | boolean): RadioSettingValue {
+  if (field.fieldId === 'duplex') {
+    return duplexFromSelectValue(String(input));
+  }
+
   const editor = channelFieldEditor(field);
   const booleanSelect =
     editor.kind === 'select' && editor.items.some((item) => item.value === 'true' || item.value === 'false');

@@ -5,13 +5,19 @@ import type {
   RadioId,
   RadioMemoryMap,
   RadioProgram,
+  RadioProgrammedChannel,
   RadioProgressIndicator,
   RadioSettings,
 } from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
+import {
+  applyChannelPatch,
+  channelCapacity,
+  channelNameMaxLength,
+  type ChannelPatch,
+} from '~/utils/channel-edit';
 import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
@@ -407,6 +413,125 @@ export function useRadio() {
     });
   }
 
+  async function addChannel(programmed: RadioProgrammedChannel): Promise<boolean> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to add to',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return false;
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+
+    if (programmed.channelNumber < 0 || programmed.channelNumber >= capacity) {
+      toast.add({
+        title: 'Cannot add channel',
+        description: 'That memory slot is outside this radio\'s channel range.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    if (program.value.channels.some((channel) => channel.channelNumber === programmed.channelNumber)) {
+      toast.add({
+        title: 'Slot in use',
+        description: `Memory slot ${programmed.channelNumber} is already programmed.`,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: [...program.value.channels, programmed].sort((left, right) => left.channelNumber - right.channelNumber),
+    });
+
+    toast.add({
+      title: 'Channel added',
+      description: `Memory slot ${programmed.channelNumber} was added to the loaded image.`,
+      color: 'success',
+      icon: 'i-lucide-plus',
+    });
+    return true;
+  }
+
+  async function addChannels(programmed: RadioProgrammedChannel[]): Promise<number> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to add to',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return 0;
+    }
+
+    if (programmed.length === 0) {
+      return 0;
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+    const occupied = new Set(program.value.channels.map((channel) => channel.channelNumber));
+    const accepted = programmed.filter((channel) => {
+      return channel.channelNumber >= 0 && channel.channelNumber < capacity && !occupied.has(channel.channelNumber);
+    });
+
+    if (accepted.length === 0) {
+      toast.add({
+        title: 'Could not add channels',
+        description: 'No unused memory slots were available.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return 0;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: [...program.value.channels, ...accepted].sort((left, right) => left.channelNumber - right.channelNumber),
+    });
+
+    const first = accepted[0]!.channelNumber;
+    const last = accepted[accepted.length - 1]!.channelNumber;
+    const radioName = activeRadioId.value.name;
+    const slotLabel = accepted.length === 1 ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
+
+    toast.add({
+      title: accepted.length === 1 ? 'Channel added' : 'Channels added',
+      description: `${accepted.length === 1 ? '1 channel' : `${accepted.length} channels`} added to ${radioName} in ${slotLabel}.`,
+      color: 'success',
+      icon: 'i-lucide-plus',
+    });
+    return accepted.length;
+  }
+
+  async function removeChannels(channelNumbers: number[]): Promise<void> {
+    if (!program.value || !memory.value || !activeRadioId.value || channelNumbers.length === 0) {
+      return;
+    }
+
+    const remove = new Set(channelNumbers);
+    persistProgram({
+      ...program.value,
+      channels: program.value.channels.filter((channel) => !remove.has(channel.channelNumber)),
+    });
+
+    toast.add({
+      title: channelNumbers.length === 1 ? 'Channel removed' : 'Channels removed',
+      description:
+        channelNumbers.length === 1
+          ? `Memory slot ${channelNumbers[0]} was cleared in the loaded image.`
+          : `${channelNumbers.length} memory slots were cleared in the loaded image.`,
+      color: 'success',
+      icon: 'i-lucide-trash-2',
+    });
+  }
+
   function persistProgram(nextProgram: RadioProgram): void {
     program.value = nextProgram;
     channels.value = rowsFromProgram(nextProgram);
@@ -653,6 +778,9 @@ export function useRadio() {
     writeToRadio,
     updateSettings,
     updateChannel,
+    addChannel,
+    addChannels,
+    removeChannels,
     cancelTransfer,
     saveSerialLog,
     openMemoryFile,

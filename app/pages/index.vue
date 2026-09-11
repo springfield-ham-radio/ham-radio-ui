@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { TableColumn, TableRow } from '@nuxt/ui';
-import type { RadioChannel, RadioSettingValue } from '@springfield/ham-radio-api';
+import type { RadioChannel, RadioProgrammedChannel, RadioSettingValue } from '@springfield/ham-radio-api';
 import {
   collectChannelMemoryMapUiFields,
   formatMemoryMapFieldValue,
@@ -10,13 +10,14 @@ import {
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
 import { extraChannelTableFields } from '~/utils/channel-table';
+import { channelCapacity, nextAvailableChannelNumber } from '~/utils/channel-edit';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 const UCheckbox = resolveComponent('UCheckbox');
 
-const { channels, memory, program, settingsMemoryMap, activeRadioId, serialLog, updateSettings, updateChannel, saveSerialLog } =
+const { channels, memory, program, settingsMemoryMap, activeRadioId, serialLog, updateSettings, updateChannel, addChannel, removeChannels, saveSerialLog } =
   useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 const { saveChannels } = useSavedChannels();
@@ -128,7 +129,7 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
     ...core,
     ...dynamic,
     {
-      id: 'edit',
+      id: 'actions',
       header: '',
     },
   ];
@@ -136,13 +137,63 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
 
 const editorOpen = ref(false);
 const editingChannelNumber = ref<number | undefined>();
+const removeOpen = ref(false);
+const pendingRemoveNumbers = ref<number[]>([]);
+
+const occupiedChannelNumbers = computed(() => program.value?.channels.map((channel) => channel.channelNumber) ?? []);
+const radioChannelCapacity = computed(() => channelCapacity(settingsMemoryMap.value));
+const nextFreeChannelNumber = computed(() =>
+  nextAvailableChannelNumber(occupiedChannelNumbers.value, radioChannelCapacity.value),
+);
+const canAddChannel = computed(() => {
+  return Boolean(program.value && memory.value && activeRadioId.value && nextFreeChannelNumber.value !== undefined);
+});
+const addChannelTooltip = computed(() => {
+  if (!program.value || !memory.value) {
+    return 'Open a memory file or import from a radio first';
+  }
+
+  if (nextFreeChannelNumber.value === undefined) {
+    return 'All memory slots are programmed';
+  }
+
+  return 'Add a memory channel';
+});
 
 const editingChannel = computed(() => {
+  if (editingChannelNumber.value === undefined) {
+    return undefined;
+  }
+
   return program.value?.channels.find((channel) => channel.channelNumber === editingChannelNumber.value);
+});
+
+const removeTitle = computed(() =>
+  pendingRemoveNumbers.value.length === 1 ? 'Remove channel' : 'Remove channels',
+);
+
+const removeDescription = computed(() => {
+  const numbers = pendingRemoveNumbers.value;
+
+  if (numbers.length === 1) {
+    const programmed = program.value?.channels.find((channel) => channel.channelNumber === numbers[0]);
+    const label =
+      programmed && typeof programmed.radioChannel === 'object' && programmed.radioChannel.name
+        ? `${numbers[0]} (${programmed.radioChannel.name})`
+        : String(numbers[0]);
+    return `Clear memory slot ${label} from the loaded image? Write to the radio to apply the change on the device.`;
+  }
+
+  return `Clear ${numbers.length} selected memory slots from the loaded image? Write to the radio to apply the change on the device.`;
 });
 
 function openChannelEditor(channelNumber: number): void {
   editingChannelNumber.value = channelNumber;
+  editorOpen.value = true;
+}
+
+function openAddChannel(): void {
+  editingChannelNumber.value = undefined;
   editorOpen.value = true;
 }
 
@@ -162,6 +213,34 @@ function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
   }
 
   void updateChannel(editingChannelNumber.value, patch);
+}
+
+function onCreateChannel(programmed: RadioProgrammedChannel): void {
+  void addChannel(programmed);
+}
+
+function requestRemoveChannel(channelNumber: number): void {
+  pendingRemoveNumbers.value = [channelNumber];
+  removeOpen.value = true;
+}
+
+function requestRemoveSelected(): void {
+  pendingRemoveNumbers.value = selectedChannelNumbers.value;
+  removeOpen.value = true;
+}
+
+function confirmRemove(): void {
+  const numbers = pendingRemoveNumbers.value;
+
+  if (editingChannelNumber.value !== undefined && numbers.includes(editingChannelNumber.value)) {
+    editorOpen.value = false;
+    editingChannelNumber.value = undefined;
+  }
+
+  void removeChannels(numbers);
+  rowSelection.value = {};
+  removeOpen.value = false;
+  pendingRemoveNumbers.value = [];
 }
 
 function portableChannelFromMemory(channelNumber: number): RadioChannel | undefined {
@@ -269,16 +348,39 @@ async function onSaveSerialLog(): Promise<void> {
                 Set your amateur or GMRS call sign in Preferences to flag channels outside your license privileges.
               </p>
             </div>
-            <UButton
-              icon="i-lucide-bookmark"
-              color="primary"
-              variant="soft"
-              size="sm"
-              label="Save to library"
-              :disabled="selectedCount === 0 || isSavingToLibrary"
-              :loading="isSavingToLibrary"
-              @click="saveSelectedToLibrary"
-            />
+            <div class="flex shrink-0 items-center gap-1.5">
+              <UTooltip :text="addChannelTooltip" :disabled="canAddChannel">
+                <span class="inline-flex">
+                  <UButton
+                    icon="i-lucide-plus"
+                    color="primary"
+                    size="sm"
+                    label="Add channel"
+                    :disabled="!canAddChannel"
+                    @click="openAddChannel"
+                  />
+                </span>
+              </UTooltip>
+              <UButton
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="soft"
+                size="sm"
+                label="Remove"
+                :disabled="selectedCount === 0"
+                @click="requestRemoveSelected"
+              />
+              <UButton
+                icon="i-lucide-bookmark"
+                color="primary"
+                variant="soft"
+                size="sm"
+                label="Save to library"
+                :disabled="selectedCount === 0 || isSavingToLibrary"
+                :loading="isSavingToLibrary"
+                @click="saveSelectedToLibrary"
+              />
+            </div>
           </div>
           <div class="min-h-0 flex-1 overflow-hidden">
             <UTable
@@ -316,21 +418,32 @@ async function onSaveSerialLog(): Promise<void> {
                   </template>
                 </UTooltip>
               </template>
-              <template #edit-cell="{ row }">
-                <UButton
-                  icon="i-lucide-pencil"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  aria-label="Edit channel"
-                  @click.stop="openChannelEditor(row.original.channelNumber)"
-                />
+              <template #actions-cell="{ row }">
+                <div class="flex items-center justify-end gap-0.5" @click.stop>
+                  <UButton
+                    icon="i-lucide-pencil"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="Edit channel"
+                    @click="openChannelEditor(row.original.channelNumber)"
+                  />
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="Remove channel"
+                    @click="requestRemoveChannel(row.original.channelNumber)"
+                  />
+                </div>
               </template>
             </UTable>
           </div>
           <p class="mt-2 shrink-0 text-xs text-muted">
-            Select channels and choose Save to library to store portable name, frequencies, and tones. Click a row to edit
-            the loaded memory.
+            Select channels to save them to the library or remove them from this radio. Add a channel to the next unused
+            memory slot, or select saved channels on the Channels page and choose Add to radio. Click a row to edit the
+            loaded memory.
           </p>
         </div>
       </template>
@@ -396,7 +509,21 @@ async function onSaveSerialLog(): Promise<void> {
       v-model:open="editorOpen"
       :channel="editingChannel"
       :memory-map="settingsMemoryMap"
+      :occupied-channel-numbers="occupiedChannelNumbers"
+      :channel-capacity="radioChannelCapacity"
       @update:channel="onChannelPatch"
+      @create="onCreateChannel"
     />
+    <UModal
+      v-model:open="removeOpen"
+      :title="removeTitle"
+      :description="removeDescription"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer="{ close }">
+        <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
+        <UButton color="error" label="Remove" @click="confirmRemove" />
+      </template>
+    </UModal>
   </div>
 </template>

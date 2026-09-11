@@ -5,46 +5,59 @@ import {
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
 import {
+  applyChannelPatch,
   channelFieldEditor,
   channelNameMaxLength,
+  createProgrammedChannel,
+  duplexFromFrequencies,
   formatFrequencyMHz,
   keyToTone,
+  nextAvailableChannelNumber,
   parseChannelFieldValue,
   parseFrequencyMHz,
+  patchFromDuplex,
   serializeChannelFieldValue,
   toneSelectItems,
   toneToKey,
   type ChannelPatch,
 } from '~/utils/channel-edit';
-import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
   open: boolean;
   channel?: RadioProgrammedChannel;
   memoryMap?: RadioMemoryMap;
+  occupiedChannelNumbers?: number[];
+  channelCapacity?: number;
 }>();
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
   'update:channel': [patch: ChannelPatch];
+  create: [channel: RadioProgrammedChannel];
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
-const { filteredChannels, search, refresh, isLoading } = useSavedChannels();
 
 const name = ref('');
 const receiveMHz = ref('');
 const transmitMHz = ref('');
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
-const libraryOpen = ref(false);
+const draftChannel = ref<RadioProgrammedChannel | undefined>();
+const slotNumber = ref(0);
+
+const isCreate = computed(() => props.channel === undefined);
+const occupiedSlots = computed(() => new Set(props.occupiedChannelNumbers ?? []));
+const capacity = computed(() => props.channelCapacity ?? 0);
+
+const programmed = computed(() => (isCreate.value ? draftChannel.value : props.channel));
 
 const radioChannel = computed(() => {
-  if (!props.channel || typeof props.channel.radioChannel === 'string') {
+  if (!programmed.value || typeof programmed.value.radioChannel === 'string') {
     return undefined;
   }
 
-  return props.channel.radioChannel;
+  return programmed.value.radioChannel;
 });
 
 const nameMaxLength = computed(() => channelNameMaxLength(props.memoryMap));
@@ -52,12 +65,37 @@ const toneItems = toneSelectItems();
 const extraFields = computed(() => (props.memoryMap ? collectChannelMemoryMapUiFields(props.memoryMap) : []));
 
 const title = computed(() => {
-  if (props.channel === undefined) {
-    return 'Edit channel';
+  if (isCreate.value) {
+    return 'New channel';
   }
 
-  return `Channel ${props.channel.channelNumber}`;
+  return `Channel ${props.channel?.channelNumber}`;
 });
+
+const slideoverOpen = computed({
+  get: () => props.open,
+  set: (value: boolean) => {
+    emit('update:open', value);
+  },
+});
+
+const slotError = computed(() => {
+  if (!isCreate.value) {
+    return undefined;
+  }
+
+  if (!Number.isInteger(slotNumber.value) || slotNumber.value < 0 || slotNumber.value >= capacity.value) {
+    return capacity.value > 0 ? `Enter a memory slot from 0 to ${capacity.value - 1}` : 'This radio has no memory slots';
+  }
+
+  if (occupiedSlots.value.has(slotNumber.value)) {
+    return `Memory slot ${slotNumber.value} is already programmed`;
+  }
+
+  return undefined;
+});
+
+const canCreate = computed(() => isCreate.value && slotError.value === undefined && capacity.value > 0);
 
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(transmitMHz.value) ?? radioChannel.value?.transmitFrequency;
@@ -67,45 +105,79 @@ const privilegeWarning = computed(() => {
 watch(
   () => [props.open, props.channel?.channelNumber] as const,
   () => {
-    if (!props.open || !radioChannel.value) {
+    if (!props.open) {
       return;
     }
 
-    name.value = radioChannel.value.name ?? '';
-    receiveMHz.value = formatFrequencyMHz(radioChannel.value.receiveFrequency);
-    transmitMHz.value = formatFrequencyMHz(radioChannel.value.transmitFrequency);
+    if (props.channel === undefined) {
+      const available = nextAvailableChannelNumber(props.occupiedChannelNumbers ?? [], capacity.value) ?? 0;
+      draftChannel.value = createProgrammedChannel({
+        channelNumber: available,
+        memoryMap: props.memoryMap,
+      });
+      slotNumber.value = available;
+      applyDraftToFields(draftChannel.value);
+      return;
+    }
+
+    draftChannel.value = undefined;
+
+    if (typeof props.channel.radioChannel === 'string') {
+      return;
+    }
+
+    name.value = props.channel.radioChannel.name ?? '';
+    receiveMHz.value = formatFrequencyMHz(props.channel.radioChannel.receiveFrequency);
+    transmitMHz.value = formatFrequencyMHz(props.channel.radioChannel.transmitFrequency);
     receiveError.value = undefined;
     transmitError.value = undefined;
   },
+  { immediate: true },
 );
 
-function close(): void {
-  libraryOpen.value = false;
-  emit('update:open', false);
-}
+function applyDraftToFields(programmedChannel: RadioProgrammedChannel): void {
+  if (typeof programmedChannel.radioChannel === 'string') {
+    return;
+  }
 
-async function openLibrary(): Promise<void> {
-  libraryOpen.value = true;
-  search.value = '';
-  await refresh();
-}
-
-function applyLibraryChannel(channel: SavedChannel): void {
-  name.value = nameMaxLength.value === undefined ? (channel.name ?? '') : (channel.name ?? '').slice(0, nameMaxLength.value);
-  receiveMHz.value = formatFrequencyMHz(channel.receiveFrequency);
-  transmitMHz.value = formatFrequencyMHz(channel.transmitFrequency);
+  name.value = programmedChannel.radioChannel.name ?? '';
+  receiveMHz.value = formatFrequencyMHz(programmedChannel.radioChannel.receiveFrequency);
+  transmitMHz.value = formatFrequencyMHz(programmedChannel.radioChannel.transmitFrequency);
   receiveError.value = undefined;
   transmitError.value = undefined;
+}
 
-  emit('update:channel', {
-    name: name.value,
-    receiveFrequencyHz: channel.receiveFrequency,
-    transmitFrequencyHz: channel.transmitFrequency,
-    receiveTone: channel.receiveTone,
-    transmitTone: channel.transmitTone,
-  });
+function patchCurrent(patch: ChannelPatch): void {
+  if (isCreate.value) {
+    if (!draftChannel.value) {
+      return;
+    }
 
-  libraryOpen.value = false;
+    draftChannel.value = applyChannelPatch(draftChannel.value, patch, { nameMaxLength: nameMaxLength.value });
+    return;
+  }
+
+  emit('update:channel', patch);
+}
+
+function closeEditor(dismiss?: unknown): void {
+  emit('update:open', false);
+
+  if (typeof dismiss === 'function') {
+    dismiss();
+  }
+}
+
+function updateSlotNumber(value: number | undefined | null): void {
+  if (value === undefined || value === null || !draftChannel.value) {
+    return;
+  }
+
+  slotNumber.value = value;
+  draftChannel.value = {
+    ...draftChannel.value,
+    channelNumber: value,
+  };
 }
 
 function commitName(): void {
@@ -121,7 +193,7 @@ function commitName(): void {
     return;
   }
 
-  emit('update:channel', { name: next });
+  patchCurrent({ name: next });
 }
 
 function commitFrequency(kind: 'receive' | 'transmit'): void {
@@ -129,45 +201,60 @@ function commitFrequency(kind: 'receive' | 'transmit'): void {
     return;
   }
 
-  const draft = kind === 'receive' ? receiveMHz : transmitMHz;
+  const field = kind === 'receive' ? receiveMHz : transmitMHz;
   const error = kind === 'receive' ? receiveError : transmitError;
   const currentHz = kind === 'receive' ? radioChannel.value.receiveFrequency : radioChannel.value.transmitFrequency;
-  const parsed = parseFrequencyMHz(draft.value);
+  const parsed = parseFrequencyMHz(field.value);
 
   if (parsed === undefined) {
     error.value = 'Enter a frequency in MHz';
-    draft.value = formatFrequencyMHz(currentHz);
+    field.value = formatFrequencyMHz(currentHz);
     return;
   }
 
   error.value = undefined;
-  draft.value = formatFrequencyMHz(parsed);
+  field.value = formatFrequencyMHz(parsed);
 
   if (parsed === currentHz) {
     return;
   }
 
   if (kind === 'receive') {
-    emit('update:channel', { receiveFrequencyHz: parsed });
+    patchCurrent({ receiveFrequencyHz: parsed });
     return;
   }
 
-  emit('update:channel', { transmitFrequencyHz: parsed });
+  patchCurrent({ transmitFrequencyHz: parsed });
 }
 
 function updateTone(kind: 'receive' | 'transmit', key: string): void {
   const tone = keyToTone(key);
 
   if (kind === 'receive') {
-    emit('update:channel', { receiveTone: tone });
+    patchCurrent({ receiveTone: tone });
     return;
   }
 
-  emit('update:channel', { transmitTone: tone });
+  patchCurrent({ transmitTone: tone });
 }
 
 function extraValue(field: RadioMemoryMapUiField): RadioSettingValue | undefined {
-  return props.channel?.settings?.[field.fieldId];
+  if (field.fieldId === 'duplex' && radioChannel.value) {
+    const derived = duplexFromFrequencies(
+      radioChannel.value.receiveFrequency,
+      radioChannel.value.transmitFrequency,
+      programmed.value?.settings,
+    );
+
+    if (derived === 'split' && !extraSelectItems(field).some((item) => item.value === 'split')) {
+      const { receiveFrequency, transmitFrequency } = radioChannel.value;
+      return transmitFrequency === receiveFrequency ? '' : transmitFrequency > receiveFrequency ? '+' : '-';
+    }
+
+    return derived;
+  }
+
+  return programmed.value?.settings?.[field.fieldId];
 }
 
 function extraEditor(field: RadioMemoryMapUiField) {
@@ -216,21 +303,65 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
     return;
   }
 
-  emit('update:channel', {
+  if (field.fieldId === 'duplex' && radioChannel.value) {
+    const patch = patchFromDuplex(radioChannel.value.receiveFrequency, radioChannel.value.transmitFrequency, String(value));
+
+    if (patch.transmitFrequencyHz !== undefined) {
+      transmitMHz.value = formatFrequencyMHz(patch.transmitFrequencyHz);
+      transmitError.value = undefined;
+    }
+
+    patchCurrent(patch);
+    return;
+  }
+
+  patchCurrent({
     settings: {
       [field.fieldId]: parseChannelFieldValue(field, value),
     },
   });
 }
+
+function submitCreate(): void {
+  if (!draftChannel.value || typeof draftChannel.value.radioChannel === 'string') {
+    return;
+  }
+
+  const receiveHz = parseFrequencyMHz(receiveMHz.value);
+  const transmitHz = parseFrequencyMHz(transmitMHz.value);
+
+  receiveError.value = receiveHz === undefined ? 'Enter a frequency in MHz' : undefined;
+  transmitError.value = transmitHz === undefined ? 'Enter a frequency in MHz' : undefined;
+
+  if (receiveHz === undefined || transmitHz === undefined || slotError.value) {
+    return;
+  }
+
+  const nextName = nameMaxLength.value === undefined ? name.value : name.value.slice(0, nameMaxLength.value);
+  const programmedChannel = applyChannelPatch(
+    {
+      ...draftChannel.value,
+      channelNumber: slotNumber.value,
+    },
+    {
+      name: nextName,
+      receiveFrequencyHz: receiveHz,
+      transmitFrequencyHz: transmitHz,
+    },
+    { nameMaxLength: nameMaxLength.value },
+  );
+
+  emit('create', programmedChannel);
+  closeEditor();
+}
 </script>
 
 <template>
   <USlideover
-    :open="open"
+    v-model:open="slideoverOpen"
     :title="title"
-    :description="radioChannel?.name || 'Memory channel'"
+    :description="isCreate ? 'Add a memory channel to the loaded radio image.' : radioChannel?.name || 'Memory channel'"
     :ui="{ content: 'max-w-md' }"
-    @update:open="emit('update:open', $event)"
   >
     <template #body>
       <div v-if="radioChannel" class="space-y-4">
@@ -242,6 +373,21 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
           :title="privilegeWarning.title"
           :description="privilegeWarning.detail"
         />
+
+        <UFormField
+          v-if="isCreate"
+          label="Memory slot"
+          :error="slotError"
+          :hint="capacity > 0 ? `0 to ${capacity - 1}` : undefined"
+        >
+          <UInputNumber
+            :model-value="slotNumber"
+            :min="0"
+            :max="Math.max(capacity - 1, 0)"
+            class="w-full"
+            @update:model-value="updateSlotNumber"
+          />
+        </UFormField>
 
         <UFormField label="Name" :hint="nameMaxLength ? `${nameMaxLength} characters` : undefined">
           <UInput
@@ -336,44 +482,12 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
       </div>
     </template>
 
-    <template #footer>
-      <div class="flex w-full items-center justify-between gap-2">
-        <UButton
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-library"
-          label="Load from library"
-          :disabled="!radioChannel"
-          @click="openLibrary"
-        />
-        <UButton color="neutral" variant="outline" label="Done" @click="close" />
+    <template #footer="{ close }">
+      <div class="flex w-full items-center justify-end gap-2">
+        <UButton v-if="isCreate" type="button" color="neutral" variant="outline" label="Cancel" @click="closeEditor(close)" />
+        <UButton v-if="isCreate" type="button" color="primary" label="Add channel" :disabled="!canCreate" @click="submitCreate" />
+        <UButton v-else type="button" color="neutral" variant="outline" label="Done" @click="closeEditor(close)" />
       </div>
     </template>
   </USlideover>
-
-  <UModal v-model:open="libraryOpen" title="Load from library" description="Apply a portable saved channel to this memory slot.">
-    <template #body>
-      <div class="space-y-3">
-        <UInput v-model="search" icon="i-lucide-search" placeholder="Search saved channels" />
-        <div class="max-h-80 space-y-1 overflow-y-auto">
-          <p v-if="isLoading" class="px-1 py-4 text-sm text-muted">Loading library…</p>
-          <p v-else-if="filteredChannels.length === 0" class="px-1 py-4 text-sm text-muted">
-            No saved channels match. Save channels from the Radio page first.
-          </p>
-          <button
-            v-for="channel in filteredChannels"
-            :key="channel.id"
-            type="button"
-            class="flex w-full flex-col rounded-md px-2 py-2 text-left hover:bg-elevated"
-            @click="applyLibraryChannel(channel)"
-          >
-            <span class="text-sm font-medium text-highlighted">{{ channel.name || 'Untitled channel' }}</span>
-            <span class="text-xs tabular-nums text-muted">
-              TX {{ formatFrequencyMHz(channel.transmitFrequency) }} · RX {{ formatFrequencyMHz(channel.receiveFrequency) }}
-            </span>
-          </button>
-        </div>
-      </div>
-    </template>
-  </UModal>
 </template>
