@@ -335,7 +335,7 @@ async function onSaveSerialLog(): Promise<void> {
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />
-        <div v-else class="min-h-0 flex-1 overflow-y-auto pt-2">
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
           <RadioSettingsForm
             v-if="settingsMemoryMap && program"
             :memory-map="settingsMemoryMap"
