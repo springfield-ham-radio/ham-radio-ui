@@ -1,6 +1,6 @@
 # Hex Dump
 
-The **Radio → Hex Dump** tab shows the loaded memory image next to the radio’s memory map. Until a memory file is opened or a radio is imported, the tab offers **Import from Radio** and **Open Memory**.
+The **Radio → Hex Dump** tab shows the loaded memory image next to the radio’s memory map. Use **Import** / **Write** on the Radio page to read or program a radio, or **Open** / **Save** for a memory file. Until a memory is loaded, the tab also offers **Import from Radio** and **Open Memory**.
 
 ## Layout
 

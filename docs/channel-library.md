@@ -19,4 +19,4 @@ You can also mark or unmark a row as a repeater in the channel editor.
 1. Open a memory file or import from a radio.
 2. On **Channels**, select one or more rows.
 3. Choose **Add to radio**. HamBench fills unused slots in order.
-4. Use **File → Write to Radio…** to program the device.
+4. Use **Write** on the Radio page (or **File → Write to Radio…**) to program the device.

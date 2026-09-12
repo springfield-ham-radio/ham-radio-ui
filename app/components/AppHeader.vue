@@ -6,8 +6,7 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
 const router = useRouter();
-const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } =
-  useRadio();
+const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const isRadioPage = computed(() => route.path === '/');
@@ -152,58 +151,6 @@ defineShortcuts({
     </div>
 
     <div v-if="!isPreferences" class="flex flex-1 items-center justify-end gap-1.5">
-      <template v-if="isRadioPage && showBrowserFileActions">
-        <UTooltip text="Open">
-          <UButton
-            icon="i-lucide-folder-open"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Open"
-            @click="openMemoryFile"
-          />
-        </UTooltip>
-        <UTooltip text="Save">
-          <UButton
-            icon="i-lucide-save"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Save"
-            @click="saveMemoryFile"
-          />
-        </UTooltip>
-        <UTooltip text="Save As">
-          <UButton
-            icon="i-lucide-save-all"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Save As"
-            @click="saveMemoryFileAs"
-          />
-        </UTooltip>
-        <UTooltip text="Import From Radio">
-          <UButton
-            icon="i-lucide-download"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Import From Radio"
-            @click="importOpen = true"
-          />
-        </UTooltip>
-        <UTooltip text="Write To Radio">
-          <UButton
-            icon="i-lucide-upload"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Write To Radio"
-            @click="openWriteToRadio"
-          />
-        </UTooltip>
-      </template>
       <UTooltip text="Preferences">
         <UButton icon="i-lucide-settings" color="neutral" variant="ghost" to="/preferences" aria-label="Preferences" />
       </UTooltip>

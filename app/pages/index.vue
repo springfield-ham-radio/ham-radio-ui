@@ -20,17 +20,22 @@ const UCheckbox = resolveComponent('UCheckbox');
 
 const {
   channels,
+  configurations,
   memory,
   program,
   settingsMemoryMap,
   activeRadioId,
   serialLog,
+  importOpen,
   updateSettings,
   updateChannel,
   addChannel,
   reorderChannels,
   removeChannels,
   saveSerialLog,
+  openWriteToRadio,
+  openMemoryFile,
+  saveMemoryFile,
 } = useRadio();
 const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
 const { saveChannels } = useSavedChannels();
@@ -172,6 +177,29 @@ const nextFreeChannelNumber = computed(() =>
 );
 const canAddChannel = computed(() => {
   return Boolean(program.value && memory.value && activeRadioId.value && nextFreeChannelNumber.value !== undefined);
+});
+const hasLoadedMemory = computed(() => Boolean(memory.value && activeRadioId.value));
+const canWriteMemory = computed(() => {
+  if (!hasLoadedMemory.value || !activeRadioId.value) {
+    return false;
+  }
+
+  const config = configurations.value.find((item) => item.id.model === activeRadioId.value?.model);
+  return Boolean(config?.writeMemory);
+});
+const writeMemoryTooltip = computed(() => {
+  if (!hasLoadedMemory.value) {
+    return 'Open a memory file or import from a radio first';
+  }
+
+  if (!canWriteMemory.value) {
+    return `${activeRadioId.value?.name ?? 'This radio'} does not support writing memory`;
+  }
+
+  return 'Write to Radio';
+});
+const saveMemoryTooltip = computed(() => {
+  return hasLoadedMemory.value ? 'Save' : 'Open a memory file or import from a radio first';
 });
 const addChannelTooltip = computed(() => {
   if (!program.value || !memory.value) {
@@ -415,13 +443,64 @@ async function onSaveSerialLog(): Promise<void> {
       class="flex min-h-0 flex-1 flex-col overflow-hidden"
       :unmount-on-hide="false"
       :ui="{
-        list: 'w-full shrink-0 gap-0.5 border-b border-default',
+        list: 'w-full shrink-0 items-center gap-0.5 border-b border-default',
         trigger: 'grow-0 px-3 data-[state=inactive]:text-muted data-[state=active]:text-primary',
         leadingIcon: 'text-current',
         indicator: 'bg-primary h-0.5 rounded-full',
         content: 'flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none',
       }"
     >
+      <template #list-trailing>
+        <div class="ml-auto flex shrink-0 items-center gap-1.5 ps-2">
+          <UTooltip text="Open Memory">
+            <UButton
+              icon="i-lucide-folder-open"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              aria-label="Open Memory"
+              @click="openMemoryFile"
+            />
+          </UTooltip>
+          <UTooltip :text="saveMemoryTooltip">
+            <span class="inline-flex">
+              <UButton
+                icon="i-lucide-save"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                :disabled="!hasLoadedMemory"
+                aria-label="Save"
+                @click="saveMemoryFile"
+              />
+            </span>
+          </UTooltip>
+          <USeparator orientation="vertical" class="h-5" />
+          <UTooltip text="Import from Radio">
+            <UButton
+              icon="i-lucide-download"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              aria-label="Import from Radio"
+              @click="importOpen = true"
+            />
+          </UTooltip>
+          <UTooltip :text="writeMemoryTooltip">
+            <span class="inline-flex">
+              <UButton
+                icon="i-lucide-upload"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                :disabled="!canWriteMemory"
+                aria-label="Write to Radio"
+                @click="openWriteToRadio"
+              />
+            </span>
+          </UTooltip>
+        </div>
+      </template>
       <template #channels>
         <RadioMemoryEmpty v-if="!activeRadioId" />
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
