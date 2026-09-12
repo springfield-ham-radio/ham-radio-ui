@@ -1,3 +1,9 @@
+## [0.20.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.19.1...v0.20.0) (2026-09-12)
+
+### Features
+
+* disable import and write while CAT is connected ([0fa41c9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0fa41c969522865b32644174a847bf74ecb5aa7c))
+
 ## [0.19.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.19.0...v0.19.1) (2026-09-12)
 
 ### Bug Fixes
