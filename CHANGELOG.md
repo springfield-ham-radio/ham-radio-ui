@@ -1,3 +1,9 @@
+## [0.21.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.20.0...v0.21.0) (2026-09-12)
+
+### Features
+
+* allow concurrent CAT sessions on separate serial ports ([0bf9b45](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0bf9b4544d9e5aa2c0a872e32b2197c7e02fc225))
+
 ## [0.20.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.19.1...v0.20.0) (2026-09-12)
 
 ### Features
