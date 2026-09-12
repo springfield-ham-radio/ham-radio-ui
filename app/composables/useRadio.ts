@@ -115,17 +115,7 @@ export function useRadio() {
   const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
-  const { lockedPort: catLockedPort } = useCatPortLock();
-  const catBlocksMemoryTransfer = computed(() => isCatMemoryTransferBlocked(catLockedPort.value));
-
-  watch(catLockedPort, (lockedPort) => {
-    if (!lockedPort) {
-      return;
-    }
-
-    importOpen.value = false;
-    writeOpen.value = false;
-  });
+  const { lockedPorts: catLockedPorts } = useCatPortLock();
 
   async function refreshCatalogState(): Promise<void> {
     await reloadUserJsonCatalogRecords();
@@ -253,8 +243,8 @@ export function useRadio() {
     return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
-  function warnIfCatBlocksMemoryTransfer(): boolean {
-    if (!catBlocksMemoryTransfer.value) {
+  function warnIfCatBlocksMemoryTransfer(serialPortPath: string): boolean {
+    if (!isCatMemoryTransferBlocked(catLockedPorts.value, serialPortPath)) {
       return false;
     }
 
@@ -269,18 +259,14 @@ export function useRadio() {
   }
 
   /**
-   * Open the import dialog unless CAT already holds the programming port.
+   * Open the import dialog. CAT on another serial port does not block this.
    */
   function openImportFromRadio(): void {
-    if (warnIfCatBlocksMemoryTransfer()) {
-      return;
-    }
-
     importOpen.value = true;
   }
 
   async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
-    if (warnIfCatBlocksMemoryTransfer()) {
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
       return;
     }
 
@@ -343,13 +329,9 @@ export function useRadio() {
   }
 
   /**
-   * Open the write dialog unless CAT holds the port or no memory is loaded.
+   * Open the write dialog unless no memory is loaded.
    */
   function openWriteToRadio(): void {
-    if (warnIfCatBlocksMemoryTransfer()) {
-      return;
-    }
-
     if (!memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to write',
@@ -377,7 +359,7 @@ export function useRadio() {
     const radioId = activeRadioId.value;
     const config = getConfiguration(radioId);
 
-    if (warnIfCatBlocksMemoryTransfer()) {
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
       return;
     }
 
@@ -848,7 +830,6 @@ export function useRadio() {
     serialLog,
     modulesInstallOpen,
     modulesInstallRequired,
-    catBlocksMemoryTransfer,
     initialize,
     refreshCatalogState,
     openModulesInstall,

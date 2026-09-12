@@ -1,8 +1,12 @@
 /**
- * Shared lock so Import / Write refuse the serial port while a CAT session is open.
+ * Serial ports held by live CAT sessions. Import / Write may use any other port.
  */
 export function useCatPortLock() {
-  const lockedPort = useState<string | undefined>('cat-locked-serial-port', () => undefined);
+  const lockedPorts = useState<string[]>('cat-locked-serial-ports', () => []);
 
-  return { lockedPort };
+  function setLockedPorts(ports: string[]): void {
+    lockedPorts.value = [...ports];
+  }
+
+  return { lockedPorts, setLockedPorts };
 }

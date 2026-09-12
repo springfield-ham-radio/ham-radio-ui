@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { importFromRadioTooltip } from '~/utils/cat-memory-transfer';
-
-const { catBlocksMemoryTransfer, openImportFromRadio, openMemoryFile } = useRadio();
-
-const importTooltip = computed(() => importFromRadioTooltip(catBlocksMemoryTransfer.value));
+const { openImportFromRadio, openMemoryFile } = useRadio();
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
     <p class="text-sm text-muted">Open a memory file or import from a radio to get started.</p>
     <div class="flex flex-wrap items-center justify-center gap-2">
-      <UTooltip :text="importTooltip">
-        <span class="inline-flex">
-          <UButton
-            icon="i-lucide-download"
-            color="primary"
-            label="Import from Radio"
-            :disabled="catBlocksMemoryTransfer"
-            @click="openImportFromRadio"
-          />
-        </span>
-      </UTooltip>
+      <UButton
+        icon="i-lucide-download"
+        color="primary"
+        label="Import from Radio"
+        @click="openImportFromRadio"
+      />
       <UButton
         icon="i-lucide-folder-open"
         color="neutral"

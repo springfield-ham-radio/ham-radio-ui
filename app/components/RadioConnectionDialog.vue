@@ -12,6 +12,8 @@ const props = defineProps<{
   confirmLabel: string;
   confirmLoading?: boolean;
   filter?: RadioConnectionFilter;
+  unavailablePorts?: string[];
+  omitUnavailablePorts?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -46,6 +48,8 @@ const {
 } = useRadioConnectionForm({
   isOpen: () => props.open,
   filter: props.filter,
+  unavailablePorts: () => props.unavailablePorts ?? [],
+  omitUnavailablePorts: () => props.omitUnavailablePorts ?? false,
 });
 
 async function confirm(): Promise<void> {

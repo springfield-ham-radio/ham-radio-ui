@@ -14,14 +14,17 @@ import {
 } from '~/utils/remembered-serial-port';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { markCatBusySerialPorts } from '~/utils/cat-memory-transfer';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const { configurations, writeOpen, activeRadioId, writeToRadio, refreshCatalogState } = useRadio();
+const { lockedPorts } = useCatPortLock();
 
 const selectedPort = ref<string | undefined>();
 const selectedBaudRate = ref<number | undefined>();
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = ref(false);
+const portItems = computed(() => markCatBusySerialPorts(ports.value, lockedPorts.value));
 
 const selectedConfig = computed(() => {
   const radioId = activeRadioId.value;
@@ -49,7 +52,13 @@ const showBaudRate = computed(() => {
   return shouldSelectProgrammingBaudRate(selectedConfig.value.serialConfig);
 });
 
-const canWrite = computed(() => Boolean(activeRadioId.value && selectedPort.value && selectedBaudRate.value));
+const canWrite = computed(() => {
+  if (!activeRadioId.value || !selectedPort.value || selectedBaudRate.value === undefined) {
+    return false;
+  }
+
+  return !lockedPorts.value.includes(selectedPort.value);
+});
 const radioLabel = computed(() => {
   const radioId = activeRadioId.value;
 
@@ -80,6 +89,10 @@ watch(selectedPort, (path) => {
     writeRememberedSerialPort(path);
   }
 
+  if (!path || lockedPorts.value.includes(path)) {
+    return;
+  }
+
   void holdSerialPortInactive(path).catch((cause) => {
     console.error('Failed to hold serial port inactive', cause);
   });
@@ -98,6 +111,10 @@ async function loadPorts(): Promise<void> {
       ports.value.map((port) => port.value),
       selectedPort.value,
     );
+
+    if (selectedPort.value && lockedPorts.value.includes(selectedPort.value)) {
+      selectedPort.value = ports.value.find((port) => !lockedPorts.value.includes(port.value))?.value;
+    }
   } catch (cause) {
     console.error('Failed to list serial ports', cause);
     ports.value = [];
@@ -178,7 +195,7 @@ watch(writeOpen, (open) => {
           <div class="flex gap-2">
             <USelectMenu
               v-model="selectedPort"
-              :items="ports"
+              :items="portItems"
               value-key="value"
               placeholder="Select a serial port"
               class="w-full"

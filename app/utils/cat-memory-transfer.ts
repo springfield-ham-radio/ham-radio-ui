@@ -1,36 +1,30 @@
-/** Shown when Import or Write is refused because a CAT session holds the PC port. */
-export const CAT_MEMORY_TRANSFER_BLOCKED_TITLE = 'CAT session is using the radio';
+import type { SerialPortOption } from '~/utils/serial-port-list';
 
-/** Tooltip and toast copy: disconnect CAT before clone or live memory I/O. */
+/** Shown when Import or Write targets a port CAT already holds. */
+export const CAT_MEMORY_TRANSFER_BLOCKED_TITLE = 'CAT session is using this port';
+
+/** Toast copy when memory I/O is aimed at a live CAT serial port. */
 export const CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION =
-  'Disconnect CAT before importing or writing memory.';
+  'Choose another serial port, or disconnect CAT on this one.';
 
 /**
- * True when CAT has claimed the programming serial port.
+ * True when CAT already owns `serialPortPath`.
  *
- * Clone (TM-D710A) and live memory CAT (TH-F6) both need exclusive access to
- * that port, so HamBench must not start a second session.
+ * Other ports stay free for a second radio's import, write, or CAT session.
  */
-export function isCatMemoryTransferBlocked(lockedPort: string | undefined): boolean {
-  return Boolean(lockedPort);
+export function isCatMemoryTransferBlocked(
+  lockedPorts: readonly string[],
+  serialPortPath: string | undefined,
+): boolean {
+  return Boolean(serialPortPath && lockedPorts.includes(serialPortPath));
 }
 
-/** Toolbar / empty-state tooltip for Import from Radio. */
-export function importFromRadioTooltip(catBlocked: boolean): string {
-  return catBlocked ? CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION : 'Import from Radio';
-}
-
-/** Toolbar tooltip for Write to Radio. CAT wins over missing memory. */
+/** Toolbar tooltip for Write to Radio. */
 export function writeToRadioTooltip(options: {
-  catBlocked: boolean;
   hasLoadedMemory: boolean;
   writeSupported: boolean;
   radioName?: string;
 }): string {
-  if (options.catBlocked) {
-    return CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION;
-  }
-
   if (!options.hasLoadedMemory) {
     return 'Open a memory file or import from a radio first';
   }
@@ -40,4 +34,33 @@ export function writeToRadioTooltip(options: {
   }
 
   return 'Write to Radio';
+}
+
+/**
+ * Label and disable serial ports that a CAT session already holds so Import and
+ * Write can still pick a second adapter.
+ *
+ * Pass `omitBusy` on the CAT connect dialog so those ports are not choices.
+ */
+export function markCatBusySerialPorts(
+  ports: SerialPortOption[],
+  lockedPorts: readonly string[],
+  options?: { omitBusy?: boolean },
+): Array<SerialPortOption & { disabled?: boolean; description?: string }> {
+  if (options?.omitBusy) {
+    return ports.filter((port) => !lockedPorts.includes(port.value));
+  }
+
+  return ports.map((port) => {
+    if (!lockedPorts.includes(port.value)) {
+      return port;
+    }
+
+    return {
+      ...port,
+      label: `${port.label} (CAT)`,
+      description: 'Disconnect CAT to use this port',
+      disabled: true,
+    };
+  });
 }

@@ -1,37 +1,29 @@
 import { describe, it } from 'node:test';
 import { expect } from 'chai';
-import { computed, ref, shallowRef } from 'vue';
+import { computed, ref } from 'vue';
 
-describe('CAT connected flag', () => {
-  it('should turn true after session, status, and port lock are assigned', () => {
-    const session = shallowRef<object | undefined>();
-    const status = ref<object | undefined>();
-    const lockedPort = ref<string | undefined>();
-    const connected = computed(
-      () => Boolean(session.value) && Boolean(status.value) && Boolean(lockedPort.value),
-    );
+describe('CAT connected sessions', () => {
+  it('should treat each live radio as its own connected session', () => {
+    const liveRadios = ref<Array<{ port: string }>>([]);
+    const connected = computed(() => liveRadios.value.length > 0);
 
     expect(connected.value).to.equal(false);
 
-    status.value = { radioIdentity: 'TM-D710' };
-    expect(connected.value).to.equal(false);
-
-    session.value = {};
-    lockedPort.value = '/dev/cu.usbserial';
+    liveRadios.value = [{ port: '/dev/cu.usbserial-a' }];
     expect(connected.value).to.equal(true);
-  });
 
-  it('should stay false if a plain session variable short-circuits Vue tracking', () => {
-    let session: object | undefined;
-    const status = ref<object | undefined>();
-    const lockedPort = ref<string | undefined>();
-    const connected = computed(() => Boolean(session && status.value && lockedPort.value));
+    liveRadios.value = [
+      { port: '/dev/cu.usbserial-a' },
+      { port: '/dev/cu.usbserial-b' },
+    ];
+    expect(liveRadios.value).to.have.length(2);
+    expect(connected.value).to.equal(true);
 
-    expect(connected.value).to.equal(false);
+    liveRadios.value = liveRadios.value.filter((radio) => radio.port !== '/dev/cu.usbserial-a');
+    expect(liveRadios.value).to.have.length(1);
+    expect(connected.value).to.equal(true);
 
-    status.value = { radioIdentity: 'TM-D710' };
-    session = {};
-    lockedPort.value = '/dev/cu.usbserial';
+    liveRadios.value = [];
     expect(connected.value).to.equal(false);
   });
 });

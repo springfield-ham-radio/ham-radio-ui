@@ -16,6 +16,7 @@ import {
 } from '~/utils/remembered-serial-port';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { markCatBusySerialPorts } from '~/utils/cat-memory-transfer';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 export type RadioConnectionFilter = (config: LoadedRadioConfig) => boolean;
@@ -33,6 +34,8 @@ export interface RadioConnectionSelection {
 export function useRadioConnectionForm(options: {
   isOpen: () => boolean;
   filter?: RadioConnectionFilter;
+  unavailablePorts?: () => string[];
+  omitUnavailablePorts?: () => boolean;
 }) {
   const {
     configurations,
@@ -49,6 +52,12 @@ export function useRadioConnectionForm(options: {
   const selectedBaudRate = ref<number | undefined>();
   const ports = ref<Array<{ label: string; value: string }>>([]);
   const loadingPorts = ref(false);
+  const unavailablePorts = computed(() => options.unavailablePorts?.() ?? []);
+  const portItems = computed(() =>
+    markCatBusySerialPorts(ports.value, unavailablePorts.value, {
+      omitBusy: options.omitUnavailablePorts?.() ?? false,
+    }),
+  );
 
   const availableConfigs = computed(() => {
     if (!options.filter) {
@@ -100,9 +109,13 @@ export function useRadioConnectionForm(options: {
     return shouldSelectProgrammingBaudRate(selectedConfig.value.serialConfig);
   });
 
-  const canSubmit = computed(() =>
-    Boolean(selectedRadio.value && selectedPort.value && selectedBaudRate.value !== undefined && selectedConfig.value),
-  );
+  const canSubmit = computed(() => {
+    if (!selectedRadio.value || !selectedPort.value || selectedBaudRate.value === undefined || !selectedConfig.value) {
+      return false;
+    }
+
+    return !unavailablePorts.value.includes(selectedPort.value);
+  });
 
   watch(selectedManufacturer, (manufacturer) => {
     if (selectedRadio.value?.manufacturer !== manufacturer) {
@@ -137,7 +150,7 @@ export function useRadioConnectionForm(options: {
       writeRememberedSerialPort(path);
     }
 
-    if (!options.isOpen()) {
+    if (!options.isOpen() || !path || unavailablePorts.value.includes(path)) {
       return;
     }
 
@@ -159,6 +172,10 @@ export function useRadioConnectionForm(options: {
         ports.value.map((port) => port.value),
         selectedPort.value,
       );
+
+      if (selectedPort.value && unavailablePorts.value.includes(selectedPort.value)) {
+        selectedPort.value = ports.value.find((port) => !unavailablePorts.value.includes(port.value))?.value;
+      }
     } catch (cause) {
       console.error('Failed to list serial ports', cause);
       ports.value = [];
@@ -199,7 +216,13 @@ export function useRadioConnectionForm(options: {
   }
 
   async function takeSelection(): Promise<RadioConnectionSelection | undefined> {
-    if (!selectedRadio.value || !selectedPort.value || selectedBaudRate.value === undefined || !selectedConfig.value) {
+    if (
+      !selectedRadio.value ||
+      !selectedPort.value ||
+      selectedBaudRate.value === undefined ||
+      !selectedConfig.value ||
+      unavailablePorts.value.includes(selectedPort.value)
+    ) {
       return undefined;
     }
 
@@ -234,7 +257,7 @@ export function useRadioConnectionForm(options: {
     selectedRadio,
     selectedPort,
     selectedBaudRate,
-    ports,
+    ports: portItems,
     loadingPorts,
     availableManufacturers,
     models,

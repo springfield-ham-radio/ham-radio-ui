@@ -82,7 +82,10 @@ export function isExcludedCustomSerialPort(path: string, excludedPortNames: stri
   });
 }
 
-function serialPortLabel(path: string): string {
+/**
+ * Short label for a serial path, dropping the macOS `/dev/cu.` prefix.
+ */
+export function serialPortLabel(path: string): string {
   if (path.startsWith('/dev/cu.')) {
     return path.slice('/dev/cu.'.length);
   }
