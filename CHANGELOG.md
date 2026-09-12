@@ -1,3 +1,10 @@
+## [0.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.14.0...v0.15.0) (2026-09-12)
+
+### Features
+
+* add WaveBench lumped filter design bench ([8b702b4](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8b702b43277287c802b85ec2e67e26b5d08f4164))
+* import RepeaterBook and CHIRP CSV into the channel library ([8503020](https://github.com/springfield-ham-radio/ham-radio-ui/commit/850302009dfb355fe2088518baadd1103f5b910d))
+
 ## [0.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.13.1...v0.14.0) (2026-09-11)
 
 ### Features
