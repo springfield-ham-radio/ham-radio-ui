@@ -1,6 +1,6 @@
 # CAT
 
-The **CAT** page is live computer control for radios whose driver sets `capabilities.liveControl` and a Kenwood `cat` block. It is not a memory editor. Import and Write stay on the Radio page and refuse to run while a CAT session is connected.
+The **CAT** page is live computer control for radios whose driver sets `capabilities.liveControl` and a Kenwood `cat` block. It is not a memory editor. Import and Write stay on the Radio page and are disabled while a CAT session is connected.
 
 Memory protocol is separate: TH-F6 programs memories with live CAT (`catRead` / `catWrite`); TM-D710A clones EEPROM and still speaks Kenwood CAT on the same PC port. How that live session talks (wake CR, VFO count, `FO` vs `FQ`, mode and power names) comes from the radio module `cat` fields, not from HamBench model checks.
 
@@ -25,7 +25,7 @@ Each VFO card shows the live frequency. Edit the MHz field and press Enter or le
 
 ## Disconnect
 
-Click **Disconnect** before Import, Write, or Sniffer on the same serial port. The Radio page will warn if you try to transfer memory while CAT still holds the port.
+Click **Disconnect** before Import, Write, or Sniffer on the same serial port. While CAT is connected, Import and Write on the Radio page (and **File → Import from Radio…** / **Write to Radio…**) stay disabled. Disconnect first; HamBench will not open the connection dialog until the port is free.
 
 ## Debug
 

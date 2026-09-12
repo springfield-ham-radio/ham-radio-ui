@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
   const router = useRouter();
-  const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
+  const { openImportFromRadio, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
   const { checkForUpdate } = useAppUpdater();
 
   void (async () => {
@@ -24,7 +24,7 @@ export default defineNuxtPlugin(() => {
       });
       await listen('import-from-radio', () => {
         void router.push('/');
-        importOpen.value = true;
+        openImportFromRadio();
       });
       await listen('write-to-radio', () => {
         void router.push('/');

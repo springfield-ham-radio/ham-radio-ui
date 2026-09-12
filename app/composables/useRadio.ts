@@ -21,6 +21,11 @@ import {
 } from '~/utils/channel-edit';
 import { useCatPortLock } from '~/composables/useCatPortLock';
 import {
+  CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+  CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
+  isCatMemoryTransferBlocked,
+} from '~/utils/cat-memory-transfer';
+import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
   listRadioManufacturers,
@@ -111,6 +116,16 @@ export function useRadio() {
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const { lockedPort: catLockedPort } = useCatPortLock();
+  const catBlocksMemoryTransfer = computed(() => isCatMemoryTransferBlocked(catLockedPort.value));
+
+  watch(catLockedPort, (lockedPort) => {
+    if (!lockedPort) {
+      return;
+    }
+
+    importOpen.value = false;
+    writeOpen.value = false;
+  });
 
   async function refreshCatalogState(): Promise<void> {
     await reloadUserJsonCatalogRecords();
@@ -238,22 +253,34 @@ export function useRadio() {
     return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
-  function catSessionBlocksTransfer(): boolean {
-    if (!catLockedPort.value) {
+  function warnIfCatBlocksMemoryTransfer(): boolean {
+    if (!catBlocksMemoryTransfer.value) {
       return false;
     }
 
     toast.add({
-      title: 'CAT session is using the radio',
-      description: 'Disconnect CAT before importing or writing memory.',
+      title: CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
+      description: CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
       color: 'warning',
       icon: 'i-lucide-unplug',
     });
+
     return true;
   }
 
+  /**
+   * Open the import dialog unless CAT already holds the programming port.
+   */
+  function openImportFromRadio(): void {
+    if (warnIfCatBlocksMemoryTransfer()) {
+      return;
+    }
+
+    importOpen.value = true;
+  }
+
   async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
-    if (catSessionBlocksTransfer()) {
+    if (warnIfCatBlocksMemoryTransfer()) {
       return;
     }
 
@@ -315,7 +342,14 @@ export function useRadio() {
     }
   }
 
+  /**
+   * Open the write dialog unless CAT holds the port or no memory is loaded.
+   */
   function openWriteToRadio(): void {
+    if (warnIfCatBlocksMemoryTransfer()) {
+      return;
+    }
+
     if (!memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to write',
@@ -343,7 +377,7 @@ export function useRadio() {
     const radioId = activeRadioId.value;
     const config = getConfiguration(radioId);
 
-    if (catSessionBlocksTransfer()) {
+    if (warnIfCatBlocksMemoryTransfer()) {
       return;
     }
 
@@ -814,12 +848,14 @@ export function useRadio() {
     serialLog,
     modulesInstallOpen,
     modulesInstallRequired,
+    catBlocksMemoryTransfer,
     initialize,
     refreshCatalogState,
     openModulesInstall,
     uninstallRadio,
     getModelsByManufacturer,
     importFromRadio,
+    openImportFromRadio,
     openWriteToRadio,
     writeToRadio,
     updateSettings,

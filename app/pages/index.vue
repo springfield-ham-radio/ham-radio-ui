@@ -11,6 +11,7 @@ import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useS
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
 import { extraChannelTableFields } from '~/utils/channel-table';
+import { importFromRadioTooltip, writeToRadioTooltip } from '~/utils/cat-memory-transfer';
 import { channelCapacity, nextAvailableChannelNumber } from '~/utils/channel-edit';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
@@ -26,13 +27,14 @@ const {
   settingsMemoryMap,
   activeRadioId,
   serialLog,
-  importOpen,
+  catBlocksMemoryTransfer,
   updateSettings,
   updateChannel,
   addChannel,
   reorderChannels,
   removeChannels,
   saveSerialLog,
+  openImportFromRadio,
   openWriteToRadio,
   openMemoryFile,
   saveMemoryFile,
@@ -179,24 +181,26 @@ const canAddChannel = computed(() => {
   return Boolean(program.value && memory.value && activeRadioId.value && nextFreeChannelNumber.value !== undefined);
 });
 const hasLoadedMemory = computed(() => Boolean(memory.value && activeRadioId.value));
-const canWriteMemory = computed(() => {
-  if (!hasLoadedMemory.value || !activeRadioId.value) {
+const writeSupported = computed(() => {
+  if (!activeRadioId.value) {
     return false;
   }
 
   const config = configurations.value.find((item) => item.id.model === activeRadioId.value?.model);
   return Boolean(config?.writeMemory);
 });
+const canImportFromRadio = computed(() => !catBlocksMemoryTransfer.value);
+const canWriteMemory = computed(() => {
+  return hasLoadedMemory.value && writeSupported.value && !catBlocksMemoryTransfer.value;
+});
+const importMemoryTooltip = computed(() => importFromRadioTooltip(catBlocksMemoryTransfer.value));
 const writeMemoryTooltip = computed(() => {
-  if (!hasLoadedMemory.value) {
-    return 'Open a memory file or import from a radio first';
-  }
-
-  if (!canWriteMemory.value) {
-    return `${activeRadioId.value?.name ?? 'This radio'} does not support writing memory`;
-  }
-
-  return 'Write to Radio';
+  return writeToRadioTooltip({
+    catBlocked: catBlocksMemoryTransfer.value,
+    hasLoadedMemory: hasLoadedMemory.value,
+    writeSupported: writeSupported.value,
+    radioName: activeRadioId.value?.name,
+  });
 });
 const saveMemoryTooltip = computed(() => {
   return hasLoadedMemory.value ? 'Save' : 'Open a memory file or import from a radio first';
@@ -489,15 +493,18 @@ async function onSaveSerialLog(): Promise<void> {
             </span>
           </UTooltip>
           <USeparator orientation="vertical" class="h-5" />
-          <UTooltip text="Import from Radio">
-            <UButton
-              icon="i-lucide-download"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              aria-label="Import from Radio"
-              @click="importOpen = true"
-            />
+          <UTooltip :text="importMemoryTooltip">
+            <span class="inline-flex">
+              <UButton
+                icon="i-lucide-download"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                :disabled="!canImportFromRadio"
+                aria-label="Import from Radio"
+                @click="openImportFromRadio"
+              />
+            </span>
           </UTooltip>
           <UTooltip :text="writeMemoryTooltip">
             <span class="inline-flex">
