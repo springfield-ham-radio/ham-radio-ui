@@ -41,6 +41,13 @@ describe('defaultSerialLogFileName', () => {
 
     expect(fileName).to.equal('radio-import-serial-2026-08-22T19-44-01-250Z.json');
   });
+
+  it('names a CAT session log', () => {
+    const timestamp = new Date('2026-08-22T19:44:01.250Z');
+    const fileName = defaultSerialLogFileName('cat', radioId, timestamp);
+
+    expect(fileName).to.equal('baofeng-uv5r-cat-serial-2026-08-22T19-44-01-250Z.json');
+  });
 });
 
 describe('serializeSerialLogFile', () => {

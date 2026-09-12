@@ -47,7 +47,7 @@ describe('radioSupportsLiveCat', () => {
     expect(
       radioSupportsLiveCat({
         capabilities: { liveControl: true },
-        cat: { protocol: 'kenwood', dialect: 'fm-mobile' },
+        cat: { protocol: 'kenwood', vfoCount: 2, vfoChannel: true },
       }),
     ).to.equal(true);
   });

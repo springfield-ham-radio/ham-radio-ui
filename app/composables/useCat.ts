@@ -1,13 +1,19 @@
 import type { RadioId } from '@springfield/ham-radio-api';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
-import { kenwoodCatDialectForRadio } from '~/utils/kenwood-cat-control';
+import { createCatSerialLog, type CatSerialLogSnapshot } from '~/utils/cat-serial-log';
+import { kenwoodCatProfileFromConfig } from '~/utils/kenwood-cat-profile';
 import { openKenwoodCatSerialTransport } from '~/utils/kenwood-cat-serial';
 import { KenwoodCatSession, type CatStatus, type CatVfo } from '~/utils/kenwood-cat-session';
-import type { KenwoodCatPower } from '~/utils/kenwood-cat-control';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
+import { memoryFileDisplayName } from '~/utils/radio-memory-file';
+import { isTauriRuntime, saveJsonFileWithPicker } from '~/utils/radio-memory-file-io';
 import { releaseSerialPortHold } from '~/utils/serial-idle-hold';
-import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import {
+  defaultSerialLogFileName,
+  serializeSerialLogFile,
+  serialLogEntryCount,
+} from '~/utils/serial-log-file';
 
 const logger = new LogLayer({
   transport: [
@@ -20,7 +26,7 @@ const logger = new LogLayer({
 
 const POLL_INTERVAL_MS = 1500;
 
-let session: KenwoodCatSession | undefined;
+const session = shallowRef<KenwoodCatSession | undefined>();
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let commandQueue: Promise<void> = Promise.resolve();
 
@@ -32,8 +38,15 @@ export function useCat() {
   const busy = useState('cat-busy', () => false);
   const error = useState<string | null>('cat-error', () => null);
   const connectedRadio = useState<RadioId | undefined>('cat-connected-radio', () => undefined);
+  const serialLog = useState<CatSerialLogSnapshot | undefined>('cat-serial-log', () => undefined);
+  const logRadio = useState<RadioId | undefined>('cat-log-radio', () => undefined);
+  const logPort = useState<string | undefined>('cat-log-port', () => undefined);
 
-  const connected = computed(() => Boolean(session && status.value && lockedPort.value));
+  // Read every ref. A plain `session && status.value` never tracks status/port, so the
+  // Control tab stays on Connect after a successful handshake.
+  const connected = computed(
+    () => Boolean(session.value) && Boolean(status.value) && Boolean(lockedPort.value),
+  );
 
   async function connect(path: string, radio: LoadedRadioConfig, baudRate: number): Promise<void> {
     if (!isTauriRuntime()) {
@@ -46,19 +59,26 @@ export function useCat() {
       return;
     }
 
-    if (session) {
+    if (session.value) {
       await disconnect();
     }
 
     connecting.value = true;
     error.value = null;
+    logRadio.value = radio.id;
+    logPort.value = path;
+    const traffic = createCatSerialLog();
+    serialLog.value = traffic.snapshot();
 
     try {
       await releaseSerialPortHold();
-      const transport = await openKenwoodCatSerialTransport(path, radio.serialConfig, baudRate);
+      const transport = await openKenwoodCatSerialTransport(path, radio.serialConfig, baudRate, (direction, data) => {
+        traffic.append(direction, data);
+        serialLog.value = traffic.snapshot();
+      });
       const nextSession = new KenwoodCatSession({
         transport,
-        dialect: kenwoodCatDialectForRadio({ model: radio.id.model, cat: radio.cat }),
+        profile: kenwoodCatProfileFromConfig(radio.cat),
       });
 
       try {
@@ -68,7 +88,7 @@ export function useCat() {
         throw cause;
       }
 
-      session = nextSession;
+      session.value = nextSession;
       lockedPort.value = path;
       connectedRadio.value = radio.id;
       startPolling();
@@ -95,8 +115,8 @@ export function useCat() {
 
   async function disconnect(): Promise<void> {
     stopPolling();
-    const current = session;
-    session = undefined;
+    const current = session.value;
+    session.value = undefined;
     lockedPort.value = undefined;
     connectedRadio.value = undefined;
     status.value = undefined;
@@ -114,12 +134,14 @@ export function useCat() {
   }
 
   async function poll(): Promise<void> {
-    if (!session || busy.value || session.status?.transmitting) {
+    const current = session.value;
+
+    if (!current || busy.value || current.status?.transmitting) {
       return;
     }
 
     try {
-      status.value = await session.poll();
+      status.value = await current.poll();
       error.value = null;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'CAT poll failed';
@@ -136,7 +158,7 @@ export function useCat() {
     await runCommand((current) => current.setMode(band, mode));
   }
 
-  async function setPower(band: CatVfo['band'], power: KenwoodCatPower): Promise<void> {
+  async function setPower(band: CatVfo['band'], power: string): Promise<void> {
     await runCommand((current) => current.setPower(band, power));
   }
 
@@ -145,7 +167,7 @@ export function useCat() {
   }
 
   async function runCommand(action: (current: KenwoodCatSession) => Promise<CatStatus>): Promise<void> {
-    const current = session;
+    const current = session.value;
 
     if (!current) {
       return;
@@ -190,6 +212,58 @@ export function useCat() {
     }
   }
 
+  async function saveSerialLog(): Promise<void> {
+    const captured = serialLog.value;
+    const entryCount = serialLogEntryCount(captured);
+
+    if (!captured || entryCount === 0) {
+      toast.add({
+        title: 'No serial log',
+        description: 'Connect CAT to capture serial traffic.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    try {
+      const contents = serializeSerialLogFile({
+        operation: 'cat',
+        radioId: logRadio.value ?? connectedRadio.value,
+        serialPortPath: logPort.value ?? lockedPort.value,
+        log: captured,
+      });
+      const destination = await saveJsonFileWithPicker(
+        contents,
+        defaultSerialLogFileName('cat', logRadio.value ?? connectedRadio.value),
+        {
+          title: 'Save Serial Log',
+          filterName: 'Serial Log',
+        },
+      );
+
+      if (destination === undefined) {
+        return;
+      }
+
+      toast.add({
+        title: 'Serial log saved',
+        description: `${memoryFileDisplayName(destination)} · ${entryCount} frames`,
+        color: 'success',
+        icon: 'i-lucide-file-text',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to save serial log';
+      logger.withError(cause).error('Failed to save CAT serial log');
+      toast.add({
+        title: 'Could not save serial log',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
+  }
+
   return {
     status,
     connecting,
@@ -198,6 +272,7 @@ export function useCat() {
     connected,
     connectedRadio,
     lockedPort,
+    serialLog,
     connect,
     disconnect,
     poll,
@@ -205,5 +280,6 @@ export function useCat() {
     setMode,
     setPower,
     setTransmit,
+    saveSerialLog,
   };
 }

@@ -5,6 +5,8 @@ import type { RadioSerialConfig } from '@springfield/ham-radio-api';
 
 const OPEN_TIMEOUT_MS = 5000;
 
+export type CatSerialTrafficHandler = (direction: 'SEND' | 'RECV', data: Uint8Array) => void;
+
 /**
  * Open a Kenwood CAT serial session using the radio's programming-port settings.
  */
@@ -12,6 +14,7 @@ export async function openKenwoodCatSerialTransport(
   path: string,
   serialConfig: RadioSerialConfig,
   baudRate: number,
+  onTraffic?: CatSerialTrafficHandler,
 ): Promise<CatTransport> {
   const port = new TauriNodeSerialPort({
     path,
@@ -26,7 +29,7 @@ export async function openKenwoodCatSerialTransport(
 
   await waitForPortOpen(port);
 
-  return new KenwoodCatSerialTransport(port);
+  return new KenwoodCatSerialTransport(port, onTraffic);
 }
 
 function waitForPortOpen(port: TauriNodeSerialPort): Promise<void> {
@@ -70,11 +73,15 @@ class KenwoodCatSerialTransport implements CatTransport {
     timer: ReturnType<typeof setTimeout>;
   }> = [];
 
-  constructor(private readonly port: TauriNodeSerialPort) {
+  constructor(
+    private readonly port: TauriNodeSerialPort,
+    private readonly onTraffic?: CatSerialTrafficHandler,
+  ) {
     this.port.on('data', this.onData);
   }
 
   async write(bytes: Uint8Array): Promise<void> {
+    this.onTraffic?.('SEND', bytes);
     await new Promise<void>((resolve, reject) => {
       this.port.write(bytes, (error) => {
         if (error) {
@@ -146,9 +153,15 @@ class KenwoodCatSerialTransport implements CatTransport {
       return;
     }
 
-    this.buffer = Buffer.concat([this.buffer, Buffer.from(chunk)]);
+    const bytes = Buffer.from(chunk);
+    this.onTraffic?.('RECV', bytes);
+    this.buffer = Buffer.concat([this.buffer, bytes]);
     this.flushWaiters();
   };
+
+  discardBuffered(): void {
+    this.buffer = Buffer.alloc(0);
+  }
 
   private flushWaiters(): void {
     while (this.waiters.length > 0) {

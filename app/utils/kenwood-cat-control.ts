@@ -1,8 +1,5 @@
 export const KENWOOD_CAT_CR = 0x0d;
-
-export type KenwoodCatDialect = 'fm-mobile' | 'th-f6';
-
-export type KenwoodCatPower = 'high' | 'medium' | 'low';
+export const KENWOOD_VFO_CHANNEL_FIELDS = 13;
 
 export interface KenwoodCatReply {
   ok: boolean;
@@ -11,44 +8,11 @@ export interface KenwoodCatReply {
   raw: string;
 }
 
-const TH_F6_MODES = ['FM', 'WFM', 'AM', 'LSB', 'USB', 'CW'] as const;
-const FM_MOBILE_MODES = ['FM'] as const;
-const POWER_CODES: KenwoodCatPower[] = ['high', 'medium', 'low'];
-
-/**
- * Pick the Kenwood CAT dialect from a radio model id.
- *
- * TH-F6 is all-mode. TM-V71 / TM-D710 family radios are FM mobiles.
- */
-export function kenwoodCatDialectForModel(model: string): KenwoodCatDialect {
-  const normalized = model.toLowerCase();
-
-  if (normalized.includes('th-f6') || normalized.includes('thf6')) {
-    return 'th-f6';
-  }
-
-  return 'fm-mobile';
-}
-
-export interface KenwoodCatRadioHint {
-  model?: string;
-  cat?: {
-    protocol?: string;
-    dialect?: string;
-  };
-}
-
-/**
- * Prefer the driver `cat.dialect` when it is a known Kenwood dialect.
- */
-export function kenwoodCatDialectForRadio(radio: KenwoodCatRadioHint): KenwoodCatDialect {
-  const dialect = radio.cat?.dialect?.trim().toLowerCase();
-
-  if (dialect === 'th-f6' || dialect === 'fm-mobile') {
-    return dialect;
-  }
-
-  return kenwoodCatDialectForModel(radio.model ?? '');
+export interface KenwoodFoChannel {
+  fields: string[];
+  band: 0 | 1;
+  frequencyHz: number;
+  mode: string;
 }
 
 /**
@@ -90,14 +54,14 @@ export function parseKenwoodCatReply(line: string): KenwoodCatReply {
 }
 
 /**
- * Format Hertz as the 11-digit Kenwood CAT frequency field.
+ * Format Hertz as a Kenwood CAT frequency field.
  */
-export function formatKenwoodFrequencyHz(frequencyHz: number): string {
-  return Math.round(frequencyHz).toString().padStart(11, '0');
+export function formatKenwoodFrequencyHz(frequencyHz: number, width = 11): string {
+  return Math.round(frequencyHz).toString().padStart(width, '0');
 }
 
 /**
- * Parse an 11-digit (or similarly padded) Kenwood frequency field as Hertz.
+ * Parse a padded Kenwood frequency field as Hertz.
  */
 export function parseKenwoodFrequencyHz(field: string): number | undefined {
   const trimmed = field.trim();
@@ -115,27 +79,45 @@ export function parseKenwoodFrequencyHz(field: string): number | undefined {
   return hertz;
 }
 
-export function kenwoodModesForDialect(dialect: KenwoodCatDialect): readonly string[] {
-  return dialect === 'th-f6' ? TH_F6_MODES : FM_MOBILE_MODES;
+function asBand(value: number): 0 | 1 {
+  return value === 1 ? 1 : 0;
 }
 
-export function decodeKenwoodMode(code: number, dialect: KenwoodCatDialect): string {
-  const modes = kenwoodModesForDialect(dialect);
-  return modes[code] ?? 'FM';
+/**
+ * Parse a Kenwood `FO n` VFO-channel reply.
+ */
+export function parseKenwoodFoReply(reply: KenwoodCatReply, modes: readonly string[]): KenwoodFoChannel {
+  if (reply.fields.length < KENWOOD_VFO_CHANNEL_FIELDS) {
+    throw new Error('Radio did not return a VFO channel');
+  }
+
+  const frequencyHz = parseKenwoodFrequencyHz(reply.fields[1] ?? '');
+
+  if (frequencyHz === undefined) {
+    throw new Error('Radio did not return a frequency');
+  }
+
+  const band = asBand(Number.parseInt(reply.fields[0] ?? '0', 10));
+  const modeCode = Number.parseInt(reply.fields[12] ?? '0', 10);
+  const mode = modes[Number.isFinite(modeCode) ? modeCode : 0] ?? modes[0] ?? 'FM';
+
+  return {
+    fields: reply.fields.slice(0, KENWOOD_VFO_CHANNEL_FIELDS),
+    band,
+    frequencyHz,
+    mode,
+  };
 }
 
-export function encodeKenwoodMode(mode: string, dialect: KenwoodCatDialect): number | undefined {
-  const normalized = mode.trim().toUpperCase();
-  const modes = kenwoodModesForDialect(dialect);
-  const index = modes.indexOf(normalized as (typeof modes)[number]);
-
-  return index >= 0 ? index : undefined;
+export function kenwoodFoWithFrequency(channel: KenwoodFoChannel, frequencyHz: number, width: number): string[] {
+  const digits = Math.max(channel.fields[1]?.length ?? 0, width);
+  const fields = [...channel.fields];
+  fields[1] = formatKenwoodFrequencyHz(frequencyHz, digits);
+  return fields;
 }
 
-export function decodeKenwoodPower(code: number): KenwoodCatPower | undefined {
-  return POWER_CODES[code];
-}
-
-export function encodeKenwoodPower(power: KenwoodCatPower): number {
-  return POWER_CODES.indexOf(power);
+export function kenwoodFoWithMode(channel: KenwoodFoChannel, modeCode: number): string[] {
+  const fields = [...channel.fields];
+  fields[12] = String(modeCode);
+  return fields;
 }

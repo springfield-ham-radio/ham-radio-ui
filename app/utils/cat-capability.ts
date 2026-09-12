@@ -5,7 +5,16 @@ import type { RadioProtocolStep } from '@springfield/ham-radio-api';
  */
 export interface RadioCatConfig {
   protocol: string;
-  dialect?: string;
+  wakeCr?: boolean;
+  vfoCount?: number;
+  frequencyCommands?: string[];
+  frequencyWidth?: number;
+  vfoChannel?: boolean;
+  modes?: string[];
+  powers?: string[];
+  modeCommand?: string;
+  powerBandIndex?: boolean;
+  bandControl?: boolean;
 }
 
 export interface RadioCatCapability {

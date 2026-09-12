@@ -1,15 +1,11 @@
 import { describe, it } from 'node:test';
 import { expect } from 'chai';
 import {
-  decodeKenwoodMode,
-  decodeKenwoodPower,
   encodeKenwoodCatCommand,
-  encodeKenwoodMode,
-  encodeKenwoodPower,
   formatKenwoodFrequencyHz,
-  kenwoodCatDialectForModel,
-  kenwoodCatDialectForRadio,
+  kenwoodFoWithFrequency,
   parseKenwoodCatReply,
+  parseKenwoodFoReply,
   parseKenwoodFrequencyHz,
 } from '../../app/utils/kenwood-cat-control.ts';
 
@@ -58,43 +54,30 @@ describe('kenwood CAT control', () => {
       expect(parseKenwoodFrequencyHz('00430000000')).to.equal(430_000_000);
     });
 
+    it('should format and parse 10-digit Hertz fields', () => {
+      expect(formatKenwoodFrequencyHz(144_600_000, 10)).to.equal('0144600000');
+      expect(parseKenwoodFrequencyHz('0144600000')).to.equal(144_600_000);
+    });
+
     it('should reject invalid frequency fields', () => {
       expect(parseKenwoodFrequencyHz('abc')).to.equal(undefined);
       expect(parseKenwoodFrequencyHz('0')).to.equal(undefined);
     });
   });
 
-  describe('dialect', () => {
-    it('should use all-mode mapping for TH-F6 and FM-mobile otherwise', () => {
-      expect(kenwoodCatDialectForModel('kenwood-th-f6')).to.equal('th-f6');
-      expect(kenwoodCatDialectForModel('kenwood-tm-d710a')).to.equal('fm-mobile');
-    });
-
-    it('should prefer the driver cat dialect when it is known', () => {
-      expect(kenwoodCatDialectForRadio({ model: 'kenwood-th-f6', cat: { dialect: 'fm-mobile' } })).to.equal(
-        'fm-mobile',
+  describe('FO channel', () => {
+    it('should parse a VFO-channel reply and rewrite frequency', () => {
+      const parsed = parseKenwoodFoReply(
+        parseKenwoodCatReply('FO 0,0144600000,0,0,0,0,0,0,08,08,000,00000000,0'),
+        ['FM', 'NFM', 'AM'],
       );
-      expect(kenwoodCatDialectForRadio({ cat: { dialect: 'th-f6' } })).to.equal('th-f6');
-      expect(kenwoodCatDialectForRadio({ model: 'kenwood-th-f6' })).to.equal('th-f6');
-    });
 
-    it('should map TH-F6 mode codes', () => {
-      expect(decodeKenwoodMode(0, 'th-f6')).to.equal('FM');
-      expect(decodeKenwoodMode(2, 'th-f6')).to.equal('AM');
-      expect(decodeKenwoodMode(4, 'th-f6')).to.equal('USB');
-      expect(encodeKenwoodMode('CW', 'th-f6')).to.equal(5);
-    });
-
-    it('should map FM-mobile mode 0 to FM', () => {
-      expect(decodeKenwoodMode(0, 'fm-mobile')).to.equal('FM');
-      expect(encodeKenwoodMode('FM', 'fm-mobile')).to.equal(0);
-    });
-
-    it('should map power codes', () => {
-      expect(decodeKenwoodPower(0)).to.equal('high');
-      expect(decodeKenwoodPower(1)).to.equal('medium');
-      expect(decodeKenwoodPower(2)).to.equal('low');
-      expect(encodeKenwoodPower('low')).to.equal(2);
+      expect(parsed).to.include({
+        band: 0,
+        frequencyHz: 144_600_000,
+        mode: 'FM',
+      });
+      expect(kenwoodFoWithFrequency(parsed, 146_520_000, 10)[1]).to.equal('0146520000');
     });
   });
 });

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
-import type { KenwoodCatPower } from '~/utils/kenwood-cat-control';
 
 const props = defineProps<{
   vfo: CatVfo;
   modes: string[];
+  powers: string[];
   isControl: boolean;
   transmitting: boolean;
   disabled: boolean;
@@ -14,7 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   frequency: [frequencyHz: number];
   mode: [mode: string];
-  power: [power: KenwoodCatPower];
+  power: [power: string];
   transmit: [transmit: boolean];
   log: [];
 }>();
@@ -24,11 +24,12 @@ const { getTransmitPrivilegeWarning } = useOperatorLicense();
 const frequencyDraft = ref(formatFrequencyMHz(props.vfo.frequencyHz));
 const frequencyDirty = ref(false);
 
-const powerItems: Array<{ label: string; value: KenwoodCatPower }> = [
-  { label: 'High', value: 'high' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'Low', value: 'low' },
-];
+const powerItems = computed(() =>
+  props.powers.map((power) => ({
+    label: power,
+    value: power,
+  })),
+);
 
 const privilegeWarning = computed(() => getTransmitPrivilegeWarning(props.vfo.frequencyHz));
 
@@ -62,7 +63,7 @@ function onMode(mode: string | undefined): void {
   emit('mode', mode);
 }
 
-function onPower(power: KenwoodCatPower | undefined): void {
+function onPower(power: string | undefined): void {
   if (!power) {
     return;
   }
@@ -115,7 +116,6 @@ function onPttUp(): void {
           color="neutral"
           variant="outline"
           size="sm"
-          class="capitalize"
         />
       </div>
     </div>
@@ -158,7 +158,7 @@ function onPttUp(): void {
           :items="powerItems"
           value-key="value"
           :disabled="disabled"
-          class="w-full capitalize"
+          class="w-full"
           @update:model-value="onPower"
         />
       </UFormField>

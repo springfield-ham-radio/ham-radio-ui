@@ -3,7 +3,7 @@ import type { RadioId } from '@springfield/ham-radio-api';
 export const SERIAL_LOG_FILE_KIND = 'springfield-ham-radio-serial-log';
 export const SERIAL_LOG_FILE_VERSION = 1;
 
-export type SerialLogOperation = 'import' | 'write';
+export type SerialLogOperation = 'import' | 'write' | 'cat';
 
 export interface SerialLogDocument {
   kind: typeof SERIAL_LOG_FILE_KIND;
