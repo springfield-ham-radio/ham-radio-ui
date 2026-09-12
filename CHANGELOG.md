@@ -1,3 +1,9 @@
+## [0.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.18.0...v0.19.0) (2026-09-12)
+
+### Features
+
+* drive Kenwood CAT from the radio module profile ([b8e9d3d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b8e9d3dfe46c11a260239e36e5fcfa89914154a1))
+
 ## [0.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.17.0...v0.18.0) (2026-09-12)
 
 ### Features
