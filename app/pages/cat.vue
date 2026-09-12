@@ -39,6 +39,7 @@ const { createQso } = useStationLog();
 
 const connectOpen = ref(false);
 const editorOpen = ref(false);
+const transmitMicWarningOpen = ref(true);
 const logDefaults = ref<Partial<StationLogQsoInput>>({});
 const activeTab = ref('control');
 const savingSerialLog = ref(false);
@@ -284,11 +285,14 @@ onBeforeUnmount(() => {
 
             <template v-else>
               <UAlert
+                v-if="transmitMicWarningOpen"
                 color="warning"
                 variant="subtle"
                 icon="i-lucide-triangle-alert"
                 title="Transmit keys microphone audio"
                 description="CAT TX/RX keys whichever side currently has PTT and sends mic audio, not audio from the DATA port. Hold the transmit button only while you are ready to send."
+                close
+                @update:open="transmitMicWarningOpen = $event"
               />
 
               <CatSessionPanel
