@@ -200,6 +200,50 @@ CREATE INDEX idx_station_log_qsos_callsign ON station_log_qsos(their_callsign);
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "create_imported_repeaters",
+            sql: r#"
+CREATE TABLE imported_repeaters (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_key TEXT NOT NULL UNIQUE,
+  source_format TEXT NOT NULL,
+  callsign TEXT NOT NULL,
+  city TEXT,
+  county TEXT,
+  state TEXT,
+  country TEXT,
+  landmark TEXT,
+  receive_frequency INTEGER NOT NULL,
+  transmit_frequency INTEGER NOT NULL,
+  transmit_tone INTEGER NOT NULL,
+  transmit_tone_type TEXT NOT NULL,
+  receive_tone INTEGER NOT NULL,
+  receive_tone_type TEXT NOT NULL,
+  use_type TEXT,
+  operational_status TEXT,
+  modes TEXT,
+  notes TEXT,
+  latitude REAL,
+  longitude REAL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_imported_repeaters_callsign ON imported_repeaters(callsign);
+CREATE INDEX idx_imported_repeaters_rx ON imported_repeaters(receive_frequency);
+"#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "add_saved_channels_kind",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN kind TEXT NOT NULL DEFAULT 'channel';
+CREATE INDEX idx_saved_channels_kind ON saved_channels(kind);
+DROP TABLE IF EXISTS imported_repeaters;
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

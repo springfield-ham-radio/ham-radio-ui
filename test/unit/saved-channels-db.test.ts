@@ -34,6 +34,7 @@ describe('saved-channels-db', () => {
       const row: SavedChannelRow = {
         id: '11111111-1111-1111-1111-111111111111',
         name: 'Local RPT',
+        kind: 'repeater',
         transmit_frequency: 146_520_000,
         receive_frequency: 146_520_000,
         transmit_tone: 885,
@@ -49,6 +50,7 @@ describe('saved-channels-db', () => {
 
       expect(model.id).to.equal(RadioChannelId(row.id));
       expect(model.name).to.equal('Local RPT');
+      expect(model.kind).to.equal('repeater');
       expect(model.transmitFrequency).to.equal(Frequency(146_520_000));
       expect(model.receiveFrequency).to.equal(Frequency(146_520_000));
       expect(model.transmitTone).to.deep.equal({ tone: 885, type: RadioToneType.CTCSS });
@@ -72,6 +74,7 @@ describe('saved-channels-db', () => {
       expect(saved.receiveTone).to.deep.equal(sampleChannel.receiveTone);
       expect(saved.createdAt).to.equal(10);
       expect(saved.updatedAt).to.equal(20);
+      expect(saved.kind).to.equal('channel');
     });
   });
 
@@ -89,6 +92,13 @@ describe('saved-channels-db', () => {
       expect(matchesSavedChannelSearch(saved, '146.5200')).to.equal(true);
       expect(matchesSavedChannelSearch(saved, '999')).to.equal(false);
       expect(matchesSavedChannelSearch(saved, '   ')).to.equal(true);
+    });
+
+    it('matches repeater rows by the repeater kind label', () => {
+      const saved = radioChannelToSavedChannel(sampleChannel, { kind: 'repeater' });
+
+      expect(matchesSavedChannelSearch(saved, 'repeater')).to.equal(true);
+      expect(matchesSavedChannelSearch(radioChannelToSavedChannel(sampleChannel), 'repeater')).to.equal(false);
     });
   });
 });

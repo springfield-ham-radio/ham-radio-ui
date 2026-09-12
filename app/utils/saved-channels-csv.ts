@@ -5,14 +5,22 @@ import {
   type RadioTone,
 } from '@springfield/ham-radio-api';
 import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
-import type { SavedChannel } from '~/utils/saved-channels-db';
+import {
+  detectRepeaterImportFormat,
+  importedRepeaterNotes,
+  importedRepeaterToRadioChannel,
+  parseRepeaterImportCsv,
+} from '~/utils/repeater-import';
+import type { SavedChannel, SavedChannelKind } from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind';
 
 export interface ParsedSavedChannelsCsv {
+  source: 'library' | 'repeaterbook' | 'chirp';
   channels: RadioChannel[];
   notes: Array<string | undefined>;
+  kinds: SavedChannelKind[];
 }
 
 function escapeCsvField(value: string): string {
@@ -60,6 +68,7 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         formatToneType(channel.receiveTone),
         formatToneValue(channel.receiveTone),
         escapeCsvField(channel.notes ?? ''),
+        channel.kind === 'repeater' ? 'repeater' : 'channel',
       ].join(','),
     );
   }
@@ -174,8 +183,7 @@ function parseTone(typeRaw: string, valueRaw: string): RadioTone {
 }
 
 /**
- * Parse a channel-library CSV into portable RadioChannel values.
- * New ids are assigned when the rows are inserted.
+ * Parse a HamBench library CSV, or a RepeaterBook / CHIRP export, into portable channels.
  */
 export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const rows = parseCsvRows(text.replace(/^\uFEFF/, ''));
@@ -185,6 +193,18 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   }
 
   const header = rows[0]!.map(normalizeHeader);
+  const repeaterFormat = detectRepeaterImportFormat(header);
+
+  if (repeaterFormat) {
+    const parsed = parseRepeaterImportCsv(text);
+    return {
+      source: parsed.format,
+      channels: parsed.repeaters.map((repeater) => importedRepeaterToRadioChannel(repeater)),
+      notes: parsed.repeaters.map((repeater) => importedRepeaterNotes(repeater)),
+      kinds: parsed.repeaters.map(() => 'repeater'),
+    };
+  }
+
   const required = ['name', 'tx_mhz', 'rx_mhz', 'tx_tone_type', 'tx_tone', 'rx_tone_type', 'rx_tone'];
 
   for (const column of required) {
@@ -196,6 +216,7 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const indexOf = (column: string): number => header.indexOf(column);
   const channels: RadioChannel[] = [];
   const notes: Array<string | undefined> = [];
+  const kinds: SavedChannelKind[] = [];
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -219,7 +240,12 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       receiveTone: parseTone(cell('rx_tone_type'), cell('rx_tone')),
     });
     notes.push(note || undefined);
+    kinds.push(indexOf('kind') === -1 ? 'channel' : parseSavedChannelKind(cell('kind')));
   }
 
-  return { channels, notes };
+  return { source: 'library', channels, notes, kinds };
+}
+
+function parseSavedChannelKind(value: string): SavedChannelKind {
+  return value.trim().toLowerCase() === 'repeater' ? 'repeater' : 'channel';
 }

@@ -133,9 +133,8 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
       }),
   },
   {
-    accessorKey: 'name',
+    id: 'name',
     header: 'Name',
-    cell: ({ row }) => row.original.name || '—',
   },
   { accessorKey: 'band', header: 'Band' },
   {
@@ -216,6 +215,7 @@ async function confirmAddToRadio(): Promise<void> {
 async function onSave(payload: {
   channel: RadioChannel;
   notes?: string;
+  kind?: SavedChannel['kind'];
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -223,6 +223,7 @@ async function onSave(payload: {
       await updateChannel({
         id: payload.id,
         name: payload.channel.name,
+        kind: payload.kind ?? editingChannel.value?.kind ?? 'channel',
         transmitFrequency: payload.channel.transmitFrequency,
         receiveFrequency: payload.channel.receiveFrequency,
         transmitTone: payload.channel.transmitTone,
@@ -232,7 +233,7 @@ async function onSave(payload: {
         updatedAt: Date.now(),
       });
     } else {
-      await createChannel(payload.channel, payload.notes);
+      await createChannel(payload.channel, payload.notes, payload.kind);
     }
 
     editorOpen.value = false;
@@ -276,7 +277,7 @@ onMounted(() => {
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
         <p class="text-xs text-muted">
-          Reusable portable channels. Select rows and choose Add to radio to copy them into unused slots on the loaded radio.
+          Portable channels and imported repeaters. Select rows and choose Add to radio to copy them into unused slots on the loaded radio.
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
@@ -297,7 +298,7 @@ onMounted(() => {
             color="neutral"
             variant="outline"
             size="sm"
-            aria-label="Import channel library from CSV"
+            aria-label="Import channel library, RepeaterBook, or CHIRP CSV"
             :loading="isImporting"
             @click="onImportCsv"
           />
@@ -329,7 +330,7 @@ onMounted(() => {
     <UInput
       v-model="search"
       icon="i-lucide-search"
-      placeholder="Search by name or frequency"
+      placeholder="Search by name, frequency, or repeater"
       size="sm"
       class="w-full max-w-sm"
     />
@@ -359,9 +360,24 @@ onMounted(() => {
           empty: 'py-8 text-center text-sm text-muted',
           tr: 'cursor-pointer',
         }"
-        empty="No saved channels yet. Add one here, or save memory channels from the Radio page."
+        empty="No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page."
         @select="onSelectChannel"
       >
+        <template #name-cell="{ row }">
+          <div class="flex min-w-0 items-center gap-1.5">
+            <UTooltip v-if="row.original.kind === 'repeater'" text="Repeater">
+              <UBadge
+                color="primary"
+                variant="subtle"
+                size="xs"
+                icon="i-lucide-radio-tower"
+                label="Repeater"
+                class="shrink-0"
+              />
+            </UTooltip>
+            <span class="truncate">{{ row.original.name || '—' }}</span>
+          </div>
+        </template>
         <template #actions-cell="{ row }">
           <div class="flex items-center justify-end gap-0.5" @click.stop>
             <UButton

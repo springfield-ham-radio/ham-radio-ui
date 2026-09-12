@@ -13,9 +13,12 @@ export const SAVED_CHANNELS_DATABASE = 'sqlite:ham-radio.db';
 
 export type SavedToneType = 'CTCSS' | 'DCS';
 
+export type SavedChannelKind = 'channel' | 'repeater';
+
 export interface SavedChannelRow {
   id: string;
   name: string | null;
+  kind: string | null;
   transmit_frequency: number;
   receive_frequency: number;
   transmit_tone: number;
@@ -29,9 +32,14 @@ export interface SavedChannelRow {
 
 export interface SavedChannel extends RadioChannel {
   id: RadioChannelId;
+  kind: SavedChannelKind;
   notes?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export function savedChannelKindFromDb(value: string | null | undefined): SavedChannelKind {
+  return value === 'repeater' ? 'repeater' : 'channel';
 }
 
 let databasePromise: Promise<Database> | undefined;
@@ -71,6 +79,7 @@ export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
   return {
     id: RadioChannelId(row.id),
     name: row.name ?? undefined,
+    kind: savedChannelKindFromDb(row.kind),
     transmitFrequency: Frequency(row.transmit_frequency),
     receiveFrequency: Frequency(row.receive_frequency),
     transmitTone: radioToneFromDb(row.transmit_tone, row.transmit_tone_type),
@@ -83,13 +92,20 @@ export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
 
 export function radioChannelToSavedChannel(
   channel: RadioChannel,
-  options: { id?: RadioChannelId; notes?: string; createdAt?: number; updatedAt?: number } = {},
+  options: {
+    id?: RadioChannelId;
+    kind?: SavedChannelKind;
+    notes?: string;
+    createdAt?: number;
+    updatedAt?: number;
+  } = {},
 ): SavedChannel {
   const now = Date.now();
 
   return {
     id: options.id ?? RadioChannelId(crypto.randomUUID()),
     name: channel.name,
+    kind: options.kind ?? 'channel',
     transmitFrequency: channel.transmitFrequency,
     receiveFrequency: channel.receiveFrequency,
     transmitTone: channel.transmitTone,
@@ -103,7 +119,7 @@ export function radioChannelToSavedChannel(
 export async function listSavedChannels(): Promise<SavedChannel[]> {
   const database = await getSavedChannelsDatabase();
   const rows = await database.select<SavedChannelRow[]>(
-    `SELECT id, name, transmit_frequency, receive_frequency,
+    `SELECT id, name, kind, transmit_frequency, receive_frequency,
             transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
             notes, created_at, updated_at
      FROM saved_channels
@@ -123,13 +139,14 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
   for (const channel of channels) {
     await database.execute(
       `INSERT INTO saved_channels (
-         id, name, transmit_frequency, receive_frequency,
+         id, name, kind, transmit_frequency, receive_frequency,
          transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
          notes, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         channel.id,
         channel.name ?? null,
+        channel.kind,
         channel.transmitFrequency,
         channel.receiveFrequency,
         channel.transmitTone.tone,
@@ -160,17 +177,19 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
   await database.execute(
     `UPDATE saved_channels SET
        name = $1,
-       transmit_frequency = $2,
-       receive_frequency = $3,
-       transmit_tone = $4,
-       transmit_tone_type = $5,
-       receive_tone = $6,
-       receive_tone_type = $7,
-       notes = $8,
-       updated_at = $9
-     WHERE id = $10`,
+       kind = $2,
+       transmit_frequency = $3,
+       receive_frequency = $4,
+       transmit_tone = $5,
+       transmit_tone_type = $6,
+       receive_tone = $7,
+       receive_tone_type = $8,
+       notes = $9,
+       updated_at = $10
+     WHERE id = $11`,
     [
       updated.name ?? null,
+      updated.kind,
       updated.transmitFrequency,
       updated.receiveFrequency,
       updated.transmitTone.tone,
@@ -221,6 +240,7 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
   }
 
   const name = channel.name?.toLowerCase() ?? '';
+  const notes = channel.notes?.toLowerCase() ?? '';
   const transmit = String(channel.transmitFrequency);
   const receive = String(channel.receiveFrequency);
   const transmitMhz = (channel.transmitFrequency / 1_000_000).toFixed(4);
@@ -228,6 +248,8 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
 
   return (
     name.includes(trimmed) ||
+    notes.includes(trimmed) ||
+    (channel.kind === 'repeater' && 'repeater'.startsWith(trimmed) && trimmed.length >= 3) ||
     transmit.includes(trimmed) ||
     receive.includes(trimmed) ||
     transmitMhz.includes(trimmed) ||
