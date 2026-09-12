@@ -449,7 +449,7 @@ export function useOperatorLicense() {
 
     let detail: string;
 
-    if (band.name === 'Weather Radio') {
+    if (displayBandName(band.name) === 'Weather Radio') {
       detail = 'NOAA Weather Radio is receive-only. Amateur licenses cannot transmit here.';
     } else if (requiredLicenses.length > 0 && requiredLicenses.every((name) => !HAM_CLASS_NAMES.has(name))) {
       detail = `This is a ${bandName} allocation. Transmit requires ${formatRequiredLicenses(requiredLicenses)}.`;
