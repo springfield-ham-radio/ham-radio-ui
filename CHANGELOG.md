@@ -1,3 +1,9 @@
+## [0.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.16.1...v0.17.0) (2026-09-12)
+
+### Features
+
+* move the radio badge next to save and import ([36a0eb2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/36a0eb25a24276d865c1354cc8a62eabba8cc49b))
+
 ## [0.16.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.16.0...v0.16.1) (2026-09-12)
 
 ### Bug Fixes
