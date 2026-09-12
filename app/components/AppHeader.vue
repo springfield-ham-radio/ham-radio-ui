@@ -6,7 +6,7 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
 const router = useRouter();
-const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } = useRadio();
+const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, memoryFilePath } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const isRadioPage = computed(() => route.path === '/');
@@ -104,19 +104,6 @@ defineShortcuts({
       <h1 class="truncate px-1 text-sm font-semibold text-highlighted">
         {{ isPreferences ? 'Preferences' : APP_NAME }}
       </h1>
-      <UTooltip
-        v-if="isRadioPage && activeRadioId"
-        :text="`${activeRadioId.manufacturer} · ${activeRadioId.model}`"
-      >
-        <UBadge
-          :label="activeRadioId.name"
-          color="neutral"
-          variant="subtle"
-          size="sm"
-          icon="i-lucide-radio"
-          class="max-w-56 truncate"
-        />
-      </UTooltip>
       <UTooltip v-if="isRadioPage && currentFileName" :text="memoryFilePath">
         <UBadge
           :label="currentFileName"

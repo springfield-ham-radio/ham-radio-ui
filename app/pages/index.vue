@@ -452,6 +452,19 @@ async function onSaveSerialLog(): Promise<void> {
     >
       <template #list-trailing>
         <div class="ml-auto flex shrink-0 items-center gap-1.5 ps-2">
+          <UTooltip
+            v-if="activeRadioId"
+            :text="`${activeRadioId.manufacturer} · ${activeRadioId.model}`"
+          >
+            <UBadge
+              :label="activeRadioId.name"
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              icon="i-lucide-radio"
+              class="max-w-56 truncate"
+            />
+          </UTooltip>
           <UTooltip text="Open Memory">
             <UButton
               icon="i-lucide-folder-open"
