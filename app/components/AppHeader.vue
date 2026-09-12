@@ -20,6 +20,7 @@ const sectionItems = computed<TabsItem[]>(() => [
   { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
   { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
+  { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
 ]);
 
 const activeSection = computed({
@@ -32,6 +33,10 @@ const activeSection = computed({
       return 'log';
     }
 
+    if (route.path.startsWith('/wavebench')) {
+      return 'wavebench';
+    }
+
     return 'radio';
   },
   set: (value: string | number) => {
@@ -42,6 +47,11 @@ const activeSection = computed({
 
     if (value === 'log') {
       void router.push('/log');
+      return;
+    }
+
+    if (value === 'wavebench') {
+      void router.push('/wavebench');
       return;
     }
 
@@ -143,46 +153,56 @@ defineShortcuts({
 
     <div v-if="!isPreferences" class="flex flex-1 items-center justify-end gap-1.5">
       <template v-if="isRadioPage && showBrowserFileActions">
-        <UButton
-          icon="i-lucide-folder-open"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Open"
-          @click="openMemoryFile"
-        />
-        <UButton
-          icon="i-lucide-save"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Save"
-          @click="saveMemoryFile"
-        />
-        <UButton
-          icon="i-lucide-save-all"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Save As"
-          @click="saveMemoryFileAs"
-        />
-        <UButton
-          icon="i-lucide-download"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Import From Radio"
-          @click="importOpen = true"
-        />
-        <UButton
-          icon="i-lucide-upload"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Write To Radio"
-          @click="openWriteToRadio"
-        />
+        <UTooltip text="Open">
+          <UButton
+            icon="i-lucide-folder-open"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Open"
+            @click="openMemoryFile"
+          />
+        </UTooltip>
+        <UTooltip text="Save">
+          <UButton
+            icon="i-lucide-save"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Save"
+            @click="saveMemoryFile"
+          />
+        </UTooltip>
+        <UTooltip text="Save As">
+          <UButton
+            icon="i-lucide-save-all"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Save As"
+            @click="saveMemoryFileAs"
+          />
+        </UTooltip>
+        <UTooltip text="Import From Radio">
+          <UButton
+            icon="i-lucide-download"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Import From Radio"
+            @click="importOpen = true"
+          />
+        </UTooltip>
+        <UTooltip text="Write To Radio">
+          <UButton
+            icon="i-lucide-upload"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Write To Radio"
+            @click="openWriteToRadio"
+          />
+        </UTooltip>
       </template>
       <UTooltip text="Preferences">
         <UButton icon="i-lucide-settings" color="neutral" variant="ghost" to="/preferences" aria-label="Preferences" />

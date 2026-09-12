@@ -10,7 +10,7 @@
     <RadioWriteDialog />
     <RadioProgressDialog />
     <RadioModulesInstallDialog
-      v-model:open="modulesInstallOpen"
+      v-model:open="modulesDialogOpen"
       :required="modulesInstallRequired"
       @installed="onModulesInstalled"
     />
@@ -25,6 +25,14 @@ const { initialize, activeRadioId, memoryFilePath, modulesInstallOpen, modulesIn
   useRadio();
 const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
+const route = useRoute();
+
+const modulesDialogOpen = computed({
+  get: () => modulesInstallOpen.value && !route.path.startsWith('/wavebench'),
+  set: (open: boolean) => {
+    modulesInstallOpen.value = open;
+  },
+});
 
 useHead({
   titleTemplate: (title) => (title && title !== APP_NAME ? `${title} · ${APP_NAME}` : APP_NAME),
