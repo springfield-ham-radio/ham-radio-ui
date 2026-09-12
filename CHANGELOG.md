@@ -1,3 +1,10 @@
+## [0.22.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.21.0...v0.22.0) (2026-09-12)
+
+### Features
+
+* add a CAT debug capture switch so live sessions do not fill memory ([d43bca0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d43bca044ed6a3a5cd95626c318cfe2cb42e9ea5))
+* allow dismissing the CAT transmit microphone warning ([d507672](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d5076720b7602b6ab6bbcc84ba39f23e6c860772))
+
 ## [0.21.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.20.0...v0.21.0) (2026-09-12)
 
 ### Features
