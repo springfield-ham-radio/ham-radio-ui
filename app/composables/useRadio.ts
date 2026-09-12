@@ -19,6 +19,7 @@ import {
   reorderProgrammedChannels,
   type ChannelPatch,
 } from '~/utils/channel-edit';
+import { useCatPortLock } from '~/composables/useCatPortLock';
 import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
@@ -109,6 +110,7 @@ export function useRadio() {
   const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
+  const { lockedPort: catLockedPort } = useCatPortLock();
 
   async function refreshCatalogState(): Promise<void> {
     await reloadUserJsonCatalogRecords();
@@ -236,7 +238,25 @@ export function useRadio() {
     return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
+  function catSessionBlocksTransfer(): boolean {
+    if (!catLockedPort.value) {
+      return false;
+    }
+
+    toast.add({
+      title: 'CAT session is using the radio',
+      description: 'Disconnect CAT before importing or writing memory.',
+      color: 'warning',
+      icon: 'i-lucide-unplug',
+    });
+    return true;
+  }
+
   async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
+    if (catSessionBlocksTransfer()) {
+      return;
+    }
+
     const config = getConfiguration(radioId);
 
     if (!config) {
@@ -322,6 +342,10 @@ export function useRadio() {
 
     const radioId = activeRadioId.value;
     const config = getConfiguration(radioId);
+
+    if (catSessionBlocksTransfer()) {
+      return;
+    }
 
     if (!config) {
       throw new Error(`Radio configuration for ${radioId.model} was not found`);

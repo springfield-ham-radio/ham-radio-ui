@@ -28,7 +28,21 @@ const router = useRouter();
 const route = useRoute();
 
 const modulesDialogOpen = computed({
-  get: () => modulesInstallOpen.value && !route.path.startsWith('/wavebench'),
+  get: () => {
+    if (!modulesInstallOpen.value) {
+      return false;
+    }
+
+    if (route.path.startsWith('/wavebench')) {
+      return false;
+    }
+
+    if (route.path.startsWith('/cat') && modulesInstallRequired.value) {
+      return false;
+    }
+
+    return true;
+  },
   set: (open: boolean) => {
     modulesInstallOpen.value = open;
   },

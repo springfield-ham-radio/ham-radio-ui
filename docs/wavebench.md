@@ -4,7 +4,7 @@ WaveBench is a theory bench inside HamBench. The first experiment is **lumped fi
 
 ## Open the page
 
-Use the **WaveBench** tab in the header, between Log and Preferences.
+Use the **WaveBench** tab in the header, after Log.
 
 ## Filter types
 
