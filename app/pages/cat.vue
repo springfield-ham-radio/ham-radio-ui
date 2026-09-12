@@ -24,12 +24,15 @@ const {
   connected,
   lockedPorts,
   failedConnectLog,
+  debugLogging,
   connect,
   disconnect,
   setFrequency,
   setMode,
   setPower,
   setTransmit,
+  setDebugLogging,
+  clearSerialLog,
   saveSerialLog,
 } = useCat();
 const { createQso } = useStationLog();
@@ -81,17 +84,25 @@ const debugPackets = computed(() => snifferPacketsFromSerialLog(debugLog.value))
 
 const debugSummary = computed(() => {
   const frames = serialLogEntryCount(debugLog.value);
+  const frameLabel = `${frames} frame${frames === 1 ? '' : 's'}`;
 
   if (frames === 0) {
-    return 'Serial traffic from CAT sessions appears here.';
+    return debugLogging.value
+      ? 'Capturing serial traffic from CAT sessions.'
+      : 'Capture is off. Connect still logs the handshake; turn Capture on for live traffic.';
   }
 
   if (debugPort.value === 'failed' || (!activeDebugRadio.value && failedConnectLog.value)) {
-    return `Last failed connect · ${frames} frame${frames === 1 ? '' : 's'}`;
+    return `Last failed connect · ${frameLabel}`;
   }
 
   const name = activeDebugRadio.value?.radio.name ?? 'CAT';
-  return `${connected.value ? 'Live' : 'Last session'} · ${name} · ${frames} frame${frames === 1 ? '' : 's'}`;
+
+  if (!connected.value) {
+    return `Last session · ${name} · ${frameLabel}`;
+  }
+
+  return `${debugLogging.value ? 'Capturing' : 'Paused'} · ${name} · ${frameLabel}`;
 });
 
 const connectionBadge = computed(() => {
@@ -178,6 +189,10 @@ async function onSaveSerialLog(): Promise<void> {
   } finally {
     savingSerialLog.value = false;
   }
+}
+
+function onClearSerialLog(): void {
+  clearSerialLog(debugPort.value);
 }
 
 onBeforeUnmount(() => {
@@ -304,6 +319,21 @@ onBeforeUnmount(() => {
                 value-key="value"
                 class="w-56"
               />
+              <USwitch
+                :model-value="debugLogging"
+                size="sm"
+                label="Capture"
+                @update:model-value="setDebugLogging"
+              />
+              <UButton
+                icon="i-lucide-eraser"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                label="Clear"
+                :disabled="debugPackets.length === 0"
+                @click="onClearSerialLog"
+              />
               <UButton
                 icon="i-lucide-file-text"
                 color="neutral"
@@ -319,7 +349,11 @@ onBeforeUnmount(() => {
           <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
               <p v-if="debugPackets.length === 0" class="text-muted">
-                Connect CAT to capture serial traffic. Failed connects stay here so you can see the wake CR and ID exchange.
+                {{
+                  debugLogging
+                    ? 'Connect CAT to capture serial traffic. Failed connects stay here so you can see the wake CR and ID exchange.'
+                    : 'Capture is off, so live CAT traffic is not recorded. Connect still logs the handshake, including failed connects.'
+                }}
               </p>
               <div v-for="packet in debugPackets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
                 <span class="text-muted">{{ packet.timestamp }}</span>

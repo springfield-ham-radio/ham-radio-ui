@@ -32,6 +32,8 @@ Use **Disconnect** on that radio’s panel. The other CAT sessions stay up. Disc
 
 ## Debug
 
-The **Debug** tab shows live SEND/RECV bytes. When more than one session is open, choose the radio (or **Last failed connect**) in the menu. Each frame is hex plus an ASCII preview (`ID\r`, `?\r`). **Save serial log** writes the same JSON shape as Radio import/write logs for the selected session.
+The **Debug** tab shows SEND/RECV bytes. Capture is off by default so a long CAT session does not fill memory. Connect still records the handshake (wake CR, `ID`, VFO reads), including failed connects. Turn **Capture** on to record live poll and command traffic; turning it off stops recording but keeps what is already on screen. **Clear** drops the current buffer without disconnecting.
+
+When more than one session is open, choose the radio (or **Last failed connect**) in the menu. Each frame is hex plus an ASCII preview (`ID\r`, `?\r`). **Save serial log** writes the same JSON shape as Radio import/write logs for the selected session.
 
 A good TM-D710 connect shows `ID\r` → `ID TM-D710\r`, then `BC\r`, `FO 0\r`, and `FO 1\r` with full VFO replies. No reply after `ID` usually means the wrong jack, baud, or serial device. Modules that set `wakeCr` also show a wake CR first.

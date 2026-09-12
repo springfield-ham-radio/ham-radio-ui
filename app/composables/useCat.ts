@@ -54,6 +54,7 @@ export function useCat() {
   const failedConnectLog = useState<CatSerialLogSnapshot | undefined>('cat-failed-log', () => undefined);
   const failedConnectRadio = useState<RadioId | undefined>('cat-failed-radio', () => undefined);
   const failedConnectPort = useState<string | undefined>('cat-failed-port', () => undefined);
+  const debugLogging = useState('cat-debug-logging', () => false);
 
   const connected = computed(() => liveRadios.value.length > 0);
 
@@ -112,6 +113,10 @@ export function useCat() {
     try {
       await releaseSerialPortHold();
       const transport = await openKenwoodCatSerialTransport(path, radio.serialConfig, baudRate, (direction, data) => {
+        if (!traffic.isEnabled()) {
+          return;
+        }
+
         traffic.append(direction, data);
         const snapshot = traffic.snapshot();
         const live = liveRadios.value.find((item) => item.port === path);
@@ -156,6 +161,7 @@ export function useCat() {
       failedConnectLog.value = undefined;
       failedConnectRadio.value = undefined;
       failedConnectPort.value = undefined;
+      traffic.setEnabled(debugLogging.value);
       startPolling(path);
       toast.add({
         title: 'CAT connected',
@@ -272,6 +278,46 @@ export function useCat() {
     await work;
   }
 
+  /**
+   * Turn live serial capture on or off for every CAT session.
+   *
+   * Connect always records the handshake. After that, frames are stored only
+   * while capture is on so a long session does not grow without bound.
+   */
+  function setDebugLogging(enabled: boolean): void {
+    debugLogging.value = enabled;
+
+    for (const runtime of runtimes.values()) {
+      runtime.traffic.setEnabled(enabled);
+    }
+  }
+
+  /**
+   * Drop the Debug tab buffer for one session without disconnecting.
+   */
+  function clearSerialLog(port?: string): void {
+    if (port === 'failed' || (!port && liveRadios.value.length === 0)) {
+      failedConnectLog.value = undefined;
+      return;
+    }
+
+    const path = port ?? liveRadios.value[0]?.port;
+
+    if (!path) {
+      failedConnectLog.value = undefined;
+      return;
+    }
+
+    const runtime = runtimes.get(path);
+
+    if (!runtime) {
+      return;
+    }
+
+    runtime.traffic.clear();
+    patchLiveRadio(path, { serialLog: runtime.traffic.snapshot() });
+  }
+
   async function saveSerialLog(port?: string): Promise<void> {
     const failed = port === 'failed' || (!port && liveRadios.value.length === 0);
     const live = failed ? undefined : port ? liveRadios.value.find((radio) => radio.port === port) : liveRadios.value[0];
@@ -333,6 +379,7 @@ export function useCat() {
     failedConnectLog,
     failedConnectRadio,
     failedConnectPort,
+    debugLogging,
     connect,
     disconnect,
     poll,
@@ -340,6 +387,8 @@ export function useCat() {
     setMode,
     setPower,
     setTransmit,
+    setDebugLogging,
+    clearSerialLog,
     saveSerialLog,
   };
 }

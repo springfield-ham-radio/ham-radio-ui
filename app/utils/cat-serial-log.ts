@@ -19,6 +19,9 @@ export interface CatSerialLogSnapshot {
 export interface CatSerialLog {
   append(direction: 'SEND' | 'RECV', data: Uint8Array): void;
   snapshot(): CatSerialLogSnapshot;
+  setEnabled(enabled: boolean): void;
+  isEnabled(): boolean;
+  clear(): void;
 }
 
 /**
@@ -53,14 +56,17 @@ function formatElapsed(elapsedMs: number): string {
 
 /**
  * In-memory CAT serial log in the same SEND/RECV shape as driver import logs.
+ *
+ * Capture can be paused so a live CAT session does not grow without bound.
  */
 export function createCatSerialLog(startedAt = Date.now()): CatSerialLog {
   const startTime = new Date(startedAt).toISOString();
   const entries: CatSerialLogEntry[] = [];
+  let enabled = true;
 
   return {
     append(direction: 'SEND' | 'RECV', data: Uint8Array): void {
-      if (data.length === 0) {
+      if (!enabled || data.length === 0) {
         return;
       }
 
@@ -84,6 +90,15 @@ export function createCatSerialLog(startedAt = Date.now()): CatSerialLog {
         },
         entries: entries.map((entry) => ({ ...entry, data: [...entry.data] })),
       };
+    },
+    setEnabled(nextEnabled: boolean): void {
+      enabled = nextEnabled;
+    },
+    isEnabled(): boolean {
+      return enabled;
+    },
+    clear(): void {
+      entries.length = 0;
     },
   };
 }

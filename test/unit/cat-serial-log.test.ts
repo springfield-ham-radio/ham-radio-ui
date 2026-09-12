@@ -34,4 +34,35 @@ describe('createCatSerialLog', () => {
     log.append('SEND', new Uint8Array());
     expect(log.snapshot().entries).to.have.length(0);
   });
+
+  it('should ignore frames while capture is disabled', () => {
+    const log = createCatSerialLog();
+    log.append('SEND', Uint8Array.from(Buffer.from('ID\r', 'ascii')));
+    log.setEnabled(false);
+    log.append('SEND', Uint8Array.from(Buffer.from('FO 0\r', 'ascii')));
+
+    expect(log.isEnabled()).to.equal(false);
+    expect(log.snapshot().entries).to.have.length(1);
+    expect(log.snapshot().entries[0]?.description).to.equal('ID\\r');
+  });
+
+  it('should resume capturing after capture is enabled', () => {
+    const log = createCatSerialLog();
+    log.setEnabled(false);
+    log.append('SEND', Uint8Array.from(Buffer.from('ID\r', 'ascii')));
+    log.setEnabled(true);
+    log.append('SEND', Uint8Array.from(Buffer.from('FO 0\r', 'ascii')));
+
+    expect(log.snapshot().entries).to.have.length(1);
+    expect(log.snapshot().entries[0]?.description).to.equal('FO 0\\r');
+  });
+
+  it('should drop stored frames when cleared', () => {
+    const log = createCatSerialLog();
+    log.append('SEND', Uint8Array.from(Buffer.from('ID\r', 'ascii')));
+    log.clear();
+
+    expect(log.snapshot().metadata.totalEntries).to.equal(0);
+    expect(log.snapshot().entries).to.have.length(0);
+  });
 });
