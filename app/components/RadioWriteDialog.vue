@@ -7,6 +7,11 @@ import {
   shouldSelectProgrammingBaudRate,
   writeRememberedBaudRate,
 } from '~/utils/radio-baud-rate';
+import {
+  readRememberedSerialPort,
+  resolveRememberedSerialPort,
+  writeRememberedSerialPort,
+} from '~/utils/remembered-serial-port';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
@@ -71,6 +76,10 @@ watch(
 );
 
 watch(selectedPort, (path) => {
+  if (path) {
+    writeRememberedSerialPort(path);
+  }
+
   void holdSerialPortInactive(path).catch((cause) => {
     console.error('Failed to hold serial port inactive', cause);
   });
@@ -78,22 +87,25 @@ watch(selectedPort, (path) => {
 
 async function loadPorts(): Promise<void> {
   loadingPorts.value = true;
+  const previousPort = selectedPort.value;
 
   try {
     await releaseSerialPortHold();
     const availablePorts = await SerialPort.available_ports();
     ports.value = serialPortSelectItems(Object.keys(availablePorts), readSerialPortSettings());
-
-    if (selectedPort.value && !ports.value.some((port) => port.value === selectedPort.value)) {
-      selectedPort.value = undefined;
-    }
+    selectedPort.value = resolveRememberedSerialPort(
+      readRememberedSerialPort(),
+      ports.value.map((port) => port.value),
+      selectedPort.value,
+    );
   } catch (cause) {
     console.error('Failed to list serial ports', cause);
     ports.value = [];
+    selectedPort.value = undefined;
   } finally {
     loadingPorts.value = false;
 
-    if (writeOpen.value && selectedPort.value) {
+    if (writeOpen.value && selectedPort.value && selectedPort.value === previousPort) {
       void holdSerialPortInactive(selectedPort.value).catch((holdCause) => {
         console.error('Failed to hold serial port inactive', holdCause);
       });

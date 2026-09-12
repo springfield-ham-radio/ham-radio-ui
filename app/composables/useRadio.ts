@@ -41,6 +41,7 @@ import {
   writeTextFile,
   writeTextFileWithPicker,
 } from '~/utils/radio-memory-file-io';
+import { writeRememberedRadio } from '~/utils/remembered-radio';
 import {
   defaultSerialLogFileName,
   serializeSerialLogFile,
@@ -756,6 +757,7 @@ export function useRadio() {
 
     memory.value = memoryData;
     activeRadioId.value = radioId;
+    writeRememberedRadio(radioId);
     const codec = await getCodec(radioId);
     const decoded = codec?.decode({
       radioModel: radioId.model,
