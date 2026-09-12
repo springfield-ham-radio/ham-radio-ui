@@ -1,3 +1,9 @@
+## [0.19.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.19.0...v0.19.1) (2026-09-12)
+
+### Bug Fixes
+
+* update @springfield/ham-radio-registry to ^1.5.0 ([dcca55d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/dcca55df8e3df33322724d463652ed35ad0e2642))
+
 ## [0.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.18.0...v0.19.0) (2026-09-12)
 
 ### Features
