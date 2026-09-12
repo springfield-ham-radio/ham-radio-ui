@@ -1,3 +1,9 @@
+## [0.16.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.16.0...v0.16.1) (2026-09-12)
+
+### Bug Fixes
+
+* update @springfield/ham-radio-utils to ^4.10.2 ([b1c347b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b1c347bc60e718fed4713a0a1814c4d5cdf5593b))
+
 ## [0.16.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.15.0...v0.16.0) (2026-09-12)
 
 ### Features
