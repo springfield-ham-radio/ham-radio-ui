@@ -1,3 +1,14 @@
+## [0.16.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.15.0...v0.16.0) (2026-09-12)
+
+### Features
+
+* move radio memory actions onto the Radio page ([06e49ad](https://github.com/springfield-ham-radio/ham-radio-ui/commit/06e49adac33278c4031f391262b9b0ba2ebfd5a8))
+* remember last radio and serial port across restarts ([8bf5046](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8bf50463ee632c152a2502daede76cd42796ff60))
+
+### Bug Fixes
+
+* show Weather Radio for WX8–WX10 channels ([948c078](https://github.com/springfield-ham-radio/ham-radio-ui/commit/948c078f3396fb317557a7c62afba91b85420240))
+
 ## [0.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.14.0...v0.15.0) (2026-09-12)
 
 ### Features
