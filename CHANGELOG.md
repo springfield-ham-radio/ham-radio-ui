@@ -1,3 +1,9 @@
+## [0.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.17.0...v0.18.0) (2026-09-12)
+
+### Features
+
+* add a Kenwood CAT page for live VFO control ([c54cc75](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c54cc752f145508549563e5338d3a3f36ad72270))
+
 ## [0.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.16.1...v0.17.0) (2026-09-12)
 
 ### Features
