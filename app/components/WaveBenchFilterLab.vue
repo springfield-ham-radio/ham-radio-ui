@@ -162,32 +162,18 @@ const phaseSeries = computed(() => [
   },
 ]);
 
-const timeScale = computed(() => {
-  const duration = waveforms.value.at(-1)?.timeSeconds ?? 0;
-
-  if (duration > 0 && duration < 1e-6) {
-    return { factor: 1e9, label: 'Time (ns)' };
-  }
-
-  if (duration < 1e-3) {
-    return { factor: 1e6, label: 'Time (µs)' };
-  }
-
-  return { factor: 1e3, label: 'Time (ms)' };
-});
-
-const timeSeries = computed(() => [
+const timeScopeChannels = computed(() => [
   {
     id: 'input',
-    label: 'Input',
-    color: 'var(--ui-text-muted, #737373)',
-    points: waveforms.value.map((sample) => ({ x: sample.timeSeconds * timeScale.value.factor, y: sample.input })),
+    label: 'CH1 In',
+    color: 'var(--ui-info)',
+    samples: waveforms.value.map((sample) => ({ timeSeconds: sample.timeSeconds, voltage: sample.input })),
   },
   {
     id: 'output',
-    label: 'Output',
-    color: 'var(--ui-primary)',
-    points: waveforms.value.map((sample) => ({ x: sample.timeSeconds * timeScale.value.factor, y: sample.output })),
+    label: 'CH2 Out',
+    color: 'var(--ui-warning)',
+    samples: waveforms.value.map((sample) => ({ timeSeconds: sample.timeSeconds, voltage: sample.output })),
   },
 ]);
 
@@ -658,13 +644,9 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
             >
               <h4 v-if="chartLayout === 'all'" class="mb-1 shrink-0 text-xs font-medium text-muted">{{ timeTitle }}</h4>
               <div class="h-full min-h-0 flex-1">
-                <WaveBenchPlot
-                  :series="timeSeries"
-                  x-scale="linear"
-                  :x-label="timeScale.label"
-                  y-label="V"
-                  :format-x="(value) => value.toFixed(2)"
-                  :format-y="(value) => value.toFixed(1)"
+                <WaveBenchScope
+                  :channels="timeScopeChannels"
+                  layout="overlay"
                   aria-label="Input and output waveforms"
                 />
               </div>
