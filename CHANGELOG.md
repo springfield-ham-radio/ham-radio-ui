@@ -1,3 +1,9 @@
+## [0.26.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.25.0...v0.26.0) (2026-09-13)
+
+### Features
+
+* group official radios by manufacturer in Preferences ([6991d93](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6991d936db3fa9ad2513f0af5e0426f1d6a3325a))
+
 ## [0.25.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.24.0...v0.25.0) (2026-09-13)
 
 ### Features
