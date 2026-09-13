@@ -101,6 +101,13 @@ export function readSerialPortSettings(): SerialPortSettings {
   }
 }
 
+/**
+ * Persist serial-port preferences.
+ *
+ * Names are normalized in the stored JSON. Callers must not replace a live
+ * tags-input model with that normalized array; Reka UI TagsInput's deep
+ * v-model retriggers and freezes the Preferences page.
+ */
 export function writeSerialPortSettings(settings: SerialPortSettings): void {
   if (!import.meta.client) {
     return;

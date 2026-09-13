@@ -68,4 +68,16 @@ describe('serial port settings', () => {
 
     expect(parseSerialPortSettings(serializeSerialPortSettings(settings))).to.deep.equal(settings);
   });
+
+  it('should serialize trimmed names without mutating the live tags list', () => {
+    const excludedPortNames = [' BryansHeadphones '];
+
+    const serialized = serializeSerialPortSettings({
+      filterCommonPorts: true,
+      excludedPortNames,
+    });
+
+    expect(excludedPortNames).to.deep.equal([' BryansHeadphones ']);
+    expect(parseSerialPortSettings(serialized).excludedPortNames).to.deep.equal(['BryansHeadphones']);
+  });
 });

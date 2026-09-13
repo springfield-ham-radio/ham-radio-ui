@@ -490,7 +490,7 @@
 
 <script setup lang="ts">
 import { openExternalUrl } from '~/utils/open-external-url';
-import { normalizeExcludedPortNames, readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
+import { readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
 import { parseSnifferSettings, readSnifferSettings, snifferSshTarget, writeSnifferSettings } from '~/utils/sniffer-settings';
 import {
   checkRemoteSnifferHost,
@@ -1024,25 +1024,14 @@ const activeSection = computed(() => {
   return sections.find((section) => section.id === currentSection.value) ?? sections[0];
 });
 
-let persistingSerialPortSettings = false;
-
 function persistSerialPortSettings(): void {
-  if (persistingSerialPortSettings) {
-    return;
-  }
-
-  persistingSerialPortSettings = true;
-
-  try {
-    const names = normalizeExcludedPortNames(excludedPortNames.value);
-    excludedPortNames.value = names;
-    writeSerialPortSettings({
-      filterCommonPorts: filterCommonPorts.value,
-      excludedPortNames: names,
-    });
-  } finally {
-    persistingSerialPortSettings = false;
-  }
+  // Write storage only. Replacing `excludedPortNames` with a newly normalized
+  // array retriggers Reka UI TagsInput's deep v-model and freezes the app
+  // after the names have already been saved.
+  writeSerialPortSettings({
+    filterCommonPorts: filterCommonPorts.value,
+    excludedPortNames: excludedPortNames.value,
+  });
 }
 
 function setFilterCommonPorts(enabled: boolean): void {
