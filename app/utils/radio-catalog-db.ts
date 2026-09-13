@@ -20,6 +20,11 @@ export interface LoadedRadioConfig extends Radio {
   };
   capabilities?: RadioCapabilities & { liveControl?: boolean };
   cat?: RadioCatConfig;
+  metadata?: {
+    moduleId?: string;
+    moduleVersion?: string;
+    pluginPath?: string;
+  };
 }
 
 export interface RadioCatalogRecord {

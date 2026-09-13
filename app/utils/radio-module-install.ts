@@ -63,17 +63,36 @@ async function hydrateConfigsIntoCatalog(
   configPaths: string[],
   source: RadioCatalogSource,
   sourcePath?: string,
+  catalogModelId?: string,
+  catalogConfig?: string,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
 
   for (const configPath of configPaths) {
+    if (catalogConfig && !catalogConfigMatchesPath(catalogConfig, configPath)) {
+      continue;
+    }
+
     const text = await invoke<string>('load_text_file', { path: configPath });
     const radio = await loadRadioConfigFromFile(configPath, text);
+
+    if (
+      !catalogConfig &&
+      catalogModelId &&
+      !catalogModelMatchesId(catalogModelId, radio.id.model, radio.id.manufacturer)
+    ) {
+      continue;
+    }
+
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
     });
     radios.push(radio);
+  }
+
+  if ((catalogModelId || catalogConfig) && radios.length === 0) {
+    throw new Error(`That module does not include radio ${catalogModelId || catalogConfig}`);
   }
 
   return radios;
@@ -81,9 +100,11 @@ async function hydrateConfigsIntoCatalog(
 
 /**
  * Download an official catalog module, verify integrity, and upsert radios as `installed`.
+ * Pass `catalogModelId` / `catalogConfig` to add only that radio from the zip.
  */
 export async function installOfficialModule(
   entry: RadioModuleCatalogEntry,
+  options: { catalogModelId?: string; catalogConfig?: string } = {},
 ): Promise<InstallModuleRadiosResult> {
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
@@ -99,7 +120,13 @@ export async function installOfficialModule(
     version: entry.version,
   });
 
-  const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'installed', installed.installPath);
+  const radios = await hydrateConfigsIntoCatalog(
+    installed.configPaths,
+    'installed',
+    installed.installPath,
+    options.catalogModelId,
+    options.catalogConfig,
+  );
 
   return {
     moduleId: installed.moduleId,
@@ -228,6 +255,40 @@ export async function installPickedLocalModuleFile(
 
   const fileName = basename(picked.path);
   return installLocalModuleZip(picked.path, moduleIdFromZipName(fileName), versionFromZipName(fileName));
+}
+
+/**
+ * True when a catalog `config` path refers to this extracted config file.
+ */
+export function catalogConfigMatchesPath(catalogConfig: string, configPath: string): boolean {
+  const wanted = catalogConfig.replace(/\\/g, '/').replace(/^\.\//, '');
+  const actual = configPath.replace(/\\/g, '/');
+
+  return actual === wanted || actual.endsWith(`/${wanted}`) || basename(actual) === basename(wanted);
+}
+
+/**
+ * True when a catalog radio id refers to this radio.
+ * Legacy catalogs used short ids (`uv5r`); configs use prefixed ids (`baofeng-uv5r`).
+ */
+export function catalogModelMatchesId(
+  catalogModelId: string,
+  modelId: string,
+  manufacturer: string,
+): boolean {
+  const catalogId = catalogModelId.toLowerCase();
+  const normalizedModelId = modelId.toLowerCase();
+
+  if (normalizedModelId === catalogId) {
+    return true;
+  }
+
+  if (normalizedModelId.endsWith(`-${catalogId}`)) {
+    return true;
+  }
+
+  const manufacturerSlug = manufacturer.toLowerCase().replace(/\s+/g, '-');
+  return normalizedModelId === `${manufacturerSlug}-${catalogId}`;
 }
 
 const MODULE_INSTALL_PATH_PATTERN = /\/radio-modules\/([^/]+)\/([^/]+)\/?$/;

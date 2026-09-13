@@ -30,7 +30,10 @@
       </header>
 
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="mx-auto flex w-full max-w-xl flex-col px-6 pt-2 pb-10">
+        <div
+          class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
+          :class="currentSection === 'radios' ? 'max-w-2xl' : 'max-w-xl'"
+        >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
@@ -301,59 +304,8 @@
           </div>
         </section>
 
-        <section v-else-if="currentSection === 'radios'" class="flex flex-col gap-4">
-          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="flex flex-col gap-4 px-4 py-4">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted">Installed radios</p>
-                <p class="text-xs text-muted">
-                  Official modules are verified. Local files are marked Unverified and are not updated from the catalog.
-                </p>
-              </div>
-
-              <ul v-if="catalogRecords.length > 0" class="divide-y divide-default rounded-lg bg-muted">
-                <li
-                  v-for="record in catalogRecords"
-                  :key="record.modelId"
-                  class="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-                >
-                  <div class="min-w-0">
-                    <p class="truncate font-medium text-highlighted">
-                      {{ record.manufacturer }} {{ record.name }}
-                    </p>
-                    <p class="truncate text-xs text-muted">v{{ record.version }} · {{ record.modelId }}</p>
-                  </div>
-                  <div class="flex shrink-0 items-center gap-2">
-                    <UBadge
-                      :label="record.source === 'user' ? 'Unverified' : record.source === 'installed' ? 'Official' : 'Bundled'"
-                      :color="record.source === 'user' ? 'warning' : 'success'"
-                      variant="subtle"
-                      size="sm"
-                    />
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      icon="i-lucide-trash-2"
-                      size="xs"
-                      aria-label="Remove radio"
-                      :disabled="removingModelId === record.modelId"
-                      @click="requestRemoveRadio(record)"
-                    />
-                  </div>
-                </li>
-              </ul>
-              <p v-else class="text-sm text-muted">No radios installed yet.</p>
-
-              <div>
-                <UButton
-                  label="Install radios…"
-                  color="primary"
-                  icon="i-lucide-download"
-                  @click="openModulesInstall()"
-                />
-              </div>
-            </div>
-          </div>
+        <section v-else-if="currentSection === 'radios'">
+          <RadioModulesPreference />
         </section>
 
         <section v-else-if="currentSection === 'serial'" class="flex flex-col gap-4">
@@ -534,33 +486,9 @@
     </div>
   </div>
 
-  <UModal v-model:open="removeConfirmOpen" :ui="{ content: 'sm:max-w-md' }">
-    <template #content>
-      <div class="flex flex-col gap-4 p-5">
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">Remove radio?</h2>
-          <p class="mt-2 text-sm text-muted">
-            {{ removeConfirmMessage }}
-          </p>
-        </div>
-        <div class="flex justify-end gap-2">
-          <UButton label="Cancel" color="neutral" variant="ghost" @click="cancelRemoveRadio" />
-          <UButton
-            label="Remove"
-            color="error"
-            :loading="removingModelId !== undefined"
-            @click="confirmRemoveRadio"
-          />
-        </div>
-      </div>
-    </template>
-  </UModal>
 </template>
 
 <script setup lang="ts">
-import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
-import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
-import { isModuleInstallPath } from '~/utils/radio-module-install';
 import { openExternalUrl } from '~/utils/open-external-url';
 import { normalizeExcludedPortNames, readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
 import { parseSnifferSettings, readSnifferSettings, snifferSshTarget, writeSnifferSettings } from '~/utils/sniffer-settings';
@@ -626,7 +554,6 @@ const sections = [
 
 const route = useRoute();
 const router = useRouter();
-const { openModulesInstall, uninstallRadio, configurations } = useRadio();
 const {
   status,
   autoUpdateEnabled,
@@ -643,10 +570,6 @@ const {
 const initialSerialPortSettings = readSerialPortSettings();
 const filterCommonPorts = ref(initialSerialPortSettings.filterCommonPorts);
 const excludedPortNames = ref([...initialSerialPortSettings.excludedPortNames]);
-const catalogRecords = ref<RadioCatalogRecord[]>([]);
-const removeConfirmOpen = ref(false);
-const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
-const removingModelId = ref<string | undefined>();
 const initialSnifferSettings = readSnifferSettings();
 const snifferHostInput = ref(initialSnifferSettings.host);
 const snifferPortInput = ref(initialSnifferSettings.port);
@@ -1080,56 +1003,6 @@ async function onToggleRemoteSniffer(enabled: boolean): Promise<void> {
   await onStopRemoteSniffer();
 }
 
-const removeConfirmMessage = computed(() => {
-  const record = pendingRemoveRecord.value;
-
-  if (!record) {
-    return '';
-  }
-
-  if (record.sourcePath && (record.source === 'installed' || isModuleInstallPath(record.sourcePath))) {
-    const related = catalogRecords.value.filter((candidate) => candidate.sourcePath === record.sourcePath);
-    const names = related.map((candidate) => `${candidate.manufacturer} ${candidate.name}`).join(', ');
-
-    if (related.length > 1) {
-      return `Remove the installed module and delete ${names} from your catalog? This also removes the module files from this computer.`;
-    }
-
-    return `Remove ${record.manufacturer} ${record.name} from your catalog? This also deletes the installed module files from this computer.`;
-  }
-
-  return `Remove ${record.manufacturer} ${record.name} from your catalog? The original file on disk is not deleted.`;
-});
-
-function requestRemoveRadio(record: RadioCatalogRecord): void {
-  pendingRemoveRecord.value = record;
-  removeConfirmOpen.value = true;
-}
-
-function cancelRemoveRadio(): void {
-  removeConfirmOpen.value = false;
-  pendingRemoveRecord.value = undefined;
-}
-
-async function confirmRemoveRadio(): Promise<void> {
-  const record = pendingRemoveRecord.value;
-
-  if (!record) {
-    return;
-  }
-
-  removingModelId.value = record.modelId;
-  removeConfirmOpen.value = false;
-
-  try {
-    await uninstallRadio(record);
-    await refreshInstalledRadios();
-  } finally {
-    removingModelId.value = undefined;
-    pendingRemoveRecord.value = undefined;
-  }
-}
-
 const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
@@ -1230,21 +1103,9 @@ const updaterStatusLabel = computed(() => {
   return 'Not checked yet.';
 });
 
-async function refreshInstalledRadios(): Promise<void> {
-  try {
-    catalogRecords.value = await listRadioCatalogRecords();
-  } catch {
-    catalogRecords.value = [];
-  }
-}
-
 watch(
   currentSection,
   (section) => {
-    if (section === 'radios') {
-      void refreshInstalledRadios();
-    }
-
     if (section === 'sniffer') {
       scheduleSnifferProbe(0);
       startSnifferStatusPoll();
@@ -1254,16 +1115,6 @@ watch(
     stopSnifferStatusPoll();
   },
   { immediate: true },
-);
-
-watch(
-  configurations,
-  () => {
-    if (currentSection.value === 'radios') {
-      void refreshInstalledRadios();
-    }
-  },
-  { deep: true },
 );
 
 const {

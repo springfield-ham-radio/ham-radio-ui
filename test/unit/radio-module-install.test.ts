@@ -3,6 +3,8 @@ import { expect } from 'chai';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
 import {
   APP_HAM_RADIO_API_VERSION,
+  catalogConfigMatchesPath,
+  catalogModelMatchesId,
   isModuleInstallPath,
   isUserJsonCatalogSourcePath,
   parseModuleInstallPath,
@@ -19,7 +21,14 @@ describe('radio module install helpers', () => {
             package: '@springfield/radio-module-baofeng',
             manufacturer: 'Baofeng',
             version: '3.1.0',
-            supportedRadios: ['uv5r'],
+            radios: [
+              {
+                modelId: 'baofeng-uv5r',
+                name: 'Baofeng UV-5R',
+                config: 'configs/baofeng-uv5r.json',
+              },
+            ],
+            supportedRadios: ['baofeng-uv5r'],
             minApiVersion: '17.3.0',
             downloadUrl:
               'https://github.com/springfield-ham-radio/radio-module-baofeng/releases/download/v3.1.0/radio-module-baofeng-3.1.0.zip',
@@ -58,4 +67,24 @@ describe('radio module install helpers', () => {
     expect(isUserJsonCatalogSourcePath('installed', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
     expect(isUserJsonCatalogSourcePath('user', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
   });
+
+  it('should match a catalog config path to an extracted file', () => {
+    expect(
+      catalogConfigMatchesPath(
+        'configs/baofeng-uv5r.json',
+        '/tmp/radio-modules/baofeng/3.4.1/configs/baofeng-uv5r.json',
+      ),
+    ).to.equal(true);
+    expect(
+      catalogConfigMatchesPath('configs/kenwood-th-f6.json', '/tmp/radio-modules/kenwood/1.8.0/configs/kenwood-th-d74.json'),
+    ).to.equal(false);
+  });
+
+  it('should match a catalog radio id to a prefixed config model', () => {
+    expect(catalogModelMatchesId('baofeng-uv5r', 'baofeng-uv5r', 'Baofeng')).to.equal(true);
+    expect(catalogModelMatchesId('uv5r', 'baofeng-uv5r', 'Baofeng')).to.equal(true);
+    expect(catalogModelMatchesId('uv5r-plus', 'baofeng-uv5r', 'Baofeng')).to.equal(false);
+    expect(catalogModelMatchesId('th-d74', 'kenwood-th-d74', 'Kenwood')).to.equal(true);
+  });
 });
+
