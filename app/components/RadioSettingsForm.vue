@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import type { RadioMemoryMap, RadioSettings, RadioSettingValue } from '@springfield/ham-radio-api';
-import {
-  collectMemoryMapUiFields,
-  groupMemoryMapUiFields,
-  type RadioMemoryMapUiField,
-} from '@springfield/ham-radio-utils';
+import { type RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
+import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
 
 const props = defineProps<{
@@ -17,79 +14,18 @@ const emit = defineEmits<{
 }>();
 
 const EMPTY_SELECT_VALUE = '__empty__';
-
-const GROUP_LABELS: Record<string, string> = {
-  basic: 'Basic Settings',
-  display: 'Display',
-  audio: 'Audio',
-  aux: 'Auxiliary',
-  transmit: 'Transmit / Receive',
-  dtmf: 'DTMF Settings',
-  memory: 'Memory',
-  repeater: 'Repeater',
-  keys: 'PF Keys',
-  bands: 'Band Masks',
-  vfo: 'VFO',
-  aprs: 'APRS',
-  sky: 'Sky Command',
-  save: 'Power Save',
-  main: 'Main',
-  advanced: 'Advanced Settings',
-  workmode: 'Work Mode Settings',
-  other: 'Other Settings',
-  service: 'Service Settings',
-};
-
-const GROUP_ICONS: Record<string, string> = {
-  basic: 'i-lucide-sliders-horizontal',
-  display: 'i-lucide-monitor',
-  audio: 'i-lucide-volume-2',
-  aux: 'i-lucide-unplug',
-  transmit: 'i-lucide-radio-tower',
-  dtmf: 'i-lucide-hash',
-  memory: 'i-lucide-database',
-  repeater: 'i-lucide-repeat-2',
-  keys: 'i-lucide-keyboard',
-  bands: 'i-lucide-layers',
-  vfo: 'i-lucide-gauge',
-  aprs: 'i-lucide-map-pinned',
-  sky: 'i-lucide-cloud',
-  save: 'i-lucide-battery-medium',
-  main: 'i-lucide-layout-dashboard',
-  advanced: 'i-lucide-settings-2',
-  workmode: 'i-lucide-waypoints',
-  other: 'i-lucide-ellipsis',
-  service: 'i-lucide-wrench',
-};
-
-const GROUP_ORDER = Object.keys(GROUP_LABELS);
+const FALLBACK_GROUP_ICON = 'i-lucide-sliders-horizontal';
 
 const contentPane = useTemplateRef<HTMLElement>('contentPane');
 
-const uiFields = computed(() => collectMemoryMapUiFields(props.memoryMap));
-const groupedFields = computed(() => groupMemoryMapUiFields(uiFields.value));
+const groupEntries = computed(() => collectMemoryMapUiGroups(props.memoryMap));
 
-const groupEntries = computed(() => {
-  return [...groupedFields.value.entries()]
-    .map(([group, fields]) => ({
-      group,
-      label: GROUP_LABELS[group] ?? group,
-      icon: GROUP_ICONS[group] ?? 'i-lucide-sliders-horizontal',
-      fields,
-    }))
-    .sort((left, right) => {
-      const leftIndex = GROUP_ORDER.indexOf(left.group);
-      const rightIndex = GROUP_ORDER.indexOf(right.group);
-      return (leftIndex === -1 ? GROUP_ORDER.length : leftIndex) - (rightIndex === -1 ? GROUP_ORDER.length : rightIndex);
-    });
-});
-
-const selectedGroup = ref<string | undefined>('basic');
+const selectedGroup = ref<string | undefined>();
 
 watch(
   groupEntries,
   (entries) => {
-    const values = entries.map((entry) => entry.group);
+    const values = entries.map((entry) => entry.id);
 
     if (values.length === 0) {
       selectedGroup.value = undefined;
@@ -108,17 +44,44 @@ watch(selectedGroup, () => {
 });
 
 const selectedEntry = computed(() => {
-  return groupEntries.value.find((entry) => entry.group === selectedGroup.value) ?? groupEntries.value[0];
+  return groupEntries.value.find((entry) => entry.id === selectedGroup.value) ?? groupEntries.value[0];
 });
 
-const selectedFields = computed<RadioMemoryMapUiField[]>(() => selectedEntry.value?.fields ?? []);
+const selectedSections = computed(() => {
+  const entry = selectedEntry.value;
+
+  if (!entry) {
+    return [];
+  }
+
+  if (entry.groups.length === 0) {
+    return [{ id: entry.id, fields: entry.fields }];
+  }
+
+  const sections: { id: string; label?: string; description?: string; fields: RadioMemoryMapUiField[] }[] = [];
+  const ungrouped = entry.fields.filter((field) => !fieldSubgroup(field));
+
+  if (ungrouped.length > 0) {
+    sections.push({ id: `${entry.id}-ungrouped`, fields: ungrouped });
+  }
+
+  for (const subgroup of entry.groups) {
+    sections.push(subgroup);
+  }
+
+  return sections;
+});
 
 const groupSelectItems = computed(() => {
   return groupEntries.value.map((entry) => ({
     label: entry.label,
-    value: entry.group,
+    value: entry.id,
   }));
 });
+
+function groupIcon(entry: { icon?: string }): string {
+  return entry.icon || FALLBACK_GROUP_ICON;
+}
 
 function fieldValue(field: RadioMemoryMapUiField): RadioSettingValue | undefined {
   return getSettingAtPath(props.settings, field.path);
@@ -222,81 +185,96 @@ function selectGroup(group: string): void {
     >
       <button
         v-for="entry in groupEntries"
-        :key="entry.group"
+        :key="entry.id"
         type="button"
         class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium transition-colors"
         :class="
-          selectedGroup === entry.group
+          selectedGroup === entry.id
             ? 'bg-primary text-inverted'
             : 'text-highlighted hover:bg-elevated/80'
         "
-        :aria-current="selectedGroup === entry.group ? 'true' : undefined"
-        @click="selectGroup(entry.group)"
+        :aria-current="selectedGroup === entry.id ? 'true' : undefined"
+        @click="selectGroup(entry.id)"
       >
-        <UIcon :name="entry.icon" class="size-4 shrink-0" />
+        <UIcon :name="groupIcon(entry)" class="size-4 shrink-0" />
         {{ entry.label }}
       </button>
     </nav>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col md:pl-6">
-      <header class="mb-3 flex shrink-0 items-center gap-2">
-        <UIcon v-if="selectedEntry" :name="selectedEntry.icon" class="size-4 text-muted" />
-        <h2 class="text-sm font-semibold text-highlighted">{{ selectedEntry?.label }}</h2>
+      <header class="mb-3 flex shrink-0 flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <UIcon v-if="selectedEntry" :name="groupIcon(selectedEntry)" class="size-4 text-muted" />
+          <h2 class="text-sm font-semibold text-highlighted">{{ selectedEntry?.label }}</h2>
+        </div>
+        <p v-if="selectedEntry?.description" class="text-xs text-muted">{{ selectedEntry.description }}</p>
       </header>
 
       <div ref="contentPane" class="min-h-0 flex-1 overflow-y-auto pb-8">
-        <div :key="selectedGroup" class="space-y-3">
+        <div :key="selectedGroup" class="space-y-5">
           <UAlert
-            v-if="selectedGroup === 'service'"
+            v-if="selectedEntry?.warning"
             color="warning"
             variant="subtle"
             icon="i-lucide-triangle-alert"
-            title="Service calibration values"
-            description="Change only with appropriate test equipment."
+            :title="selectedEntry.warning.title"
+            :description="selectedEntry.warning.description"
           />
 
-          <div class="grid gap-3 sm:grid-cols-2">
-            <UFormField
-              v-for="field in selectedFields"
-              :key="field.path"
-              :label="field.ui.label"
-              :description="field.ui.description"
-            >
-              <UInputNumber
-                v-if="field.ui.widget === 'integer' || field.ui.widget === 'number'"
-                :model-value="numberValue(field)"
-                :min="field.value?.kind === 'integer' ? field.value.min : undefined"
-                :max="field.value?.kind === 'integer' ? field.value.max : undefined"
-                :disabled="!isWritable(field)"
-                class="w-full"
-                @update:model-value="updateNumber(field, $event)"
-              />
+          <section
+            v-for="(section, index) in selectedSections"
+            :key="section.id"
+            class="space-y-3"
+            :class="index > 0 ? 'border-t border-default pt-5' : undefined"
+          >
+            <header v-if="section.label" class="space-y-0.5">
+              <h3 class="text-sm font-semibold text-highlighted">{{ section.label }}</h3>
+              <p v-if="section.description" class="text-xs text-muted">{{ section.description }}</p>
+            </header>
 
-              <USelect
-                v-else-if="field.ui.widget === 'select'"
-                :model-value="selectValue(field)"
-                :items="enumSelectItems(field)"
-                :disabled="!isWritable(field)"
-                class="w-full"
-                @update:model-value="updateSelect(field, $event)"
-              />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <UFormField
+                v-for="field in section.fields"
+                :key="field.path"
+                :label="field.ui.label"
+                :description="field.ui.description"
+              >
+                <UInputNumber
+                  v-if="field.ui.widget === 'integer' || field.ui.widget === 'number'"
+                  :model-value="numberValue(field)"
+                  :min="field.value?.kind === 'integer' ? field.value.min : undefined"
+                  :max="field.value?.kind === 'integer' ? field.value.max : undefined"
+                  :disabled="!isWritable(field)"
+                  class="w-full"
+                  @update:model-value="updateNumber(field, $event)"
+                />
 
-              <USwitch
-                v-else-if="field.ui.widget === 'switch'"
-                :model-value="Boolean(fieldValue(field))"
-                :disabled="!isWritable(field)"
-                @update:model-value="updateField(field, Boolean($event))"
-              />
+                <USelect
+                  v-else-if="field.ui.widget === 'select'"
+                  :model-value="selectValue(field)"
+                  :items="enumSelectItems(field)"
+                  :disabled="!isWritable(field)"
+                  class="w-full"
+                  @update:model-value="updateSelect(field, $event)"
+                />
 
-              <UInput
-                v-else
-                :model-value="textValue(field)"
-                :disabled="!isWritable(field)"
-                class="w-full"
-                @update:model-value="updateField(field, String($event ?? ''))"
-              />
-            </UFormField>
-          </div>
+                <USwitch
+                  v-else-if="field.ui.widget === 'switch'"
+                  :model-value="Boolean(fieldValue(field))"
+                  :disabled="!isWritable(field)"
+                  @update:model-value="updateField(field, Boolean($event))"
+                />
+
+                <UInput
+                  v-else
+                  :model-value="textValue(field)"
+                  :disabled="!isWritable(field)"
+                  class="w-full"
+                  @update:model-value="updateField(field, String($event ?? ''))"
+                />
+              </UFormField>
+            </div>
+          </section>
         </div>
       </div>
     </div>
