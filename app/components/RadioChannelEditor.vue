@@ -37,6 +37,7 @@ const emit = defineEmits<{
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
+const { settingsFieldsGridStyle } = useAppearanceSettings();
 
 const name = ref('');
 const receiveMHz = ref('');
@@ -441,7 +442,7 @@ function submitCreate(): void {
           </UFormField>
         </div>
 
-        <div v-if="extraFields.length > 0" class="grid gap-3 sm:grid-cols-2">
+        <div v-if="extraFields.length > 0" class="settings-fields-grid" :style="settingsFieldsGridStyle">
           <UFormField
             v-for="field in extraFields"
             :key="field.fieldId"

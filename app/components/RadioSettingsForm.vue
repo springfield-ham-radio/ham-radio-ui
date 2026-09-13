@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const EMPTY_SELECT_VALUE = '__empty__';
 const FALLBACK_GROUP_ICON = 'i-lucide-sliders-horizontal';
 
+const { settingsFieldsGridStyle } = useAppearanceSettings();
 const contentPane = useTemplateRef<HTMLElement>('contentPane');
 
 const groupEntries = computed(() => collectMemoryMapUiGroups(props.memoryMap));
@@ -252,7 +253,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
               <HelpTooltip v-if="section.description" :text="section.description" />
             </header>
 
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="settings-fields-grid" :style="settingsFieldsGridStyle">
               <UFormField
                 v-for="field in section.fields"
                 :key="field.path"

@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="mx-auto flex w-full max-w-xl flex-col px-6 pt-2 pb-10">
 
-        <section v-if="currentSection === 'appearance'">
+        <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex items-center justify-between gap-4 px-4 py-3">
               <div class="min-w-0">
@@ -40,6 +40,18 @@
                 <p class="text-xs text-muted">Light, dark, or match the system appearance.</p>
               </div>
               <ThemeSelect />
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Settings columns</p>
+                <p class="text-xs text-muted">
+                  How many fields to show per row on the Radio Settings tab and in channel editors.
+                </p>
+              </div>
+              <SettingsColumnsSelect />
             </div>
           </div>
         </section>
