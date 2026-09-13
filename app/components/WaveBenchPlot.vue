@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { plotViewportSize } from '~/utils/wavebench-charts';
+
 export interface PlotPoint {
   x: number;
   y: number;
@@ -35,6 +37,7 @@ const props = withDefaults(
     formatX?: (value: number) => string;
     formatY?: (value: number) => string;
     ariaLabel?: string;
+    height?: number;
   }>(),
   {
     xScale: 'linear',
@@ -45,17 +48,39 @@ const props = withDefaults(
     formatX: (value: number) => String(value),
     formatY: (value: number) => value.toFixed(1),
     ariaLabel: 'Plot',
+    height: 232,
   },
 );
 
-const width = 640;
-const height = 232;
 const left = 52;
 const right = 18;
 const top = 18;
 const bottom = 44;
-const plotWidth = width - left - right;
-const plotHeight = height - top - bottom;
+
+const frame = ref<HTMLElement | null>(null);
+const width = ref(640);
+const height = ref(props.height);
+
+const plotWidth = computed(() => Math.max(1, width.value - left - right));
+const plotHeight = computed(() => Math.max(1, height.value - top - bottom));
+
+function syncViewport(): void {
+  const size = plotViewportSize(frame.value?.clientWidth ?? 0, frame.value?.clientHeight ?? 0, 640, props.height);
+  width.value = size.width;
+  height.value = size.height;
+}
+
+onMounted(() => {
+  syncViewport();
+
+  if (typeof ResizeObserver === 'undefined' || !frame.value) {
+    return;
+  }
+
+  const observer = new ResizeObserver(() => syncViewport());
+  observer.observe(frame.value);
+  onBeforeUnmount(() => observer.disconnect());
+});
 
 const bounds = computed(() => {
   const xs = props.series.flatMap((series) => series.points.map((point) => point.x)).filter((value) => value > 0 || props.xScale === 'linear');
@@ -81,16 +106,16 @@ function xPosition(value: number): number {
     const start = Math.log10(Math.max(bounds.value.xMin, Number.MIN_VALUE));
     const stop = Math.log10(Math.max(bounds.value.xMax, Number.MIN_VALUE * 10));
     const fraction = (Math.log10(Math.max(value, Number.MIN_VALUE)) - start) / (stop - start || 1);
-    return left + fraction * plotWidth;
+    return left + fraction * plotWidth.value;
   }
 
   const fraction = (value - bounds.value.xMin) / (bounds.value.xMax - bounds.value.xMin || 1);
-  return left + fraction * plotWidth;
+  return left + fraction * plotWidth.value;
 }
 
 function yPosition(value: number): number {
   const fraction = (value - bounds.value.yMin) / (bounds.value.yMax - bounds.value.yMin || 1);
-  return top + plotHeight - fraction * plotHeight;
+  return top + plotHeight.value - fraction * plotHeight.value;
 }
 
 function seriesPath(points: PlotPoint[]): string {
@@ -167,12 +192,14 @@ function niceStep(rough: number): number {
 </script>
 
 <template>
-  <svg
-    :viewBox="`0 0 ${width} ${height}`"
-    class="h-auto w-full text-muted"
-    role="img"
-    :aria-label="ariaLabel"
-  >
+  <div ref="frame" class="h-full min-h-0 min-w-0 w-full overflow-hidden">
+    <svg
+      :viewBox="`0 0 ${width} ${height}`"
+      class="block h-full w-full text-muted"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      :aria-label="ariaLabel"
+    >
     <rect
       :x="left"
       :y="top"
@@ -302,4 +329,5 @@ function niceStep(rough: number): number {
       </g>
     </g>
   </svg>
+  </div>
 </template>

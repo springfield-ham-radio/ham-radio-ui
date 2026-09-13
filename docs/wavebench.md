@@ -29,6 +29,8 @@ Readings at the probe frequency:
 - Group delay
 - Linear |H|
 
+The Bode plots and time-domain trace share one viewport so they stay on screen. **One chart** is the default: pick Magnitude, Phase, or Time. **All charts** tiles the same area instead of stacking plots into a scroll.
+
 The Bode plots mark `f_c` or `f_0` and the probe. The harmonic table is the transmitter view of the same math: how much 2f, 3f, 4f, and 5f still get through.
 
 ## Presets

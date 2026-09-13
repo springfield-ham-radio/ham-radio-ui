@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import {
+  visibleWaveBenchCharts,
+  type WaveBenchChartId,
+  type WaveBenchChartLayout,
+} from '~/utils/wavebench-charts';
+import {
   bodePlot,
   designFilter,
   evaluateResponse,
@@ -35,6 +40,17 @@ const stimulusItems: TabsItem[] = [
   { label: 'Square', value: 'square' },
 ];
 
+const chartItems: TabsItem[] = [
+  { label: 'Magnitude', value: 'magnitude' },
+  { label: 'Phase', value: 'phase' },
+  { label: 'Time', value: 'time' },
+];
+
+const chartLayoutItems: TabsItem[] = [
+  { label: 'One chart', value: 'single', icon: 'i-lucide-square' },
+  { label: 'All charts', value: 'all', icon: 'i-lucide-layout-grid' },
+];
+
 const frequencyUnitItems = [
   { label: 'Hz', value: 'Hz' },
   { label: 'kHz', value: 'kHz' },
@@ -51,6 +67,8 @@ const bandwidthHz = ref(defaultPreset.parameters.bandwidthHz);
 const resistanceOhms = ref(defaultPreset.parameters.resistanceOhms);
 const testFrequencyHz = ref(defaultPreset.testFrequencyHz);
 const stimulus = ref<FilterStimulus>('sine');
+const selectedChart = ref<WaveBenchChartId>('magnitude');
+const chartLayout = ref<WaveBenchChartLayout>('single');
 const cutoffUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.cutoffHz));
 const centerUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.centerHz));
 const bandwidthUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.bandwidthHz));
@@ -200,6 +218,32 @@ const slopeLabel = computed(() => {
   return design.value.order === 1 ? '20 dB/decade' : '40 dB/decade';
 });
 
+const visibleChartIds = computed(() => visibleWaveBenchCharts(chartLayout.value, selectedChart.value));
+
+const magnitudeTitle = computed(() => {
+  return design.value.responseKind === 's21' ? 'Bode magnitude · insertion gain S21' : 'Bode magnitude · voltage gain H(jω)';
+});
+
+const timeTitle = computed(() => {
+  return `Time domain · ${stimulus.value} at ${formatFrequencyHz(testFrequencyHz.value)}`;
+});
+
+const chartPanelTitle = computed(() => {
+  if (chartLayout.value === 'all') {
+    return 'Charts';
+  }
+
+  if (selectedChart.value === 'magnitude') {
+    return magnitudeTitle.value;
+  }
+
+  if (selectedChart.value === 'phase') {
+    return 'Bode phase';
+  }
+
+  return timeTitle.value;
+});
+
 const resistanceLabel = computed(() => {
   return design.value.topology === 'lc' ? 'Z₀' : 'R';
 });
@@ -311,7 +355,7 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 px-4 py-4">
+  <div class="flex h-full min-h-0 flex-col gap-3 px-4 py-4">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <UTabs
         v-model="kind"
@@ -355,8 +399,8 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
       />
     </div>
 
-    <div class="grid min-w-0 gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div class="flex min-w-0 flex-col gap-4">
+    <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto xl:grid-cols-[20rem_minmax(0,1fr)] xl:overflow-hidden">
+      <div class="flex min-w-0 flex-col gap-4 xl:min-h-0 xl:overflow-y-auto">
         <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
           <h3 class="mb-3 text-sm font-semibold text-highlighted">Design</h3>
           <div class="flex flex-col gap-3">
@@ -450,112 +494,6 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
           </ul>
           <p class="mt-3 text-xs text-muted">{{ slopeLabel }} beyond the passband. Ideal lumped elements, no parasitics.</p>
         </section>
-      </div>
-
-      <div class="flex min-w-0 flex-col gap-4">
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-          <h3 class="mb-3 text-sm font-semibold text-highlighted">Circuit</h3>
-          <WaveBenchSchematic :design="design" />
-        </section>
-
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 class="text-sm font-semibold text-highlighted">Probe tone</h3>
-            <UTabs
-              v-model="stimulus"
-              :items="stimulusItems"
-              :content="false"
-              color="neutral"
-              variant="pill"
-              size="xs"
-              class="w-auto"
-              :ui="{ list: 'w-auto', trigger: 'grow-0' }"
-            />
-          </div>
-          <div class="flex flex-col gap-3">
-            <div class="flex gap-2">
-              <UInputNumber
-                v-model="probeDisplay"
-                :min="0.001"
-                :step="probeUnit === 'Hz' ? 1 : 0.001"
-                :format-options="{ maximumFractionDigits: 6 }"
-                class="min-w-0 flex-1"
-              />
-              <USelect v-model="probeUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
-            </div>
-            <USlider v-model="probeSlider" :min="0" :max="1000" :step="1" />
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-[11px] text-muted">{{ design.responseKind === 's21' ? 'S21' : 'Gain' }}</p>
-                <p class="font-mono text-sm text-highlighted">{{ formatDecibels(probeResponse.magnitudeDb) }}</p>
-              </div>
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-[11px] text-muted">Phase</p>
-                <p class="font-mono text-sm text-highlighted">{{ probeResponse.phaseDegrees.toFixed(1) }}°</p>
-              </div>
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-[11px] text-muted">Group delay</p>
-                <p class="font-mono text-sm text-highlighted">{{ formatDelay(probeDelay) }}</p>
-              </div>
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-[11px] text-muted">|H| linear</p>
-                <p class="font-mono text-sm text-highlighted">{{ probeResponse.magnitude.toFixed(3) }}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-          <h3 class="mb-1 text-sm font-semibold text-highlighted">
-            Bode magnitude
-            <span class="font-normal text-muted">
-              · {{ design.responseKind === 's21' ? 'insertion gain S21' : 'voltage gain H(jω)' }}
-            </span>
-          </h3>
-          <WaveBenchPlot
-            :series="magnitudeSeries"
-            x-scale="log"
-            x-label="Frequency"
-            y-label="dB"
-            :y-min="magnitudeYBounds.min"
-            :y-max="magnitudeYBounds.max"
-            :markers="bodeMarkers"
-            :guides="[{ y: -3.01, label: '−3 dB' }]"
-            :format-x="formatFrequencyHz"
-            :format-y="(value) => value.toFixed(0)"
-            aria-label="Bode magnitude plot"
-          />
-        </section>
-
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-          <h3 class="mb-1 text-sm font-semibold text-highlighted">Bode phase</h3>
-          <WaveBenchPlot
-            :series="phaseSeries"
-            x-scale="log"
-            x-label="Frequency"
-            y-label="deg"
-            :markers="bodeMarkers"
-            :format-x="formatFrequencyHz"
-            :format-y="(value) => value.toFixed(0)"
-            aria-label="Bode phase plot"
-          />
-        </section>
-
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
-          <h3 class="mb-1 text-sm font-semibold text-highlighted">
-            Time domain
-            <span class="font-normal text-muted">· {{ stimulus }} at {{ formatFrequencyHz(testFrequencyHz) }}</span>
-          </h3>
-          <WaveBenchPlot
-            :series="timeSeries"
-            x-scale="linear"
-            :x-label="timeScale.label"
-            y-label="V"
-            :format-x="(value) => value.toFixed(2)"
-            :format-y="(value) => value.toFixed(1)"
-            aria-label="Input and output waveforms"
-          />
-        </section>
 
         <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
           <h3 class="mb-1 text-sm font-semibold text-highlighted">Harmonics of the probe</h3>
@@ -580,6 +518,158 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
               </tr>
             </tbody>
           </table>
+        </section>
+      </div>
+
+      <div class="flex min-h-0 min-w-0 flex-col gap-4 xl:overflow-hidden">
+        <div class="grid shrink-0 gap-4 lg:grid-cols-2">
+          <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
+            <h3 class="mb-3 text-sm font-semibold text-highlighted">Circuit</h3>
+            <WaveBenchSchematic :design="design" />
+          </section>
+
+          <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold text-highlighted">Probe tone</h3>
+              <UTabs
+                v-model="stimulus"
+                :items="stimulusItems"
+                :content="false"
+                color="neutral"
+                variant="pill"
+                size="xs"
+                class="w-auto"
+                :ui="{ list: 'w-auto', trigger: 'grow-0' }"
+              />
+            </div>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-2">
+                <UInputNumber
+                  v-model="probeDisplay"
+                  :min="0.001"
+                  :step="probeUnit === 'Hz' ? 1 : 0.001"
+                  :format-options="{ maximumFractionDigits: 6 }"
+                  class="min-w-0 flex-1"
+                />
+                <USelect v-model="probeUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+              </div>
+              <USlider v-model="probeSlider" :min="0" :max="1000" :step="1" />
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded-lg bg-elevated px-3 py-2">
+                  <p class="text-[11px] text-muted">{{ design.responseKind === 's21' ? 'S21' : 'Gain' }}</p>
+                  <p class="font-mono text-sm text-highlighted">{{ formatDecibels(probeResponse.magnitudeDb) }}</p>
+                </div>
+                <div class="rounded-lg bg-elevated px-3 py-2">
+                  <p class="text-[11px] text-muted">Phase</p>
+                  <p class="font-mono text-sm text-highlighted">{{ probeResponse.phaseDegrees.toFixed(1) }}°</p>
+                </div>
+                <div class="rounded-lg bg-elevated px-3 py-2">
+                  <p class="text-[11px] text-muted">Group delay</p>
+                  <p class="font-mono text-sm text-highlighted">{{ formatDelay(probeDelay) }}</p>
+                </div>
+                <div class="rounded-lg bg-elevated px-3 py-2">
+                  <p class="text-[11px] text-muted">|H| linear</p>
+                  <p class="font-mono text-sm text-highlighted">{{ probeResponse.magnitude.toFixed(3) }}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="flex min-h-[20rem] min-w-0 flex-1 flex-col rounded-xl bg-default p-4 shadow-sm ring-1 ring-default xl:min-h-0">
+          <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-highlighted">{{ chartPanelTitle }}</h3>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <UTabs
+                v-if="chartLayout === 'single'"
+                v-model="selectedChart"
+                :items="chartItems"
+                :content="false"
+                color="neutral"
+                variant="pill"
+                size="xs"
+                class="w-auto"
+                :ui="{ list: 'w-auto', trigger: 'grow-0' }"
+              />
+              <UTabs
+                v-model="chartLayout"
+                :items="chartLayoutItems"
+                :content="false"
+                color="primary"
+                variant="pill"
+                size="xs"
+                class="w-auto"
+                :ui="{ list: 'w-auto', trigger: 'grow-0' }"
+              />
+            </div>
+          </div>
+
+          <div
+            class="grid min-h-0 flex-1 gap-3"
+            :class="chartLayout === 'all' ? 'grid-rows-3 xl:grid-cols-2 xl:grid-rows-2' : 'grid-rows-1'"
+          >
+            <div
+              v-if="visibleChartIds.includes('magnitude')"
+              class="flex min-h-0 min-w-0 flex-col"
+            >
+              <h4 v-if="chartLayout === 'all'" class="mb-1 shrink-0 text-xs font-medium text-muted">
+                {{ magnitudeTitle }}
+              </h4>
+              <div class="h-full min-h-0 flex-1">
+                <WaveBenchPlot
+                  :series="magnitudeSeries"
+                  x-scale="log"
+                  x-label="Frequency"
+                  y-label="dB"
+                  :y-min="magnitudeYBounds.min"
+                  :y-max="magnitudeYBounds.max"
+                  :markers="bodeMarkers"
+                  :guides="[{ y: -3.01, label: '−3 dB' }]"
+                  :format-x="formatFrequencyHz"
+                  :format-y="(value) => value.toFixed(0)"
+                  aria-label="Bode magnitude plot"
+                />
+              </div>
+            </div>
+
+            <div
+              v-if="visibleChartIds.includes('phase')"
+              class="flex min-h-0 min-w-0 flex-col"
+            >
+              <h4 v-if="chartLayout === 'all'" class="mb-1 shrink-0 text-xs font-medium text-muted">Bode phase</h4>
+              <div class="h-full min-h-0 flex-1">
+                <WaveBenchPlot
+                  :series="phaseSeries"
+                  x-scale="log"
+                  x-label="Frequency"
+                  y-label="deg"
+                  :markers="bodeMarkers"
+                  :format-x="formatFrequencyHz"
+                  :format-y="(value) => value.toFixed(0)"
+                  aria-label="Bode phase plot"
+                />
+              </div>
+            </div>
+
+            <div
+              v-if="visibleChartIds.includes('time')"
+              class="flex min-h-0 min-w-0 flex-col"
+              :class="chartLayout === 'all' ? 'xl:col-span-2' : ''"
+            >
+              <h4 v-if="chartLayout === 'all'" class="mb-1 shrink-0 text-xs font-medium text-muted">{{ timeTitle }}</h4>
+              <div class="h-full min-h-0 flex-1">
+                <WaveBenchPlot
+                  :series="timeSeries"
+                  x-scale="linear"
+                  :x-label="timeScale.label"
+                  y-label="V"
+                  :format-x="(value) => value.toFixed(2)"
+                  :format-y="(value) => value.toFixed(1)"
+                  aria-label="Input and output waveforms"
+                />
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </div>

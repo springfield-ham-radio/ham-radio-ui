@@ -13,8 +13,8 @@ useHead({ title: 'WaveBench' });
       </div>
       <UBadge label="Filters" color="primary" variant="subtle" icon="i-lucide-audio-waveform" />
     </div>
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <WaveBenchFilterLab />
+    <div class="min-h-0 flex-1 overflow-hidden">
+      <WaveBenchFilterLab class="h-full min-h-0" />
     </div>
   </div>
 </template>
