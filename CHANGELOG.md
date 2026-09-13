@@ -1,3 +1,13 @@
+## [0.27.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.26.2...v0.27.0) (2026-09-13)
+
+### Features
+
+* keep WaveBench plots in a shared on-screen viewport ([fe241a2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/fe241a209fb139908a8c5715cd923a91f3dd7d45))
+
+### Bug Fixes
+
+* connect WaveBench schematics and typeset equations with KaTeX ([ffe9dd5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ffe9dd5994edf81588f803d02c3cde1e7381c2ae))
+
 ## [0.26.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.26.1...v0.26.2) (2026-09-13)
 
 ### Bug Fixes
