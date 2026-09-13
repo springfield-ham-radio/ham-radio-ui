@@ -1,3 +1,9 @@
+## [0.24.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.23.0...v0.24.0) (2026-09-13)
+
+### Features
+
+* tighten Settings field layout with help tooltips and inline switches ([84e2d97](https://github.com/springfield-ham-radio/ham-radio-ui/commit/84e2d9762fb6786a16a994b4724510482e547399))
+
 ## [0.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.22.0...v0.23.0) (2026-09-13)
 
 ### Features
