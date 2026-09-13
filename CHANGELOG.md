@@ -1,3 +1,9 @@
+## [0.25.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.24.0...v0.25.0) (2026-09-13)
+
+### Features
+
+* add appearance setting for settings column count ([36aefa2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/36aefa2f9db35156df16a115d72d6da51973f0c5))
+
 ## [0.24.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.23.0...v0.24.0) (2026-09-13)
 
 ### Features
