@@ -52,10 +52,18 @@ Add these as **repository** secrets (Settings → Secrets and variables → Acti
 
 | Secret | Value |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Full contents of the updater private key file, including the `untrusted comment:` line (raw text or base64 of that file) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password, or empty if the key has none |
+| `TAURI_SIGNING_PRIVATE_KEY` | Entire contents of `~/.tauri/ham-radio-ui.key`. `tauri signer generate` usually writes this as one base64 line; paste that line. You will not see `untrusted comment:` in the file; it appears only after decoding. Raw minisign text also works. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password. Omit this secret, or leave it empty, when the key has none. |
 
 Generate a key pair with `yarn tauri signer generate -w ~/.tauri/ham-radio-ui.key`. Put only the public key in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `plugins.updater.pubkey`. Keep the private key in a password manager and in the GitHub secret.
+
+Confirm a generated key decodes to a minisign/rsign secret key:
+
+```
+python3 -c "import base64, pathlib; print(base64.b64decode(pathlib.Path.home().joinpath('.tauri/ham-radio-ui.key').read_text().strip()).decode().splitlines()[0])"
+```
+
+That should print `untrusted comment: rsign encrypted secret key` or `untrusted comment: minisign encrypted secret key`. If the file already starts with `untrusted comment:`, it is already decoded; paste it as-is.
 
 Local `yarn tauri:build` also needs the key:
 
