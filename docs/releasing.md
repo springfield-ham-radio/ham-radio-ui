@@ -36,7 +36,20 @@ Unsigned builds (no Apple notarization or Windows Authenticode yet):
 
 CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
 
-macOS Gatekeeper and Windows SmartScreen will warn. Users can still open the app (macOS: right-click → Open; Windows: More info → Run anyway).
+macOS Gatekeeper and Windows SmartScreen will warn. Current macOS often reports an unsigned Safari download as **“HamBench” is damaged and can’t be opened**. That is quarantine, not a corrupt file. Users should not move it to the Trash. Clear the quarantine, then open it:
+
+```sh
+xattr -cr ~/Downloads/HamBench*.dmg
+```
+
+If the app is already in Applications:
+
+```sh
+xattr -cr /Applications/HamBench.app
+open /Applications/HamBench.app
+```
+
+Right-click → Open often does not dismiss this dialog. On Windows, choose **More info** → **Run anyway**. User-facing copy also lives in the [HamBench install guide](https://springfield-ham-radio.github.io/ham-radio-docs/guide/getting-started).
 
 ## Auto-update
 
