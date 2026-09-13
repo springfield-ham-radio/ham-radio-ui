@@ -1,3 +1,9 @@
+## [0.28.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.27.0...v0.28.0) (2026-09-13)
+
+### Features
+
+* add WaveBench AM and FM experiments on a reusable CRT ([8dd0e58](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8dd0e584b52be792e7b86b3787d044731e928704))
+
 ## [0.27.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.26.2...v0.27.0) (2026-09-13)
 
 ### Features
