@@ -145,6 +145,7 @@ const COMMON_MODES = [
 const props = defineProps<{
   open: boolean;
   qso?: StationLogQso;
+  defaults?: Partial<StationLogQsoInput>;
 }>();
 
 const emit = defineEmits<{
@@ -249,7 +250,7 @@ function resetErrors(): void {
 }
 
 watch(
-  () => [props.open, props.qso?.id] as const,
+  () => [props.open, props.qso?.id, props.defaults?.frequencyHz, props.defaults?.mode] as const,
   () => {
     if (!props.open) {
       return;
@@ -260,7 +261,7 @@ watch(
       stationCallsign: license.value?.callSign,
       myGridsquare: license.value?.gridsquare,
     });
-    const source = props.qso ?? blank;
+    const source = props.qso ?? { ...blank, ...props.defaults };
     const startedAt = source.startedAt ?? Date.now();
 
     startDate.value = formatUtcDate(startedAt);

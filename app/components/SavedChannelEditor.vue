@@ -16,7 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
-  save: [payload: { channel: RadioChannel; notes?: string; id?: SavedChannel['id'] }];
+  save: [payload: { channel: RadioChannel; notes?: string; kind?: SavedChannel['kind']; id?: SavedChannel['id'] }];
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
@@ -27,6 +27,7 @@ const transmitMHz = ref('');
 const receiveToneKey = ref('none');
 const transmitToneKey = ref('none');
 const notes = ref('');
+const isRepeater = ref(false);
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const isSaving = ref(false);
@@ -58,6 +59,7 @@ watch(
     receiveToneKey.value = toneToKey(source.receiveTone);
     transmitToneKey.value = toneToKey(source.transmitTone);
     notes.value = props.channel?.notes ?? '';
+    isRepeater.value = props.channel?.kind === 'repeater';
     receiveError.value = undefined;
     transmitError.value = undefined;
     isSaving.value = false;
@@ -95,6 +97,7 @@ async function save(): Promise<void> {
     emit('save', {
       channel,
       notes: trimmedNotes || undefined,
+      kind: isRepeater.value ? 'repeater' : 'channel',
       id: props.channel?.id,
     });
   } finally {
@@ -149,6 +152,8 @@ async function save(): Promise<void> {
         <UFormField label="Notes" description="Optional. Not written to radios.">
           <UTextarea v-model="notes" :rows="3" class="w-full" autoresize />
         </UFormField>
+
+        <USwitch v-model="isRepeater" label="Repeater" description="Imported RepeaterBook and CHIRP rows are marked this way." />
       </div>
     </template>
 

@@ -7,6 +7,7 @@ import {
   validateConfiguration,
 } from '@springfield/ham-radio-registry';
 import Database from '@tauri-apps/plugin-sql';
+import type { RadioCatConfig } from '~/utils/cat-capability';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 export const RADIO_CATALOG_DATABASE = 'sqlite:ham-radio.db';
@@ -17,7 +18,8 @@ export interface LoadedRadioConfig extends Radio {
     reference?: string;
     config?: Record<string, unknown>;
   };
-  capabilities?: RadioCapabilities;
+  capabilities?: RadioCapabilities & { liveControl?: boolean };
+  cat?: RadioCatConfig;
 }
 
 export interface RadioCatalogRecord {

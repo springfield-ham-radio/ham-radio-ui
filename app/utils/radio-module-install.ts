@@ -252,6 +252,44 @@ export function parseModuleInstallPath(
   };
 }
 
+/**
+ * True when the catalog row was added from a local JSON file that we can
+ * re-read. HamBench stores a snapshot at install time; pointing at a workspace
+ * config would otherwise keep stale serial settings such as `baudRates`.
+ */
+export function isUserJsonCatalogSourcePath(source: RadioCatalogSource, sourcePath: string | undefined): boolean {
+  return source === 'user' && typeof sourcePath === 'string' && sourcePath.toLowerCase().endsWith('.json');
+}
+
+/**
+ * Re-hydrate user-installed JSON configs from disk so local driver edits appear
+ * without a manual reinstall.
+ */
+export async function reloadUserJsonCatalogRecords(): Promise<void> {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  const records = await listRadioCatalogRecords();
+
+  for (const record of records) {
+    if (!isUserJsonCatalogSourcePath(record.source, record.sourcePath) || record.sourcePath === undefined) {
+      continue;
+    }
+
+    const path = record.sourcePath;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const text = await invoke<string>('load_text_file', { path });
+      const radio = await loadRadioConfigFromFile(path, text);
+      await upsertRadioCatalogRecord(radio, 'user', { sourcePath: path });
+    } catch (cause) {
+      console.error('Failed to reload radio config from', path, cause);
+    }
+  }
+}
+
 function usesModuleInstallDirectory(record: RadioCatalogRecord): boolean {
   return record.source === 'installed' || (record.sourcePath !== undefined && isModuleInstallPath(record.sourcePath));
 }

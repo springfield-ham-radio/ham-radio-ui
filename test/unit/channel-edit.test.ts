@@ -19,12 +19,19 @@ import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { MockLogLayer } from 'loglayer';
 import {
   applyChannelPatch,
+  availableChannelNumbers,
+  channelCapacity,
   channelFieldEditor,
   channelNameMaxLength,
+  createProgrammedChannel,
+  assignLibraryChannelsToSlots,
   formatFrequencyMHz,
   keyToTone,
+  nextAvailableChannelNumber,
   parseChannelFieldValue,
   parseFrequencyMHz,
+  patchFromDuplex,
+  reorderProgrammedChannels,
   serializeChannelFieldValue,
   toneToKey,
 } from '../../app/utils/channel-edit.ts';
@@ -124,6 +131,245 @@ describe('channelNameMaxLength', () => {
   });
 });
 
+describe('channelCapacity', () => {
+  it('reads the records struct count', () => {
+    expect(channelCapacity(sampleMap)).to.equal(128);
+    expect(channelCapacity(undefined)).to.equal(0);
+  });
+});
+
+describe('nextAvailableChannelNumber', () => {
+  it('returns unused slots in order', () => {
+    expect(availableChannelNumbers([0, 1, 3], 8)).to.deep.equal([2, 4, 5, 6, 7]);
+    expect(availableChannelNumbers([], 3)).to.deep.equal([0, 1, 2]);
+    expect(availableChannelNumbers([0, 1], 2)).to.deep.equal([]);
+  });
+
+  it('returns the lowest unused slot', () => {
+    expect(nextAvailableChannelNumber([0, 1, 3], 8)).to.equal(2);
+    expect(nextAvailableChannelNumber([], 8)).to.equal(0);
+  });
+
+  it('returns undefined when every slot is occupied', () => {
+    expect(nextAvailableChannelNumber([0, 1], 2)).to.equal(undefined);
+    expect(nextAvailableChannelNumber([], 0)).to.equal(undefined);
+  });
+});
+
+describe('reorderProgrammedChannels', () => {
+  function namedChannel(channelNumber: number, name: string): RadioProgrammedChannel {
+    return programmedChannel({
+      channelNumber,
+      radioChannel: {
+        name,
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_520_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      },
+    });
+  }
+
+  function namesBySlot(channels: RadioProgrammedChannel[]): Record<number, string> {
+    return Object.fromEntries(
+      channels.map((channel) => {
+        const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+        return [channel.channelNumber, name];
+      }),
+    );
+  }
+
+  it('moves channel data among occupied slots and keeps those slot numbers', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(5, 'CHARLIE')];
+    const result = reorderProgrammedChannels(original, 2, 0);
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'CHARLIE',
+      1: 'ALPHA',
+      5: 'BRAVO',
+    });
+    expect(result.previousToNext.get(5)).to.equal(0);
+    expect(result.previousToNext.get(0)).to.equal(1);
+    expect(result.previousToNext.get(1)).to.equal(5);
+    expect(namesBySlot(original)).to.deep.equal({
+      0: 'ALPHA',
+      1: 'BRAVO',
+      5: 'CHARLIE',
+    });
+  });
+
+  it('moves a channel down the occupied list', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(2, 'CHARLIE')],
+      0,
+      2,
+    );
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'BRAVO',
+      1: 'CHARLIE',
+      2: 'ALPHA',
+    });
+  });
+
+  it('returns the original list when the drop index does not move the row', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(4, 'BRAVO')];
+    const result = reorderProgrammedChannels(original, 1, 1);
+
+    expect(result.channels).to.equal(original);
+    expect(result.previousToNext.size).to.equal(0);
+  });
+
+  it('returns the original list when an index is out of range', () => {
+    const original = [namedChannel(0, 'ALPHA')];
+
+    expect(reorderProgrammedChannels(original, -1, 0).channels).to.equal(original);
+    expect(reorderProgrammedChannels(original, 0, 3).channels).to.equal(original);
+  });
+
+  it('leaves unresolved channel records in their original slots', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 3,
+      radioChannel: 'SKIP',
+    };
+    const result = reorderProgrammedChannels([namedChannel(0, 'ALPHA'), unresolved, namedChannel(1, 'BRAVO')], 1, 0);
+
+    expect(namesBySlot(result.channels)).to.deep.equal({
+      0: 'BRAVO',
+      1: 'ALPHA',
+      3: 'SKIP',
+    });
+  });
+});
+
+describe('createProgrammedChannel', () => {
+  const populatedMap: RadioMemoryMap = {
+    ...sampleMap,
+    structs: [
+      {
+        id: 'channels',
+        seek: 0,
+        count: 128,
+        stride: 16,
+        fields: [
+          { id: 'rxfreq', type: 'u32' },
+          { id: 'txfreq', type: 'u32' },
+          { id: 'rxtone', type: 'u16' },
+          { id: 'txtone', type: 'u16' },
+          { id: 'isuhf', type: 'bits', width: 1, value: { kind: 'boolean' } },
+          {
+            id: 'lowpower',
+            type: 'bits',
+            width: 2,
+            value: { kind: 'integer', min: 0, max: 3 },
+            ui: { group: 'channel', label: 'Power', widget: 'select' },
+          },
+          {
+            id: 'wide',
+            type: 'bits',
+            width: 1,
+            value: { kind: 'boolean' },
+            ui: { group: 'channel', label: 'Mode', widget: 'switch' },
+          },
+          {
+            id: 'scan',
+            type: 'bits',
+            width: 1,
+            value: { kind: 'boolean' },
+            ui: { group: 'channel', label: 'Scan', widget: 'switch' },
+          },
+          {
+            id: 'bcl',
+            type: 'bits',
+            width: 1,
+            value: { kind: 'boolean' },
+            ui: { group: 'channel', label: 'BCL', widget: 'switch' },
+          },
+        ],
+      },
+      sampleMap.structs[1]!,
+    ],
+  };
+
+  it('seeds radio extras and copies portable fields from a saved channel', () => {
+    const created = createProgrammedChannel({
+      channelNumber: 4,
+      memoryMap: populatedMap,
+      source: {
+        name: 'CALLING',
+        receiveFrequency: Frequency(146_940_000),
+        transmitFrequency: Frequency(146_340_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS },
+      },
+    });
+
+    expect(created.channelNumber).to.equal(4);
+    expect(created.radioChannel).to.not.be.a('string');
+
+    if (typeof created.radioChannel === 'string') {
+      return;
+    }
+
+    expect(created.radioChannel.name).to.equal('CALLING');
+    expect(created.radioChannel.receiveFrequency).to.equal(146_940_000);
+    expect(created.radioChannel.transmitFrequency).to.equal(146_340_000);
+    expect(created.radioChannel.transmitTone).to.deep.equal({ tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS });
+    expect(created.settings).to.include({
+      lowpower: 0,
+      transmitPower: 5,
+      wide: true,
+      mode: 'FM',
+      scan: true,
+      skip: '',
+      bcl: false,
+      isuhf: false,
+    });
+  });
+
+  it('truncates names to the memory-map limit', () => {
+    const created = createProgrammedChannel({
+      channelNumber: 0,
+      memoryMap: populatedMap,
+      source: { name: 'VERYLONGNAME' },
+    });
+
+    expect(created.radioChannel).to.not.be.a('string');
+
+    if (typeof created.radioChannel === 'string') {
+      return;
+    }
+
+    expect(created.radioChannel.name).to.equal('VERYLON');
+  });
+});
+
+describe('assignLibraryChannelsToSlots', () => {
+  it('fills unused slots in order and skips extras when the radio is full', () => {
+    const tightMap: RadioMemoryMap = {
+      ...sampleMap,
+      structs: sampleMap.structs.map((struct) => (struct.id === 'channels' ? { ...struct, count: 2 } : struct)),
+    };
+    const assigned = assignLibraryChannelsToSlots(
+      [
+        { name: 'A', receiveFrequency: Frequency(146_520_000), transmitFrequency: Frequency(146_520_000) },
+        { name: 'B', receiveFrequency: Frequency(146_940_000), transmitFrequency: Frequency(146_340_000) },
+      ],
+      [0],
+      tightMap,
+    );
+
+    expect(assigned.programmed).to.have.length(1);
+    expect(assigned.skipped).to.equal(1);
+    expect(assigned.programmed[0]?.channelNumber).to.equal(1);
+    expect(assigned.programmed[0]?.radioChannel).to.not.be.a('string');
+
+    if (typeof assigned.programmed[0]?.radioChannel === 'object') {
+      expect(assigned.programmed[0].radioChannel.name).to.equal('A');
+    }
+  });
+});
+
 describe('applyChannelPatch', () => {
   it('updates core RadioChannel fields and truncates the name', () => {
     const next = applyChannelPatch(
@@ -172,6 +418,16 @@ describe('applyChannelPatch', () => {
     expect(vhf.settings?.isuhf).to.equal(false);
     expect(uhf.settings?.isuhf).to.equal(true);
   });
+
+  it('keeps duplex in sync with transmit and receive frequencies', () => {
+    const plus = applyChannelPatch(programmedChannel({ settings: { duplex: '' } }), {
+      transmitFrequencyHz: 147_120_000,
+    });
+    const off = applyChannelPatch(plus, { transmitFrequencyHz: 146_520_000 });
+
+    expect(plus.settings?.duplex).to.equal('+');
+    expect(off.settings?.duplex).to.equal('');
+  });
 });
 
 describe('channel extras', () => {
@@ -203,6 +459,13 @@ describe('channel extras', () => {
     ui: { group: 'channel', label: 'PTT-ID', widget: 'select' },
     value: { kind: 'enum', values: ['Off', 'BOT', 'EOT', 'Both'] },
   };
+  const duplex: RadioMemoryMapUiField = {
+    path: 'duplex',
+    structId: 'channels',
+    fieldId: 'duplex',
+    ui: { group: 'channel', label: 'Duplex', widget: 'select' },
+    value: { kind: 'enum', values: ['', '+', '-', '', 'split'] },
+  };
 
   it('builds High/Low options for power and Wide/Narrow for mode', () => {
     const powerEditor = channelFieldEditor(power);
@@ -228,10 +491,49 @@ describe('channel extras', () => {
     expect(parseChannelFieldValue(scode, '16')).to.equal(15);
     expect(parseChannelFieldValue(pttid, 'BOT')).to.equal('BOT');
   });
+
+  it('maps Kenwood duplex empty string to Off instead of a blank select value', () => {
+    const editor = channelFieldEditor(duplex);
+
+    expect(editor.kind).to.equal('select');
+    if (editor.kind !== 'select') {
+      return;
+    }
+
+    expect(editor.items).to.deep.equal([
+      { label: 'Off', value: 'off' },
+      { label: '+', value: '+' },
+      { label: '-', value: '-' },
+      { label: 'Split', value: 'split' },
+    ]);
+    expect(serializeChannelFieldValue(duplex, undefined)).to.equal('off');
+    expect(serializeChannelFieldValue(duplex, '')).to.equal('off');
+    expect(serializeChannelFieldValue(duplex, '+')).to.equal('+');
+    expect(parseChannelFieldValue(duplex, 'off')).to.equal('');
+    expect(parseChannelFieldValue(duplex, '+')).to.equal('+');
+  });
+
+  it('shifts transmit frequency when duplex changes', () => {
+    expect(patchFromDuplex(146_520_000, 146_520_000, 'off')).to.deep.equal({
+      transmitFrequencyHz: 146_520_000,
+      settings: { duplex: '', split: false },
+    });
+    expect(patchFromDuplex(146_520_000, 146_520_000, '+')).to.deep.equal({
+      transmitFrequencyHz: 147_120_000,
+      settings: { duplex: '+', split: false },
+    });
+    expect(patchFromDuplex(146_940_000, 146_340_000, 'off')).to.deep.equal({
+      transmitFrequencyHz: 146_940_000,
+      settings: { duplex: '', split: false },
+    });
+    expect(patchFromDuplex(146_520_000, 146_520_000, 'split')).to.deep.equal({
+      settings: { duplex: 'split', split: true },
+    });
+  });
 });
 
 describe('channel edit codec round-trip', () => {
-  it('persists a patched name and frequencies through the memory-map codec', async () => {
+  function uv5rCodec() {
     const rootDirectory = join(dirname(fileURLToPath(import.meta.url)), '../..');
     const memoryMap = JSON.parse(
       readFileSync(
@@ -256,6 +558,11 @@ describe('channel edit codec round-trip', () => {
       logger: new MockLogLayer(),
     });
 
+    return { codec, memoryMap, modelId };
+  }
+
+  it('persists a patched name and frequencies through the memory-map codec', async () => {
+    const { codec, modelId } = uv5rCodec();
     const originalProgram: RadioProgram = {
       channels: [programmedChannel({ channelNumber: 0 })],
       settings: {},
@@ -289,5 +596,38 @@ describe('channel edit codec round-trip', () => {
     expect(channel.radioChannel.receiveFrequency).to.equal(146_940_000);
     expect(channel.radioChannel.transmitFrequency).to.equal(146_340_000);
     expect(channel.settings?.lowpower).to.equal(1);
+  });
+
+  it('adds a new memory slot and omits it after removal', () => {
+    const { codec, memoryMap, modelId } = uv5rCodec();
+    const empty: RadioProgram = { channels: [], settings: {} };
+    const created = createProgrammedChannel({
+      channelNumber: 5,
+      memoryMap,
+      source: {
+        name: 'SIMPLEX',
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_520_000),
+      },
+    });
+
+    const encoded = codec.encode(
+      { ...empty, channels: [created] },
+      { contents: new Uint8Array(8192).fill(0xff), radioModel: modelId },
+    );
+    const decoded = codec.decode(encoded);
+
+    expect(decoded.channels.map((channel) => channel.channelNumber)).to.deep.equal([5]);
+    expect(decoded.channels[0]?.radioChannel).to.not.be.a('string');
+
+    if (typeof decoded.channels[0]?.radioChannel === 'object') {
+      expect(decoded.channels[0].radioChannel.name).to.equal('SIMPLEX');
+      expect(decoded.channels[0].radioChannel.receiveFrequency).to.equal(146_520_000);
+    }
+
+    const cleared = codec.encode({ ...decoded, channels: [] }, encoded);
+    const afterRemove = codec.decode(cleared);
+
+    expect(afterRemove.channels).to.deep.equal([]);
   });
 });

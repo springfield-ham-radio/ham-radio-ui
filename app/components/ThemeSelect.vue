@@ -17,7 +17,7 @@ const preference = computed({
 
 <template>
   <ClientOnly>
-    <USelectMenu v-model="preference" :items="items" value-key="value" color="neutral" :search-input="false" class="w-44" />
+    <USelect v-model="preference" :items="items" value-key="value" color="neutral" class="w-44" />
     <template #fallback>
       <div class="h-8 w-44 rounded-md bg-elevated" />
     </template>

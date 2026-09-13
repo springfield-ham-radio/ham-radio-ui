@@ -42,6 +42,7 @@ export default defineNuxtConfig({
     },
     optimizeDeps: {
       exclude: ['@springfield/ham-radio-driver'],
+      include: ['@tauri-apps/api/core', '@tauri-apps/plugin-dialog', '@tauri-apps/plugin-sql'],
     },
     json: {
       stringify: true,

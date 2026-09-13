@@ -5,23 +5,34 @@ import type {
   RadioId,
   RadioMemoryMap,
   RadioProgram,
+  RadioProgrammedChannel,
   RadioProgressIndicator,
   RadioSettings,
 } from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import { applyChannelPatch, channelNameMaxLength, type ChannelPatch } from '~/utils/channel-edit';
-import { pickAndLoadRadioConfig } from '~/utils/load-radio-config';
+import {
+  applyChannelPatch,
+  channelCapacity,
+  channelNameMaxLength,
+  reorderProgrammedChannels,
+  type ChannelPatch,
+} from '~/utils/channel-edit';
+import { useCatPortLock } from '~/composables/useCatPortLock';
+import {
+  CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+  CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
+  isCatMemoryTransferBlocked,
+} from '~/utils/cat-memory-transfer';
 import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
   listRadioManufacturers,
   memoryMapFromConfig,
   type RadioCatalogRecord,
-  upsertRadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
-import { uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
+import { reloadUserJsonCatalogRecords, uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
 import {
   defaultMemoryFileName,
   memoryFileDisplayName,
@@ -36,6 +47,7 @@ import {
   writeTextFile,
   writeTextFileWithPicker,
 } from '~/utils/radio-memory-file-io';
+import { writeRememberedRadio } from '~/utils/remembered-radio';
 import {
   defaultSerialLogFileName,
   serializeSerialLogFile,
@@ -58,6 +70,8 @@ interface CapturedSerialLog {
   fileName: string;
   contents: string;
   entryCount: number;
+  operation: SerialLogOperation;
+  log: unknown;
 }
 
 interface SerialLoggedDriver {
@@ -101,8 +115,10 @@ export function useRadio() {
   const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
+  const { lockedPorts: catLockedPorts } = useCatPortLock();
 
   async function refreshCatalogState(): Promise<void> {
+    await reloadUserJsonCatalogRecords();
     const records = await listRadioCatalogRecords();
     configurations.value = records.map((record) => record.config);
     manufacturers.value = await listRadioManufacturers();
@@ -178,35 +194,6 @@ export function useRadio() {
     }
   }
 
-  async function addRadioFromFile(): Promise<void> {
-    try {
-      const picked = await pickAndLoadRadioConfig();
-
-      if (!picked) {
-        return;
-      }
-
-      await upsertRadioCatalogRecord(picked.radio, 'user', { sourcePath: picked.path });
-      await refreshCatalogState();
-
-      toast.add({
-        title: 'Radio added',
-        description: `${picked.radio.id.manufacturer} ${picked.radio.id.name}`,
-        color: 'success',
-        icon: 'i-lucide-radio',
-      });
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Failed to add radio configuration';
-      logger.withError(cause).error('Failed to add radio configuration');
-      toast.add({
-        title: 'Could not add radio',
-        description: message,
-        color: 'error',
-        icon: 'i-lucide-circle-alert',
-      });
-    }
-  }
-
   function getModelsByManufacturer(manufacturer: string): RadioId[] {
     return configurations.value.filter((config) => config.id.manufacturer === manufacturer).map((config) => config.id);
   }
@@ -256,7 +243,33 @@ export function useRadio() {
     return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
-  async function importFromRadio(serialPortPath: string, radioId: RadioId): Promise<void> {
+  function warnIfCatBlocksMemoryTransfer(serialPortPath: string): boolean {
+    if (!isCatMemoryTransferBlocked(catLockedPorts.value, serialPortPath)) {
+      return false;
+    }
+
+    toast.add({
+      title: CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
+      description: CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+      color: 'warning',
+      icon: 'i-lucide-unplug',
+    });
+
+    return true;
+  }
+
+  /**
+   * Open the import dialog. CAT on another serial port does not block this.
+   */
+  function openImportFromRadio(): void {
+    importOpen.value = true;
+  }
+
+  async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      return;
+    }
+
     const config = getConfiguration(radioId);
 
     if (!config) {
@@ -265,7 +278,7 @@ export function useRadio() {
 
     const progressIndicator = startProgress('import');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     let importedBytes = 0;
 
@@ -301,17 +314,23 @@ export function useRadio() {
         description: `${radioId.name} (${importedBytes} bytes)`,
         color: 'success',
         icon: 'i-lucide-download',
-        actions: serialLogSaveActions(),
       });
       return;
     }
 
     if (outcome === 'canceled') {
       progressOpen.value = false;
-      offerSerialLogSave('Import canceled');
+      toast.add({
+        title: 'Import canceled',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
     }
   }
 
+  /**
+   * Open the write dialog unless no memory is loaded.
+   */
   function openWriteToRadio(): void {
     if (!memory.value || !activeRadioId.value) {
       toast.add({
@@ -326,7 +345,7 @@ export function useRadio() {
     writeOpen.value = true;
   }
 
-  async function writeToRadio(serialPortPath: string): Promise<void> {
+  async function writeToRadio(serialPortPath: string, baudRate?: number): Promise<void> {
     if (!memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to write',
@@ -339,6 +358,10 @@ export function useRadio() {
 
     const radioId = activeRadioId.value;
     const config = getConfiguration(radioId);
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      return;
+    }
 
     if (!config) {
       throw new Error(`Radio configuration for ${radioId.model} was not found`);
@@ -362,7 +385,7 @@ export function useRadio() {
 
     const progressIndicator = startProgress('write');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config), logger, undefined, true);
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     const writtenBytes = memory.value.length;
 
@@ -389,14 +412,17 @@ export function useRadio() {
         description: `${radioId.name} (${writtenBytes} bytes)`,
         color: 'success',
         icon: 'i-lucide-upload',
-        actions: serialLogSaveActions(),
       });
       return;
     }
 
     if (outcome === 'canceled') {
       progressOpen.value = false;
-      offerSerialLogSave('Write canceled');
+      toast.add({
+        title: 'Write canceled',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
     }
   }
 
@@ -426,6 +452,144 @@ export function useRadio() {
 
         return applyChannelPatch(programmed, patch, { nameMaxLength });
       }),
+    });
+  }
+
+  async function addChannel(programmed: RadioProgrammedChannel): Promise<boolean> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to add to',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return false;
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+
+    if (programmed.channelNumber < 0 || programmed.channelNumber >= capacity) {
+      toast.add({
+        title: 'Cannot add channel',
+        description: 'That memory slot is outside this radio\'s channel range.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    if (program.value.channels.some((channel) => channel.channelNumber === programmed.channelNumber)) {
+      toast.add({
+        title: 'Slot in use',
+        description: `Memory slot ${programmed.channelNumber} is already programmed.`,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: [...program.value.channels, programmed].sort((left, right) => left.channelNumber - right.channelNumber),
+    });
+
+    toast.add({
+      title: 'Channel added',
+      description: `Memory slot ${programmed.channelNumber} was added to the loaded image.`,
+      color: 'success',
+      icon: 'i-lucide-plus',
+    });
+    return true;
+  }
+
+  async function addChannels(programmed: RadioProgrammedChannel[]): Promise<number> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      toast.add({
+        title: 'Nothing to add to',
+        description: 'Open a memory file or import from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return 0;
+    }
+
+    if (programmed.length === 0) {
+      return 0;
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+    const occupied = new Set(program.value.channels.map((channel) => channel.channelNumber));
+    const accepted = programmed.filter((channel) => {
+      return channel.channelNumber >= 0 && channel.channelNumber < capacity && !occupied.has(channel.channelNumber);
+    });
+
+    if (accepted.length === 0) {
+      toast.add({
+        title: 'Could not add channels',
+        description: 'No unused memory slots were available.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return 0;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: [...program.value.channels, ...accepted].sort((left, right) => left.channelNumber - right.channelNumber),
+    });
+
+    const first = accepted[0]!.channelNumber;
+    const last = accepted[accepted.length - 1]!.channelNumber;
+    const radioName = activeRadioId.value.name;
+    const slotLabel = accepted.length === 1 ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
+
+    toast.add({
+      title: accepted.length === 1 ? 'Channel added' : 'Channels added',
+      description: `${accepted.length === 1 ? '1 channel' : `${accepted.length} channels`} added to ${radioName} in ${slotLabel}.`,
+      color: 'success',
+      icon: 'i-lucide-plus',
+    });
+    return accepted.length;
+  }
+
+  async function reorderChannels(fromIndex: number, toIndex: number): Promise<Map<number, number>> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      return new Map();
+    }
+
+    const result = reorderProgrammedChannels(program.value.channels, fromIndex, toIndex);
+
+    if (result.previousToNext.size === 0) {
+      return result.previousToNext;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: result.channels,
+    });
+
+    return result.previousToNext;
+  }
+
+  async function removeChannels(channelNumbers: number[]): Promise<void> {
+    if (!program.value || !memory.value || !activeRadioId.value || channelNumbers.length === 0) {
+      return;
+    }
+
+    const remove = new Set(channelNumbers);
+    persistProgram({
+      ...program.value,
+      channels: program.value.channels.filter((channel) => !remove.has(channel.channelNumber)),
+    });
+
+    toast.add({
+      title: channelNumbers.length === 1 ? 'Channel removed' : 'Channels removed',
+      description:
+        channelNumbers.length === 1
+          ? `Memory slot ${channelNumbers[0]} was cleared in the loaded image.`
+          : `${channelNumbers.length} memory slots were cleared in the loaded image.`,
+      color: 'success',
+      icon: 'i-lucide-trash-2',
     });
   }
 
@@ -484,38 +648,9 @@ export function useRadio() {
         log,
       }),
       entryCount,
+      operation,
+      log,
     };
-  }
-
-  function serialLogSaveActions(): Array<{ label: string; color: 'neutral'; variant: 'outline'; onClick: () => void }> {
-    if (!serialLog.value) {
-      return [];
-    }
-
-    return [
-      {
-        label: 'Save serial log',
-        color: 'neutral',
-        variant: 'outline',
-        onClick: () => {
-          void saveSerialLog();
-        },
-      },
-    ];
-  }
-
-  function offerSerialLogSave(title: string): void {
-    if (!serialLog.value) {
-      return;
-    }
-
-    toast.add({
-      title,
-      description: `${serialLog.value.entryCount} serial frames captured.`,
-      color: 'neutral',
-      icon: 'i-lucide-file-text',
-      actions: serialLogSaveActions(),
-    });
   }
 
   async function saveSerialLog(): Promise<void> {
@@ -662,6 +797,7 @@ export function useRadio() {
 
     memory.value = memoryData;
     activeRadioId.value = radioId;
+    writeRememberedRadio(radioId);
     const codec = await getCodec(radioId);
     const decoded = codec?.decode({
       radioModel: radioId.model,
@@ -698,13 +834,17 @@ export function useRadio() {
     refreshCatalogState,
     openModulesInstall,
     uninstallRadio,
-    addRadioFromFile,
     getModelsByManufacturer,
     importFromRadio,
+    openImportFromRadio,
     openWriteToRadio,
     writeToRadio,
     updateSettings,
     updateChannel,
+    addChannel,
+    addChannels,
+    reorderChannels,
+    removeChannels,
     cancelTransfer,
     saveSerialLog,
     openMemoryFile,
@@ -713,14 +853,14 @@ export function useRadio() {
   };
 }
 
-function toRadio(config: LoadedRadioConfig): Radio {
+function toRadio(config: LoadedRadioConfig, baudRate?: number): Radio {
   return {
     id: config.id,
     version: config.version,
     description: config.description,
     settingsSchema: config.settingsSchema,
     memoryConfig: config.memoryConfig,
-    serialConfig: config.serialConfig,
+    serialConfig: baudRate === undefined ? config.serialConfig : { ...config.serialConfig, baudRate },
     readMemory: config.readMemory,
     writeMemory: config.writeMemory,
     memoryMap: config.memoryMap,

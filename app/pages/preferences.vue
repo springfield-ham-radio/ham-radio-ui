@@ -344,68 +344,57 @@
           </div>
         </section>
 
+        <section v-else-if="currentSection === 'serial'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Hide common system ports</p>
+                <p class="text-xs text-muted">
+                  Skip Bluetooth Incoming, debug-console, and wlan-debug in Import, Write, and Sniffer. Programming cables stay in the list.
+                </p>
+              </div>
+              <USwitch
+                :model-value="filterCommonPorts"
+                aria-label="Hide common system ports"
+                @update:model-value="setFilterCommonPorts"
+              />
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-3 px-4 py-4">
+              <UFormField
+                label="Hide named ports"
+                description="Enter device names to omit from serial-port lists, for example BryansHeadphones. Press Return after each name."
+                class="w-full"
+              >
+                <UInputTags
+                  v-model="excludedPortNames"
+                  placeholder="BryansHeadphones"
+                  add-on-blur
+                  add-on-tab
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-col gap-4 px-4 py-4">
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted">Connection</p>
                 <p class="text-xs text-muted">
-                  Sniffer URL is enough for normal use. Install and run ham-radio-sniffer yourself, then point the app at its HTTP origin.
+                  Radio → Sniffer talks to this host over HTTP. Include a username if SSH needs one, for example pi@192.168.1.10.
                 </p>
               </div>
 
-              <UFormField label="Sniffer URL" class="w-full">
-                <UInput
-                  v-model="snifferBaseUrlInput"
-                  placeholder="http://127.0.0.1:3010"
-                  class="w-full"
-                />
-              </UFormField>
-
-              <p v-if="snifferSettingsError" class="text-xs text-error">{{ snifferSettingsError }}</p>
-            </div>
-          </div>
-
-          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="flex flex-col gap-4 px-4 py-4">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted">Remote SSH (optional)</p>
-                <p class="text-xs text-muted">
-                  Leave the host blank to keep SSH disabled. When set, the desktop app can check Node on the host, upload the bundled sniffer sources, build them remotely, and start the process with a local port forward. Uses SSH keys or your agent only (no passwords). The app never installs Node for you.
-                </p>
-              </div>
-
-              <UAlert
-                v-if="!isDesktopSnifferSsh"
-                color="neutral"
-                variant="subtle"
-                icon="i-lucide-monitor"
-                title="Desktop app required"
-                description="Check, install, start, and stop run only in the packaged Tauri app, where the bundled sniffer tree and local ssh/scp are available."
-              />
-
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <UFormField label="SSH host" class="w-full sm:col-span-2">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                <UFormField label="Host" class="w-full">
                   <UInput
-                    v-model="snifferSshHostInput"
-                    placeholder="pi@raspberrypi.local"
-                    class="w-full"
-                  />
-                </UFormField>
-
-                <UFormField label="SSH port" class="w-full">
-                  <UInput
-                    v-model.number="snifferSshPortInput"
-                    type="number"
-                    min="1"
-                    class="w-full"
-                  />
-                </UFormField>
-
-                <UFormField label="Remote directory" class="w-full">
-                  <UInput
-                    v-model="snifferRemoteDirectoryInput"
-                    placeholder="~/ham-radio-sniffer"
+                    v-model="snifferHostInput"
+                    placeholder="127.0.0.1"
                     class="w-full"
                   />
                 </UFormField>
@@ -418,19 +407,55 @@
                     class="w-full"
                   />
                 </UFormField>
-
-                <UFormField label="Remote start command" class="w-full sm:col-span-2">
-                  <UInput
-                    v-model="snifferRemoteStartCommandInput"
-                    placeholder="yarn start"
-                    class="w-full"
-                  />
-                </UFormField>
               </div>
+
+              <p v-if="snifferSettingsError" class="text-xs text-error">{{ snifferSettingsError }}</p>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-4 px-4 py-4">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Sniffer process</p>
+                <p class="text-xs text-muted">
+                  {{ snifferProcessHint }}
+                </p>
+              </div>
+
+              <UAlert
+                v-if="!isDesktopSnifferSsh"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-monitor"
+                title="Desktop app required"
+                description="Install, start, and stop run only in the packaged Tauri app, where the bundled sniffer tree is available."
+              />
+
+              <UFormField label="Install directory" class="w-full">
+                <UInput
+                  v-model="snifferInstallDirectoryInput"
+                  placeholder="~/ham-radio-sniffer"
+                  class="w-full"
+                />
+              </UFormField>
+
+              <UFormField label="Run command" class="w-full">
+                <UInput
+                  v-model="snifferStartCommandInput"
+                  placeholder="yarn start"
+                  class="w-full"
+                />
+              </UFormField>
+
+              <UCheckbox
+                v-model="snifferSshEnabledInput"
+                label="Control over SSH"
+                description="Run install, start, and stop on Host over SSH. Uses SSH keys or your agent only (no passwords)."
+              />
 
               <div class="rounded-lg bg-muted px-3 py-3">
                 <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-xs font-medium text-highlighted">Remote status</p>
+                  <p class="text-xs font-medium text-highlighted">Status</p>
                   <UBadge
                     :color="remoteHostBadgeColor"
                     variant="subtle"
@@ -452,32 +477,22 @@
               </div>
 
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <UButtonGroup size="sm">
-                  <UButton
-                    label="Check host"
-                    color="neutral"
-                    variant="outline"
-                    icon="i-lucide-shield-check"
-                    :loading="snifferSshBusy === 'check'"
-                    :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
-                    @click="onCheckRemoteSniffer"
-                  />
-                  <UButton
-                    label="Install"
-                    color="neutral"
-                    variant="outline"
-                    icon="i-lucide-upload"
-                    :loading="snifferSshBusy === 'install'"
-                    :disabled="!canRunSnifferSshActions || snifferSshBusy !== undefined"
-                    @click="onInstallRemoteSniffer"
-                  />
-                </UButtonGroup>
+                <UButton
+                  label="Install"
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  icon="i-lucide-upload"
+                  :loading="snifferSshBusy === 'install'"
+                  :disabled="!canRunSnifferActions || snifferSshBusy !== undefined"
+                  @click="onInstallRemoteSniffer"
+                />
                 <div class="flex items-center gap-2">
-                  <span class="text-sm font-medium text-highlighted">Remote</span>
+                  <span class="text-sm font-medium text-highlighted">Running</span>
                   <USwitch
                     size="sm"
-                    aria-label="Remote sniffer"
-                    :model-value="remoteTunnelRunning"
+                    aria-label="Sniffer process"
+                    :model-value="remoteSnifferRunning"
                     :disabled="remoteSnifferToggleDisabled"
                     :loading="snifferSshBusy === 'start' || snifferSshBusy === 'stop'"
                     @update:model-value="onToggleRemoteSniffer"
@@ -491,8 +506,11 @@
                 variant="subtle"
                 :icon="snifferSshError ? 'i-lucide-circle-alert' : 'i-lucide-circle-check'"
                 :title="snifferSshError ? 'Action failed' : 'Action succeeded'"
-                :description="snifferSshStatusLabel"
-              />
+              >
+                <template #description>
+                  <p class="whitespace-pre-wrap break-words text-xs">{{ snifferSshStatusLabel }}</p>
+                </template>
+              </UAlert>
               <ul v-if="snifferSshCheckMessages.length > 0" class="list-disc space-y-1 pl-5 text-xs text-muted">
                 <li v-for="(message, index) in snifferSshCheckMessages" :key="index">{{ message }}</li>
               </ul>
@@ -532,7 +550,8 @@ import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import { isModuleInstallPath } from '~/utils/radio-module-install';
 import { openExternalUrl } from '~/utils/open-external-url';
-import { parseSnifferSettings, readSnifferSettings, snifferLocalForwardBaseUrl, writeSnifferSettings } from '~/utils/sniffer-settings';
+import { normalizeExcludedPortNames, readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
+import { parseSnifferSettings, readSnifferSettings, snifferSshTarget, writeSnifferSettings } from '~/utils/sniffer-settings';
 import {
   checkRemoteSnifferHost,
   installRemoteSniffer,
@@ -552,7 +571,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -580,6 +599,12 @@ const sections = [
     tileClass: 'bg-emerald-500',
   },
   {
+    id: 'serial' as const,
+    label: 'Serial ports',
+    icon: 'i-lucide-usb',
+    tileClass: 'bg-orange-500',
+  },
+  {
     id: 'sniffer' as const,
     label: 'Sniffer',
     icon: 'i-lucide-audio-lines',
@@ -603,38 +628,64 @@ const {
   applyUpdateAndRelaunch,
   setAutoUpdateEnabled,
 } = useAppUpdater();
+const initialSerialPortSettings = readSerialPortSettings();
+const filterCommonPorts = ref(initialSerialPortSettings.filterCommonPorts);
+const excludedPortNames = ref([...initialSerialPortSettings.excludedPortNames]);
 const catalogRecords = ref<RadioCatalogRecord[]>([]);
 const removeConfirmOpen = ref(false);
 const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
 const removingModelId = ref<string | undefined>();
 const initialSnifferSettings = readSnifferSettings();
-const snifferBaseUrlInput = ref(initialSnifferSettings.baseUrl);
-const snifferSshHostInput = ref(initialSnifferSettings.sshHost);
-const snifferSshPortInput = ref(initialSnifferSettings.sshPort);
-const snifferRemoteDirectoryInput = ref(initialSnifferSettings.remoteDirectory);
-const snifferRemoteStartCommandInput = ref(initialSnifferSettings.remoteStartCommand);
+const snifferHostInput = ref(initialSnifferSettings.host);
 const snifferPortInput = ref(initialSnifferSettings.port);
+const snifferInstallDirectoryInput = ref(initialSnifferSettings.installDirectory);
+const snifferStartCommandInput = ref(initialSnifferSettings.startCommand);
+const snifferSshEnabledInput = ref(initialSnifferSettings.sshEnabled);
 const snifferSettingsError = ref('');
-const snifferSshBusy = ref<'check' | 'install' | 'start' | 'stop'>();
+const snifferSshBusy = ref<'install' | 'start' | 'stop'>();
 const snifferSshStatusLabel = ref('');
 const snifferSshError = ref(false);
 const snifferSshCheckMessages = ref<string[]>([]);
 const remoteHostCheck = ref<RemoteSnifferCheckResult>();
-const remoteTunnelRunning = ref(false);
+const remoteSnifferRunning = ref(false);
+const snifferProbeBusy = ref(false);
 
 const SNIFFER_AUTOSAVE_MS = 300;
+const SNIFFER_PROBE_MS = 700;
+const SNIFFER_STATUS_POLL_MS = 8000;
 let snifferAutosaveTimer: ReturnType<typeof setTimeout> | undefined;
+let snifferProbeTimer: ReturnType<typeof setTimeout> | undefined;
+let snifferStatusPollTimer: ReturnType<typeof setInterval> | undefined;
+let snifferProbeSeq = 0;
 let applyingSnifferSettings = false;
 
 const isDesktopSnifferSsh = computed(() => isTauriRuntime());
 
-const canRunSnifferSshActions = computed(() => {
-  return isDesktopSnifferSsh.value && snifferSshHostInput.value.trim().length > 0;
+const canRunSnifferActions = computed(() => {
+  if (!isDesktopSnifferSsh.value || snifferInstallDirectoryInput.value.trim().length === 0) {
+    return false;
+  }
+
+  const target = snifferSshTarget(draftSnifferSettings());
+
+  if (!target) {
+    return false;
+  }
+
+  return !snifferSshEnabledInput.value || target.sshHost.length > 0;
+});
+
+const snifferProcessHint = computed(() => {
+  if (snifferSshEnabledInput.value) {
+    return 'Install, start, and stop run over SSH on Host. The app never installs Node for you.';
+  }
+
+  return 'Install, start, and stop run on this computer. The app never installs Node for you.';
 });
 
 const remoteHostLabel = computed(() => {
   if (!remoteHostCheck.value) {
-    return 'Host unknown';
+    return snifferProbeBusy.value ? 'Checking' : 'Host unknown';
   }
 
   return remoteHostCheck.value.ok ? 'Host ready' : 'Host not ready';
@@ -650,7 +701,7 @@ const remoteHostBadgeColor = computed(() => {
 
 const remoteInstallLabel = computed(() => {
   if (!remoteHostCheck.value) {
-    return 'Install unknown';
+    return snifferProbeBusy.value ? 'Checking' : 'Install unknown';
   }
 
   return remoteSnifferInstallLabel(remoteHostCheck.value);
@@ -673,83 +724,88 @@ const remoteSnifferToggleDisabled = computed(() => {
     return true;
   }
 
-  if (remoteTunnelRunning.value) {
+  if (remoteSnifferRunning.value) {
     return false;
   }
 
-  return !canRunSnifferSshActions.value || !remoteSnifferReadyToStart.value;
+  return !canRunSnifferActions.value || !remoteSnifferReadyToStart.value;
 });
 
 const remoteStatusSummary = computed(() => {
-  if (!canRunSnifferSshActions.value) {
-    return 'Enter an SSH host, then use Check host to see whether the sniffer is installed.';
+  if (!canRunSnifferActions.value) {
+    return 'Set a host, port, and install directory to check status.';
   }
 
   if (snifferSshBusy.value === 'install') {
-    return 'Uploading sources and running yarn install/build on the remote host. This can take several minutes.';
-  }
-
-  if (snifferSshBusy.value === 'check') {
-    return 'Checking Node, Yarn, and whether the sniffer is installed…';
+    return 'Copying sources and running yarn install/build. This can take several minutes.';
   }
 
   if (snifferSshBusy.value === 'start') {
-    return 'Starting the remote sniffer and opening the SSH tunnel…';
+    return 'Starting the sniffer…';
   }
 
   if (snifferSshBusy.value === 'stop') {
-    return 'Stopping the remote sniffer…';
+    return 'Stopping the sniffer…';
   }
 
   if (!remoteHostCheck.value) {
-    return 'Click Check host to verify prerequisites and install state.';
+    return snifferProbeBusy.value
+      ? 'Checking whether the sniffer is installed and running…'
+      : 'Waiting to check whether the sniffer is installed and running.';
   }
 
-  if (remoteTunnelRunning.value) {
-    return 'SSH tunnel is up. Open the Sniffer tab — it should show Connected once the API responds.';
+  if (remoteSnifferRunning.value) {
+    return 'Sniffer is running. Radio → Sniffer uses Host and Port above.';
+  }
+
+  if (remoteHostCheck.value.sourcesPresent && remoteHostCheck.value.buildPresent && remoteHostCheck.value.versionMatch === false) {
+    const installed = remoteHostCheck.value.installedVersion ?? 'unknown';
+    const expected = remoteHostCheck.value.expectedVersion ?? 'the bundled copy';
+    return `Sniffer ${installed} is installed; this app ships ${expected}. Run Install to update.`;
   }
 
   if (remoteHostCheck.value.sourcesPresent && remoteHostCheck.value.buildPresent) {
-    return 'Remote sniffer is installed and built. Turn on Remote when you are ready.';
+    return remoteHostCheck.value.installedVersion
+      ? `Sniffer ${remoteHostCheck.value.installedVersion} is installed and built. Turn on Running when you are ready.`
+      : 'Sniffer is installed and built. Turn on Running when you are ready.';
   }
 
   if (remoteHostCheck.value.sourcesPresent) {
-    return 'Sources are on the host, but the build is missing. Run Install / update.';
+    return 'Sources are present, but the build is missing. Run Install to finish setup.';
   }
 
   if (remoteHostCheck.value.ok) {
-    return 'Host prerequisites look good. Run Install / update to upload and build the sniffer.';
+    return 'Prerequisites look good. Run Install to copy and build the sniffer.';
   }
 
-  return 'Fix the host issues listed below before installing.';
+  return 'Fix the issues listed below before installing.';
 });
 
 function draftSnifferSettings() {
   return parseSnifferSettings(
     JSON.stringify({
-      baseUrl: snifferBaseUrlInput.value,
-      sshHost: snifferSshHostInput.value,
-      sshPort: snifferSshPortInput.value,
-      remoteDirectory: snifferRemoteDirectoryInput.value,
-      remoteStartCommand: snifferRemoteStartCommandInput.value,
+      host: snifferHostInput.value,
       port: snifferPortInput.value,
+      installDirectory: snifferInstallDirectoryInput.value,
+      startCommand: snifferStartCommandInput.value,
+      sshEnabled: snifferSshEnabledInput.value,
     }),
   );
 }
 
 /**
- * Persist sniffer preferences when the draft URL is valid.
+ * Persist sniffer preferences when host and port are valid.
  *
- * Invalid URLs are rejected without writing so a mid-edit value cannot wipe a
+ * Invalid drafts are rejected without writing so a mid-edit value cannot wipe a
  * previously saved origin. Returns whether storage was updated.
  */
 function saveSnifferSettings(): boolean {
   const parsed = draftSnifferSettings();
-  const normalized = parsed.baseUrl;
-  const entered = snifferBaseUrlInput.value.trim().replace(/\/+$/, '');
+  const enteredHost = snifferHostInput.value.trim();
+  const enteredPort = snifferPortInput.value;
 
-  if (!entered || entered !== normalized) {
-    snifferSettingsError.value = 'Enter an http or https URL, for example http://127.0.0.1:3010';
+  if (!enteredHost || parsed.host !== enteredHost || !Number.isInteger(enteredPort) || enteredPort <= 0) {
+    snifferSettingsError.value = 'Enter a host and port, for example 127.0.0.1 and 3010';
     return false;
   }
 
@@ -757,12 +813,11 @@ function saveSnifferSettings(): boolean {
 
   try {
     writeSnifferSettings(parsed);
-    snifferBaseUrlInput.value = parsed.baseUrl;
-    snifferSshHostInput.value = parsed.sshHost;
-    snifferSshPortInput.value = parsed.sshPort;
-    snifferRemoteDirectoryInput.value = parsed.remoteDirectory;
-    snifferRemoteStartCommandInput.value = parsed.remoteStartCommand;
+    snifferHostInput.value = parsed.host;
     snifferPortInput.value = parsed.port;
+    snifferInstallDirectoryInput.value = parsed.installDirectory;
+    snifferStartCommandInput.value = parsed.startCommand;
+    snifferSshEnabledInput.value = parsed.sshEnabled;
     snifferSettingsError.value = '';
   } finally {
     applyingSnifferSettings = false;
@@ -797,20 +852,29 @@ function scheduleSnifferAutosave(): void {
 
 watch(
   [
-    snifferBaseUrlInput,
-    snifferSshHostInput,
-    snifferSshPortInput,
-    snifferRemoteDirectoryInput,
-    snifferRemoteStartCommandInput,
+    snifferHostInput,
     snifferPortInput,
+    snifferInstallDirectoryInput,
+    snifferStartCommandInput,
+    snifferSshEnabledInput,
   ],
   () => {
     scheduleSnifferAutosave();
+
+    if (!applyingSnifferSettings) {
+      scheduleSnifferProbe();
+    }
   },
 );
 
 onBeforeUnmount(() => {
   flushSnifferAutosave();
+  stopSnifferStatusPoll();
+  snifferProbeSeq += 1;
+  if (snifferProbeTimer) {
+    clearTimeout(snifferProbeTimer);
+    snifferProbeTimer = undefined;
+  }
 });
 
 function remoteActionError(cause: unknown): string {
@@ -822,47 +886,110 @@ function applyHostCheck(result: RemoteSnifferCheckResult): void {
   snifferSshCheckMessages.value = result.messages;
 }
 
-async function refreshRemoteTunnelStatus(): Promise<void> {
+function clearSnifferProbeState(): void {
+  remoteHostCheck.value = undefined;
+  remoteSnifferRunning.value = false;
+  snifferSshCheckMessages.value = [];
+  snifferProbeBusy.value = false;
+}
+
+function stopSnifferStatusPoll(): void {
+  if (snifferStatusPollTimer) {
+    clearInterval(snifferStatusPollTimer);
+    snifferStatusPollTimer = undefined;
+  }
+}
+
+function startSnifferStatusPoll(): void {
+  stopSnifferStatusPoll();
+
   if (!isDesktopSnifferSsh.value) {
-    remoteTunnelRunning.value = false;
+    return;
+  }
+
+  snifferStatusPollTimer = setInterval(() => {
+    void refreshRemoteSnifferStatus();
+  }, SNIFFER_STATUS_POLL_MS);
+}
+
+async function refreshRemoteSnifferStatus(): Promise<void> {
+  if (!canRunSnifferActions.value || currentSection.value !== 'sniffer') {
+    remoteSnifferRunning.value = false;
+    return;
+  }
+
+  if (snifferSshBusy.value === 'start' || snifferSshBusy.value === 'stop') {
     return;
   }
 
   try {
-    const status = await remoteSnifferStatus();
-    remoteTunnelRunning.value = status.running;
+    const status = await remoteSnifferStatus(draftSnifferSettings());
+    remoteSnifferRunning.value = status.running;
   } catch {
-    remoteTunnelRunning.value = false;
+    remoteSnifferRunning.value = false;
   }
 }
 
-async function onCheckRemoteSniffer(): Promise<void> {
-  flushSnifferAutosave();
-  snifferSshBusy.value = 'check';
-  snifferSshCheckMessages.value = [];
-  snifferSshError.value = false;
-  snifferSshStatusLabel.value = '';
+async function probeSnifferHost(): Promise<void> {
+  if (currentSection.value !== 'sniffer' || !isDesktopSnifferSsh.value) {
+    return;
+  }
+
+  if (!canRunSnifferActions.value) {
+    clearSnifferProbeState();
+    return;
+  }
+
+  if (snifferSshBusy.value !== undefined) {
+    return;
+  }
+
+  const seq = ++snifferProbeSeq;
+  snifferProbeBusy.value = true;
 
   try {
-    const result = await checkRemoteSnifferHost(draftSnifferSettings());
-    applyHostCheck(result);
-    snifferSshError.value = !result.ok;
-    snifferSshStatusLabel.value = result.ok
-      ? result.sourcesPresent && result.buildPresent
-        ? 'Host is ready and the sniffer is installed.'
-        : 'Host is ready. Install / update to finish remote setup.'
-      : 'Remote host check failed. Fix the issues below, then try again.';
-    await refreshRemoteTunnelStatus();
+    const settings = draftSnifferSettings();
+    const [check, status] = await Promise.all([
+      checkRemoteSnifferHost(settings),
+      remoteSnifferStatus(settings).catch(() => ({ running: false })),
+    ]);
+
+    if (seq !== snifferProbeSeq) {
+      return;
+    }
+
+    applyHostCheck(check);
+    remoteSnifferRunning.value = status.running;
   } catch (error) {
-    snifferSshError.value = true;
-    snifferSshStatusLabel.value = remoteActionError(error);
+    if (seq !== snifferProbeSeq) {
+      return;
+    }
+
+    remoteHostCheck.value = undefined;
+    remoteSnifferRunning.value = false;
+    snifferSshCheckMessages.value = [remoteActionError(error)];
   } finally {
-    snifferSshBusy.value = undefined;
+    if (seq === snifferProbeSeq) {
+      snifferProbeBusy.value = false;
+    }
   }
+}
+
+function scheduleSnifferProbe(delayMs = SNIFFER_PROBE_MS): void {
+  if (snifferProbeTimer) {
+    clearTimeout(snifferProbeTimer);
+  }
+
+  snifferProbeSeq += 1;
+  snifferProbeTimer = setTimeout(() => {
+    snifferProbeTimer = undefined;
+    void probeSnifferHost();
+  }, delayMs);
 }
 
 async function onInstallRemoteSniffer(): Promise<void> {
   flushSnifferAutosave();
+  snifferProbeSeq += 1;
   snifferSshBusy.value = 'install';
   snifferSshError.value = false;
   snifferSshStatusLabel.value = 'Uploading and building on the remote host…';
@@ -874,7 +1001,7 @@ async function onInstallRemoteSniffer(): Promise<void> {
 
     const check = await checkRemoteSnifferHost(draftSnifferSettings());
     applyHostCheck(check);
-    await refreshRemoteTunnelStatus();
+    await refreshRemoteSnifferStatus();
   } catch (error) {
     snifferSshError.value = true;
     snifferSshStatusLabel.value = remoteActionError(error);
@@ -885,39 +1012,27 @@ async function onInstallRemoteSniffer(): Promise<void> {
 
 async function onStartRemoteSniffer(): Promise<void> {
   flushSnifferAutosave();
+  snifferProbeSeq += 1;
   snifferSshBusy.value = 'start';
   snifferSshError.value = false;
   snifferSshStatusLabel.value = '';
 
   try {
-    const settings = draftSnifferSettings();
-    const result = await startRemoteSniffer(settings);
+    const result = await startRemoteSniffer(draftSnifferSettings());
     snifferSshError.value = !result.ok;
     snifferSshStatusLabel.value = result.message;
-
-    if (result.ok) {
-      const forwardUrl = snifferLocalForwardBaseUrl(settings.port);
-      applyingSnifferSettings = true;
-
-      try {
-        writeSnifferSettings({ ...settings, baseUrl: forwardUrl });
-        snifferBaseUrlInput.value = forwardUrl;
-      } finally {
-        applyingSnifferSettings = false;
-      }
-    }
-
-    await refreshRemoteTunnelStatus();
+    await refreshRemoteSnifferStatus();
   } catch (error) {
     snifferSshError.value = true;
     snifferSshStatusLabel.value = remoteActionError(error);
-    await refreshRemoteTunnelStatus();
+    await refreshRemoteSnifferStatus();
   } finally {
     snifferSshBusy.value = undefined;
   }
 }
 
 async function onStopRemoteSniffer(): Promise<void> {
+  snifferProbeSeq += 1;
   snifferSshBusy.value = 'stop';
   snifferSshError.value = false;
   snifferSshStatusLabel.value = '';
@@ -926,18 +1041,18 @@ async function onStopRemoteSniffer(): Promise<void> {
     const result = await stopRemoteSniffer(draftSnifferSettings());
     snifferSshError.value = !result.ok;
     snifferSshStatusLabel.value = result.message;
-    await refreshRemoteTunnelStatus();
+    await refreshRemoteSnifferStatus();
   } catch (error) {
     snifferSshError.value = true;
     snifferSshStatusLabel.value = remoteActionError(error);
-    await refreshRemoteTunnelStatus();
+    await refreshRemoteSnifferStatus();
   } finally {
     snifferSshBusy.value = undefined;
   }
 }
 
 async function onToggleRemoteSniffer(enabled: boolean): Promise<void> {
-  if (enabled === remoteTunnelRunning.value) {
+  if (enabled === remoteSnifferRunning.value) {
     return;
   }
 
@@ -1007,7 +1122,13 @@ const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
 
-  if (section === 'licenses' || section === 'radios' || section === 'updates' || section === 'sniffer') {
+  if (
+    section === 'licenses' ||
+    section === 'radios' ||
+    section === 'serial' ||
+    section === 'updates' ||
+    section === 'sniffer'
+  ) {
     return section;
   }
 
@@ -1017,6 +1138,40 @@ const currentSection = computed<PreferenceSection>(() => {
 const activeSection = computed(() => {
   return sections.find((section) => section.id === currentSection.value) ?? sections[0];
 });
+
+let persistingSerialPortSettings = false;
+
+function persistSerialPortSettings(): void {
+  if (persistingSerialPortSettings) {
+    return;
+  }
+
+  persistingSerialPortSettings = true;
+
+  try {
+    const names = normalizeExcludedPortNames(excludedPortNames.value);
+    excludedPortNames.value = names;
+    writeSerialPortSettings({
+      filterCommonPorts: filterCommonPorts.value,
+      excludedPortNames: names,
+    });
+  } finally {
+    persistingSerialPortSettings = false;
+  }
+}
+
+function setFilterCommonPorts(enabled: boolean): void {
+  filterCommonPorts.value = enabled;
+  persistSerialPortSettings();
+}
+
+watch(
+  excludedPortNames,
+  () => {
+    persistSerialPortSettings();
+  },
+  { deep: true },
+);
 
 function selectSection(section: PreferenceSection): void {
   if (section === 'appearance') {
@@ -1079,8 +1234,12 @@ watch(
     }
 
     if (section === 'sniffer') {
-      void refreshRemoteTunnelStatus();
+      scheduleSnifferProbe(0);
+      startSnifferStatusPoll();
+      return;
     }
+
+    stopSnifferStatusPoll();
   },
   { immediate: true },
 );

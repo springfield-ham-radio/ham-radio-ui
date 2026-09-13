@@ -44,7 +44,7 @@ Packaged builds use the [Tauri updater](https://v2.tauri.app/plugin/updater/). T
 
 `tauri-action` writes `latest.json` when `bundle.createUpdaterArtifacts` is true and the signing key is present. Artifacts are signed with a private key that must never be committed.
 
-The Release Tauri job runs [`scripts/prepare-updater-signing.ts`](../scripts/prepare-updater-signing.ts) first. That script accepts the private key as the raw minisign file, the same file with literal `\n` escapes, or base64 of the whole file. If the secret is missing or not a minisign key, the job disables `createUpdaterArtifacts` and still uploads installers. In-app updates stay off until the secret is a valid matching key.
+The Release Tauri job runs [`scripts/prepare-updater-signing.ts`](../scripts/prepare-updater-signing.ts) first. That script accepts the private key as the raw minisign file, the same file with literal `\n` escapes, or base64 of the whole file. It then sets `TAURI_SIGNING_PRIVATE_KEY` to base64 of that file, which is the encoding `tauri build` decodes. Passing the raw minisign text or a file path fails with `Invalid symbol 32, offset 9`. If the secret is missing or not a minisign key, the job disables `createUpdaterArtifacts` and still uploads installers. In-app updates stay off until the secret is a valid matching key.
 
 ### GitHub Actions secrets
 
@@ -52,18 +52,18 @@ Add these as **repository** secrets (Settings → Secrets and variables → Acti
 
 | Secret | Value |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Entire contents of `~/.tauri/ham-radio-ui.key`. `tauri signer generate` usually writes this as one base64 line. That is the value to paste. You will not see `untrusted comment:` in the file; it appears only after decoding. |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Omit this secret when the key has no password |
+| `TAURI_SIGNING_PRIVATE_KEY` | Entire contents of `~/.tauri/ham-radio-ui.key`. `tauri signer generate` usually writes this as one base64 line; paste that line. You will not see `untrusted comment:` in the file; it appears only after decoding. Raw minisign text also works. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Key password. Omit this secret, or leave it empty, when the key has none. |
 
 Generate a key pair with `yarn tauri signer generate -w ~/.tauri/ham-radio-ui.key`. Put only the public key in [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `plugins.updater.pubkey`. Keep the private key in a password manager and in the GitHub secret.
 
-Confirm the file decodes to a minisign/rsign secret key:
+Confirm a generated key decodes to a minisign/rsign secret key:
 
 ```
 python3 -c "import base64, pathlib; print(base64.b64decode(pathlib.Path.home().joinpath('.tauri/ham-radio-ui.key').read_text().strip()).decode().splitlines()[0])"
 ```
 
-That should print `untrusted comment: rsign encrypted secret key` or `untrusted comment: minisign encrypted secret key`.
+That should print `untrusted comment: rsign encrypted secret key` or `untrusted comment: minisign encrypted secret key`. If the file already starts with `untrusted comment:`, it is already decoded; paste it as-is.
 
 Local `yarn tauri:build` also needs the key:
 

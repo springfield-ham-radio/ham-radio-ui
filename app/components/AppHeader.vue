@@ -6,8 +6,7 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
 const router = useRouter();
-const { importOpen, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs, activeRadioId, memoryFilePath } =
-  useRadio();
+const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, memoryFilePath } = useRadio();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const isRadioPage = computed(() => route.path === '/');
@@ -18,9 +17,10 @@ const currentFileName = computed(() => {
 
 const sectionItems = computed<TabsItem[]>(() => [
   { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
+  { label: 'CAT', icon: 'i-lucide-cable', value: 'cat' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
   { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
-  { label: 'Sniffer', icon: 'i-lucide-audio-lines', value: 'sniffer' },
+  { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
 ]);
 
 const activeSection = computed({
@@ -33,8 +33,12 @@ const activeSection = computed({
       return 'log';
     }
 
-    if (route.path.startsWith('/sniffer')) {
-      return 'sniffer';
+    if (route.path.startsWith('/wavebench')) {
+      return 'wavebench';
+    }
+
+    if (route.path.startsWith('/cat')) {
+      return 'cat';
     }
 
     return 'radio';
@@ -50,8 +54,13 @@ const activeSection = computed({
       return;
     }
 
-    if (value === 'sniffer') {
-      void router.push('/sniffer');
+    if (value === 'wavebench') {
+      void router.push('/wavebench');
+      return;
+    }
+
+    if (value === 'cat') {
+      void router.push('/cat');
       return;
     }
 
@@ -105,19 +114,6 @@ defineShortcuts({
       <h1 class="truncate px-1 text-sm font-semibold text-highlighted">
         {{ isPreferences ? 'Preferences' : APP_NAME }}
       </h1>
-      <UTooltip
-        v-if="isRadioPage && activeRadioId"
-        :text="`${activeRadioId.manufacturer} · ${activeRadioId.model}`"
-      >
-        <UBadge
-          :label="activeRadioId.name"
-          color="neutral"
-          variant="subtle"
-          size="sm"
-          icon="i-lucide-radio"
-          class="max-w-56 truncate"
-        />
-      </UTooltip>
       <UTooltip v-if="isRadioPage && currentFileName" :text="memoryFilePath">
         <UBadge
           :label="currentFileName"
@@ -152,48 +148,6 @@ defineShortcuts({
     </div>
 
     <div v-if="!isPreferences" class="flex flex-1 items-center justify-end gap-1.5">
-      <template v-if="isRadioPage && showBrowserFileActions">
-        <UButton
-          icon="i-lucide-folder-open"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Open"
-          @click="openMemoryFile"
-        />
-        <UButton
-          icon="i-lucide-save"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Save"
-          @click="saveMemoryFile"
-        />
-        <UButton
-          icon="i-lucide-save-all"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Save As"
-          @click="saveMemoryFileAs"
-        />
-        <UButton
-          icon="i-lucide-download"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Import From Radio"
-          @click="importOpen = true"
-        />
-        <UButton
-          icon="i-lucide-upload"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          label="Write To Radio"
-          @click="openWriteToRadio"
-        />
-      </template>
       <UTooltip text="Preferences">
         <UButton icon="i-lucide-settings" color="neutral" variant="ghost" to="/preferences" aria-label="Preferences" />
       </UTooltip>

@@ -6,6 +6,7 @@ describe('transmit-privileges', () => {
   describe('displayBandName', () => {
     it('strips a trailing numeric suffix used to split overlapping allocations', () => {
       expect(displayBandName('FRS/GMRS-1')).to.equal('FRS/GMRS');
+      expect(displayBandName('Weather Radio-10')).to.equal('Weather Radio');
       expect(displayBandName('2 Meter')).to.equal('2 Meter');
     });
   });
@@ -19,6 +20,16 @@ describe('transmit-privileges', () => {
     it('resolves amateur allocations from the transmit frequency', () => {
       expect(bandNameForFrequency(146_520_000)).to.equal('2 Meter');
       expect(bandNameForFrequency(446_000_000)).to.equal('70 Centimeter');
+    });
+
+    it('resolves NOAA weather channels by name', () => {
+      expect(bandNameForFrequency(162_550_000)).to.equal('Weather Radio');
+    });
+
+    it('resolves Environment Canada WX8–WX10 channels as Weather Radio', () => {
+      expect(bandNameForFrequency(161_650_000)).to.equal('Weather Radio');
+      expect(bandNameForFrequency(161_775_000)).to.equal('Weather Radio');
+      expect(bandNameForFrequency(163_275_000)).to.equal('Weather Radio');
     });
 
     it('uses exact channel matches and a display name without the split suffix', () => {

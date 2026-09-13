@@ -1,27 +1,42 @@
 # Sniffer
 
-HamBench talks to a separate headless sniffer process over HTTP. The default workflow is **URL only**: install and run the sniffer yourself, then tell the app where it is. Optional SSH assist is available in the desktop app when you want help setting up a remote host (for example a Raspberry Pi) without a separate git checkout.
+HamBench talks to a separate headless sniffer process over HTTP. Set **Host** and **Port** in Preferences. The desktop app can also **install, start, and stop** the sniffer for you — on this computer, or on that host when **Control over SSH** is enabled.
 
-## URL only (default)
+## Connection
 
-1. Start ham-radio-sniffer on the machine that has both USB serial cables (`yarn start` after build, or `yarn dev` while developing). Default origin: `http://127.0.0.1:3010`.
-2. Open **Preferences → Sniffer** and set **Sniffer URL** if it is not the default. Changes save automatically.
-3. Open the **Sniffer** tab to pick computer/radio ports and start the bridge. The header shows **Connected** / **Disconnected** (or **Remote connected** / **Remote disconnected** when SSH is configured). Connection badges follow API reachability: if `/api/health` succeeds, the page shows connected even when the app no longer owns the SSH child (for example after an app restart with a leftover tunnel). **Remote tunnel up** means the tracked SSH session is alive but the sniffer API is not answering yet.
-4. Traffic streams live into the Traffic panel over SSE. Use **Save capture** to write a JSON file for offline review or driver verification.
+1. Open **Preferences → Sniffer** and set **Host** (default `127.0.0.1`) and **Port** (default `3010`). **Install directory** (default `~/ham-radio-sniffer`) and **Run command** (default `yarn start`) are on the Sniffer process card. Changes save automatically. The **Bridge ports** toggle on **Radio → Sniffer** always uses `http://<host>:<port>`. **Preferences → Serial ports** can hide common macOS system devices (Bluetooth Incoming, debug-console, wlan-debug) and any names you add (for example `BryansHeadphones`) from the Computer and Radio port lists; the same filter applies to Import and Write.
+2. Open **Radio → Sniffer** and choose ports: **Computer port** is the debug cable (computer ↔ sniffer), **Radio port** is the programming cable (sniffer ↔ radio). Turn on **Bridge ports**. The page header shows **Sniffer** with **Connected** / **Disconnected**. The **Running** / **Stopped** badge sits next to the Bridge heading. When the API is reachable, the version from `/api/health` is shown. Badges follow `/api/health` on that origin, polled while the page is visible.
+3. Traffic streams live into the Traffic panel over SSE. The Traffic header shows whether each port is open and how many bytes the UART has delivered (`C→R` / `R→C`). Use **Save capture** to write a JSON file for offline review or driver verification. Turning on **Bridge ports** keeps the existing SSE connection; reachability follows `/api/health`, not EventSource reconnects.
+
+If the bridge is running and byte counts stay at 0, the selected serial device is not receiving — a scope on a different TX line will not change that. On the sniffer host, `SNIFFER_LOG_LEVEL=debug yarn start` (or `yarn dev`) prints every chunk as hex; default `info` logs the first bytes on each port.
 
 Live traffic arrives as server-sent events. The sniffer itself has no web UI.
 
-## Optional SSH assist
+You can still start ham-radio-sniffer yourself (`yarn start` after build, or `yarn dev` while developing) and only set Host and Port. Install / Running are optional.
 
-Leave **SSH host** blank to keep SSH disabled. When a host is set (desktop app only):
+## Install, start, and stop
 
-1. **Check host** verifies Node.js (major version ≥ 24, matching the sniffer `.nvmrc`), Yarn or Corepack, write access to the remote directory, and whether sources/build already exist. Preferences shows **Host ready / Not ready** and **Installed / Sources only / Not installed** badges. The app does **not** install Node for you.
-2. **Install** uploads the **bundled sniffer sources** shipped with the app (not a git clone), then runs `yarn install` and `yarn build` on the remote so native `serialport` bindings match that machine’s architecture. Use it again to update an existing install.
-3. The **Remote** switch starts the configured remote start command over SSH with `PORT`/`HOST` set to the configured port (production Nitro defaults to port 3000 otherwise), opens a local port forward on the same port, and waits until `/api/health` responds. The Sniffer URL is updated to `http://127.0.0.1:<port>`. Turning it off ends the SSH session (and the remote process started with it).
+These controls live under **Preferences → Sniffer** and run only in the desktop app. The app does **not** install Node for you. Status (host ready, installed, running) is checked automatically when you open the page and when Host, Port, Install directory, Run command, or Control over SSH change.
+
+1. **Install directory** is where sources and the build live (default `~/ham-radio-sniffer`).
+2. **Run command** starts the process (default `yarn start`).
+3. **Install** copies the **bundled sniffer sources** shipped with the app (not a git clone), then runs `yarn install` and `yarn build` so native `serialport` bindings match that machine’s architecture. Use it again to update an existing install.
+4. **Running** starts a detached sniffer process on the configured port and waits until `/api/health` responds. Turning it off stops that process. If start fails, the error includes why (process exited, health timeout) and the last lines of `sniffer.log`.
+
+Host check also compares the installed sniffer **version** to the copy bundled in HamBench. An older install shows **Update available**; run **Install** to copy and rebuild.
+
+When **Control over SSH** is off, those commands run on this computer. A loopback host binds `127.0.0.1`; any other host binds `0.0.0.0`.
+
+When **Control over SSH** is on, the same commands run on **Host**:
+
+- `192.168.1.10` SSHes to `192.168.1.10`. SSH uses your default user or `~/.ssh/config`.
+- `pi@192.168.1.10` SSHes as `pi@192.168.1.10`.
+
+There is no SSH tunnel. Allow the listen port through the host firewall if needed.
 
 SSH uses key or agent authentication only (`BatchMode=yes`). Password prompts are not supported.
 
-The Remote switch lives only under **Preferences → Sniffer**. The Sniffer tab Start/Stop bridge controls open the serial ports once the API is reachable.
+The **Bridge ports** toggle on **Radio → Sniffer** opens the serial ports once the API is reachable.
 
 ## Capture files
 

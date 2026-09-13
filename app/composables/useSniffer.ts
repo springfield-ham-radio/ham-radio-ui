@@ -1,5 +1,5 @@
-import type { SnifferEvent, SnifferLogResponse, SnifferPacket, SnifferPortsResponse, SnifferStatus } from '~/utils/sniffer-api';
-import { snifferFetchErrorMessage } from '~/utils/sniffer-api';
+import type { SnifferEvent, SnifferHealth, SnifferLogResponse, SnifferPacket, SnifferPortsResponse, SnifferStatus } from '~/utils/sniffer-api';
+import { snifferEventSourceErrorAction, snifferFetchErrorMessage } from '~/utils/sniffer-api';
 import {
   defaultSnifferCaptureFileName,
   serializeSnifferCaptureFile,
@@ -7,7 +7,9 @@ import {
 } from '~/utils/sniffer-capture';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 import { saveJsonFileWithPicker } from '~/utils/radio-memory-file-io';
-import { readSnifferSettings, snifferApiUrl } from '~/utils/sniffer-settings';
+import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { readSnifferSettings, snifferApiUrl, snifferHttpUrl } from '~/utils/sniffer-settings';
 
 const MAX_LIVE_PACKETS = 2000;
 const HEALTH_POLL_MS = 3000;
@@ -20,8 +22,9 @@ const HEALTH_POLL_MS = 3000;
  */
 export function useSniffer() {
   const toast = useToast();
-  const baseUrl = useState('sniffer-base-url', () => readSnifferSettings().baseUrl);
+  const baseUrl = useState('sniffer-base-url', () => snifferHttpUrl(readSnifferSettings()));
   const reachable = useState('sniffer-reachable', () => false);
+  const snifferVersion = useState<string | undefined>('sniffer-version', () => undefined);
   const status = useState<SnifferStatus>('sniffer-status', () => ({ running: false, packetCount: 0 }));
   const ports = useState<string[]>('sniffer-ports', () => []);
   const portsPending = useState('sniffer-ports-pending', () => false);
@@ -43,12 +46,21 @@ export function useSniffer() {
   }
 
   function disconnectEvents(): void {
-    eventSource?.close();
+    const source = eventSource;
     eventSource = undefined;
+
+    if (!source) {
+      return;
+    }
+
+    source.onerror = null;
+    source.onmessage = null;
+    source.close();
   }
 
   function markUnreachable(): void {
     reachable.value = false;
+    snifferVersion.value = undefined;
     disconnectEvents();
 
     // Drop "running" so a stale useState value cannot disagree with the
@@ -66,7 +78,10 @@ export function useSniffer() {
 
     try {
       const response = await request<SnifferPortsResponse>('/api/ports');
-      ports.value = response.ports.map((port) => port.path);
+      ports.value = serialPortSelectItems(
+        response.ports.map((port) => port.path),
+        readSerialPortSettings(),
+      ).map((port) => port.value);
       reachable.value = true;
     } catch (error) {
       markUnreachable();
@@ -79,9 +94,10 @@ export function useSniffer() {
 
   async function checkHealth(): Promise<boolean> {
     try {
-      await request('/api/health');
-      reachable.value = true;
-      return true;
+      const health = await request<SnifferHealth>('/api/health');
+      reachable.value = health.ok !== false;
+      snifferVersion.value = typeof health.version === 'string' && health.version.length > 0 ? health.version : undefined;
+      return reachable.value;
     } catch {
       markUnreachable();
       return false;
@@ -119,7 +135,13 @@ export function useSniffer() {
     };
 
     source.onerror = () => {
-      markUnreachable();
+      if (snifferEventSourceErrorAction({ current: eventSource, source, readyState: source.readyState }) === 'ignore') {
+        return;
+      }
+
+      if (eventSource === source) {
+        eventSource = undefined;
+      }
     };
   }
 
@@ -139,7 +161,10 @@ export function useSniffer() {
 
       packets.value = [];
       applyStatus(nextStatus);
-      connectEvents();
+
+      if (!eventSource) {
+        connectEvents();
+      }
     } catch (error) {
       errorMessage.value = snifferFetchErrorMessage(error);
     } finally {
@@ -233,7 +258,7 @@ export function useSniffer() {
   }
 
   async function connect(): Promise<void> {
-    baseUrl.value = readSnifferSettings().baseUrl;
+    baseUrl.value = snifferHttpUrl(readSnifferSettings());
     const isReachable = await checkHealth();
 
     if (!isReachable) {
@@ -259,7 +284,7 @@ export function useSniffer() {
 
     void connect();
     healthTimer = setInterval(() => {
-      const storedUrl = readSnifferSettings().baseUrl;
+      const storedUrl = snifferHttpUrl(readSnifferSettings());
       const needsEvents = !eventSource;
 
       if (storedUrl !== baseUrl.value || !reachable.value || needsEvents) {
@@ -290,6 +315,7 @@ export function useSniffer() {
   return {
     baseUrl,
     reachable,
+    snifferVersion,
     status,
     ports,
     portsPending,

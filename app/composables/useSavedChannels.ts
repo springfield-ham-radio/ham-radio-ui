@@ -68,12 +68,13 @@ export function useSavedChannels() {
     }
   }
 
-  async function createChannel(radioChannel: RadioChannel, notes?: string): Promise<SavedChannel> {
+  async function createChannel(radioChannel: RadioChannel, notes?: string, kind?: SavedChannel['kind']): Promise<SavedChannel> {
     try {
       const trimmedNotes = notes?.trim();
       const [saved] = await insertSavedChannelModels([
         radioChannelToSavedChannel(radioChannel, {
           notes: trimmedNotes ? trimmedNotes : undefined,
+          kind,
         }),
       ]);
 
@@ -194,16 +195,25 @@ export function useSavedChannels() {
       }
 
       const models = parsed.channels.map((channel, index) =>
-        radioChannelToSavedChannel(channel, { notes: parsed.notes[index] }),
+        radioChannelToSavedChannel(channel, {
+          notes: parsed.notes[index],
+          kind: parsed.kinds[index],
+        }),
       );
       await insertSavedChannelModels(models);
       channels.value = await listSavedChannels();
+      const sourceLabel =
+        parsed.source === 'repeaterbook'
+          ? 'RepeaterBook CSV'
+          : parsed.source === 'chirp'
+            ? 'CHIRP CSV'
+            : 'CSV';
       toast.add({
-        title: 'Library imported',
+        title: parsed.source === 'library' ? 'Library imported' : 'Repeaters imported',
         description:
           models.length === 1
-            ? '1 channel was imported from CSV.'
-            : `${models.length} channels were imported from CSV.`,
+            ? `1 ${parsed.source === 'library' ? 'channel' : 'repeater'} was imported from ${sourceLabel}.`
+            : `${models.length} ${parsed.source === 'library' ? 'channels' : 'repeaters'} were imported from ${sourceLabel}.`,
         color: 'success',
         icon: 'i-lucide-file-up',
       });

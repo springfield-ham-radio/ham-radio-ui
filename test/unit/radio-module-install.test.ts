@@ -4,6 +4,7 @@ import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-rad
 import {
   APP_HAM_RADIO_API_VERSION,
   isModuleInstallPath,
+  isUserJsonCatalogSourcePath,
   parseModuleInstallPath,
 } from '../../app/utils/radio-module-install.ts';
 
@@ -45,5 +46,16 @@ describe('radio module install helpers', () => {
         'C:\\Users\\me\\AppData\\Roaming\\com.springfield.ham-radio\\radio-modules\\baofeng\\3.1.0',
       ),
     ).to.deep.equal({ moduleId: 'baofeng', version: '3.1.0' });
+  });
+
+  it('should reload catalog rows that were installed from a local JSON file', () => {
+    expect(
+      isUserJsonCatalogSourcePath(
+        'user',
+        '/Users/me/Development/radio-module-kenwood/configs/kenwood-tm-d710a.json',
+      ),
+    ).to.equal(true);
+    expect(isUserJsonCatalogSourcePath('installed', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
+    expect(isUserJsonCatalogSourcePath('user', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
   });
 });

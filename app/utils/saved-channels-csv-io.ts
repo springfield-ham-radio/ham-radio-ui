@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const CSV_FILTER = { name: 'CSV', extensions: ['csv'] as string[] };
@@ -12,8 +14,6 @@ export async function saveChannelLibraryCsvWithPicker(contents: string): Promise
     return saveCsvInBrowser(contents, defaultPath);
   }
 
-  const { save } = await import('@tauri-apps/plugin-dialog');
-  const { invoke } = await import('@tauri-apps/api/core');
   const path = await save({
     title: 'Export Channel Library',
     defaultPath,
@@ -33,14 +33,19 @@ export async function saveChannelLibraryCsvWithPicker(contents: string): Promise
  * Prompt for a CSV file and return its text contents.
  */
 export async function readChannelLibraryCsvWithPicker(): Promise<string | undefined> {
+  return readCsvWithPicker('Import Channel Library');
+}
+
+/**
+ * Prompt for a CSV file using a caller-supplied dialog title.
+ */
+export async function readCsvWithPicker(title: string): Promise<string | undefined> {
   if (!isTauriRuntime()) {
     return readCsvInBrowser();
   }
 
-  const { open } = await import('@tauri-apps/plugin-dialog');
-  const { invoke } = await import('@tauri-apps/api/core');
   const path = await open({
-    title: 'Import Channel Library',
+    title,
     multiple: false,
     directory: false,
     filters: [CSV_FILTER],

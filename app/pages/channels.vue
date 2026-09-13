@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import type { RadioChannel } from '@springfield/ham-radio-api';
-import type { TableColumn } from '@nuxt/ui';
-import { formatFrequencyMHz } from '~/utils/channel-edit';
+import type { TableColumn, TableRow } from '@nuxt/ui';
+import { h, resolveComponent } from 'vue';
+import {
+  assignLibraryChannelsToSlots,
+  availableChannelNumbers,
+  channelCapacity,
+  formatFrequencyMHz,
+} from '~/utils/channel-edit';
 import { formatSavedTone, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 useHead({ title: 'Channels' });
+
+const UCheckbox = resolveComponent('UCheckbox');
 
 const {
   filteredChannels,
@@ -19,12 +27,15 @@ const {
   exportLibraryCsv,
   importLibraryCsv,
 } = useSavedChannels();
+const { program, memory, settingsMemoryMap, activeRadioId, addChannels } = useRadio();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
-
+const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
+const addToRadioOpen = ref(false);
+const rowSelection = ref<Record<string, boolean>>({});
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
@@ -37,11 +48,93 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
   }));
 });
 
-const columns: TableColumn<DisplaySavedChannel>[] = [
+const selectedLibraryChannels = computed(() => {
+  const selected = new Set(
+    Object.entries(rowSelection.value)
+      .filter(([, isSelected]) => isSelected)
+      .map(([id]) => id),
+  );
+
+  return displayChannels.value.filter((channel) => selected.has(String(channel.id)));
+});
+
+const selectedCount = computed(() => selectedLibraryChannels.value.length);
+const occupiedChannelNumbers = computed(() => program.value?.channels.map((channel) => channel.channelNumber) ?? []);
+const freeSlotCount = computed(() => {
+  return availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value)).length;
+});
+const radioReady = computed(() => Boolean(program.value && memory.value && activeRadioId.value));
+const canAddToRadio = computed(() => selectedCount.value > 0 && radioReady.value && freeSlotCount.value > 0);
+
+const addToRadioTooltip = computed(() => {
+  if (selectedCount.value === 0) {
+    return 'Select saved channels to add';
+  }
+
+  if (!radioReady.value) {
+    return 'Open a memory file or import from a radio first';
+  }
+
+  if (freeSlotCount.value === 0) {
+    return `All memory slots on ${activeRadioId.value?.name ?? 'this radio'} are programmed`;
+  }
+
+  return 'Add selected channels to the loaded radio';
+});
+
+const addToRadioTitle = computed(() => (selectedCount.value === 1 ? 'Add channel to radio' : 'Add channels to radio'));
+
+const addToRadioDescription = computed(() => {
+  const radioName = activeRadioId.value?.name ?? 'the loaded radio';
+  const count = selectedCount.value;
+  const slots = availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value));
+  const take = Math.min(count, slots.length);
+
+  if (take === 0) {
+    return `There are no unused memory slots on ${radioName}.`;
+  }
+
+  const first = slots[0];
+  const last = slots[take - 1];
+  const slotLabel = first === last ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
+
+  if (take < count) {
+    return `Only ${slots.length} unused slots remain on ${radioName}. Add the first ${take} selected channels to ${slotLabel}? Write to the radio to apply the change on the device.`;
+  }
+
+  const channelLabel = count === 1 ? 'this channel' : `${count} channels`;
+  return `Add ${channelLabel} to ${radioName} in unused ${slotLabel}? Write to the radio to apply the change on the device.`;
+});
+
+const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
-    accessorKey: 'name',
+    id: 'select',
+    header: ({ table }) =>
+      h(UCheckbox, {
+        modelValue: table.getIsSomePageRowsSelected() ? 'indeterminate' : table.getIsAllPageRowsSelected(),
+        'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+          table.toggleAllPageRowsSelected(!!value);
+        },
+        'aria-label': 'Select all saved channels',
+        onClick: (event: Event) => {
+          event.stopPropagation();
+        },
+      }),
+    cell: ({ row }) =>
+      h(UCheckbox, {
+        modelValue: row.getIsSelected(),
+        'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+          row.toggleSelected(!!value);
+        },
+        'aria-label': `Select ${row.original.name || 'saved channel'}`,
+        onClick: (event: Event) => {
+          event.stopPropagation();
+        },
+      }),
+  },
+  {
+    id: 'name',
     header: 'Name',
-    cell: ({ row }) => row.original.name || '—',
   },
   { accessorKey: 'band', header: 'Band' },
   {
@@ -68,7 +161,7 @@ const columns: TableColumn<DisplaySavedChannel>[] = [
     id: 'actions',
     header: '',
   },
-];
+]);
 
 function openCreate(): void {
   editingChannel.value = undefined;
@@ -80,9 +173,49 @@ function openEdit(channel: SavedChannel): void {
   editorOpen.value = true;
 }
 
+function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void {
+  const target = event.target;
+
+  if (target instanceof Element && target.closest('button, input, [role="checkbox"]')) {
+    return;
+  }
+
+  openEdit(row.original);
+}
+
+function requestAddToRadio(): void {
+  if (!canAddToRadio.value) {
+    return;
+  }
+
+  addToRadioOpen.value = true;
+}
+
+async function confirmAddToRadio(): Promise<void> {
+  const assignment = assignLibraryChannelsToSlots(
+    selectedLibraryChannels.value,
+    occupiedChannelNumbers.value,
+    settingsMemoryMap.value,
+  );
+
+  isAddingToRadio.value = true;
+
+  try {
+    const added = await addChannels(assignment.programmed);
+
+    if (added > 0) {
+      rowSelection.value = {};
+      addToRadioOpen.value = false;
+    }
+  } finally {
+    isAddingToRadio.value = false;
+  }
+}
+
 async function onSave(payload: {
   channel: RadioChannel;
   notes?: string;
+  kind?: SavedChannel['kind'];
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -90,6 +223,7 @@ async function onSave(payload: {
       await updateChannel({
         id: payload.id,
         name: payload.channel.name,
+        kind: payload.kind ?? editingChannel.value?.kind ?? 'channel',
         transmitFrequency: payload.channel.transmitFrequency,
         receiveFrequency: payload.channel.receiveFrequency,
         transmitTone: payload.channel.transmitTone,
@@ -99,7 +233,7 @@ async function onSave(payload: {
         updatedAt: Date.now(),
       });
     } else {
-      await createChannel(payload.channel, payload.notes);
+      await createChannel(payload.channel, payload.notes, payload.kind);
     }
 
     editorOpen.value = false;
@@ -142,7 +276,9 @@ onMounted(() => {
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
-        <p class="text-xs text-muted">Reusable portable channels stored in the app database.</p>
+        <p class="text-xs text-muted">
+          Portable channels and imported repeaters. Select rows and choose Add to radio to copy them into unused slots on the loaded radio.
+        </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
         <UTooltip text="Export CSV">
@@ -162,10 +298,24 @@ onMounted(() => {
             color="neutral"
             variant="outline"
             size="sm"
-            aria-label="Import channel library from CSV"
+            aria-label="Import channel library, RepeaterBook, or CHIRP CSV"
             :loading="isImporting"
             @click="onImportCsv"
           />
+        </UTooltip>
+        <UTooltip :text="addToRadioTooltip">
+          <span class="inline-flex">
+            <UButton
+              icon="i-lucide-radio"
+              color="primary"
+              variant="soft"
+              size="sm"
+              label="Add to radio"
+              :disabled="!canAddToRadio || isAddingToRadio"
+              :loading="isAddingToRadio"
+              @click="requestAddToRadio"
+            />
+          </span>
         </UTooltip>
         <UButton
           icon="i-lucide-plus"
@@ -180,7 +330,7 @@ onMounted(() => {
     <UInput
       v-model="search"
       icon="i-lucide-search"
-      placeholder="Search by name or frequency"
+      placeholder="Search by name, frequency, or repeater"
       size="sm"
       class="w-full max-w-sm"
     />
@@ -196,8 +346,10 @@ onMounted(() => {
 
     <div class="min-h-0 flex-1 overflow-auto">
       <UTable
+        v-model:row-selection="rowSelection"
         :data="displayChannels"
         :columns="columns"
+        :get-row-id="(row) => String(row.id)"
         :loading="isLoading"
         sticky
         class="max-h-full"
@@ -208,9 +360,24 @@ onMounted(() => {
           empty: 'py-8 text-center text-sm text-muted',
           tr: 'cursor-pointer',
         }"
-        empty="No saved channels yet. Add one here, or save memory channels from the Radio page."
-        @select="(row) => openEdit(row.original)"
+        empty="No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page."
+        @select="onSelectChannel"
       >
+        <template #name-cell="{ row }">
+          <div class="flex min-w-0 items-center gap-1.5">
+            <UTooltip v-if="row.original.kind === 'repeater'" text="Repeater">
+              <UBadge
+                color="primary"
+                variant="subtle"
+                size="xs"
+                icon="i-lucide-radio-tower"
+                label="Repeater"
+                class="shrink-0"
+              />
+            </UTooltip>
+            <span class="truncate">{{ row.original.name || '—' }}</span>
+          </div>
+        </template>
         <template #actions-cell="{ row }">
           <div class="flex items-center justify-end gap-0.5" @click.stop>
             <UButton
@@ -235,5 +402,21 @@ onMounted(() => {
     </div>
 
     <SavedChannelEditor v-model:open="editorOpen" :channel="editingChannel" @save="onSave" />
+    <UModal
+      v-model:open="addToRadioOpen"
+      :title="addToRadioTitle"
+      :description="addToRadioDescription"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer="{ close }">
+        <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
+        <UButton
+          color="primary"
+          label="Add to radio"
+          :loading="isAddingToRadio"
+          @click="confirmAddToRadio"
+        />
+      </template>
+    </UModal>
   </div>
 </template>

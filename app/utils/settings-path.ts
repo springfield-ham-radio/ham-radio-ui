@@ -1,5 +1,24 @@
 import type { RadioSettingValue } from '@springfield/ham-radio-api';
 
+/** Clone nested settings. structuredClone cannot clone Vue reactive proxies. */
+function cloneSettingValue(value: RadioSettingValue): RadioSettingValue {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cloneSettingValue(entry));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const cloned: Record<string, RadioSettingValue> = {};
+
+    for (const [key, entry] of Object.entries(value)) {
+      cloned[key] = cloneSettingValue(entry);
+    }
+
+    return cloned;
+  }
+
+  return value;
+}
+
 /**
  * Read a nested setting by dot path (e.g. settings.squelch or pttid.0.code).
  */
@@ -32,7 +51,7 @@ export function setSettingAtPath(
   value: RadioSettingValue,
 ): Record<string, RadioSettingValue> {
   const parts = path.split('.');
-  const clone = structuredClone(root) as Record<string, RadioSettingValue>;
+  const clone = cloneSettingValue(root) as Record<string, RadioSettingValue>;
   let current: RadioSettingValue = clone;
 
   for (let index = 0; index < parts.length - 1; index += 1) {
