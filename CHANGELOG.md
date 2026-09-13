@@ -1,3 +1,9 @@
+## [0.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.22.0...v0.23.0) (2026-09-13)
+
+### Features
+
+* show driver-defined settings groups in the Settings tab ([8083f77](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8083f770899047ec9dbc3966da9061ebd8430f44))
+
 ## [0.22.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.21.0...v0.22.0) (2026-09-12)
 
 ### Features
