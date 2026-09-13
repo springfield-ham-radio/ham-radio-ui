@@ -106,4 +106,43 @@ describe('collectMemoryMapUiGroups', () => {
       { id: 'receive', label: 'Receive' },
     ]);
   });
+
+  it('should sort section fields by ui.order', () => {
+    const grouped = collectMemoryMapUiGroups({
+      version: '1.0.0',
+      structs: [
+        {
+          id: 'settings',
+          seek: 0,
+          fields: [
+            {
+              id: 'vhf_enable',
+              type: 'u8',
+              value: { kind: 'boolean' },
+              ui: { group: 'other', label: 'VHF TX Enabled', widget: 'switch', subgroup: 'limits', order: 1 },
+            },
+            {
+              id: 'vhf_lower',
+              type: 'u8',
+              value: { kind: 'integer' },
+              ui: { group: 'other', label: 'VHF Lower', widget: 'integer', subgroup: 'limits', order: 3 },
+            },
+            {
+              id: 'uhf_enable',
+              type: 'u8',
+              value: { kind: 'boolean' },
+              ui: { group: 'other', label: 'UHF TX Enabled', widget: 'switch', subgroup: 'limits', order: 2 },
+            },
+          ],
+        },
+      ],
+      groups: [{ id: 'other', label: 'Other Settings', groups: [{ id: 'limits', label: 'Band Limits' }] }],
+    } as RadioMemoryMap);
+
+    expect(grouped[0]?.groups[0]?.fields.map((field) => field.fieldId)).to.deep.equal([
+      'vhf_enable',
+      'uhf_enable',
+      'vhf_lower',
+    ]);
+  });
 });

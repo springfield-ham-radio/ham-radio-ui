@@ -50,6 +50,27 @@ function fallbackGroupLabel(id: string): string {
     .join(' ');
 }
 
+function fieldUiOrder(field: RadioMemoryMapUiField): number | undefined {
+  const extra = field.ui as RadioMemoryMapUiField['ui'] & { order?: number };
+  return typeof extra.order === 'number' && Number.isFinite(extra.order) ? extra.order : undefined;
+}
+
+function sortUiFields(fields: RadioMemoryMapUiField[]): RadioMemoryMapUiField[] {
+  return fields
+    .map((field, index) => ({ field, index }))
+    .sort((left, right) => {
+      const leftOrder = fieldUiOrder(left.field) ?? Number.POSITIVE_INFINITY;
+      const rightOrder = fieldUiOrder(right.field) ?? Number.POSITIVE_INFINITY;
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.field);
+}
+
 function declaredGroups(memoryMap: RadioMemoryMap): SettingsGroup[] {
   const extra = memoryMap as RadioMemoryMap & { groups?: SettingsGroup[] };
   return extra.groups ?? [];
@@ -98,7 +119,7 @@ function collectUiSubgroups(declared: SettingsGroup | undefined, fields: RadioMe
       id: subgroup.id,
       label: subgroup.label,
       description: subgroup.description,
-      fields: subgroupFields,
+      fields: sortUiFields(subgroupFields),
     });
   }
 
@@ -110,7 +131,7 @@ function collectUiSubgroups(declared: SettingsGroup | undefined, fields: RadioMe
     result.push({
       id,
       label: fallbackGroupLabel(id),
-      fields: subgroupFields,
+      fields: sortUiFields(subgroupFields),
     });
   }
 
@@ -124,7 +145,7 @@ function toUiGroup(id: string, label: string, fields: RadioMemoryMapUiField[], d
     description: declared?.description,
     icon: declared?.icon,
     warning: declared?.warning,
-    fields,
+    fields: sortUiFields(fields),
     groups: collectUiSubgroups(declared, fields),
   };
 }
@@ -133,6 +154,7 @@ function toUiGroup(id: string, label: string, fields: RadioMemoryMapUiField[], d
  * Collect radio-wide UI fields grouped for the Settings tab.
  * Top-level `memoryMap.groups` become the left nav. Nested `groups` plus
  * field `ui.subgroup` become headed sections in the panel.
+ * `ui.order` sorts fields within a group or section.
  */
 export function collectMemoryMapUiGroups(memoryMap: RadioMemoryMap): SettingsUiGroup[] {
   const grouped = groupMemoryMapUiFields(collectMemoryMapUiFields(memoryMap));

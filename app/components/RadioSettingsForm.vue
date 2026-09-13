@@ -166,6 +166,26 @@ function isWritable(field: RadioMemoryMapUiField): boolean {
 function selectGroup(group: string): void {
   selectedGroup.value = group;
 }
+
+function fieldFormUi(field: RadioMemoryMapUiField) {
+  const isSwitch = field.ui.widget === 'switch';
+  const hasDescription = Boolean(field.ui.description);
+
+  if (!isSwitch && !hasDescription) {
+    return undefined;
+  }
+
+  return {
+    ...(isSwitch
+      ? {
+          root: 'flex items-center justify-between gap-3',
+          wrapper: 'min-w-0 flex-1',
+          container: 'mt-0 shrink-0',
+        }
+      : {}),
+    ...(hasDescription ? { labelWrapper: 'justify-start' } : {}),
+  };
+}
 </script>
 
 <template>
@@ -202,12 +222,12 @@ function selectGroup(group: string): void {
     </nav>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col md:pl-6">
-      <header class="mb-3 flex shrink-0 flex-col gap-1">
+      <header class="mb-3 flex shrink-0 items-center gap-1">
         <div class="flex items-center gap-2">
           <UIcon v-if="selectedEntry" :name="groupIcon(selectedEntry)" class="size-4 text-muted" />
           <h2 class="text-sm font-semibold text-highlighted">{{ selectedEntry?.label }}</h2>
         </div>
-        <p v-if="selectedEntry?.description" class="text-xs text-muted">{{ selectedEntry.description }}</p>
+        <HelpTooltip v-if="selectedEntry?.description" :text="selectedEntry.description" />
       </header>
 
       <div ref="contentPane" class="min-h-0 flex-1 overflow-y-auto pb-8">
@@ -227,9 +247,9 @@ function selectGroup(group: string): void {
             class="space-y-3"
             :class="index > 0 ? 'border-t border-default pt-5' : undefined"
           >
-            <header v-if="section.label" class="space-y-0.5">
+            <header v-if="section.label" class="flex items-center gap-1">
               <h3 class="text-sm font-semibold text-highlighted">{{ section.label }}</h3>
-              <p v-if="section.description" class="text-xs text-muted">{{ section.description }}</p>
+              <HelpTooltip v-if="section.description" :text="section.description" />
             </header>
 
             <div class="grid gap-3 sm:grid-cols-2">
@@ -237,8 +257,12 @@ function selectGroup(group: string): void {
                 v-for="field in section.fields"
                 :key="field.path"
                 :label="field.ui.label"
-                :description="field.ui.description"
+                :ui="fieldFormUi(field)"
               >
+                <template v-if="field.ui.description" #hint>
+                  <HelpTooltip :text="field.ui.description" />
+                </template>
+
                 <UInputNumber
                   v-if="field.ui.widget === 'integer' || field.ui.widget === 'number'"
                   :model-value="numberValue(field)"
