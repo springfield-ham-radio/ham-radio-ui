@@ -44,6 +44,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "buffer": "^6.0.3",
     "eventemitter3": "^5.0.1",
+    "katex": "^0.18.7",
     "loglayer": "^9.4.0",
     "nuxt": "^4.3.0",
     "sortablejs": "^1.15.7",

@@ -24,6 +24,7 @@ export interface FilterComponent {
 export interface FilterEquation {
   id: string;
   title: string;
+  /** LaTeX source, typeset with KaTeX in the Equations panel. */
   expression: string;
 }
 
@@ -404,19 +405,19 @@ function designRcSection(parameters: FilterParameters): FilterDesign {
       {
         id: 'fc',
         title: 'Cutoff',
-        expression: 'f_c = 1 / (2π R C)',
+        expression: 'f_c = \\dfrac{1}{2\\pi R C}',
       },
       {
         id: 'H',
         title: 'Transfer function',
-        expression: isLowPass ? 'H(s) = 1 / (1 + s R C)' : 'H(s) = s R C / (1 + s R C)',
+        expression: isLowPass ? 'H(s) = \\dfrac{1}{1 + sRC}' : 'H(s) = \\dfrac{sRC}{1 + sRC}',
       },
       {
         id: 'mag',
         title: 'Magnitude',
         expression: isLowPass
-          ? '|H(jω)| = 1 / √(1 + (ω/ω_c)²)'
-          : '|H(jω)| = (ω/ω_c) / √(1 + (ω/ω_c)²)',
+          ? '|H(j\\omega)| = \\dfrac{1}{\\sqrt{1 + (\\omega/\\omega_c)^{2}}}'
+          : '|H(j\\omega)| = \\dfrac{\\omega/\\omega_c}{\\sqrt{1 + (\\omega/\\omega_c)^{2}}}',
       },
     ],
     summary: isLowPass
@@ -459,18 +460,22 @@ function designLcSection(parameters: FilterParameters): FilterDesign {
         id: 'butterworth',
         title: 'Butterworth S21',
         expression: isLowPass
-          ? 'S₂₁(s) = 1 / ((s/ω_c)² + √2 s/ω_c + 1)'
-          : 'S₂₁(s) = (s/ω_c)² / ((s/ω_c)² + √2 s/ω_c + 1)',
+          ? 'S_{21}(s) = \\dfrac{1}{(s/\\omega_c)^{2} + \\sqrt{2}\\, s/\\omega_c + 1}'
+          : 'S_{21}(s) = \\dfrac{(s/\\omega_c)^{2}}{(s/\\omega_c)^{2} + \\sqrt{2}\\, s/\\omega_c + 1}',
       },
       {
         id: 'L',
         title: 'Series element',
-        expression: isLowPass ? 'L = √2 Z₀ / ω_c' : 'C = 1 / (√2 Z₀ ω_c)',
+        expression: isLowPass
+          ? 'L = \\dfrac{\\sqrt{2}\\, Z_{0}}{\\omega_c}'
+          : 'C = \\dfrac{1}{\\sqrt{2}\\, Z_{0}\\,\\omega_c}',
       },
       {
         id: 'C',
         title: 'Shunt element',
-        expression: isLowPass ? 'C = √2 / (Z₀ ω_c)' : 'L = √2 Z₀ / ω_c',
+        expression: isLowPass
+          ? 'C = \\dfrac{\\sqrt{2}}{Z_{0}\\,\\omega_c}'
+          : 'L = \\dfrac{\\sqrt{2}\\, Z_{0}}{\\omega_c}',
       },
     ],
     summary: isLowPass
@@ -505,17 +510,17 @@ function designBandPass(parameters: FilterParameters): FilterDesign {
       {
         id: 'f0',
         title: 'Center',
-        expression: 'f₀ = 1 / (2π √(L C))',
+        expression: 'f_{0} = \\dfrac{1}{2\\pi\\sqrt{LC}}',
       },
       {
         id: 'Q',
         title: 'Loaded Q',
-        expression: 'Q = f₀ / BW = ω₀ L / R',
+        expression: 'Q = \\dfrac{f_{0}}{\\mathrm{BW}} = \\dfrac{\\omega_{0} L}{R}',
       },
       {
         id: 'H',
         title: 'Transfer function',
-        expression: 'H(s) = (s ω₀ / Q) / (s² + s ω₀ / Q + ω₀²)',
+        expression: 'H(s) = \\dfrac{s\\omega_{0}/Q}{s^{2} + s\\omega_{0}/Q + \\omega_{0}^{2}}',
       },
     ],
     summary:

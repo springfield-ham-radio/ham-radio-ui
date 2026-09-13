@@ -355,8 +355,8 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
       />
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div class="flex flex-col gap-4">
+    <div class="grid min-w-0 gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
+      <div class="flex min-w-0 flex-col gap-4">
         <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
           <h3 class="mb-3 text-sm font-semibold text-highlighted">Design</h3>
           <div class="flex flex-col gap-3">
@@ -424,12 +424,14 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
           </p>
         </section>
 
-        <section class="rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
+        <section class="min-w-0 rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
           <h3 class="mb-3 text-sm font-semibold text-highlighted">Equations</h3>
-          <dl class="flex flex-col gap-2">
-            <div v-for="equation in design.equations" :key="equation.id">
+          <dl class="flex min-w-0 flex-col gap-3">
+            <div v-for="equation in design.equations" :key="equation.id" class="min-w-0">
               <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">{{ equation.title }}</dt>
-              <dd class="overflow-x-auto font-mono text-sm whitespace-nowrap text-highlighted">{{ equation.expression }}</dd>
+              <dd class="min-w-0">
+                <WaveBenchEquation :expression="equation.expression" />
+              </dd>
             </div>
           </dl>
         </section>

@@ -2,6 +2,8 @@
 
 WaveBench is a theory bench inside HamBench. The first experiment is **lumped filter design**: change a cutoff, watch the schematic, equations, Bode plots, and time-domain waveforms update together.
 
+Equations in the sidebar are typeset with [KaTeX](https://katex.org), so transfer functions render as stacked fractions instead of a clipped one-line string.
+
 ## Open the page
 
 Use the **WaveBench** tab in the header, after Log.
