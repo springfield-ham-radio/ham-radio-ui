@@ -31,26 +31,26 @@
     "release": "semantic-release"
   },
   "dependencies": {
-    "@nuxt/ui": "3",
-    "@springfield/ham-radio-api": "^17.9.0",
-    "@springfield/ham-radio-driver": "^3.3.2",
-    "@springfield/ham-radio-registry": "^1.6.1",
-    "@springfield/ham-radio-utils": "^4.12.0",
+    "@nuxt/ui": "4.11.1",
+    "@springfield/ham-radio-api": "^17.9.1",
+    "@springfield/ham-radio-driver": "^3.3.3",
+    "@springfield/ham-radio-registry": "^1.6.2",
+    "@springfield/ham-radio-utils": "^4.12.1",
     "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2.7.0",
-    "@tauri-apps/plugin-opener": "^2.5.4",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-opener": "^2.5.5",
     "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-sql": "^2.4.0",
-    "@tauri-apps/plugin-updater": "^2.10.1",
+    "@tauri-apps/plugin-sql": "^2.4.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "buffer": "^6.0.3",
-    "eventemitter3": "^5.0.1",
+    "eventemitter3": "^5.0.4",
     "katex": "^0.18.7",
     "loglayer": "^9.4.0",
-    "nuxt": "^4.3.0",
+    "nuxt": "^4.5.2",
     "sortablejs": "^1.15.7",
     "tauri-plugin-serialplugin": "^2.17.1",
-    "vue": "^3.5.27",
-    "vue-router": "^4.6.4"
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@semantic-release/changelog": "7.0.0",
@@ -69,7 +69,7 @@
     "semantic-release": "25.0.9",
     "tailwindcss": "^4.1.18",
     "tsx": "4.23.13",
-    "typescript": "~5.9.3"
+    "typescript": "7.0.2"
   },
   "resolutions": {
     "conventional-changelog-conventionalcommits": "9.3.1"

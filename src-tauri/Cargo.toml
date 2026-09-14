@@ -22,11 +22,11 @@ tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-serialplugin = "2.21.1"
 tauri-plugin-mcp-bridge = "0.8.0"
-tauri-plugin-dialog = "2.7.0"
-tauri-plugin-opener = "2.5.4"
-tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
+tauri-plugin-dialog = "2.7.3"
+tauri-plugin-opener = "2.5.5"
+tauri-plugin-sql = { version = "2.4.1", features = ["sqlite"] }
 tauri-plugin-process = "2.3.1"
-tauri-plugin-updater = "2.10.1"
+tauri-plugin-updater = "2.11.0"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
