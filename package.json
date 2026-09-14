@@ -31,7 +31,7 @@
     "release": "semantic-release"
   },
   "dependencies": {
-    "@nuxt/ui": "3",
+    "@nuxt/ui": "4",
     "@springfield/ham-radio-api": "^17.9.0",
     "@springfield/ham-radio-driver": "^3.3.2",
     "@springfield/ham-radio-registry": "^1.6.1",
