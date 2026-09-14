@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { APP_NAME } from '~/utils/app-name';
+import { APP_VERSION } from '~/utils/app-version';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
@@ -124,6 +125,14 @@ defineShortcuts({
       <h1 class="truncate px-1 text-sm font-semibold text-highlighted">
         {{ isPreferences ? 'Preferences' : APP_NAME }}
       </h1>
+      <UBadge
+        v-if="!isPreferences"
+        :label="`v${APP_VERSION}`"
+        color="neutral"
+        variant="subtle"
+        size="xs"
+        class="shrink-0"
+      />
       <UTooltip v-if="isRadioPage && currentFileName" :text="memoryFilePath">
         <UBadge
           :label="currentFileName"
