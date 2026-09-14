@@ -1,3 +1,14 @@
+## [0.31.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.30.0...v0.31.0) (2026-09-14)
+
+### Features
+
+* add stations and owned antennas for Propagation ([d39dd3f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d39dd3f0a3c4ec28dd2072765e00728a035c6b46))
+* nest antennas under each station in Preferences ([429b7ac](https://github.com/springfield-ham-radio/ham-radio-ui/commit/429b7ac3be8dbcaf923e4fc330a2a89d5ae40ce8))
+
+### Bug Fixes
+
+* update @springfield/ham-radio-api to ^17.9.0 and @springfield/ham-radio-utils to ^4.12.0 ([8ed31d1](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8ed31d191395124dd630c7e5767ff4aa29013e73))
+
 ## [0.30.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.29.0...v0.30.0) (2026-09-14)
 
 ### Features
