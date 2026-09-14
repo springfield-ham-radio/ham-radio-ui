@@ -1,3 +1,9 @@
+## [0.31.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.1...v0.31.2) (2026-09-14)
+
+### Bug Fixes
+
+* update Springfield packages, Nuxt UI 4, and nested dependency patches ([5b7f1aa](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5b7f1aa9facd5b703efa565b2f39310f9c5e66d1))
+
 ## [0.31.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.0...v0.31.1) (2026-09-14)
 
 ### Bug Fixes
