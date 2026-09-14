@@ -310,7 +310,6 @@
 
         <section v-else-if="currentSection === 'stations'" class="flex flex-col gap-4">
           <RadioStationPreference />
-          <AntennaStationPreference />
         </section>
 
         <section v-else-if="currentSection === 'serial'" class="flex flex-col gap-4">

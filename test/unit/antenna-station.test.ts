@@ -21,6 +21,7 @@ import {
   parseStationAntennaStore,
   removeAntennaFromStore,
   removeStationFromStore,
+  replaceAntennaInStore,
   resolveAntennaView,
   resolveStationLocation,
   selectAntennaInStore,
@@ -295,6 +296,22 @@ describe('station antennas', () => {
     expect(updated.createdAt).to.equal(5);
     expect(updated.updatedAt).to.equal(9);
     expect(updated.heightAglM).to.equal(18);
+  });
+
+  it('should move a selected antenna to another station on update', () => {
+    const cabin = createRadioStation({ nickname: 'Cabin' }, { id: 'station-cabin', now: 2 });
+    const antenna = createStationAntenna(sampleDraft(), { id: 'ant-1', now: 1 });
+    let store = addAntennaToStore(defaultStationAntennaStore(), antenna);
+    store = addStationToStore(store, cabin);
+    store = selectAntennaInStore(store, 'ant-1');
+
+    const updated = updateStationAntenna(antenna, { ...sampleDraft(), stationId: 'station-cabin' }, 9);
+    store = replaceAntennaInStore(store, updated);
+
+    expect(updated.stationId).to.equal('station-cabin');
+    expect(store.antennas[0]?.stationId).to.equal('station-cabin');
+    expect(store.selectedStationId).to.equal('station-cabin');
+    expect(store.selectedId).to.equal('ant-1');
   });
 
   it('should resolve a station view from the selected antenna and a what-if from the scratch draft', () => {

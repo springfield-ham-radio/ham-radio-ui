@@ -23,6 +23,7 @@ import {
 const props = defineProps<{
   open: boolean;
   antenna?: StationAntenna;
+  stationId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -30,7 +31,10 @@ const emit = defineEmits<{
   save: [draft: AntennaDraft];
 }>();
 
+const { stations } = useStationAntennas();
+
 const nickname = ref('');
+const assignedStationId = ref('');
 const typeId = ref<AntennaTypeId>('dipole');
 const heightText = ref('10');
 const headingText = ref('45');
@@ -41,6 +45,12 @@ const headingError = ref<string | undefined>();
 
 const typeItems = antennaTypeSelectItems();
 const bandItems = antennaBandSelectItems();
+const stationItems = computed(() =>
+  stations.value.map((station) => ({
+    label: station.nickname,
+    value: station.id,
+  })),
+);
 const isCreate = computed(() => props.antenna === undefined);
 const selectedType = computed(() => antennaTypeById(typeId.value));
 const usesHeading = computed(() => {
@@ -55,18 +65,20 @@ const trapCaption = computed(() =>
 const title = computed(() => (isCreate.value ? 'Add antenna' : 'Edit antenna'));
 const description = computed(() =>
   isCreate.value
-    ? 'Generic type plus height and heading. Commercial catalogs can come later.'
+    ? 'Assigned to a station, with a generic type plus height and heading. Commercial catalogs can come later.'
     : props.antenna?.nickname || selectedType.value?.label || 'Station antenna',
 );
 
 watch(
-  () => [props.open, props.antenna?.id] as const,
+  () => [props.open, props.antenna?.id, props.stationId] as const,
   () => {
     if (!props.open) {
       return;
     }
 
-    const draft = props.antenna ? draftFromStationAntenna(props.antenna) : defaultAntennaDraft();
+    const draft = props.antenna
+      ? draftFromStationAntenna(props.antenna)
+      : { ...defaultAntennaDraft(), stationId: props.stationId };
     applyDraft(draft);
   },
   { immediate: true },
@@ -80,6 +92,7 @@ watch(bands, (next) => {
 
 function applyDraft(draft: AntennaDraft): void {
   nickname.value = draft.nickname;
+  assignedStationId.value = draft.stationId ?? props.stationId ?? stations.value[0]?.id ?? '';
   typeId.value = draft.typeId;
   heightText.value = formatNumber(draft.heightAglM);
   headingText.value = draft.headingDeg === undefined ? '' : String(Math.round(draft.headingDeg));
@@ -108,6 +121,7 @@ function formatNumber(value: number): string {
 function currentDraft(): AntennaDraft {
   return {
     nickname: nickname.value,
+    stationId: assignedStationId.value || undefined,
     typeId: typeId.value,
     heightAglM: Number(heightText.value),
     headingDeg: usesHeading.value ? Number(headingText.value) : undefined,
@@ -154,6 +168,19 @@ function save(): void {
   >
     <template #body>
       <div class="space-y-4">
+        <UFormField
+          label="Station"
+          required
+          description="The site where this antenna is installed. Change it to move the antenna."
+        >
+          <USelect
+            v-model="assignedStationId"
+            :items="stationItems"
+            value-key="value"
+            class="w-full"
+          />
+        </UFormField>
+
         <UFormField label="Nickname" hint="Optional">
           <UInput v-model="nickname" class="w-full" placeholder="Backyard Yagi" />
         </UFormField>

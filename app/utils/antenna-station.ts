@@ -294,7 +294,7 @@ export function createStationAntenna(
 }
 
 /**
- * Applies a draft to an existing antenna, preserving id and createdAt.
+ * Applies a draft to an existing antenna, preserving id and createdAt. Station can change.
  */
 export function updateStationAntenna(
   antenna: StationAntenna,
@@ -305,6 +305,7 @@ export function updateStationAntenna(
 
   return {
     ...antenna,
+    stationId: normalized.stationId ?? antenna.stationId,
     nickname: normalized.nickname,
     typeId: normalized.typeId,
     heightAglM: normalized.heightAglM,
@@ -360,12 +361,19 @@ export function addAntennaToStore(store: StationAntennaStore, antenna: StationAn
 }
 
 /**
- * Replaces one antenna in the store.
+ * Replaces one antenna in the store. Moving the selected antenna also selects its station.
  */
 export function replaceAntennaInStore(store: StationAntennaStore, antenna: StationAntenna): StationAntennaStore {
+  const stationId = resolveAntennaStationId(store, antenna.stationId);
+  const next = {
+    ...antenna,
+    stationId,
+  };
+
   return {
     ...store,
-    antennas: store.antennas.map((entry) => (entry.id === antenna.id ? antenna : entry)),
+    antennas: store.antennas.map((entry) => (entry.id === antenna.id ? next : entry)),
+    selectedStationId: store.selectedId === antenna.id ? stationId : store.selectedStationId,
   };
 }
 

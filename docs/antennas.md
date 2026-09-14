@@ -10,7 +10,7 @@ This is not a commercial catalog and not a globe forecast. Types are dipole, inv
 
 ### Stations
 
-A station is a site (Home, Cabin, Portable), not a log `STATION_CALLSIGN`. **Add** / **Edit** opens a slideover:
+A station is a site (Home, Cabin, Portable), not a log `STATION_CALLSIGN`. Each station lists the antennas installed there. **Add station** / **Edit** opens a slideover:
 
 - **Nickname** — required
 - **Maidenhead grid** — optional 2-, 4-, or 6-character locator. Editing the grid sets latitude and longitude to the **cell center**
@@ -22,8 +22,9 @@ You cannot delete the last station. Removing a station also removes the antennas
 
 ### Antennas
 
-The list under the station picker is only the antennas at the **selected** site. **Add** opens a slideover:
+Antennas sit under the station they belong to. **Add antenna** on a site opens a slideover already assigned to that site. **Station** in the editor can move it.
 
+- **Station** — the site where it is installed
 - **Nickname** — optional; empty uses the type label
 - **Type** — one of the built-in families
 - **Height AGL** — meters, 0.5–120

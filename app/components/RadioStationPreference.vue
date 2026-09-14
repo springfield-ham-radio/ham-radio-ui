@@ -3,12 +3,10 @@ import { formatStationLocation, type RadioStation } from '~/utils/antenna-statio
 
 const {
   stations,
-  selectedStationId,
   canRemoveStation,
   addStation,
   saveStation,
   removeStation,
-  selectStation,
 } = useStationAntennas();
 
 const editorOpen = ref(false);
@@ -67,14 +65,14 @@ function confirmRemove(): void {
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Stations</p>
           <p class="text-xs text-muted">
-            Sites you operate from. Grid and coordinates are editable; a license grid only fills Home when it is empty.
+            Sites you operate from, with the antennas installed at each one. Grid and coordinates are editable; a license grid only fills Home when it is empty.
           </p>
         </div>
         <UButton
           icon="i-lucide-plus"
           color="primary"
           size="xs"
-          label="Add"
+          label="Add station"
           @click="openCreate"
         />
       </div>
@@ -83,24 +81,16 @@ function confirmRemove(): void {
         <li
           v-for="station in stations"
           :key="station.id"
+          class="flex flex-col gap-2 px-3 py-2.5"
         >
-          <div
-            class="flex items-center gap-3 px-3 py-2.5"
-            :class="station.id === selectedStationId ? 'bg-default' : undefined"
-          >
-            <button
-              type="button"
-              class="flex min-w-0 flex-1 items-center gap-3 text-left"
-              @click="selectStation(station.id)"
-            >
-              <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
-                <UIcon name="i-lucide-map-pin" class="size-4 text-highlighted" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-highlighted">{{ station.nickname }}</p>
-                <p class="truncate text-xs text-muted">{{ formatStationLocation(station) }}</p>
-              </div>
-            </button>
+          <div class="flex items-center gap-3">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
+              <UIcon name="i-lucide-map-pin" class="size-4 text-highlighted" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-highlighted">{{ station.nickname }}</p>
+              <p class="truncate text-xs text-muted">{{ formatStationLocation(station) }}</p>
+            </div>
             <div class="flex shrink-0 items-center gap-1">
               <UButton
                 color="neutral"
@@ -121,6 +111,7 @@ function confirmRemove(): void {
               />
             </div>
           </div>
+          <AntennaStationPreference :station-id="station.id" />
         </li>
       </ul>
     </div>
