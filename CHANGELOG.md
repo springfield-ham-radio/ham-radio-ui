@@ -1,3 +1,9 @@
+## [0.29.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.28.0...v0.29.0) (2026-09-14)
+
+### Features
+
+* add Propagation dashboard with NOAA solar indices ([ef96969](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ef9696908350594f30854f4b7a7c59c05cb02985))
+
 ## [0.28.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.27.0...v0.28.0) (2026-09-13)
 
 ### Features
