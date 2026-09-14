@@ -3274,16 +3274,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-api@npm:^17.8.0":
-  version: 17.8.0
-  resolution: "@springfield/ham-radio-api@npm:17.8.0"
-  dependencies:
-    loglayer: "npm:^8.5.0"
-    ts-brand: "npm:^0.2.0"
-  checksum: 10c0/6cbb26c3d42577f256f7037e71148bcb3dd02633feca110fd92866e72d41003319e93114e07502bf7db3efa0a0e4a55616ba81ae4fa2c425ed80c0fbf4c03301
-  languageName: node
-  linkType: hard
-
 "@springfield/ham-radio-api@npm:^17.9.0":
   version: 17.9.0
   resolution: "@springfield/ham-radio-api@npm:17.9.0"
@@ -3294,27 +3284,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver@npm:^3.3.1":
-  version: 3.3.1
-  resolution: "@springfield/ham-radio-driver@npm:3.3.1"
+"@springfield/ham-radio-driver@npm:^3.3.2":
+  version: 3.3.2
+  resolution: "@springfield/ham-radio-driver@npm:3.3.2"
   dependencies:
     "@serialport/parser-byte-length": "npm:^13.0.0"
-    "@springfield/ham-radio-api": "npm:^17.8.0"
-    "@springfield/ham-radio-utils": "npm:^4.11.0"
+    "@springfield/ham-radio-api": "npm:^17.9.0"
+    "@springfield/ham-radio-utils": "npm:^4.12.0"
     loglayer: "npm:^9.4.0"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/b535ae1d03df15b3dcc2f4ffe2d72fcdec09f378bf1c12df39a789750fea344cd6240029a739b20d3193d2939aa65de56b9b037b8e930c2e9daf09d7e1fe4691
+  checksum: 10c0/83e94fc2424bc8d7f9020934f6183d142befc579703a35f0887865fe3b6315d58e4d74b39ed04ec7728842c50c5e8edacce67b2ddd50029302f62abb4dc85344
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-registry@npm:^1.6.0":
-  version: 1.6.0
-  resolution: "@springfield/ham-radio-registry@npm:1.6.0"
+"@springfield/ham-radio-registry@npm:^1.6.1":
+  version: 1.6.1
+  resolution: "@springfield/ham-radio-registry@npm:1.6.1"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^17.8.0"
-    "@springfield/ham-radio-utils": "npm:^4.11.0"
+    "@springfield/ham-radio-api": "npm:^17.9.0"
+    "@springfield/ham-radio-utils": "npm:^4.12.0"
     loglayer: "npm:^9.4.0"
-  checksum: 10c0/124329a72a3d1c6a36f01316f372814b47b3e67e92fdc563be72f204d2036922c121bc891967e998d09245d0fd0f34aab3c5aed2f8876bee61f087a4b04727c6
+  checksum: 10c0/4c72085fb913a7c36a209cd7750fac1022a97a2fdd3ce65bc7b3d80fa65edc173e2d2be6eaa1fd139671d62bd9b3a0d1148c3b8c8c42d422acdc0361ee357912
   languageName: node
   linkType: hard
 
@@ -3329,8 +3319,8 @@ __metadata:
     "@semantic-release/github": "npm:12.0.2"
     "@semantic-release/npm": "npm:13.1.5"
     "@springfield/ham-radio-api": "npm:^17.9.0"
-    "@springfield/ham-radio-driver": "npm:^3.3.1"
-    "@springfield/ham-radio-registry": "npm:^1.6.0"
+    "@springfield/ham-radio-driver": "npm:^3.3.2"
+    "@springfield/ham-radio-registry": "npm:^1.6.1"
     "@springfield/ham-radio-utils": "npm:^4.12.0"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
     "@tauri-apps/api": "npm:^2.10.1"
@@ -3361,20 +3351,6 @@ __metadata:
     vue-router: "npm:^4.6.4"
   languageName: unknown
   linkType: soft
-
-"@springfield/ham-radio-utils@npm:^4.11.0":
-  version: 4.11.0
-  resolution: "@springfield/ham-radio-utils@npm:4.11.0"
-  dependencies:
-    "@springfield/ham-radio-api": "npm:^17.8.0"
-    ajv: "npm:^8.20.0"
-    ajv-formats: "npm:^3.0.1"
-    fishery: "npm:^2.4.0"
-    loglayer: "npm:^9.4.0"
-    sprintf-js: "npm:^1.1.3"
-  checksum: 10c0/0e30d0a57f96de4b84a9886ae51616548413d0a1b4c8a40a30b5312131f7936dcadba24a7327c50a35f2ca2711a84fcea3b911120eb9e947d054c81971288fe9
-  languageName: node
-  linkType: hard
 
 "@springfield/ham-radio-utils@npm:^4.12.0":
   version: 4.12.0
