@@ -37,6 +37,10 @@ const modulesDialogOpen = computed({
       return false;
     }
 
+    if (route.path.startsWith('/propagation')) {
+      return false;
+    }
+
     if (route.path.startsWith('/cat') && modulesInstallRequired.value) {
       return false;
     }

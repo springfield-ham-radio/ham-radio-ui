@@ -100,8 +100,16 @@ export default defineNuxtConfig({
     },
     server: {
       strictPort: true,
+      proxy: {
+        '/api/noaa': {
+          target: 'https://services.swpc.noaa.gov',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api\/noaa/, ''),
+        },
+      },
     },
   },
+
 
   ignore: ['**/src-tauri/**'],
 });

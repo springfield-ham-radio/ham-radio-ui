@@ -20,6 +20,7 @@ const sectionItems = computed<TabsItem[]>(() => [
   { label: 'CAT', icon: 'i-lucide-cable', value: 'cat' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
   { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
+  { label: 'Propagation', icon: 'i-lucide-sun', value: 'propagation' },
   { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
 ]);
 
@@ -31,6 +32,10 @@ const activeSection = computed({
 
     if (route.path.startsWith('/log')) {
       return 'log';
+    }
+
+    if (route.path.startsWith('/propagation')) {
+      return 'propagation';
     }
 
     if (route.path.startsWith('/wavebench')) {
@@ -51,6 +56,11 @@ const activeSection = computed({
 
     if (value === 'log') {
       void router.push('/log');
+      return;
+    }
+
+    if (value === 'propagation') {
+      void router.push('/propagation');
       return;
     }
 
