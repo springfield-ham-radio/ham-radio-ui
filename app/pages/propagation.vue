@@ -60,6 +60,8 @@ onMounted(() => {
       :description="error"
     />
 
+    <PropagationAntennaPanel />
+
     <PropagationSolarPanel :conditions="conditions" :loading="loading" />
 
     <PropagationBandChart :solar-flux="conditions?.solarFlux" :k-index="conditions?.kIndex" />

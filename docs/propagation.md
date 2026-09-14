@@ -4,8 +4,9 @@ Propagation is a live HF conditions dashboard inside HamBench. It has two sectio
 
 - **Solar activity** — current NOAA space-weather indices (10.7 cm solar flux, sunspot number, planetary A and K, GOES X-ray class), a 30-day SFI/SSN trend, and the WWV geomagnetic summary.
 - **Band openings** — a day/night table and a 24-hour heatmap estimating which HF bands (plus 6 m) are more likely open from those indices and local time.
+- **Antenna** — pick a station (grid and DMS coordinates when set), then an owned antenna from Preferences, or a scratch what-if. Gain, beam, and takeoff are catalog estimates, not a globe overlay. Station antennas may be tagged 2 m / 70 cm; those bands are not on the WWV openings chart.
 
-This is a WWV-style rule-of-thumb chart, **not** a VOACAP path forecast and **not** a live spot map.
+This is a WWV-style rule-of-thumb chart, **not** a VOACAP path forecast and **not** a live spot map. See [Antennas](./antennas.md) for stations, owned antennas, and what-if.
 
 ## Open the page
 
@@ -41,4 +42,4 @@ The band chart always uses the current live WWV SFI and K. The SFI/SSN sparkline
 
 ## What this model leaves out
 
-Point-to-point MUF, absorbption maps, live PSK Reporter / RBN spots, tropo, and sporadic-E. Those can be later surfaces; this page’s job is the WWV dashboard.
+Point-to-point MUF, absorbption maps, live PSK Reporter / RBN spots, tropo, and sporadic-E. Those can be later surfaces; this page’s job is the WWV dashboard. The antenna card does not yet draw skip rings on a globe.

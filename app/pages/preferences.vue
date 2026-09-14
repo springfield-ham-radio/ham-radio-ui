@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div
           class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
-          :class="currentSection === 'radios' ? 'max-w-2xl' : 'max-w-xl'"
+          :class="currentSection === 'radios' || currentSection === 'stations' ? 'max-w-2xl' : 'max-w-xl'"
         >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
@@ -308,6 +308,11 @@
           <RadioModulesPreference />
         </section>
 
+        <section v-else-if="currentSection === 'stations'" class="flex flex-col gap-4">
+          <RadioStationPreference />
+          <AntennaStationPreference />
+        </section>
+
         <section v-else-if="currentSection === 'serial'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex items-center justify-between gap-4 px-4 py-3">
@@ -511,7 +516,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'serial' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'stations' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -537,6 +542,12 @@ const sections = [
     label: 'Radios',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
+  },
+  {
+    id: 'stations' as const,
+    label: 'Stations',
+    icon: 'i-lucide-map-pin',
+    tileClass: 'bg-teal-500',
   },
   {
     id: 'serial' as const,
@@ -1006,6 +1017,10 @@ async function onToggleRemoteSniffer(enabled: boolean): Promise<void> {
 const currentSection = computed<PreferenceSection>(() => {
   const value = route.query.section;
   const section = Array.isArray(value) ? value[0] : value;
+
+  if (section === 'stations' || section === 'antennas') {
+    return 'stations';
+  }
 
   if (
     section === 'licenses' ||

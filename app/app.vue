@@ -41,6 +41,10 @@ const modulesDialogOpen = computed({
       return false;
     }
 
+    if (route.path.startsWith('/preferences')) {
+      return false;
+    }
+
     if (route.path.startsWith('/cat') && modulesInstallRequired.value) {
       return false;
     }
