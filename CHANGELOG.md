@@ -1,3 +1,9 @@
+## [0.30.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.29.0...v0.30.0) (2026-09-14)
+
+### Features
+
+* show the app version as a badge next to the brand ([d193209](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d19320996981b28ccac03ceb23172ee5854ff585))
+
 ## [0.29.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.28.0...v0.29.0) (2026-09-14)
 
 ### Features
