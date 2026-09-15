@@ -1,3 +1,9 @@
+## [0.31.9](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.8...v0.31.9) (2026-09-15)
+
+### Bug Fixes
+
+* bump sha2 from 0.10 to 0.11 ([b3eacd5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b3eacd5cf9a17c323ac8ce264f97c61e0595e072))
+
 ## [0.31.8](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.7...v0.31.8) (2026-09-15)
 
 ### Bug Fixes
