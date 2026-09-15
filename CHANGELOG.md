@@ -1,3 +1,9 @@
+## [0.31.6](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.5...v0.31.6) (2026-09-15)
+
+### Bug Fixes
+
+* bump zip crate from 2 to 4.6.1 ([1b65279](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1b6527959f6eb9467cf2daab8834b5c16b6a4866))
+
 ## [0.31.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.4...v0.31.5) (2026-09-15)
 
 ### Bug Fixes
