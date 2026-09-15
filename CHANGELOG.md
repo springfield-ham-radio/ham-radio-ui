@@ -1,3 +1,9 @@
+## [0.31.8](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.7...v0.31.8) (2026-09-15)
+
+### Bug Fixes
+
+* update [@springfield](https://github.com/springfield) packages to API 17.10.0, utils 4.12.4, driver 3.4.1, and registry 1.6.5 ([7b8cf23](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7b8cf23f82d764b5444bed4947cc4ca66a6661a6))
+
 ## [0.31.7](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.6...v0.31.7) (2026-09-15)
 
 ### Bug Fixes
