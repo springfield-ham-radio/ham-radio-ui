@@ -1,3 +1,9 @@
+## [0.31.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.4...v0.31.5) (2026-09-15)
+
+### Bug Fixes
+
+* migrate tauri-plugin-serialplugin to 3.0.7 ([a12f587](https://github.com/springfield-ham-radio/ham-radio-ui/commit/a12f587103ad2c05fe16995de509391041ac6bc6))
+
 ## [0.31.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.3...v0.31.4) (2026-09-14)
 
 ### Bug Fixes
