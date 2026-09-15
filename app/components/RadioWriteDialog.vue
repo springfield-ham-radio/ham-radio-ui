@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SerialPort } from 'tauri-plugin-serialplugin';
+import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import {
   programmingBaudRateSelectItems,
   readRememberedBaudRate,

@@ -3297,7 +3297,7 @@ __metadata:
     semantic-release: "npm:25.0.9"
     sortablejs: "npm:^1.15.7"
     tailwindcss: "npm:^4.1.18"
-    tauri-plugin-serialplugin: "npm:^2.17.1"
+    tauri-plugin-serialplugin-api: "npm:3.0.7"
     tsx: "npm:4.23.13"
     typescript: "npm:7.0.2"
     vue: "npm:^3.5.42"
@@ -12458,12 +12458,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tauri-plugin-serialplugin@npm:^2.17.1":
-  version: 2.17.1
-  resolution: "tauri-plugin-serialplugin@npm:2.17.1"
+"tauri-plugin-serialplugin-api@npm:3.0.7":
+  version: 3.0.7
+  resolution: "tauri-plugin-serialplugin-api@npm:3.0.7"
   dependencies:
     "@tauri-apps/api": "npm:>=2.0.0-beta.6"
-  checksum: 10c0/d14d34a7c9ef4eb52a35e71effe9363be66899705b71a56c4ceb4ee53b7d75d1e0c214ccff22fa6b0cdc7db865ae183d6b7451923baea6cb36d351cfa40448aa
+  checksum: 10c0/288fad22f4d897cee79674bf8d01edae4be1142674e70e6df4ecaa035dc8c871fc4c1c07b2c9a865734993b4f5acbb9f2476d049da866b373d6e48c451f67baf
   languageName: node
   linkType: hard
 

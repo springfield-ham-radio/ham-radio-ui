@@ -1,5 +1,5 @@
 import type { RadioId } from '@springfield/ham-radio-api';
-import { SerialPort } from 'tauri-plugin-serialplugin';
+import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import {
   programmingBaudRateSelectItems,
   readRememberedBaudRate,

@@ -1,4 +1,4 @@
-import { DataBits, FlowControl, Parity, SerialPort, StopBits } from 'tauri-plugin-serialplugin';
+import { DataBits, FlowControl, Parity, SerialPort, StopBits } from 'tauri-plugin-serialplugin-api';
 
 let heldPort: SerialPort | undefined;
 

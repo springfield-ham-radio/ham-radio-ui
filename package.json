@@ -48,7 +48,7 @@
     "loglayer": "^9.4.0",
     "nuxt": "^4.5.2",
     "sortablejs": "^1.15.7",
-    "tauri-plugin-serialplugin": "^2.17.1",
+    "tauri-plugin-serialplugin-api": "3.0.7",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"
   },
