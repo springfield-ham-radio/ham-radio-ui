@@ -1,3 +1,9 @@
+## [0.31.7](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.6...v0.31.7) (2026-09-15)
+
+### Bug Fixes
+
+* bump tauri-plugin-mcp-bridge from 0.8 to 0.13.0 ([7554631](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7554631d269af55df8b26eb56d20c45abef665ea))
+
 ## [0.31.6](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.5...v0.31.6) (2026-09-15)
 
 ### Bug Fixes
