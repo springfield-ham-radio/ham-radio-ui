@@ -10,7 +10,7 @@ Installers for macOS (Apple Silicon), Windows, and Linux are on [GitHub Releases
 
 ## Development
 
-Node.js 24 (see `.nvmrc`) and Yarn 4 via Corepack. Rust and [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) are required.
+Node.js 26 (see `.nvmrc`) and Yarn 4 via Corepack. Rust and [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) are required.
 
 ```bash
 corepack enable
