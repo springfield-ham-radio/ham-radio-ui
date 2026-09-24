@@ -1,3 +1,9 @@
+## [0.32.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.9...v0.32.0) (2026-09-24)
+
+### Features
+
+* show radio menu number and range in settings tooltips ([a232270](https://github.com/springfield-ham-radio/ham-radio-ui/commit/a23227026ba05d9e9d739330f38add6b9fd3e681))
+
 ## [0.31.9](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.8...v0.31.9) (2026-09-15)
 
 ### Bug Fixes
