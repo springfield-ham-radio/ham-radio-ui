@@ -1,3 +1,9 @@
+## [0.33.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.32.0...v0.33.0) (2026-09-24)
+
+### Features
+
+* organize the channel library into groups ([65225e8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/65225e8a410ed25d13987b5ff63f0a0e07eb4bed))
+
 ## [0.32.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.9...v0.32.0) (2026-09-24)
 
 ### Features
