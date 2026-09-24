@@ -12,7 +12,7 @@ Use **Import CSV** on the Channels page. HamBench accepts:
 
 RepeaterBook and CHIRP rows are stored in the same library and shown with a **Repeater** badge. RepeaterBook `Frequency` is the downlink (radio receive); `Input Freq` is the uplink (radio transmit). Data courtesy of RepeaterBook.com when that export is used.
 
-You can also mark or unmark a row as a repeater in the channel editor.
+You can also mark or unmark a row as a repeater in the channel editor. Repeater rows store **Use** (open or closed) and **On-air**. RepeaterBook `Use` and `Operational Status` fill those fields on import.
 
 ## Add to a radio
 

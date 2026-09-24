@@ -34,7 +34,8 @@ describe('repeater-import', () => {
       expect(analog.transmitFrequency).toBe(Frequency(146_325_000));
       expect(analog.transmitTone).toEqual({ tone: 1035, type: RadioToneType.CTCSS });
       expect(analog.receiveTone).toEqual({ tone: 0, type: RadioToneType.CTCSS });
-      expect(analog.operationalStatus).toBe('On-air');
+      expect(analog.use).toBe('open');
+      expect(analog.onAir).toBe(true);
       expect(analog.modes).toBe('FM');
     });
 
@@ -77,17 +78,63 @@ describe('repeater-import', () => {
       expect(dtcs.receiveTone).toEqual({ tone: 754, type: RadioToneType.DCS });
     });
 
+    it('parses a RepeaterBook search download that uses Output Freq and Call', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",County,State,Modes,Digital Access
+441.600000,446.60000,+,100.0,100.0,KE5RS,"Leander",Williamson,Texas,FM AllStar EchoLink ,
+1293.100000,1273.10000,-,,,W5KA,"Austin - South Austin Med Ctr",Travis,Texas,DSTAR ,
+927.187500,902.18750,-,151.4,151.4,K5TRA,"Austin",Travis,Texas,FM AllStar EchoLink P-25 ,293
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.format).toBe('repeaterbook');
+      expect(parsed.repeaters).toHaveLength(3);
+
+      const leander = parsed.repeaters[0]!;
+      expect(leander.callsign).toBe('KE5RS');
+      expect(leander.city).toBe('Leander');
+      expect(leander.county).toBe('Williamson');
+      expect(leander.state).toBe('Texas');
+      expect(leander.receiveFrequency).toBe(Frequency(441_600_000));
+      expect(leander.transmitFrequency).toBe(Frequency(446_600_000));
+      expect(leander.transmitTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
+      expect(leander.receiveTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
+      expect(leander.modes).toBe('FM AllStar EchoLink');
+
+      const noTone = parsed.repeaters[1]!;
+      expect(noTone.callsign).toBe('W5KA');
+      expect(noTone.transmitTone.tone).toBe(0);
+      expect(noTone.receiveTone.tone).toBe(0);
+      expect(noTone.modes).toBe('DSTAR');
+
+      const access = parsed.repeaters[2]!;
+      expect(access.notes).toBe('Digital access 293');
+    });
+
+    it('reads Use and Op Status from a RepeaterBook search export', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,"Location",Call,Use,Op Status,Mode
+146.940000,146.34000,-,107.2,107.2,"Austin",W5KA,OPEN,On-air,FM
+146.520000,146.520000,,,,"Austin",N5TEST,CLOSED,Off-air,FM
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.repeaters[0]?.use).toBe('open');
+      expect(parsed.repeaters[0]?.onAir).toBe(true);
+      expect(parsed.repeaters[1]?.use).toBe('closed');
+      expect(parsed.repeaters[1]?.onAir).toBe(false);
+    });
+
     it('rejects CSV files that are not RepeaterBook or CHIRP exports', () => {
       expect(() => parseRepeaterImportCsv('name,tx_mhz\nA,146.52\n')).toThrow(/RepeaterBook or CHIRP/);
     });
   });
 
   describe('importedRepeaterToRadioChannel', () => {
-    it('copies callsign, frequencies, and tones into a portable channel', () => {
+    it('keeps a RepeaterBook call sign off the portable channel name', () => {
       const parsed = parseRepeaterImportCsv(repeaterBookCsv);
       const channel = importedRepeaterToRadioChannel(parsed.repeaters[0]!);
 
-      expect(channel.name).toBe('WJ1L');
+      expect(channel.name).toBeUndefined();
+      expect(parsed.repeaters[0]?.callsign).toBe('WJ1L');
       expect(channel.receiveFrequency).toBe(Frequency(146_925_000));
       expect(channel.transmitFrequency).toBe(Frequency(146_325_000));
       expect(channel.transmitTone).toEqual({ tone: 1035, type: RadioToneType.CTCSS });

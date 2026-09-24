@@ -7,7 +7,7 @@ import {
   toneSelectItems,
   toneToKey,
 } from '~/utils/channel-edit';
-import { createBlankRadioChannel, type SavedChannel } from '~/utils/saved-channels-db';
+import { createBlankRadioChannel, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
   open: boolean;
@@ -16,23 +16,40 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
-  save: [payload: { channel: RadioChannel; notes?: string; kind?: SavedChannel['kind']; id?: SavedChannel['id'] }];
+  save: [
+    payload: {
+      channel: RadioChannel;
+      notes?: string;
+      kind?: SavedChannel['kind'];
+      use?: RepeaterUse;
+      onAir?: boolean;
+      callsign?: string;
+      id?: SavedChannel['id'];
+    },
+  ];
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
 
 const name = ref('');
+const callsign = ref('');
 const receiveMHz = ref('');
 const transmitMHz = ref('');
 const receiveToneKey = ref('none');
 const transmitToneKey = ref('none');
 const notes = ref('');
 const isRepeater = ref(false);
+const repeaterUse = shallowRef<RepeaterUse>('open');
+const onAir = shallowRef(true);
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const isSaving = ref(false);
 
 const toneItems = toneSelectItems();
+const useItems = [
+  { label: 'Open', value: 'open' },
+  { label: 'Closed', value: 'closed' },
+];
 const isCreate = computed(() => props.channel === undefined);
 
 const title = computed(() => (isCreate.value ? 'New library channel' : 'Edit library channel'));
@@ -54,12 +71,15 @@ watch(
 
     const source = props.channel ?? createBlankRadioChannel();
     name.value = source.name ?? '';
+    callsign.value = props.channel?.callsign ?? '';
     receiveMHz.value = formatFrequencyMHz(source.receiveFrequency);
     transmitMHz.value = formatFrequencyMHz(source.transmitFrequency);
     receiveToneKey.value = toneToKey(source.receiveTone);
     transmitToneKey.value = toneToKey(source.transmitTone);
     notes.value = props.channel?.notes ?? '';
     isRepeater.value = props.channel?.kind === 'repeater';
+    repeaterUse.value = props.channel?.use ?? 'open';
+    onAir.value = props.channel?.onAir ?? true;
     receiveError.value = undefined;
     transmitError.value = undefined;
     isSaving.value = false;
@@ -98,6 +118,9 @@ async function save(): Promise<void> {
       channel,
       notes: trimmedNotes || undefined,
       kind: isRepeater.value ? 'repeater' : 'channel',
+      use: isRepeater.value ? repeaterUse.value : undefined,
+      onAir: isRepeater.value ? onAir.value : undefined,
+      callsign: isRepeater.value ? callsign.value.trim() || undefined : undefined,
       id: props.channel?.id,
     });
   } finally {
@@ -129,6 +152,10 @@ async function save(): Promise<void> {
           <UInput v-model="name" class="w-full" placeholder="Optional label" />
         </UFormField>
 
+        <UFormField v-if="isRepeater" label="Call sign" description="Repeater call sign. Not written to the radio name.">
+          <UInput v-model="callsign" class="w-full uppercase" placeholder="W5KA" />
+        </UFormField>
+
         <div class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Receive (MHz)" :error="receiveError">
             <UInput v-model="receiveMHz" inputmode="decimal" class="w-full tabular-nums" />
@@ -154,6 +181,14 @@ async function save(): Promise<void> {
         </UFormField>
 
         <USwitch v-model="isRepeater" label="Repeater" description="Imported RepeaterBook and CHIRP rows are marked this way." />
+
+        <template v-if="isRepeater">
+          <UFormField label="Use" description="Open repeaters welcome any licensed operator. Closed repeaters are for members.">
+            <USelect v-model="repeaterUse" :items="useItems" value-key="value" class="w-full" />
+          </UFormField>
+
+          <USwitch v-model="onAir" label="On-air" description="Turn this off when the repeater is off the air." />
+        </template>
       </div>
     </template>
 

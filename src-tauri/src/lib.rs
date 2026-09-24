@@ -121,6 +121,30 @@ fn load_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn fetch_repeaterbook_search(url: String) -> Result<String, String> {
+    let parsed = url::Url::parse(&url).map_err(|error| error.to_string())?;
+
+    if parsed.scheme() != "https" || parsed.host_str() != Some("www.repeaterbook.com") {
+        return Err("RepeaterBook lookup URL is not allowed".into());
+    }
+
+    if parsed.path() != "/repeaters/location_search.php" {
+        return Err("RepeaterBook lookup URL is not allowed".into());
+    }
+
+    let response = reqwest::get(parsed)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("RepeaterBook lookup failed: HTTP {}", response.status()));
+    }
+
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+    String::from_utf8(bytes.to_vec()).map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -244,6 +268,41 @@ DROP TABLE IF EXISTS imported_repeaters;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "create_channel_groups",
+            sql: r#"
+CREATE TABLE channel_groups (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_channel_groups_name ON channel_groups(name COLLATE NOCASE);
+CREATE TABLE channel_group_members (
+  group_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  PRIMARY KEY (group_id, channel_id)
+);
+CREATE INDEX idx_channel_group_members_channel ON channel_group_members(channel_id);
+"#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "add_saved_channels_repeater_status",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN use_type TEXT;
+ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
+"#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "add_saved_channels_callsign",
+            sql: "ALTER TABLE saved_channels ADD COLUMN callsign TEXT;",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -260,6 +319,7 @@ DROP TABLE IF EXISTS imported_repeaters;
         .invoke_handler(tauri::generate_handler![
             save_text_file,
             load_text_file,
+            fetch_repeaterbook_search,
             radio_modules::download_and_install_radio_module,
             radio_modules::install_radio_module_from_zip,
             radio_modules::list_installed_radio_module_configs,

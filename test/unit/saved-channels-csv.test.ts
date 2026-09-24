@@ -44,6 +44,17 @@ describe('saved-channels-csv', () => {
     const parsed = parseSavedChannelsCsv(csv);
 
     expect(parsed.kinds[0]).toBe('repeater');
+    expect(parsed.uses[0]).toBeUndefined();
+    expect(parsed.onAir[0]).toBeUndefined();
+  });
+
+  it('round-trips repeater use and on-air through CSV', () => {
+    const csv = serializeSavedChannelsCsv([{ ...sample, kind: 'repeater', use: 'closed', onAir: false }]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.kinds[0]).toBe('repeater');
+    expect(parsed.uses[0]).toBe('closed');
+    expect(parsed.onAir[0]).toBe(false);
   });
 
   it('imports RepeaterBook CSV as repeater library rows', () => {
@@ -51,9 +62,12 @@ describe('saved-channels-csv', () => {
 
     expect(parsed.source).toBe('repeaterbook');
     expect(parsed.kinds).toEqual(['repeater']);
-    expect(parsed.channels[0]?.name).toBe('WJ1L');
+    expect(parsed.channels[0]?.name).toBeUndefined();
+    expect(parsed.callsigns[0]).toBe('WJ1L');
     expect(parsed.channels[0]?.receiveFrequency).toBe(Frequency(146_925_000));
     expect(parsed.channels[0]?.transmitFrequency).toBe(Frequency(146_325_000));
+    expect(parsed.uses[0]).toBe('open');
+    expect(parsed.onAir[0]).toBe(true);
   });
 
   it('rejects CSV files missing required columns', () => {

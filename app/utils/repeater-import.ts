@@ -1,5 +1,6 @@
 import { Frequency, RadioToneType, type RadioChannel, type RadioTone } from '@springfield/ham-radio-api';
 import { parseFrequencyMHz } from '~/utils/channel-edit';
+import type { RepeaterUse } from '~/utils/saved-channels-db';
 
 export type RepeaterImportFormat = 'repeaterbook' | 'chirp';
 
@@ -16,8 +17,8 @@ export interface ParsedRepeater {
   transmitFrequency: Frequency;
   transmitTone: RadioTone;
   receiveTone: RadioTone;
-  useType?: string;
-  operationalStatus?: string;
+  use?: RepeaterUse;
+  onAir?: boolean;
   modes?: string;
   notes?: string;
   latitude?: number;
@@ -34,7 +35,7 @@ const NONE_TONE: RadioTone = { tone: 0, type: RadioToneType.CTCSS };
 /**
  * Parse a RepeaterBook website CSV or CHIRP CSV export into portable repeater rows.
  *
- * RepeaterBook `Frequency` is the downlink (radio receive). `Input Freq` is the uplink (radio transmit).
+ * RepeaterBook `Frequency` or `Output Freq` is the downlink (radio receive). `Input Freq` is the uplink (radio transmit).
  */
 export function parseRepeaterImportCsv(text: string): ParsedRepeaterImport {
   const rows = parseCsvRows(text.replace(/^\uFEFF/, ''));
@@ -69,7 +70,7 @@ export function parseRepeaterImportCsv(text: string): ParsedRepeaterImport {
  */
 export function importedRepeaterToRadioChannel(repeater: ParsedRepeater): RadioChannel {
   return {
-    name: repeater.callsign || undefined,
+    name: repeater.sourceFormat === 'repeaterbook' ? undefined : repeater.callsign || undefined,
     transmitFrequency: repeater.transmitFrequency,
     receiveFrequency: repeater.receiveFrequency,
     transmitTone: repeater.transmitTone,
@@ -84,7 +85,6 @@ export function importedRepeaterNotes(repeater: ParsedRepeater): string | undefi
   const parts = [
     formatRepeaterLocation(repeater),
     repeater.landmark,
-    repeater.operationalStatus,
     repeater.modes,
     repeater.notes,
   ].filter((part): part is string => Boolean(part && part.trim()));
@@ -114,12 +114,16 @@ export function detectRepeaterImportFormat(header: string[]): RepeaterImportForm
     return 'repeaterbook';
   }
 
+  if (columns.has('output_freq') && columns.has('input_freq') && (columns.has('call') || columns.has('callsign'))) {
+    return 'repeaterbook';
+  }
+
   return undefined;
 }
 
 function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater | undefined {
   const cell = columnLookup(header, row);
-  const receiveHz = parseFrequencyMHz(cell('frequency'));
+  const receiveHz = parseFrequencyMHz(cell('frequency', 'output_freq'));
 
   if (receiveHz === undefined) {
     return undefined;
@@ -128,26 +132,31 @@ function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater |
   const transmitHz = parseFrequencyMHz(cell('input_freq', 'input_frequency')) ?? receiveHz;
   const stateId = cell('state_id');
   const repeaterId = cell('rptr_id');
-  const callsign = cell('callsign') || cell('name');
-  const sourceKey = `rb:${stateId || 'unknown'}:${repeaterId || receiveHz}`;
+  const callsign = cell('callsign') || cell('call') || cell('name');
+  const sourceKey = repeaterId
+    ? `rb:${stateId || 'unknown'}:${repeaterId}`
+    : `rb:${cell('state') || 'unknown'}:${callsign || 'unknown'}:${receiveHz}`;
+  const digitalAccess = emptyToUndefined(cell('digital_access'));
 
   return {
     sourceKey,
     sourceFormat: 'repeaterbook',
     callsign,
-    city: emptyToUndefined(cell('nearest_city', 'city')),
+    city: emptyToUndefined(cell('nearest_city', 'city', 'location')),
     county: emptyToUndefined(cell('county')),
     state: emptyToUndefined(cell('state')),
     country: emptyToUndefined(cell('country')),
     landmark: emptyToUndefined(cell('landmark')),
     receiveFrequency: Frequency(receiveHz),
     transmitFrequency: Frequency(transmitHz),
-    transmitTone: parseRepeaterTone(cell('pl', 'uplink_ctcss')),
-    receiveTone: parseRepeaterTone(cell('tsq', 'downlink_ctcss')),
-    useType: emptyToUndefined(cell('use')),
-    operationalStatus: emptyToUndefined(cell('operational_status')),
-    modes: collectRepeaterBookModes(cell) || undefined,
-    notes: emptyToUndefined(cell('notes')),
+    transmitTone: parseRepeaterTone(cell('pl', 'uplink_ctcss', 'uplink_tone')),
+    receiveTone: parseRepeaterTone(cell('tsq', 'downlink_ctcss', 'downlink_tone')),
+    use: repeaterUseFromLabel(cell('use')),
+    onAir: repeaterOnAirFromStatus(cell('operational_status', 'op_status', 'on_air')),
+    modes: collectRepeaterBookModes(cell) || emptyToUndefined(cell('modes')),
+    notes: [emptyToUndefined(cell('notes')), digitalAccess ? `Digital access ${digitalAccess}` : undefined]
+      .filter((part): part is string => Boolean(part))
+      .join(' · ') || undefined,
     latitude: parseOptionalNumber(cell('lat')),
     longitude: parseOptionalNumber(cell('long', 'lng')),
   };
@@ -301,6 +310,40 @@ function collectRepeaterBookModes(cell: (...names: string[]) => string): string 
   }
 
   return modes.join(', ');
+}
+
+/**
+ * RepeaterBook Use is OPEN or CLOSED. Other labels stay unset.
+ */
+export function repeaterUseFromLabel(value: string | undefined): RepeaterUse | undefined {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === 'open' || normalized === 'closed') {
+    return normalized;
+  }
+
+  return undefined;
+}
+
+/**
+ * RepeaterBook Operational Status is On-air or Off-air. Unknown labels stay unset.
+ */
+export function repeaterOnAirFromStatus(value: string | undefined): boolean | undefined {
+  const normalized = value?.trim().toLowerCase().replaceAll(/[\s_]+/g, '-');
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized === 'on-air' || normalized === 'onair' || normalized === 'yes' || normalized === 'true' || normalized === '1') {
+    return true;
+  }
+
+  if (normalized === 'off-air' || normalized === 'offair' || normalized === 'no' || normalized === 'false' || normalized === '0') {
+    return false;
+  }
+
+  return undefined;
 }
 
 function isYes(value: string): boolean {

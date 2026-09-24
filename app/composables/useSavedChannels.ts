@@ -1,6 +1,20 @@
+import { invoke } from '@tauri-apps/api/core';
 import type { RadioChannel, RadioChannelId } from '@springfield/ham-radio-api';
+import { ALL_CHANNELS_TAB_ID, channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
+import {
+  addChannelsToGroup,
+  deleteChannelGroup,
+  insertChannelGroup,
+  listChannelGroupMemberships,
+  listChannelGroups,
+  renameChannelGroup,
+} from '~/utils/channel-groups-db';
+import { fillRepeaterBookUseAndOnAir } from '~/utils/repeaterbook-listings';
+import { importedRepeaterNotes, importedRepeaterToRadioChannel, parseRepeaterImportCsv } from '~/utils/repeater-import';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   deleteSavedChannel,
+  deleteSavedChannels,
   insertSavedChannelModels,
   insertSavedChannels,
   listSavedChannels,
@@ -18,23 +32,56 @@ import {
 export function useSavedChannels() {
   const toast = useToast();
   const channels = useState<SavedChannel[]>('saved-channels', () => []);
+  const groups = useState<ChannelGroup[]>('channel-groups', () => []);
+  const memberships = useState<ChannelGroupMembership[]>('channel-group-memberships', () => []);
+  const activeGroupId = useState('channel-group-active', () => ALL_CHANNELS_TAB_ID);
   const isLoading = useState('saved-channels-loading', () => false);
   const error = useState<string | null>('saved-channels-error', () => null);
   const search = useState('saved-channels-search', () => '');
 
+  const scopedChannels = computed(() => channelsInGroup(channels.value, memberships.value, activeGroupId.value));
+
   const filteredChannels = computed(() => {
-    return channels.value.filter((channel) => matchesSavedChannelSearch(channel, search.value));
+    return scopedChannels.value.filter((channel) => matchesSavedChannelSearch(channel, search.value));
   });
+
+  const activeGroup = computed(() => groups.value.find((group) => group.id === activeGroupId.value));
+
+  function ensureActiveGroup(): void {
+    if (activeGroupId.value === ALL_CHANNELS_TAB_ID) {
+      return;
+    }
+
+    if (!groups.value.some((group) => group.id === activeGroupId.value)) {
+      activeGroupId.value = ALL_CHANNELS_TAB_ID;
+    }
+  }
+
+  async function reloadLibrary(): Promise<void> {
+    const [nextChannels, nextGroups, nextMemberships] = await Promise.all([
+      listSavedChannels(),
+      listChannelGroups(),
+      listChannelGroupMemberships(),
+    ]);
+
+    channels.value = nextChannels;
+    groups.value = nextGroups;
+    memberships.value = nextMemberships;
+    ensureActiveGroup();
+  }
 
   async function refresh(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      channels.value = await listSavedChannels();
+      await reloadLibrary();
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Failed to load saved channels';
       channels.value = [];
+      groups.value = [];
+      memberships.value = [];
+      activeGroupId.value = ALL_CHANNELS_TAB_ID;
     } finally {
       isLoading.value = false;
     }
@@ -68,20 +115,38 @@ export function useSavedChannels() {
     }
   }
 
-  async function createChannel(radioChannel: RadioChannel, notes?: string, kind?: SavedChannel['kind']): Promise<SavedChannel> {
+  async function createChannel(
+    radioChannel: RadioChannel,
+    notes?: string,
+    kind?: SavedChannel['kind'],
+    repeater?: { use?: SavedChannel['use']; onAir?: SavedChannel['onAir']; callsign?: string },
+  ): Promise<SavedChannel> {
     try {
       const trimmedNotes = notes?.trim();
       const [saved] = await insertSavedChannelModels([
         radioChannelToSavedChannel(radioChannel, {
           notes: trimmedNotes ? trimmedNotes : undefined,
           kind,
+          use: repeater?.use,
+          onAir: repeater?.onAir,
+          callsign: repeater?.callsign,
         }),
       ]);
 
-      channels.value = await listSavedChannels();
+      if (!saved) {
+        throw new Error('Failed to create channel');
+      }
+
+      if (activeGroup.value) {
+        await addChannelsToGroup(activeGroup.value.id, [saved.id]);
+      }
+
+      await reloadLibrary();
       toast.add({
         title: 'Channel created',
-        description: 'The channel was added to the library.',
+        description: activeGroup.value
+          ? `The channel was added to ${activeGroup.value.name}.`
+          : 'The channel was added to the library.',
         color: 'success',
         icon: 'i-lucide-plus',
       });
@@ -125,6 +190,7 @@ export function useSavedChannels() {
     try {
       await deleteSavedChannel(id);
       channels.value = channels.value.filter((channel) => channel.id !== id);
+      memberships.value = memberships.value.filter((membership) => membership.channelId !== id);
       toast.add({
         title: 'Channel removed',
         description: 'The channel was deleted from the library.',
@@ -144,21 +210,68 @@ export function useSavedChannels() {
   }
 
 
+  async function removeChannels(ids: readonly RadioChannelId[]): Promise<number> {
+    const unique = [...new Set(ids)];
+
+    if (unique.length === 0) {
+      return 0;
+    }
+
+    try {
+      await deleteSavedChannels(unique);
+      const removed = new Set(unique);
+      channels.value = channels.value.filter((channel) => !removed.has(channel.id));
+      memberships.value = memberships.value.filter((membership) => !removed.has(membership.channelId));
+      toast.add({
+        title: unique.length === 1 ? 'Channel removed' : 'Channels removed',
+        description:
+          unique.length === 1
+            ? 'The channel was deleted from the library.'
+            : `${unique.length} channels were deleted from the library.`,
+        color: 'success',
+        icon: 'i-lucide-trash-2',
+      });
+      return unique.length;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to delete channels';
+      toast.add({
+        title: 'Could not delete channels',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
   async function exportLibraryCsv(): Promise<void> {
     try {
-      const csv = serializeSavedChannelsCsv(channels.value);
+      const exporting = scopedChannels.value;
+
+      if (activeGroup.value && exporting.length === 0) {
+        toast.add({
+          title: 'Nothing to export',
+          description: `${activeGroup.value.name} has no channels.`,
+          color: 'warning',
+          icon: 'i-lucide-file-down',
+        });
+        return;
+      }
+
+      const csv = serializeSavedChannelsCsv(exporting);
       const destination = await saveChannelLibraryCsvWithPicker(csv);
 
       if (!destination) {
         return;
       }
 
+      const scope = activeGroup.value ? activeGroup.value.name : 'the library';
       toast.add({
         title: 'Library exported',
         description:
-          channels.value.length === 1
-            ? '1 channel was exported to CSV.'
-            : `${channels.value.length} channels were exported to CSV.`,
+          exporting.length === 1
+            ? `1 channel from ${scope} was exported to CSV.`
+            : `${exporting.length} channels from ${scope} were exported to CSV.`,
         color: 'success',
         icon: 'i-lucide-file-down',
       });
@@ -194,30 +307,102 @@ export function useSavedChannels() {
         return 0;
       }
 
-      const models = parsed.channels.map((channel, index) =>
+      let models = parsed.channels.map((channel, index) =>
         radioChannelToSavedChannel(channel, {
           notes: parsed.notes[index],
           kind: parsed.kinds[index],
+          use: parsed.uses[index],
+          onAir: parsed.onAir[index],
+          callsign: parsed.callsigns[index],
         }),
       );
-      await insertSavedChannelModels(models);
-      channels.value = await listSavedChannels();
+
+      if (parsed.source === 'repeaterbook' && isTauriRuntime()) {
+        const repeaters = await fillRepeaterBookUseAndOnAir(parseRepeaterImportCsv(text).repeaters, (url) =>
+          invoke<string>('fetch_repeaterbook_search', { url }),
+        );
+        models = repeaters.map((repeater) =>
+          radioChannelToSavedChannel(importedRepeaterToRadioChannel(repeater), {
+            notes: importedRepeaterNotes(repeater),
+            kind: 'repeater',
+            use: repeater.use,
+            onAir: repeater.onAir,
+            callsign: repeater.callsign || undefined,
+          }),
+        );
+      }
+
+      const existing = new Map(channels.value.map((channel) => [libraryImportKey(channel), channel]));
+      const toInsert: SavedChannel[] = [];
+      const memberIds: RadioChannelId[] = [];
+      let updated = 0;
+
+      for (const model of models) {
+        const match = existing.get(libraryImportKey(model));
+
+        if (!match) {
+          toInsert.push(model);
+          existing.set(libraryImportKey(model), model);
+          memberIds.push(model.id);
+          continue;
+        }
+
+        memberIds.push(match.id);
+        const nextUse = model.use ?? match.use;
+        const nextOnAir = model.onAir ?? match.onAir;
+        const nextNotes = model.notes ?? match.notes;
+        const nextCallsign = model.callsign ?? match.callsign;
+        const callsignWasName =
+          Boolean(model.callsign) &&
+          !match.callsign &&
+          match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
+        const nextName = callsignWasName ? undefined : match.name;
+
+        if (nextUse === match.use && nextOnAir === match.onAir && nextNotes === match.notes && nextCallsign === match.callsign && nextName === match.name) {
+          continue;
+        }
+
+        if (toInsert.some((row) => row.id === match.id)) {
+          continue;
+        }
+
+        await updateSavedChannel({
+          ...match,
+          name: nextName,
+          use: nextUse,
+          onAir: nextOnAir,
+          notes: nextNotes,
+          callsign: nextCallsign,
+        });
+        updated += 1;
+      }
+
+      await insertSavedChannelModels(toInsert);
+
+      if (activeGroup.value) {
+        await addChannelsToGroup(activeGroup.value.id, memberIds);
+      }
+
+      await reloadLibrary();
+      const added = toInsert.length;
       const sourceLabel =
         parsed.source === 'repeaterbook'
           ? 'RepeaterBook CSV'
           : parsed.source === 'chirp'
             ? 'CHIRP CSV'
             : 'CSV';
+      const destination = activeGroup.value ? activeGroup.value.name : 'the library';
+      const summary = [
+        added === 1 ? '1 new' : `${added} new`,
+        updated === 1 ? '1 updated' : `${updated} updated`,
+      ].join(', ');
       toast.add({
         title: parsed.source === 'library' ? 'Library imported' : 'Repeaters imported',
-        description:
-          models.length === 1
-            ? `1 ${parsed.source === 'library' ? 'channel' : 'repeater'} was imported from ${sourceLabel}.`
-            : `${models.length} ${parsed.source === 'library' ? 'channels' : 'repeaters'} were imported from ${sourceLabel}.`,
+        description: `${summary} from ${sourceLabel} in ${destination}.`,
         color: 'success',
         icon: 'i-lucide-file-up',
       });
-      return models.length;
+      return added;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Failed to import channel library';
       toast.add({
@@ -230,8 +415,95 @@ export function useSavedChannels() {
     }
   }
 
+  async function createGroup(name: string, channelIds: readonly RadioChannelId[]): Promise<ChannelGroup> {
+    try {
+      const group = await insertChannelGroup(name, channelIds);
+      await reloadLibrary();
+      activeGroupId.value = group.id;
+      toast.add({
+        title: 'Group created',
+        description:
+          channelIds.length === 0
+            ? `${group.name} is empty. Import a CSV to add channels.`
+            : channelIds.length === 1
+              ? `${group.name} contains 1 channel.`
+              : `${group.name} contains ${channelIds.length} channels.`,
+        color: 'success',
+        icon: 'i-lucide-folder-plus',
+      });
+      return group;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to create group';
+      toast.add({
+        title: 'Could not create group',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
+  async function renameGroup(id: string, name: string): Promise<ChannelGroup> {
+    try {
+      const group = await renameChannelGroup(id, name);
+      await reloadLibrary();
+      toast.add({
+        title: 'Group renamed',
+        description: `The group is now ${group.name}.`,
+        color: 'success',
+        icon: 'i-lucide-folder-pen',
+      });
+      return group;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to rename group';
+      toast.add({
+        title: 'Could not rename group',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
+  async function removeGroup(id: string): Promise<void> {
+    const group = groups.value.find((candidate) => candidate.id === id);
+
+    try {
+      await deleteChannelGroup(id);
+      groups.value = groups.value.filter((candidate) => candidate.id !== id);
+      memberships.value = memberships.value.filter((membership) => membership.groupId !== id);
+
+      if (activeGroupId.value === id) {
+        activeGroupId.value = ALL_CHANNELS_TAB_ID;
+      }
+
+      toast.add({
+        title: 'Group removed',
+        description: group
+          ? `${group.name} was removed. Its channels are still in All.`
+          : 'The group was removed. Its channels are still in All.',
+        color: 'success',
+        icon: 'i-lucide-folder-minus',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to remove group';
+      toast.add({
+        title: 'Could not remove group',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
   return {
     channels,
+    groups,
+    activeGroupId,
+    activeGroup,
     filteredChannels,
     isLoading,
     error,
@@ -241,7 +513,16 @@ export function useSavedChannels() {
     createChannel,
     updateChannel,
     removeChannel,
+    removeChannels,
     exportLibraryCsv,
     importLibraryCsv,
+    createGroup,
+    renameGroup,
+    removeGroup,
   };
+}
+
+function libraryImportKey(channel: Pick<SavedChannel, 'name' | 'kind' | 'callsign' | 'transmitFrequency' | 'receiveFrequency'>): string {
+  const label = (channel.callsign || channel.name || '').trim().toLowerCase();
+  return `${channel.kind}|${label}|${channel.transmitFrequency}|${channel.receiveFrequency}`;
 }
