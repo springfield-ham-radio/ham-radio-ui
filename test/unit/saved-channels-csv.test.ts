@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType } from '@springfield/ham-radio-api';
 import {
   parseSavedChannelsCsv,
@@ -29,35 +28,35 @@ describe('saved-channels-csv', () => {
     const csv = serializeSavedChannelsCsv([sample]);
     const parsed = parseSavedChannelsCsv(csv);
 
-    expect(parsed.source).to.equal('library');
-    expect(parsed.channels).to.have.length(1);
-    expect(parsed.channels[0]?.name).to.equal('Local RPT');
-    expect(parsed.channels[0]?.transmitFrequency).to.equal(Frequency(146_520_000));
-    expect(parsed.channels[0]?.receiveFrequency).to.equal(Frequency(146_520_000));
-    expect(parsed.channels[0]?.transmitTone).to.deep.equal({ tone: 885, type: RadioToneType.CTCSS });
-    expect(parsed.channels[0]?.receiveTone).to.deep.equal({ tone: 23, type: RadioToneType.DCS });
-    expect(parsed.notes[0]).to.equal('Club, "main" repeater');
-    expect(parsed.kinds[0]).to.equal('channel');
+    expect(parsed.source).toBe('library');
+    expect(parsed.channels).toHaveLength(1);
+    expect(parsed.channels[0]?.name).toBe('Local RPT');
+    expect(parsed.channels[0]?.transmitFrequency).toBe(Frequency(146_520_000));
+    expect(parsed.channels[0]?.receiveFrequency).toBe(Frequency(146_520_000));
+    expect(parsed.channels[0]?.transmitTone).toEqual({ tone: 885, type: RadioToneType.CTCSS });
+    expect(parsed.channels[0]?.receiveTone).toEqual({ tone: 23, type: RadioToneType.DCS });
+    expect(parsed.notes[0]).toBe('Club, "main" repeater');
+    expect(parsed.kinds[0]).toBe('channel');
   });
 
   it('preserves a repeater kind through CSV', () => {
     const csv = serializeSavedChannelsCsv([{ ...sample, kind: 'repeater' }]);
     const parsed = parseSavedChannelsCsv(csv);
 
-    expect(parsed.kinds[0]).to.equal('repeater');
+    expect(parsed.kinds[0]).toBe('repeater');
   });
 
   it('imports RepeaterBook CSV as repeater library rows', () => {
     const parsed = parseSavedChannelsCsv(repeaterBookCsv);
 
-    expect(parsed.source).to.equal('repeaterbook');
-    expect(parsed.kinds).to.deep.equal(['repeater']);
-    expect(parsed.channels[0]?.name).to.equal('WJ1L');
-    expect(parsed.channels[0]?.receiveFrequency).to.equal(Frequency(146_925_000));
-    expect(parsed.channels[0]?.transmitFrequency).to.equal(Frequency(146_325_000));
+    expect(parsed.source).toBe('repeaterbook');
+    expect(parsed.kinds).toEqual(['repeater']);
+    expect(parsed.channels[0]?.name).toBe('WJ1L');
+    expect(parsed.channels[0]?.receiveFrequency).toBe(Frequency(146_925_000));
+    expect(parsed.channels[0]?.transmitFrequency).toBe(Frequency(146_325_000));
   });
 
   it('rejects CSV files missing required columns', () => {
-    expect(() => parseSavedChannelsCsv('name,tx_mhz\nA,146.52\n')).to.throw(/missing required column/);
+    expect(() => parseSavedChannelsCsv('name,tx_mhz\nA,146.52\n')).toThrow(/missing required column/);
   });
 });

@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { APP_VERSION } from '../../app/utils/app-version.ts';
 
 describe('app-version', () => {
@@ -9,7 +8,7 @@ describe('app-version', () => {
       version: string;
     };
 
-    expect(APP_VERSION).to.equal(packageJson.version);
-    expect(APP_VERSION).to.match(/^\d+\.\d+\.\d+/);
+    expect(APP_VERSION).toBe(packageJson.version);
+    expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/);
   });
 });

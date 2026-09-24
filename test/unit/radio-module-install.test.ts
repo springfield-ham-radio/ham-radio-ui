@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
 import {
   APP_HAM_RADIO_API_VERSION,
@@ -38,15 +37,15 @@ describe('radio module install helpers', () => {
       }),
     );
 
-    expect(catalog.modules[0]?.id).to.equal('baofeng');
-    expect(isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, catalog.modules[0]!.minApiVersion)).to.be.true;
+    expect(catalog.modules[0]?.id).toBe('baofeng');
+    expect(isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, catalog.modules[0]!.minApiVersion)).toBe(true);
   });
 
   it('should detect module install directories', () => {
     expect(
       isModuleInstallPath('/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/baofeng/3.1.0'),
-    ).to.be.true;
-    expect(isModuleInstallPath('/tmp/baofeng-config.json')).to.be.false;
+    ).toBe(true);
+    expect(isModuleInstallPath('/tmp/baofeng-config.json')).toBe(false);
   });
 
   it('should parse module id and version from install paths', () => {
@@ -54,7 +53,7 @@ describe('radio module install helpers', () => {
       parseModuleInstallPath(
         'C:\\Users\\me\\AppData\\Roaming\\com.springfield.ham-radio\\radio-modules\\baofeng\\3.1.0',
       ),
-    ).to.deep.equal({ moduleId: 'baofeng', version: '3.1.0' });
+    ).toEqual({ moduleId: 'baofeng', version: '3.1.0' });
   });
 
   it('should reload catalog rows that were installed from a local JSON file', () => {
@@ -63,9 +62,9 @@ describe('radio module install helpers', () => {
         'user',
         '/Users/me/Development/radio-module-kenwood/configs/kenwood-tm-d710a.json',
       ),
-    ).to.equal(true);
-    expect(isUserJsonCatalogSourcePath('installed', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
-    expect(isUserJsonCatalogSourcePath('user', '/Users/me/radio-modules/kenwood/1.1.0')).to.equal(false);
+    ).toBe(true);
+    expect(isUserJsonCatalogSourcePath('installed', '/Users/me/radio-modules/kenwood/1.1.0')).toBe(false);
+    expect(isUserJsonCatalogSourcePath('user', '/Users/me/radio-modules/kenwood/1.1.0')).toBe(false);
   });
 
   it('should match a catalog config path to an extracted file', () => {
@@ -74,17 +73,17 @@ describe('radio module install helpers', () => {
         'configs/baofeng-uv5r.json',
         '/tmp/radio-modules/baofeng/3.4.1/configs/baofeng-uv5r.json',
       ),
-    ).to.equal(true);
+    ).toBe(true);
     expect(
       catalogConfigMatchesPath('configs/kenwood-th-f6.json', '/tmp/radio-modules/kenwood/1.8.0/configs/kenwood-th-d74.json'),
-    ).to.equal(false);
+    ).toBe(false);
   });
 
   it('should match a catalog radio id to a prefixed config model', () => {
-    expect(catalogModelMatchesId('baofeng-uv5r', 'baofeng-uv5r', 'Baofeng')).to.equal(true);
-    expect(catalogModelMatchesId('uv5r', 'baofeng-uv5r', 'Baofeng')).to.equal(true);
-    expect(catalogModelMatchesId('uv5r-plus', 'baofeng-uv5r', 'Baofeng')).to.equal(false);
-    expect(catalogModelMatchesId('th-d74', 'kenwood-th-d74', 'Kenwood')).to.equal(true);
+    expect(catalogModelMatchesId('baofeng-uv5r', 'baofeng-uv5r', 'Baofeng')).toBe(true);
+    expect(catalogModelMatchesId('uv5r', 'baofeng-uv5r', 'Baofeng')).toBe(true);
+    expect(catalogModelMatchesId('uv5r-plus', 'baofeng-uv5r', 'Baofeng')).toBe(false);
+    expect(catalogModelMatchesId('th-d74', 'kenwood-th-d74', 'Kenwood')).toBe(true);
   });
 });
 

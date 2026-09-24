@@ -1,25 +1,24 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { remoteSnifferInstallBadgeColor, remoteSnifferInstallLabel } from '../../app/utils/sniffer-ssh.ts';
 
 describe('remote sniffer install status', () => {
   it('should label missing sources as not installed', () => {
-    expect(remoteSnifferInstallLabel({ sourcesPresent: false, buildPresent: false })).to.equal('Not installed');
-    expect(remoteSnifferInstallBadgeColor({ sourcesPresent: false, buildPresent: false })).to.equal('neutral');
+    expect(remoteSnifferInstallLabel({ sourcesPresent: false, buildPresent: false })).toBe('Not installed');
+    expect(remoteSnifferInstallBadgeColor({ sourcesPresent: false, buildPresent: false })).toBe('neutral');
   });
 
   it('should label sources without a build as sources only', () => {
-    expect(remoteSnifferInstallLabel({ sourcesPresent: true, buildPresent: false })).to.equal('Sources only');
-    expect(remoteSnifferInstallBadgeColor({ sourcesPresent: true, buildPresent: false })).to.equal('warning');
+    expect(remoteSnifferInstallLabel({ sourcesPresent: true, buildPresent: false })).toBe('Sources only');
+    expect(remoteSnifferInstallBadgeColor({ sourcesPresent: true, buildPresent: false })).toBe('warning');
   });
 
   it('should label a complete remote build as installed', () => {
     expect(
       remoteSnifferInstallLabel({ sourcesPresent: true, buildPresent: true, versionMatch: true }),
-    ).to.equal('Installed');
+    ).toBe('Installed');
     expect(
       remoteSnifferInstallBadgeColor({ sourcesPresent: true, buildPresent: true, versionMatch: true }),
-    ).to.equal('success');
+    ).toBe('success');
   });
 
   it('should include the installed version when it matches the bundled copy', () => {
@@ -30,7 +29,7 @@ describe('remote sniffer install status', () => {
         versionMatch: true,
         installedVersion: '0.1.0',
       }),
-    ).to.equal('Installed 0.1.0');
+    ).toBe('Installed 0.1.0');
   });
 
   it('should flag an older installed sniffer as needing an update', () => {
@@ -41,13 +40,13 @@ describe('remote sniffer install status', () => {
         versionMatch: false,
         installedVersion: '0.1.0',
       }),
-    ).to.equal('Update from 0.1.0');
+    ).toBe('Update from 0.1.0');
     expect(
       remoteSnifferInstallBadgeColor({
         sourcesPresent: true,
         buildPresent: true,
         versionMatch: false,
       }),
-    ).to.equal('warning');
+    ).toBe('warning');
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   formatAdifDate,
   formatAdifTime,
@@ -37,37 +36,37 @@ const sample: StationLogQso = {
 
 describe('station-log-adif', () => {
   it('formats and parses ADIF date/time in UTC', () => {
-    expect(formatAdifDate(startedAt)).to.equal('20240615');
-    expect(formatAdifTime(startedAt)).to.equal('143045');
-    expect(parseAdifDateTime('20240615', '143045')).to.equal(startedAt);
-    expect(parseAdifDateTime('20240615', '1430')).to.equal(Date.UTC(2024, 5, 15, 14, 30, 0));
+    expect(formatAdifDate(startedAt)).toBe('20240615');
+    expect(formatAdifTime(startedAt)).toBe('143045');
+    expect(parseAdifDateTime('20240615', '143045')).toBe(startedAt);
+    expect(parseAdifDateTime('20240615', '1430')).toBe(Date.UTC(2024, 5, 15, 14, 30, 0));
   });
 
   it('round-trips portable QSO fields through ADI', () => {
     const adi = serializeStationLogAdif([sample]);
     const parsed = parseStationLogAdif(adi);
 
-    expect(parsed.skipped).to.equal(0);
-    expect(parsed.qsos).to.have.length(1);
+    expect(parsed.skipped).toBe(0);
+    expect(parsed.qsos).toHaveLength(1);
 
     const qso = parsed.qsos[0]!;
-    expect(qso.theirCallsign).to.equal('W1AW');
-    expect(qso.startedAt).to.equal(startedAt);
-    expect(qso.endedAt).to.equal(startedAt + 120_000);
-    expect(qso.frequencyHz).to.equal(146_520_000);
-    expect(qso.band).to.equal('2m');
-    expect(qso.mode).to.equal('FM');
-    expect(qso.rstSent).to.equal('59');
-    expect(qso.rstReceived).to.equal('59');
-    expect(qso.theirName).to.equal('Hiram');
-    expect(qso.theirQth).to.equal('Newington, CT');
-    expect(qso.theirGridsquare).to.equal('FN31');
-    expect(qso.txPowerWatts).to.equal(5);
-    expect(qso.comment).to.equal('Club station, "main"');
-    expect(qso.operatorCallsign).to.equal('K1ABC');
-    expect(qso.stationCallsign).to.equal('K1ABC');
-    expect(qso.myGridsquare).to.equal('FN42');
-    expect(qso.adifExtra).to.deep.equal({ DXCC: '291' });
+    expect(qso.theirCallsign).toBe('W1AW');
+    expect(qso.startedAt).toBe(startedAt);
+    expect(qso.endedAt).toBe(startedAt + 120_000);
+    expect(qso.frequencyHz).toBe(146_520_000);
+    expect(qso.band).toBe('2m');
+    expect(qso.mode).toBe('FM');
+    expect(qso.rstSent).toBe('59');
+    expect(qso.rstReceived).toBe('59');
+    expect(qso.theirName).toBe('Hiram');
+    expect(qso.theirQth).toBe('Newington, CT');
+    expect(qso.theirGridsquare).toBe('FN31');
+    expect(qso.txPowerWatts).toBe(5);
+    expect(qso.comment).toBe('Club station, "main"');
+    expect(qso.operatorCallsign).toBe('K1ABC');
+    expect(qso.stationCallsign).toBe('K1ABC');
+    expect(qso.myGridsquare).toBe('FN42');
+    expect(qso.adifExtra).toEqual({ DXCC: '291' });
   });
 
   it('skips records missing CALL or QSO_DATE', () => {
@@ -80,16 +79,16 @@ describe('station-log-adif', () => {
 
     const parsed = parseStationLogAdif(adi);
 
-    expect(parsed.skipped).to.equal(2);
-    expect(parsed.qsos).to.have.length(1);
-    expect(parsed.qsos[0]?.theirCallsign).to.equal('K1ABC');
-    expect(parsed.qsos[0]?.mode).to.equal('CW');
+    expect(parsed.skipped).toBe(2);
+    expect(parsed.qsos).toHaveLength(1);
+    expect(parsed.qsos[0]?.theirCallsign).toBe('K1ABC');
+    expect(parsed.qsos[0]?.mode).toBe('CW');
   });
 
   it('includes a HamBench PROGRAMID header on export', () => {
     const adi = serializeStationLogAdif([sample]);
 
-    expect(adi).to.match(/<PROGRAMID:8>HamBench/i);
-    expect(adi).to.match(/<EOH>/i);
+    expect(adi).toMatch(/<PROGRAMID:8>HamBench/i);
+    expect(adi).toMatch(/<EOH>/i);
   });
 });

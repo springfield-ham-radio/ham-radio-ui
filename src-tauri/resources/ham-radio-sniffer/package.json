@@ -20,7 +20,7 @@
     "postinstall": "nuxt prepare",
     "prepare": "husky",
     "preview": "nuxt preview",
-    "sniff": "tsx src/cli.ts",
+    "sniff": "node src/cli.ts",
     "start": "HOST=\"${HOST:-127.0.0.1}\" PORT=\"${PORT:-3010}\" node .output/server/index.mjs",
     "test": "yarn test:unit",
     "test:unit": "tsx --test test/unit/**/*.test.ts"

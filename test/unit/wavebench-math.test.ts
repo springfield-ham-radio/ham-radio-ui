@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { designFilter, FILTER_PRESETS } from '../../app/utils/wavebench-filters.ts';
 import { renderEquationHtml } from '../../app/utils/wavebench-math.ts';
 
@@ -8,9 +7,9 @@ describe('wavebench-math', () => {
     it('should typeset a display-mode fraction with KaTeX', () => {
       const html = renderEquationHtml('S_{21}(s) = \\dfrac{1}{1 + sRC}');
 
-      expect(html).to.include('katex');
-      expect(html).to.include('S');
-      expect(html).to.include('21');
+      expect(html).toContain('katex');
+      expect(html).toContain('S');
+      expect(html).toContain('21');
     });
 
     it('should typeset every filter equation without throwing', () => {
@@ -36,8 +35,8 @@ describe('wavebench-math', () => {
 
       for (const design of designs) {
         for (const equation of design.equations) {
-          expect(() => renderEquationHtml(equation.expression), `${design.kind} ${design.topology} ${equation.id}`).not.to.throw();
-          expect(renderEquationHtml(equation.expression)).to.include('katex');
+          expect(() => renderEquationHtml(equation.expression), `${design.kind} ${design.topology} ${equation.id}`).not.toThrow();
+          expect(renderEquationHtml(equation.expression)).toContain('katex');
         }
       }
     });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
 
 describe('CAT connected sessions', () => {
@@ -7,23 +6,23 @@ describe('CAT connected sessions', () => {
     const liveRadios = ref<Array<{ port: string }>>([]);
     const connected = computed(() => liveRadios.value.length > 0);
 
-    expect(connected.value).to.equal(false);
+    expect(connected.value).toBe(false);
 
     liveRadios.value = [{ port: '/dev/cu.usbserial-a' }];
-    expect(connected.value).to.equal(true);
+    expect(connected.value).toBe(true);
 
     liveRadios.value = [
       { port: '/dev/cu.usbserial-a' },
       { port: '/dev/cu.usbserial-b' },
     ];
-    expect(liveRadios.value).to.have.length(2);
-    expect(connected.value).to.equal(true);
+    expect(liveRadios.value).toHaveLength(2);
+    expect(connected.value).toBe(true);
 
     liveRadios.value = liveRadios.value.filter((radio) => radio.port !== '/dev/cu.usbserial-a');
-    expect(liveRadios.value).to.have.length(1);
-    expect(connected.value).to.equal(true);
+    expect(liveRadios.value).toHaveLength(1);
+    expect(connected.value).toBe(true);
 
     liveRadios.value = [];
-    expect(connected.value).to.equal(false);
+    expect(connected.value).toBe(false);
   });
 });

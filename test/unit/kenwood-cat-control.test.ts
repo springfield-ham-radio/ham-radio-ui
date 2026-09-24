@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   encodeKenwoodCatCommand,
   formatKenwoodFrequencyHz,
@@ -12,27 +11,27 @@ import {
 describe('kenwood CAT control', () => {
   describe('encodeKenwoodCatCommand', () => {
     it('should encode a bare command with CR', () => {
-      expect(Buffer.from(encodeKenwoodCatCommand('ID')).toString('ascii')).to.equal('ID\r');
-      expect(Buffer.from(encodeKenwoodCatCommand('TX')).toString('ascii')).to.equal('TX\r');
+      expect(Buffer.from(encodeKenwoodCatCommand('ID')).toString('ascii')).toBe('ID\r');
+      expect(Buffer.from(encodeKenwoodCatCommand('TX')).toString('ascii')).toBe('TX\r');
     });
 
     it('should join fields with commas after a space', () => {
-      expect(Buffer.from(encodeKenwoodCatCommand('FQ', ['00144600000', 0])).toString('ascii')).to.equal(
+      expect(Buffer.from(encodeKenwoodCatCommand('FQ', ['00144600000', 0])).toString('ascii')).toBe(
         'FQ 00144600000,0\r',
       );
-      expect(Buffer.from(encodeKenwoodCatCommand('BC', [1])).toString('ascii')).to.equal('BC 1\r');
+      expect(Buffer.from(encodeKenwoodCatCommand('BC', [1])).toString('ascii')).toBe('BC 1\r');
     });
   });
 
   describe('parseKenwoodCatReply', () => {
     it('should parse command and fields', () => {
-      expect(parseKenwoodCatReply('FQ 00144600000,0')).to.deep.equal({
+      expect(parseKenwoodCatReply('FQ 00144600000,0')).toEqual({
         ok: true,
         command: 'FQ',
         fields: ['00144600000', '0'],
         raw: 'FQ 00144600000,0',
       });
-      expect(parseKenwoodCatReply('ID TM-D710')).to.deep.equal({
+      expect(parseKenwoodCatReply('ID TM-D710')).toEqual({
         ok: true,
         command: 'ID',
         fields: ['TM-D710'],
@@ -41,27 +40,27 @@ describe('kenwood CAT control', () => {
     });
 
     it('should treat Kenwood error replies as not ok', () => {
-      expect(parseKenwoodCatReply('?').ok).to.equal(false);
-      expect(parseKenwoodCatReply('N').ok).to.equal(false);
-      expect(parseKenwoodCatReply('').ok).to.equal(false);
+      expect(parseKenwoodCatReply('?').ok).toBe(false);
+      expect(parseKenwoodCatReply('N').ok).toBe(false);
+      expect(parseKenwoodCatReply('').ok).toBe(false);
     });
   });
 
   describe('frequency', () => {
     it('should format and parse 11-digit Hertz fields', () => {
-      expect(formatKenwoodFrequencyHz(144_600_000)).to.equal('00144600000');
-      expect(parseKenwoodFrequencyHz('00144600000')).to.equal(144_600_000);
-      expect(parseKenwoodFrequencyHz('00430000000')).to.equal(430_000_000);
+      expect(formatKenwoodFrequencyHz(144_600_000)).toBe('00144600000');
+      expect(parseKenwoodFrequencyHz('00144600000')).toBe(144_600_000);
+      expect(parseKenwoodFrequencyHz('00430000000')).toBe(430_000_000);
     });
 
     it('should format and parse 10-digit Hertz fields', () => {
-      expect(formatKenwoodFrequencyHz(144_600_000, 10)).to.equal('0144600000');
-      expect(parseKenwoodFrequencyHz('0144600000')).to.equal(144_600_000);
+      expect(formatKenwoodFrequencyHz(144_600_000, 10)).toBe('0144600000');
+      expect(parseKenwoodFrequencyHz('0144600000')).toBe(144_600_000);
     });
 
     it('should reject invalid frequency fields', () => {
-      expect(parseKenwoodFrequencyHz('abc')).to.equal(undefined);
-      expect(parseKenwoodFrequencyHz('0')).to.equal(undefined);
+      expect(parseKenwoodFrequencyHz('abc')).toBe(undefined);
+      expect(parseKenwoodFrequencyHz('0')).toBe(undefined);
     });
   });
 
@@ -72,12 +71,12 @@ describe('kenwood CAT control', () => {
         ['FM', 'NFM', 'AM'],
       );
 
-      expect(parsed).to.include({
+      expect(parsed).toMatchObject({
         band: 0,
         frequencyHz: 144_600_000,
         mode: 'FM',
       });
-      expect(kenwoodFoWithFrequency(parsed, 146_520_000, 10)[1]).to.equal('0146520000');
+      expect(kenwoodFoWithFrequency(parsed, 146_520_000, 10)[1]).toBe('0146520000');
     });
   });
 });

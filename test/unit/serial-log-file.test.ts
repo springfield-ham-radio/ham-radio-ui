@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { RadioModelId, type RadioId } from '@springfield/ham-radio-api';
 import {
   SERIAL_LOG_FILE_KIND,
@@ -32,21 +31,21 @@ describe('defaultSerialLogFileName', () => {
     const timestamp = new Date('2026-08-22T19:44:01.250Z');
     const fileName = defaultSerialLogFileName('write', radioId, timestamp);
 
-    expect(fileName).to.equal('baofeng-uv5r-write-serial-2026-08-22T19-44-01-250Z.json');
+    expect(fileName).toBe('baofeng-uv5r-write-serial-2026-08-22T19-44-01-250Z.json');
   });
 
   it('falls back to a generic model when no radio is loaded', () => {
     const timestamp = new Date('2026-08-22T19:44:01.250Z');
     const fileName = defaultSerialLogFileName('import', undefined, timestamp);
 
-    expect(fileName).to.equal('radio-import-serial-2026-08-22T19-44-01-250Z.json');
+    expect(fileName).toBe('radio-import-serial-2026-08-22T19-44-01-250Z.json');
   });
 
   it('names a CAT session log', () => {
     const timestamp = new Date('2026-08-22T19:44:01.250Z');
     const fileName = defaultSerialLogFileName('cat', radioId, timestamp);
 
-    expect(fileName).to.equal('baofeng-uv5r-cat-serial-2026-08-22T19-44-01-250Z.json');
+    expect(fileName).toBe('baofeng-uv5r-cat-serial-2026-08-22T19-44-01-250Z.json');
   });
 });
 
@@ -60,15 +59,15 @@ describe('serializeSerialLogFile', () => {
     });
     const parsed = JSON.parse(json) as Record<string, unknown>;
 
-    expect(parsed.kind).to.equal(SERIAL_LOG_FILE_KIND);
-    expect(parsed.version).to.equal(SERIAL_LOG_FILE_VERSION);
-    expect(parsed.operation).to.equal('write');
-    expect(parsed.serialPortPath).to.equal('/dev/cu.usbserial-0001');
-    expect(parsed.radioId).to.deep.equal({
+    expect(parsed.kind).toBe(SERIAL_LOG_FILE_KIND);
+    expect(parsed.version).toBe(SERIAL_LOG_FILE_VERSION);
+    expect(parsed.operation).toBe('write');
+    expect(parsed.serialPortPath).toBe('/dev/cu.usbserial-0001');
+    expect(parsed.radioId).toEqual({
       model: 'baofeng-uv5r',
       name: 'Baofeng UV-5R',
       manufacturer: 'Baofeng',
     });
-    expect(parsed.log).to.deep.equal(log);
+    expect(parsed.log).toEqual(log);
   });
 });

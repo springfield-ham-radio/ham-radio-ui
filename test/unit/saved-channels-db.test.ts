@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType, type RadioChannel } from '@springfield/ham-radio-api';
 import {
   matchesSavedChannelSearch,
@@ -22,10 +21,10 @@ const sampleChannel: RadioChannel = {
 describe('saved-channels-db', () => {
   describe('toneTypeToDb / toneTypeFromDb', () => {
     it('round-trips CTCSS and DCS', () => {
-      expect(toneTypeToDb(RadioToneType.CTCSS)).to.equal('CTCSS');
-      expect(toneTypeToDb(RadioToneType.DCS)).to.equal('DCS');
-      expect(toneTypeFromDb('CTCSS')).to.equal(RadioToneType.CTCSS);
-      expect(toneTypeFromDb('DCS')).to.equal(RadioToneType.DCS);
+      expect(toneTypeToDb(RadioToneType.CTCSS)).toBe('CTCSS');
+      expect(toneTypeToDb(RadioToneType.DCS)).toBe('DCS');
+      expect(toneTypeFromDb('CTCSS')).toBe(RadioToneType.CTCSS);
+      expect(toneTypeFromDb('DCS')).toBe(RadioToneType.DCS);
     });
   });
 
@@ -48,16 +47,16 @@ describe('saved-channels-db', () => {
 
       const model = savedChannelRowToModel(row);
 
-      expect(model.id).to.equal(RadioChannelId(row.id));
-      expect(model.name).to.equal('Local RPT');
-      expect(model.kind).to.equal('repeater');
-      expect(model.transmitFrequency).to.equal(Frequency(146_520_000));
-      expect(model.receiveFrequency).to.equal(Frequency(146_520_000));
-      expect(model.transmitTone).to.deep.equal({ tone: 885, type: RadioToneType.CTCSS });
-      expect(model.receiveTone).to.deep.equal({ tone: 23, type: RadioToneType.DCS });
-      expect(model.notes).to.equal('Club repeater');
-      expect(model.createdAt).to.equal(1_000);
-      expect(model.updatedAt).to.equal(2_000);
+      expect(model.id).toBe(RadioChannelId(row.id));
+      expect(model.name).toBe('Local RPT');
+      expect(model.kind).toBe('repeater');
+      expect(model.transmitFrequency).toBe(Frequency(146_520_000));
+      expect(model.receiveFrequency).toBe(Frequency(146_520_000));
+      expect(model.transmitTone).toEqual({ tone: 885, type: RadioToneType.CTCSS });
+      expect(model.receiveTone).toEqual({ tone: 23, type: RadioToneType.DCS });
+      expect(model.notes).toBe('Club repeater');
+      expect(model.createdAt).toBe(1_000);
+      expect(model.updatedAt).toBe(2_000);
     });
   });
 
@@ -68,19 +67,19 @@ describe('saved-channels-db', () => {
         updatedAt: 20,
       });
 
-      expect(saved.id).to.be.a('string');
-      expect(saved.name).to.equal('Local RPT');
-      expect(saved.transmitFrequency).to.equal(sampleChannel.transmitFrequency);
-      expect(saved.receiveTone).to.deep.equal(sampleChannel.receiveTone);
-      expect(saved.createdAt).to.equal(10);
-      expect(saved.updatedAt).to.equal(20);
-      expect(saved.kind).to.equal('channel');
+      expect(saved.id).toBeTypeOf('string');
+      expect(saved.name).toBe('Local RPT');
+      expect(saved.transmitFrequency).toBe(sampleChannel.transmitFrequency);
+      expect(saved.receiveTone).toEqual(sampleChannel.receiveTone);
+      expect(saved.createdAt).toBe(10);
+      expect(saved.updatedAt).toBe(20);
+      expect(saved.kind).toBe('channel');
     });
   });
 
   describe('radioToneFromDb', () => {
     it('builds a RadioTone from stored columns', () => {
-      expect(radioToneFromDb(1000, 'CTCSS')).to.deep.equal({ tone: 1000, type: RadioToneType.CTCSS });
+      expect(radioToneFromDb(1000, 'CTCSS')).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
     });
   });
 
@@ -88,17 +87,17 @@ describe('saved-channels-db', () => {
     it('matches by name or frequency text', () => {
       const saved = radioChannelToSavedChannel(sampleChannel);
 
-      expect(matchesSavedChannelSearch(saved, 'local')).to.equal(true);
-      expect(matchesSavedChannelSearch(saved, '146.5200')).to.equal(true);
-      expect(matchesSavedChannelSearch(saved, '999')).to.equal(false);
-      expect(matchesSavedChannelSearch(saved, '   ')).to.equal(true);
+      expect(matchesSavedChannelSearch(saved, 'local')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, '146.5200')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, '999')).toBe(false);
+      expect(matchesSavedChannelSearch(saved, '   ')).toBe(true);
     });
 
     it('matches repeater rows by the repeater kind label', () => {
       const saved = radioChannelToSavedChannel(sampleChannel, { kind: 'repeater' });
 
-      expect(matchesSavedChannelSearch(saved, 'repeater')).to.equal(true);
-      expect(matchesSavedChannelSearch(radioChannelToSavedChannel(sampleChannel), 'repeater')).to.equal(false);
+      expect(matchesSavedChannelSearch(saved, 'repeater')).toBe(true);
+      expect(matchesSavedChannelSearch(radioChannelToSavedChannel(sampleChannel), 'repeater')).toBe(false);
     });
   });
 });

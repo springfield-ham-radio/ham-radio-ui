@@ -23,7 +23,7 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix --fix-suggestions",
     "test": "yarn test:unit",
-    "test:unit": "tsx --test test/unit/**/*.test.ts",
+    "test:unit": "vitest run test/unit",
     "tauri": "tauri",
     "pretauri:dev": "yarn bundle:sniffer",
     "tauri:dev": "tauri dev",
@@ -61,16 +61,14 @@
     "@semantic-release/npm": "13.1.5",
     "@springfield/radio-module-baofeng": "^3.1.0",
     "@tauri-apps/cli": "^2.10.1",
-    "@types/chai": "5.2.3",
     "@types/node": "26.5.1",
     "@types/sortablejs": "^1",
-    "chai": "6.2.2",
     "conventional-changelog-conventionalcommits": "9.3.1",
     "oxlint": "1.82.0",
     "semantic-release": "25.0.9",
     "tailwindcss": "^4.1.18",
-    "tsx": "4.23.13",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "^5.0.1"
   },
   "resolutions": {
     "conventional-changelog-conventionalcommits": "9.3.1"

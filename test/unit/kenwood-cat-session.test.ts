@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   KenwoodCatSession,
   type CatTransport,
@@ -86,20 +85,20 @@ describe('KenwoodCatSession', () => {
     });
     const status = await session.connect();
 
-    expect(transport.sent).to.deep.equal(['ID', 'BC', 'FO 0', 'PC 0', 'FO 1', 'PC 1']);
-    expect(status.radioIdentity).to.equal('TM-D710');
-    expect(status.dualBand).to.equal(true);
-    expect(status.controlBand).to.equal(0);
-    expect(status.powers).to.deep.equal(['High', 'Medium', 'Low']);
-    expect(status.vfos).to.have.length(2);
-    expect(status.vfos[0]).to.include({
+    expect(transport.sent).toEqual(['ID', 'BC', 'FO 0', 'PC 0', 'FO 1', 'PC 1']);
+    expect(status.radioIdentity).toBe('TM-D710');
+    expect(status.dualBand).toBe(true);
+    expect(status.controlBand).toBe(0);
+    expect(status.powers).toEqual(['High', 'Medium', 'Low']);
+    expect(status.vfos).toHaveLength(2);
+    expect(status.vfos[0]).toMatchObject({
       band: 0,
       label: 'A',
       frequencyHz: 144_600_000,
       mode: 'FM',
       power: 'High',
     });
-    expect(status.vfos[1]).to.include({
+    expect(status.vfos[1]).toMatchObject({
       band: 1,
       label: 'B',
       frequencyHz: 440_000_000,
@@ -119,12 +118,12 @@ describe('KenwoodCatSession', () => {
     });
     const status = await session.connect();
 
-    expect(transport.sent[0]).to.equal('');
-    expect(transport.sent).to.deep.equal(['', 'ID', 'FQ', 'FO', 'MD', 'PC']);
-    expect(status.radioIdentity).to.equal('TH-F6');
-    expect(status.dualBand).to.equal(false);
-    expect(status.vfos).to.have.length(1);
-    expect(status.vfos[0]).to.include({
+    expect(transport.sent[0]).toBe('');
+    expect(transport.sent).toEqual(['', 'ID', 'FQ', 'FO', 'MD', 'PC']);
+    expect(status.radioIdentity).toBe('TH-F6');
+    expect(status.dualBand).toBe(false);
+    expect(status.vfos).toHaveLength(1);
+    expect(status.vfos[0]).toMatchObject({
       frequencyHz: 146_200_000,
       mode: 'USB',
       power: 'Medium',
@@ -161,13 +160,13 @@ describe('KenwoodCatSession', () => {
     const transmitting = await session.setTransmit(true);
     const receiving = await session.setTransmit(false);
 
-    expect(transport.sent).to.include('FO 0,0146520000,0,0,0,0,0,0,08,08,000,00000000,0');
-    expect(transport.sent).to.include('FO 0,0146520000,0,0,0,0,0,0,08,08,000,00000000,1');
-    expect(transport.sent).to.include('PC 0,1');
-    expect(transport.sent).to.include('TX');
-    expect(transport.sent).to.include('RX');
-    expect(transmitting.transmitting).to.equal(true);
-    expect(receiving.transmitting).to.equal(false);
+    expect(transport.sent).toContain('FO 0,0146520000,0,0,0,0,0,0,08,08,000,00000000,0');
+    expect(transport.sent).toContain('FO 0,0146520000,0,0,0,0,0,0,08,08,000,00000000,1');
+    expect(transport.sent).toContain('PC 0,1');
+    expect(transport.sent).toContain('TX');
+    expect(transport.sent).toContain('RX');
+    expect(transmitting.transmitting).toBe(true);
+    expect(receiving.transmitting).toBe(false);
   });
 
   it('should close the transport on disconnect', async () => {
@@ -182,8 +181,8 @@ describe('KenwoodCatSession', () => {
     await session.connect();
     await session.disconnect();
 
-    expect(transport.closed).to.equal(true);
-    expect(session.status).to.equal(undefined);
+    expect(transport.closed).toBe(true);
+    expect(session.status).toBe(undefined);
   });
 
   it('should discard a wake CR NAK before reading ID', async () => {
@@ -198,8 +197,8 @@ describe('KenwoodCatSession', () => {
     });
     const status = await session.connect();
 
-    expect(status.radioIdentity).to.equal('TH-F6');
-    expect(transport.prebuffered).to.deep.equal([]);
+    expect(status.radioIdentity).toBe('TH-F6');
+    expect(transport.prebuffered).toEqual([]);
   });
 
   it('should skip a command echo and use the ID payload', async () => {
@@ -213,7 +212,7 @@ describe('KenwoodCatSession', () => {
     });
     const status = await session.connect();
 
-    expect(status.radioIdentity).to.equal('TM-D710');
+    expect(status.radioIdentity).toBe('TM-D710');
   });
 });
 
@@ -227,7 +226,7 @@ describe('stationLogDraftFromCatVfo', () => {
         mode: 'FM',
         power: 'High',
       }),
-    ).to.include({
+    ).toMatchObject({
       frequencyHz: 146_520_000,
       mode: 'FM',
       band: '2m',

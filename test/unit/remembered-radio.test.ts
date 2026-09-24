@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { RadioModelId, type RadioId } from '@springfield/ham-radio-api';
 import {
   parseRememberedRadio,
@@ -21,11 +20,11 @@ const tmD710: RadioId = {
 
 describe('remembered radio', () => {
   it('should fall back to undefined when storage is empty or invalid', () => {
-    expect(parseRememberedRadio(null)).to.equal(undefined);
-    expect(parseRememberedRadio('')).to.equal(undefined);
-    expect(parseRememberedRadio('{')).to.equal(undefined);
-    expect(parseRememberedRadio('[]')).to.equal(undefined);
-    expect(parseRememberedRadio(JSON.stringify({ model: 'baofeng-uv5r' }))).to.equal(undefined);
+    expect(parseRememberedRadio(null)).toBe(undefined);
+    expect(parseRememberedRadio('')).toBe(undefined);
+    expect(parseRememberedRadio('{')).toBe(undefined);
+    expect(parseRememberedRadio('[]')).toBe(undefined);
+    expect(parseRememberedRadio(JSON.stringify({ model: 'baofeng-uv5r' }))).toBe(undefined);
   });
 
   it('should parse a stored radio and ignore unknown fields', () => {
@@ -38,7 +37,7 @@ describe('remembered radio', () => {
           extra: true,
         }),
       ),
-    ).to.deep.equal(uv5r);
+    ).toEqual(uv5r);
   });
 
   it('should reject blank identity fields', () => {
@@ -50,26 +49,26 @@ describe('remembered radio', () => {
           manufacturer: 'Baofeng',
         }),
       ),
-    ).to.equal(undefined);
+    ).toBe(undefined);
   });
 
   it('should round-trip a radio through serialize and parse', () => {
-    expect(parseRememberedRadio(serializeRememberedRadio(uv5r))).to.deep.equal(uv5r);
+    expect(parseRememberedRadio(serializeRememberedRadio(uv5r))).toEqual(uv5r);
   });
 
   describe('resolveRememberedRadio', () => {
     it('should return undefined when nothing is remembered', () => {
-      expect(resolveRememberedRadio(undefined, [uv5r, tmD710])).to.equal(undefined);
+      expect(resolveRememberedRadio(undefined, [uv5r, tmD710])).toBe(undefined);
     });
 
     it('should return the catalog radio when the remembered model is still installed', () => {
       const remembered = parseRememberedRadio(serializeRememberedRadio(uv5r));
 
-      expect(resolveRememberedRadio(remembered, [tmD710, uv5r])).to.equal(uv5r);
+      expect(resolveRememberedRadio(remembered, [tmD710, uv5r])).toBe(uv5r);
     });
 
     it('should return undefined when the remembered radio is no longer installed', () => {
-      expect(resolveRememberedRadio(uv5r, [tmD710])).to.equal(undefined);
+      expect(resolveRememberedRadio(uv5r, [tmD710])).toBe(undefined);
     });
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import type { RadioMemoryConfig, RadioMemoryMap } from '@springfield/ham-radio-api';
 import {
   bufferOffsetToRadioAddress,
@@ -66,8 +65,8 @@ describe('codec-display', () => {
     it('should pack whole-byte fields and bitfields into a 16-byte record', () => {
       const layout = layoutStructFields(channelMap.structs[0]!.fields);
 
-      expect(layout.recordSize).to.equal(16);
-      expect(layout.slots.map((slot) => [slot.id, slot.offset, slot.size])).to.deep.equal([
+      expect(layout.recordSize).toBe(16);
+      expect(layout.slots.map((slot) => [slot.id, slot.offset, slot.size])).toEqual([
         ['rxfreq', 0, 4],
         ['txfreq', 4, 4],
         ['rxtone', 8, 2],
@@ -77,13 +76,13 @@ describe('codec-display', () => {
         ['power', 12, 1],
         ['name', 13, 3],
       ]);
-      expect(layout.slots.find((slot) => slot.id === 'rxfreq')?.valueKind).to.equal('lbcd');
-      expect(layout.slots.find((slot) => slot.id === 'scan')).to.include({
+      expect(layout.slots.find((slot) => slot.id === 'rxfreq')?.valueKind).toBe('lbcd');
+      expect(layout.slots.find((slot) => slot.id === 'scan')).toMatchObject({
         bitOffset: 4,
         bitWidth: 1,
         reserved: false,
       });
-      expect(groupLayoutBands(layout.slots).map((band) => band.kind)).to.deep.equal([
+      expect(groupLayoutBands(layout.slots).map((band) => band.kind)).toEqual([
         'field',
         'field',
         'field',
@@ -98,23 +97,23 @@ describe('codec-display', () => {
     it('should assign channel-binding roles and address spans', () => {
       const described = describeMemoryMap(channelMap);
 
-      expect(described.version).to.equal('1.0.0');
-      expect(described.structs[0]?.id).to.equal('channels');
-      expect(described.structs[0]?.role).to.equal('records');
-      expect(described.structs[0]?.span).to.deep.equal({ start: 0, end: 2047 });
-      expect(described.structs[0]?.notes).to.include('Empty when first byte is 0xFF');
-      expect(described.structs[1]?.role).to.equal('names');
-      expect(described.structs[1]?.span.start).to.equal(0x1000);
+      expect(described.version).toBe('1.0.0');
+      expect(described.structs[0]?.id).toBe('channels');
+      expect(described.structs[0]?.role).toBe('records');
+      expect(described.structs[0]?.span).toEqual({ start: 0, end: 2047 });
+      expect(described.structs[0]?.notes).toContain('Empty when first byte is 0xFF');
+      expect(described.structs[1]?.role).toBe('names');
+      expect(described.structs[1]?.span.start).toBe(0x1000);
     });
 
     it('should split channel structs from settings structs', () => {
       const channels = filterMemoryMap(channelMap, 'channels');
       const settings = filterMemoryMap(channelMap, 'settings');
 
-      expect(channels.structs.map((struct) => struct.id)).to.deep.equal(['channels', 'names']);
-      expect(channels.channelBindings?.records).to.equal('channels');
-      expect(settings.structs.map((struct) => struct.id)).to.deep.equal(['squelch']);
-      expect(settings.channelBindings).to.equal(undefined);
+      expect(channels.structs.map((struct) => struct.id)).toEqual(['channels', 'names']);
+      expect(channels.channelBindings?.records).toBe('channels');
+      expect(settings.structs.map((struct) => struct.id)).toEqual(['squelch']);
+      expect(settings.channelBindings).toBe(undefined);
     });
 
     it('should treat every struct as settings when there are no channel bindings', () => {
@@ -126,8 +125,8 @@ describe('codec-display', () => {
       const settings = filterMemoryMap(unbound, 'settings');
       const channels = filterMemoryMap(unbound, 'channels');
 
-      expect(channels.structs).to.deep.equal([]);
-      expect(settings.structs.map((struct) => struct.id)).to.deep.equal(['channels', 'names', 'squelch']);
+      expect(channels.structs).toEqual([]);
+      expect(settings.structs.map((struct) => struct.id)).toEqual(['channels', 'names', 'squelch']);
     });
   });
 
@@ -144,9 +143,9 @@ describe('codec-display', () => {
         },
       };
 
-      expect(Object.keys(filterMemoryConfig(config, 'channels')?.segments ?? {})).to.deep.equal(['channels']);
-      expect(Object.keys(filterMemoryConfig(config, 'settings')?.segments ?? {})).to.deep.equal(['settings']);
-      expect(filterMemoryConfig(undefined, 'channels')).to.equal(undefined);
+      expect(Object.keys(filterMemoryConfig(config, 'channels')?.segments ?? {})).toEqual(['channels']);
+      expect(Object.keys(filterMemoryConfig(config, 'settings')?.segments ?? {})).toEqual(['settings']);
+      expect(filterMemoryConfig(undefined, 'channels')).toBe(undefined);
     });
   });
 
@@ -154,8 +153,8 @@ describe('codec-display', () => {
     it('should pretty-print the memory map', () => {
       const json = formatCodecJson(channelMap);
 
-      expect(json).to.include('"id": "channels"');
-      expect(json).to.include('"channelBindings"');
+      expect(json).toContain('"id": "channels"');
+      expect(json).toContain('"channelBindings"');
     });
   });
 
@@ -164,8 +163,8 @@ describe('codec-display', () => {
       const described = describeMemoryMap(channelMap);
       const channels = described.structs[0]!;
 
-      expect(codecStructInstanceAddress(channels, 0)).to.equal(0);
-      expect(codecStructInstanceAddress(channels, 2)).to.equal(32);
+      expect(codecStructInstanceAddress(channels, 0)).toBe(0);
+      expect(codecStructInstanceAddress(channels, 2)).toBe(32);
 
       const grouped = {
         ...channels,
@@ -174,9 +173,9 @@ describe('codec-display', () => {
         stride: 16,
       };
 
-      expect(codecStructInstanceAddress(grouped, 0)).to.equal(0);
-      expect(codecStructInstanceAddress(grouped, 1)).to.equal(16);
-      expect(codecStructInstanceAddress(grouped, 2)).to.equal(40);
+      expect(codecStructInstanceAddress(grouped, 0)).toBe(0);
+      expect(codecStructInstanceAddress(grouped, 1)).toBe(16);
+      expect(codecStructInstanceAddress(grouped, 2)).toBe(40);
     });
   });
 
@@ -195,14 +194,14 @@ describe('codec-display', () => {
       const hits = collectCodecByteHits(described, 0x2000, memoryConfig);
       const channelTwo = codecHitAtOffset(hits, 32);
 
-      expect(channelTwo).to.include({
+      expect(channelTwo).toMatchObject({
         structId: 'channels',
         instanceIndex: 2,
         fieldId: 'rxfreq',
       });
 
       const nameByte = codecHitAtOffset(hits, 32 + 13);
-      expect(nameByte?.fieldId).to.equal('name');
+      expect(nameByte?.fieldId).toBe('name');
 
       const selected = codecSelectionOffsets(
         described,
@@ -211,8 +210,8 @@ describe('codec-display', () => {
         memoryConfig,
       );
 
-      expect(selected.instance).to.deep.equal([32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]);
-      expect(selected.field).to.deep.equal([36, 37, 38, 39]);
+      expect(selected.instance).toEqual([32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]);
+      expect(selected.field).toEqual([36, 37, 38, 39]);
     });
 
     it('should map packed settings offsets back to EEPROM addresses', () => {
@@ -227,8 +226,8 @@ describe('codec-display', () => {
       };
       const packedSize = 6144 + 320;
 
-      expect(bufferOffsetToRadioAddress(6144, packedConfig, packedSize)).to.equal(7872);
-      expect(bufferOffsetToRadioAddress(0x1ee0, packedConfig, 8192)).to.equal(0x1ee0);
+      expect(bufferOffsetToRadioAddress(6144, packedConfig, packedSize)).toBe(7872);
+      expect(bufferOffsetToRadioAddress(0x1ee0, packedConfig, 8192)).toBe(0x1ee0);
     });
   });
 
@@ -238,12 +237,12 @@ describe('codec-display', () => {
       const toneSlot = { id: 'rxtone', offset: 8, size: 2, reserved: false, typeLabel: 'tone', valueKind: 'tone' };
       const scanSlot = { id: 'scan', offset: 12, size: 1, reserved: false, typeLabel: '1b', valueKind: 'boolean' };
 
-      expect(formatCodecSettingValue(146_520_000, freqSlot)).to.equal('146.5200 MHz');
-      expect(formatCodecSettingValue(162_550_000, { id: 'freq', offset: 0, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).to.equal('162.5500 MHz');
-      expect(formatCodecSettingValue(600_000, { id: 'offset', offset: 10, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).to.equal('0.6000 MHz');
-      expect(formatCodecSettingValue({ mode: 'ctcss', value: 885 }, toneSlot)).to.equal('CTCSS 88.5');
-      expect(formatCodecSettingValue({ mode: 'none' }, toneSlot)).to.equal('None');
-      expect(formatCodecSettingValue(true, scanSlot)).to.equal('On');
+      expect(formatCodecSettingValue(146_520_000, freqSlot)).toBe('146.5200 MHz');
+      expect(formatCodecSettingValue(162_550_000, { id: 'freq', offset: 0, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).toBe('162.5500 MHz');
+      expect(formatCodecSettingValue(600_000, { id: 'offset', offset: 10, size: 4, reserved: false, typeLabel: 'u32', valueKind: 'integer' })).toBe('0.6000 MHz');
+      expect(formatCodecSettingValue({ mode: 'ctcss', value: 885 }, toneSlot)).toBe('CTCSS 88.5');
+      expect(formatCodecSettingValue({ mode: 'none' }, toneSlot)).toBe('None');
+      expect(formatCodecSettingValue(true, scanSlot)).toBe('On');
     });
   });
 
@@ -251,8 +250,8 @@ describe('codec-display', () => {
     it('should call channel-bound structs Channel', () => {
       const described = describeMemoryMap(channelMap);
 
-      expect(codecInstanceLabel(described.structs[0]!)).to.equal('Channel');
-      expect(codecInstanceLabel(described.structs[2]!)).to.equal('squelch');
+      expect(codecInstanceLabel(described.structs[0]!)).toBe('Channel');
+      expect(codecInstanceLabel(described.structs[2]!)).toBe('squelch');
     });
   });
 });

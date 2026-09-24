@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   SNIFFER_CAPTURE_FILE_KIND,
   SNIFFER_CAPTURE_FILE_VERSION,
@@ -42,7 +41,7 @@ const log = {
 
 describe('defaultSnifferCaptureFileName', () => {
   it('should include a filesystem-safe timestamp', () => {
-    expect(defaultSnifferCaptureFileName(new Date('2026-08-28T19:44:01.250Z'))).to.equal(
+    expect(defaultSnifferCaptureFileName(new Date('2026-08-28T19:44:01.250Z'))).toBe(
       'sniffer-capture-2026-08-28T19-44-01-250Z.json',
     );
   });
@@ -58,24 +57,24 @@ describe('serializeSnifferCaptureFile', () => {
     });
     const parsed = JSON.parse(json) as Record<string, unknown>;
 
-    expect(parsed.kind).to.equal(SNIFFER_CAPTURE_FILE_KIND);
-    expect(parsed.version).to.equal(SNIFFER_CAPTURE_FILE_VERSION);
-    expect(parsed.computerPort).to.equal('/dev/tty.usbserial-A');
-    expect(parsed.radioPort).to.equal('/dev/tty.usbserial-B');
-    expect(parsed.baudRate).to.equal(9600);
-    expect(parsed.savedAt).to.equal('2026-08-28T19:45:00.000Z');
-    expect(parsed.packets).to.deep.equal(packets);
-    expect(parsed.log).to.deep.equal(log);
+    expect(parsed.kind).toBe(SNIFFER_CAPTURE_FILE_KIND);
+    expect(parsed.version).toBe(SNIFFER_CAPTURE_FILE_VERSION);
+    expect(parsed.computerPort).toBe('/dev/tty.usbserial-A');
+    expect(parsed.radioPort).toBe('/dev/tty.usbserial-B');
+    expect(parsed.baudRate).toBe(9600);
+    expect(parsed.savedAt).toBe('2026-08-28T19:45:00.000Z');
+    expect(parsed.packets).toEqual(packets);
+    expect(parsed.log).toEqual(log);
   });
 });
 
 describe('snifferCaptureEntryCount', () => {
   it('should prefer SerialLogger entries when present', () => {
-    expect(snifferCaptureEntryCount(log, packets)).to.equal(1);
+    expect(snifferCaptureEntryCount(log, packets)).toBe(1);
   });
 
   it('should fall back to packet count when the log is missing', () => {
-    expect(snifferCaptureEntryCount(undefined, packets)).to.equal(1);
+    expect(snifferCaptureEntryCount(undefined, packets)).toBe(1);
   });
 });
 
@@ -91,7 +90,7 @@ describe('snifferPacketsFromSerialLog', () => {
       ],
     });
 
-    expect(result).to.deep.equal([
+    expect(result).toEqual([
       {
         id: 1,
         timestamp: '000.010',
@@ -120,7 +119,7 @@ describe('snifferPacketsFromSerialLog', () => {
   });
 
   it('should return an empty list when the log has no entries', () => {
-    expect(snifferPacketsFromSerialLog(undefined)).to.deep.equal([]);
-    expect(snifferPacketsFromSerialLog({})).to.deep.equal([]);
+    expect(snifferPacketsFromSerialLog(undefined)).toEqual([]);
+    expect(snifferPacketsFromSerialLog({})).toEqual([]);
   });
 });

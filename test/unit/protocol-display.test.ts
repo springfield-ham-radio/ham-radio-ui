@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import type { RadioMemoryConfig, RadioProtocolStep } from '@springfield/ham-radio-api';
 import {
   describeProtocolSteps,
@@ -77,22 +76,22 @@ const thF6Read: RadioProtocolStep[] = [
 describe('protocol-display', () => {
   describe('formatByteToken', () => {
     it('should render hex bytes as two-digit uppercase labels', () => {
-      expect(formatByteToken('0x50')).to.deep.include({ kind: 'hex', label: '50' });
-      expect(formatByteToken(32)).to.deep.include({ kind: 'hex', label: '20' });
+      expect(formatByteToken('0x50')).toMatchObject({ kind: 'hex', label: '50' });
+      expect(formatByteToken(32)).toMatchObject({ kind: 'hex', label: '20' });
     });
 
     it('should name well-known control bytes', () => {
-      expect(formatByteToken('0x06')).to.deep.include({ kind: 'control', label: 'ACK' });
-      expect(formatByteToken('0x0D')).to.deep.include({ kind: 'control', label: 'CR' });
+      expect(formatByteToken('0x06')).toMatchObject({ kind: 'control', label: 'ACK' });
+      expect(formatByteToken('0x0D')).toMatchObject({ kind: 'control', label: 'CR' });
     });
 
     it('should render single-character opcodes as ASCII', () => {
-      expect(formatByteToken('S')).to.deep.include({ kind: 'ascii', label: 'S' });
+      expect(formatByteToken('S')).toMatchObject({ kind: 'ascii', label: 'S' });
     });
 
     it('should keep $-placeholders distinct from literals', () => {
-      expect(formatByteToken('$address')).to.deep.include({ kind: 'placeholder', label: '$address' });
-      expect(formatByteToken('$data')).to.deep.include({ kind: 'placeholder', label: '$data' });
+      expect(formatByteToken('$address')).toMatchObject({ kind: 'placeholder', label: '$address' });
+      expect(formatByteToken('$data')).toMatchObject({ kind: 'placeholder', label: '$data' });
     });
   });
 
@@ -100,16 +99,16 @@ describe('protocol-display', () => {
     it('should describe a fixed-length opaque reply', () => {
       const message = formatExpect({ bytes: 8 });
 
-      expect(message.direction).to.equal('expect');
-      expect(message.annotation).to.equal('any 8 bytes');
-      expect(message.tokens[0]).to.deep.include({ kind: 'length', label: '8 bytes' });
+      expect(message.direction).toBe('expect');
+      expect(message.annotation).toBe('any 8 bytes');
+      expect(message.tokens[0]).toMatchObject({ kind: 'length', label: '8 bytes' });
     });
 
     it('should describe a delimiter-terminated reply', () => {
       const message = formatExpect({ until: '0x0D' });
 
-      expect(message.direction).to.equal('expect');
-      expect(message.annotation).to.equal('until CR');
+      expect(message.direction).toBe('expect');
+      expect(message.annotation).toBe('until CR');
     });
   });
 
@@ -117,11 +116,11 @@ describe('protocol-display', () => {
     it('should turn a clone read into handshake exchanges plus a chunk loop', () => {
       const steps = describeProtocolSteps(uv5rRead, uv5rMemory);
 
-      expect(steps).to.have.length(4);
-      expect(steps[0]?.kind).to.equal('exchange');
-      expect(steps[0]?.title).to.equal('Send magic number');
-      expect(steps[0]?.messages[0]?.direction).to.equal('send');
-      expect(steps[0]?.messages[0]?.tokens.map((token) => token.label)).to.deep.equal([
+      expect(steps).toHaveLength(4);
+      expect(steps[0]?.kind).toBe('exchange');
+      expect(steps[0]?.title).toBe('Send magic number');
+      expect(steps[0]?.messages[0]?.direction).toBe('send');
+      expect(steps[0]?.messages[0]?.tokens.map((token) => token.label)).toEqual([
         '50',
         'BB',
         'FF',
@@ -130,17 +129,17 @@ describe('protocol-display', () => {
         '07',
         '25',
       ]);
-      expect(steps[0]?.messages[1]?.tokens.map((token) => token.label)).to.deep.equal(['ACK']);
+      expect(steps[0]?.messages[1]?.tokens.map((token) => token.label)).toEqual(['ACK']);
 
       const loop = steps[3];
-      expect(loop?.kind).to.equal('read');
-      expect(loop?.loop?.label).to.equal('Each chunk');
-      expect(loop?.loop?.detail).to.include('64-byte');
-      expect(loop?.loop?.detail).to.include('channels');
-      expect(loop?.loop?.detail).to.include('settings');
-      expect(loop?.messages.map((message) => message.direction)).to.deep.equal(['send', 'expect', 'send', 'expect']);
-      expect(loop?.messages[0]?.tokens.map((token) => token.label)).to.deep.equal(['S', '$address', '$chunkSize']);
-      expect(loop?.messages[1]?.tokens.map((token) => token.label)).to.deep.equal(['X', '$address', '$length', '$data']);
+      expect(loop?.kind).toBe('read');
+      expect(loop?.loop?.label).toBe('Each chunk');
+      expect(loop?.loop?.detail).toContain('64-byte');
+      expect(loop?.loop?.detail).toContain('channels');
+      expect(loop?.loop?.detail).toContain('settings');
+      expect(loop?.messages.map((message) => message.direction)).toEqual(['send', 'expect', 'send', 'expect']);
+      expect(loop?.messages[0]?.tokens.map((token) => token.label)).toEqual(['S', '$address', '$chunkSize']);
+      expect(loop?.messages[1]?.tokens.map((token) => token.label)).toEqual(['X', '$address', '$length', '$data']);
     });
 
     it('should turn a clone write into a chunk loop with payload on send', () => {
@@ -165,18 +164,18 @@ describe('protocol-display', () => {
       );
 
       const loop = steps[0];
-      expect(loop?.kind).to.equal('write');
-      expect(loop?.loop?.label).to.equal('Each chunk');
-      expect(loop?.loop?.detail).to.include('16-byte');
-      expect(loop?.notes).to.include('Wait 50 ms after each block');
-      expect(loop?.notes.some((note) => note.includes('3312–3327'))).to.equal(true);
-      expect(loop?.messages[0]?.tokens.map((token) => token.label)).to.deep.equal([
+      expect(loop?.kind).toBe('write');
+      expect(loop?.loop?.label).toBe('Each chunk');
+      expect(loop?.loop?.detail).toContain('16-byte');
+      expect(loop?.notes).toContain('Wait 50 ms after each block');
+      expect(loop?.notes.some((note) => note.includes('3312–3327'))).toBe(true);
+      expect(loop?.messages[0]?.tokens.map((token) => token.label)).toEqual([
         'X',
         '$address',
         '$length',
         '$data',
       ]);
-      expect(loop?.messages[1]?.tokens.map((token) => token.label)).to.deep.equal(['ACK']);
+      expect(loop?.messages[1]?.tokens.map((token) => token.label)).toEqual(['ACK']);
     });
 
     it('should show CAT write commands per channel', () => {
@@ -205,15 +204,15 @@ describe('protocol-display', () => {
       );
 
       const loop = steps[0];
-      expect(loop?.kind).to.equal('catWrite');
-      expect(loop?.loop?.label).to.equal('Each channel');
-      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MW')))).to.equal(
+      expect(loop?.kind).toBe('catWrite');
+      expect(loop?.loop?.label).toBe('Each channel');
+      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MW')))).toBe(
         true,
       );
-      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MR')))).to.equal(
+      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MR')))).toBe(
         false,
       );
-      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MNA')))).to.equal(
+      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MNA')))).toBe(
         true,
       );
     });
@@ -228,20 +227,20 @@ describe('protocol-display', () => {
         },
       });
 
-      expect(steps[0]?.notes).to.include('Wait 150 ms after send');
-      expect(steps[1]?.messages[1]?.annotation).to.equal('until CR');
+      expect(steps[0]?.notes).toContain('Wait 150 ms after send');
+      expect(steps[1]?.messages[1]?.annotation).toBe('until CR');
 
       const loop = steps[2];
-      expect(loop?.kind).to.equal('catRead');
-      expect(loop?.loop?.label).to.equal('Each channel');
-      expect(loop?.loop?.detail).to.include('400');
-      expect(loop?.loop?.detail).to.include('kenwood-th-f6');
-      expect(loop?.notes).to.include('Timeout 2000 ms');
-      expect(loop?.notes).to.include('20 ms between commands');
-      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MR')))).to.equal(
+      expect(loop?.kind).toBe('catRead');
+      expect(loop?.loop?.label).toBe('Each channel');
+      expect(loop?.loop?.detail).toContain('400');
+      expect(loop?.loop?.detail).toContain('kenwood-th-f6');
+      expect(loop?.notes).toContain('Timeout 2000 ms');
+      expect(loop?.notes).toContain('20 ms between commands');
+      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MR')))).toBe(
         true,
       );
-      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MNA')))).to.equal(
+      expect(loop?.messages.some((message) => message.tokens.some((token) => token.label.includes('MNA')))).toBe(
         true,
       );
     });
@@ -251,8 +250,8 @@ describe('protocol-display', () => {
     it('should pretty-print the raw protocol steps', () => {
       const json = formatProtocolJson(uv5rRead);
 
-      expect(json).to.include('"description": "Send magic number"');
-      expect(json).to.include('"read"');
+      expect(json).toContain('"description": "Send magic number"');
+      expect(json).toContain('"read"');
     });
   });
 
@@ -267,7 +266,7 @@ describe('protocol-display', () => {
           rts: false,
           dtr: true,
         }),
-      ).to.equal('9600 baud · 8N1 · DTR on · RTS off');
+      ).toBe('9600 baud · 8N1 · DTR on · RTS off');
     });
   });
 });

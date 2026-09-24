@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
   importedRepeaterToRadioChannel,
@@ -23,63 +22,63 @@ describe('repeater-import', () => {
     it('parses RepeaterBook CSV into downlink RX and uplink TX', () => {
       const parsed = parseRepeaterImportCsv(repeaterBookCsv);
 
-      expect(parsed.format).to.equal('repeaterbook');
-      expect(parsed.repeaters).to.have.length(2);
+      expect(parsed.format).toBe('repeaterbook');
+      expect(parsed.repeaters).toHaveLength(2);
 
       const analog = parsed.repeaters[0]!;
-      expect(analog.sourceKey).to.equal('rb:23:21812');
-      expect(analog.callsign).to.equal('WJ1L');
-      expect(analog.city).to.equal('Lyman');
-      expect(analog.state).to.equal('Maine');
-      expect(analog.receiveFrequency).to.equal(Frequency(146_925_000));
-      expect(analog.transmitFrequency).to.equal(Frequency(146_325_000));
-      expect(analog.transmitTone).to.deep.equal({ tone: 1035, type: RadioToneType.CTCSS });
-      expect(analog.receiveTone).to.deep.equal({ tone: 0, type: RadioToneType.CTCSS });
-      expect(analog.operationalStatus).to.equal('On-air');
-      expect(analog.modes).to.equal('FM');
+      expect(analog.sourceKey).toBe('rb:23:21812');
+      expect(analog.callsign).toBe('WJ1L');
+      expect(analog.city).toBe('Lyman');
+      expect(analog.state).toBe('Maine');
+      expect(analog.receiveFrequency).toBe(Frequency(146_925_000));
+      expect(analog.transmitFrequency).toBe(Frequency(146_325_000));
+      expect(analog.transmitTone).toEqual({ tone: 1035, type: RadioToneType.CTCSS });
+      expect(analog.receiveTone).toEqual({ tone: 0, type: RadioToneType.CTCSS });
+      expect(analog.operationalStatus).toBe('On-air');
+      expect(analog.modes).toBe('FM');
     });
 
     it('parses RepeaterBook DCS PL codes and listed digital modes', () => {
       const parsed = parseRepeaterImportCsv(repeaterBookCsv);
       const digital = parsed.repeaters[1]!;
 
-      expect(digital.transmitTone).to.deep.equal({ tone: 23, type: RadioToneType.DCS });
-      expect(digital.receiveTone).to.deep.equal({ tone: 885, type: RadioToneType.CTCSS });
-      expect(digital.modes).to.equal('FM, DMR');
+      expect(digital.transmitTone).toEqual({ tone: 23, type: RadioToneType.DCS });
+      expect(digital.receiveTone).toEqual({ tone: 885, type: RadioToneType.CTCSS });
+      expect(digital.modes).toBe('FM, DMR');
     });
 
     it('parses CHIRP CSV duplex, tone, TSQL, and DTCS rows', () => {
       const parsed = parseRepeaterImportCsv(chirpCsv);
 
-      expect(parsed.format).to.equal('chirp');
-      expect(parsed.repeaters).to.have.length(4);
+      expect(parsed.format).toBe('chirp');
+      expect(parsed.repeaters).toHaveLength(4);
 
       const minusOffset = parsed.repeaters[0]!;
-      expect(minusOffset.sourceKey).to.equal('chirp:1:146640000');
-      expect(minusOffset.callsign).to.equal('W1AW');
-      expect(minusOffset.receiveFrequency).to.equal(Frequency(146_640_000));
-      expect(minusOffset.transmitFrequency).to.equal(Frequency(146_040_000));
-      expect(minusOffset.transmitTone).to.deep.equal({ tone: 885, type: RadioToneType.CTCSS });
-      expect(minusOffset.receiveTone).to.deep.equal({ tone: 0, type: RadioToneType.CTCSS });
-      expect(minusOffset.notes).to.equal('Newington');
+      expect(minusOffset.sourceKey).toBe('chirp:1:146640000');
+      expect(minusOffset.callsign).toBe('W1AW');
+      expect(minusOffset.receiveFrequency).toBe(Frequency(146_640_000));
+      expect(minusOffset.transmitFrequency).toBe(Frequency(146_040_000));
+      expect(minusOffset.transmitTone).toEqual({ tone: 885, type: RadioToneType.CTCSS });
+      expect(minusOffset.receiveTone).toEqual({ tone: 0, type: RadioToneType.CTCSS });
+      expect(minusOffset.notes).toBe('Newington');
 
       const simplex = parsed.repeaters[1]!;
-      expect(simplex.transmitFrequency).to.equal(Frequency(146_520_000));
-      expect(simplex.receiveFrequency).to.equal(Frequency(146_520_000));
-      expect(simplex.transmitTone.tone).to.equal(0);
+      expect(simplex.transmitFrequency).toBe(Frequency(146_520_000));
+      expect(simplex.receiveFrequency).toBe(Frequency(146_520_000));
+      expect(simplex.transmitTone.tone).toBe(0);
 
       const tsql = parsed.repeaters[2]!;
-      expect(tsql.transmitFrequency).to.equal(Frequency(447_100_000));
-      expect(tsql.transmitTone).to.deep.equal({ tone: 1000, type: RadioToneType.CTCSS });
-      expect(tsql.receiveTone).to.deep.equal({ tone: 1230, type: RadioToneType.CTCSS });
+      expect(tsql.transmitFrequency).toBe(Frequency(447_100_000));
+      expect(tsql.transmitTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
+      expect(tsql.receiveTone).toEqual({ tone: 1230, type: RadioToneType.CTCSS });
 
       const dtcs = parsed.repeaters[3]!;
-      expect(dtcs.transmitTone).to.deep.equal({ tone: 754, type: RadioToneType.DCS });
-      expect(dtcs.receiveTone).to.deep.equal({ tone: 754, type: RadioToneType.DCS });
+      expect(dtcs.transmitTone).toEqual({ tone: 754, type: RadioToneType.DCS });
+      expect(dtcs.receiveTone).toEqual({ tone: 754, type: RadioToneType.DCS });
     });
 
     it('rejects CSV files that are not RepeaterBook or CHIRP exports', () => {
-      expect(() => parseRepeaterImportCsv('name,tx_mhz\nA,146.52\n')).to.throw(/RepeaterBook or CHIRP/);
+      expect(() => parseRepeaterImportCsv('name,tx_mhz\nA,146.52\n')).toThrow(/RepeaterBook or CHIRP/);
     });
   });
 
@@ -88,10 +87,10 @@ describe('repeater-import', () => {
       const parsed = parseRepeaterImportCsv(repeaterBookCsv);
       const channel = importedRepeaterToRadioChannel(parsed.repeaters[0]!);
 
-      expect(channel.name).to.equal('WJ1L');
-      expect(channel.receiveFrequency).to.equal(Frequency(146_925_000));
-      expect(channel.transmitFrequency).to.equal(Frequency(146_325_000));
-      expect(channel.transmitTone).to.deep.equal({ tone: 1035, type: RadioToneType.CTCSS });
+      expect(channel.name).toBe('WJ1L');
+      expect(channel.receiveFrequency).toBe(Frequency(146_925_000));
+      expect(channel.transmitFrequency).toBe(Frequency(146_325_000));
+      expect(channel.transmitTone).toEqual({ tone: 1035, type: RadioToneType.CTCSS });
     });
   });
 });

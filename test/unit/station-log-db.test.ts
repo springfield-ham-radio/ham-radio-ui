@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   adifBandFromFrequencyHz,
   createStationLogQso,
@@ -11,14 +10,14 @@ import {
 describe('station-log-db', () => {
   describe('adifBandFromFrequencyHz', () => {
     it('maps common amateur allocations to ADIF band tokens', () => {
-      expect(adifBandFromFrequencyHz(146_520_000)).to.equal('2m');
-      expect(adifBandFromFrequencyHz(14_200_000)).to.equal('20m');
-      expect(adifBandFromFrequencyHz(446_000_000)).to.equal('70cm');
+      expect(adifBandFromFrequencyHz(146_520_000)).toBe('2m');
+      expect(adifBandFromFrequencyHz(14_200_000)).toBe('20m');
+      expect(adifBandFromFrequencyHz(446_000_000)).toBe('70cm');
     });
 
     it('returns undefined when frequency is missing or unknown', () => {
-      expect(adifBandFromFrequencyHz(undefined)).to.equal(undefined);
-      expect(adifBandFromFrequencyHz(1_000)).to.equal(undefined);
+      expect(adifBandFromFrequencyHz(undefined)).toBe(undefined);
+      expect(adifBandFromFrequencyHz(1_000)).toBe(undefined);
     });
   });
 
@@ -50,10 +49,10 @@ describe('station-log-db', () => {
 
       const model = stationLogQsoRowToModel(row);
 
-      expect(model.theirCallsign).to.equal('W1AW');
-      expect(model.frequencyHz).to.equal(146_520_000);
-      expect(model.adifExtra).to.deep.equal({ DXCC: '291' });
-      expect(model.theirQth).to.equal(undefined);
+      expect(model.theirCallsign).toBe('W1AW');
+      expect(model.frequencyHz).toBe(146_520_000);
+      expect(model.adifExtra).toEqual({ DXCC: '291' });
+      expect(model.theirQth).toBe(undefined);
     });
   });
 
@@ -66,10 +65,10 @@ describe('station-log-db', () => {
         frequencyHz: 146_520_000,
       });
 
-      expect(qso.theirCallsign).to.equal('W1AW');
-      expect(qso.mode).to.equal('FM');
-      expect(qso.band).to.equal('2m');
-      expect(qso.id).to.be.a('string');
+      expect(qso.theirCallsign).toBe('W1AW');
+      expect(qso.mode).toBe('FM');
+      expect(qso.band).toBe('2m');
+      expect(qso.id).toBeTypeOf('string');
     });
   });
 
@@ -84,13 +83,13 @@ describe('station-log-db', () => {
     });
 
     it('matches by callsign, name, mode, or frequency text', () => {
-      expect(matchesStationLogSearch(qso, '')).to.equal(true);
-      expect(matchesStationLogSearch(qso, 'w1aw')).to.equal(true);
-      expect(matchesStationLogSearch(qso, 'hiram')).to.equal(true);
-      expect(matchesStationLogSearch(qso, 'fm')).to.equal(true);
-      expect(matchesStationLogSearch(qso, '146.52')).to.equal(true);
-      expect(matchesStationLogSearch(qso, '2m')).to.equal(true);
-      expect(matchesStationLogSearch(qso, 'zz9')).to.equal(false);
+      expect(matchesStationLogSearch(qso, '')).toBe(true);
+      expect(matchesStationLogSearch(qso, 'w1aw')).toBe(true);
+      expect(matchesStationLogSearch(qso, 'hiram')).toBe(true);
+      expect(matchesStationLogSearch(qso, 'fm')).toBe(true);
+      expect(matchesStationLogSearch(qso, '146.52')).toBe(true);
+      expect(matchesStationLogSearch(qso, '2m')).toBe(true);
+      expect(matchesStationLogSearch(qso, 'zz9')).toBe(false);
     });
   });
 });

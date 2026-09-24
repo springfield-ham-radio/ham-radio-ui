@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { DEFAULT_UPDATE_CHECK_INTERVAL_MS } from '../../app/utils/app-update-settings.ts';
 import { shouldCheckForAppUpdate, updateDownloadPercent } from '../../app/utils/app-update-policy.ts';
 
@@ -17,7 +16,7 @@ describe('app update policy', () => {
         inFlight: false,
         readyToRestart: false,
       }),
-    ).to.be.true;
+    ).toBe(true);
   });
 
   it('should not start another check while one is in flight', () => {
@@ -31,7 +30,7 @@ describe('app update policy', () => {
         inFlight: true,
         readyToRestart: false,
       }),
-    ).to.be.false;
+    ).toBe(false);
   });
 
   it('should check on startup when auto-update is enabled', () => {
@@ -45,7 +44,7 @@ describe('app update policy', () => {
         inFlight: false,
         readyToRestart: false,
       }),
-    ).to.be.true;
+    ).toBe(true);
   });
 
   it('should skip startup and interval checks when auto-update is disabled', () => {
@@ -58,8 +57,8 @@ describe('app update policy', () => {
       readyToRestart: false,
     };
 
-    expect(shouldCheckForAppUpdate({ ...options, reason: 'startup' })).to.be.false;
-    expect(shouldCheckForAppUpdate({ ...options, reason: 'interval' })).to.be.false;
+    expect(shouldCheckForAppUpdate({ ...options, reason: 'startup' })).toBe(false);
+    expect(shouldCheckForAppUpdate({ ...options, reason: 'interval' })).toBe(false);
   });
 
   it('should skip interval checks until the interval has elapsed', () => {
@@ -73,7 +72,7 @@ describe('app update policy', () => {
         inFlight: false,
         readyToRestart: false,
       }),
-    ).to.be.false;
+    ).toBe(false);
 
     expect(
       shouldCheckForAppUpdate({
@@ -85,7 +84,7 @@ describe('app update policy', () => {
         inFlight: false,
         readyToRestart: false,
       }),
-    ).to.be.true;
+    ).toBe(true);
   });
 
   it('should check on interval when there is no previous check', () => {
@@ -99,7 +98,7 @@ describe('app update policy', () => {
         inFlight: false,
         readyToRestart: false,
       }),
-    ).to.be.true;
+    ).toBe(true);
   });
 
   it('should not check again after an update is ready to restart', () => {
@@ -112,14 +111,14 @@ describe('app update policy', () => {
       readyToRestart: true,
     };
 
-    expect(shouldCheckForAppUpdate({ ...options, reason: 'startup' })).to.be.false;
-    expect(shouldCheckForAppUpdate({ ...options, reason: 'interval' })).to.be.false;
-    expect(shouldCheckForAppUpdate({ ...options, reason: 'manual' })).to.be.false;
+    expect(shouldCheckForAppUpdate({ ...options, reason: 'startup' })).toBe(false);
+    expect(shouldCheckForAppUpdate({ ...options, reason: 'interval' })).toBe(false);
+    expect(shouldCheckForAppUpdate({ ...options, reason: 'manual' })).toBe(false);
   });
 
   it('should compute download percent from bytes transferred', () => {
-    expect(updateDownloadPercent({ downloaded: 0, contentLength: 0 })).to.equal(0);
-    expect(updateDownloadPercent({ downloaded: 50, contentLength: 200 })).to.equal(25);
-    expect(updateDownloadPercent({ downloaded: 200, contentLength: 200 })).to.equal(100);
+    expect(updateDownloadPercent({ downloaded: 0, contentLength: 0 })).toBe(0);
+    expect(updateDownloadPercent({ downloaded: 50, contentLength: 200 })).toBe(25);
+    expect(updateDownloadPercent({ downloaded: 200, contentLength: 200 })).toBe(100);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { kenwoodCatProfileFromConfig, lookupCatCode } from '../../app/utils/kenwood-cat-profile.ts';
 
 describe('kenwoodCatProfileFromConfig', () => {
@@ -16,12 +15,12 @@ describe('kenwoodCatProfileFromConfig', () => {
       powerBandIndex: true,
     });
 
-    expect(profile.wakeCr).to.equal(false);
-    expect(profile.vfoCount).to.equal(2);
-    expect(profile.vfoChannel).to.equal(true);
-    expect(profile.frequencyCommands).to.deep.equal(['FO']);
-    expect(profile.powers).to.deep.equal(['High', 'Medium', 'Low']);
-    expect(lookupCatCode(profile.powers, 'medium')).to.equal(1);
+    expect(profile.wakeCr).toBe(false);
+    expect(profile.vfoCount).toBe(2);
+    expect(profile.vfoChannel).toBe(true);
+    expect(profile.frequencyCommands).toEqual(['FO']);
+    expect(profile.powers).toEqual(['High', 'Medium', 'Low']);
+    expect(lookupCatCode(profile.powers, 'medium')).toBe(1);
   });
 
   it('should resolve a handheld profile with wake CR and FQ then FO', () => {
@@ -34,15 +33,15 @@ describe('kenwoodCatProfileFromConfig', () => {
       modeCommand: 'MD',
     });
 
-    expect(profile.wakeCr).to.equal(true);
-    expect(profile.vfoCount).to.equal(1);
-    expect(profile.vfoChannel).to.equal(false);
-    expect(profile.frequencyCommands).to.deep.equal(['FQ', 'FO']);
-    expect(profile.modeCommand).to.equal('MD');
-    expect(profile.frequencyWidth).to.equal(11);
+    expect(profile.wakeCr).toBe(true);
+    expect(profile.vfoCount).toBe(1);
+    expect(profile.vfoChannel).toBe(false);
+    expect(profile.frequencyCommands).toEqual(['FQ', 'FO']);
+    expect(profile.modeCommand).toBe('MD');
+    expect(profile.frequencyWidth).toBe(11);
   });
 
   it('should reject a non-Kenwood protocol', () => {
-    expect(() => kenwoodCatProfileFromConfig({ protocol: 'icom-ci-v' })).to.throw(/Kenwood CAT/);
+    expect(() => kenwoodCatProfileFromConfig({ protocol: 'icom-ci-v' })).toThrow(/Kenwood CAT/);
   });
 });

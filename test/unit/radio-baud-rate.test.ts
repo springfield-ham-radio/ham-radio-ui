@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   listedProgrammingBaudRates,
   parseRememberedBaudRates,
@@ -18,15 +17,15 @@ describe('radio baud rate', () => {
 
   describe('listedProgrammingBaudRates', () => {
     it('should return only the default baud rate when the radio lists none', () => {
-      expect(listedProgrammingBaudRates(singleRate)).to.deep.equal([9600]);
+      expect(listedProgrammingBaudRates(singleRate)).toEqual([9600]);
     });
 
     it('should return the driver list when the radio supports multiple rates', () => {
-      expect(listedProgrammingBaudRates(multipleRates)).to.deep.equal([9600, 19200, 38400, 57600]);
+      expect(listedProgrammingBaudRates(multipleRates)).toEqual([9600, 19200, 38400, 57600]);
     });
 
     it('should ignore an empty baudRates list and fall back to the default', () => {
-      expect(listedProgrammingBaudRates({ baudRate: 9600, baudRates: [] })).to.deep.equal([9600]);
+      expect(listedProgrammingBaudRates({ baudRate: 9600, baudRates: [] })).toEqual([9600]);
     });
 
     it('should drop non-integer and out-of-range values while keeping order', () => {
@@ -35,41 +34,41 @@ describe('radio baud rate', () => {
           baudRate: 9600,
           baudRates: [9600, 100, 19200, 19200, '38400', 57600.5],
         }),
-      ).to.deep.equal([9600, 19200]);
+      ).toEqual([9600, 19200]);
     });
   });
 
   describe('shouldSelectProgrammingBaudRate', () => {
     it('should hide the selector when the radio has a single rate', () => {
-      expect(shouldSelectProgrammingBaudRate(singleRate)).to.equal(false);
+      expect(shouldSelectProgrammingBaudRate(singleRate)).toBe(false);
     });
 
     it('should show the selector when the radio lists more than one rate', () => {
-      expect(shouldSelectProgrammingBaudRate(multipleRates)).to.equal(true);
+      expect(shouldSelectProgrammingBaudRate(multipleRates)).toBe(true);
     });
   });
 
   describe('resolveProgrammingBaudRate', () => {
     it('should select the driver default when nothing is remembered', () => {
-      expect(resolveProgrammingBaudRate(multipleRates, undefined)).to.equal(9600);
+      expect(resolveProgrammingBaudRate(multipleRates, undefined)).toBe(9600);
     });
 
     it('should select the remembered rate when it is still valid for the radio', () => {
-      expect(resolveProgrammingBaudRate(multipleRates, 19200)).to.equal(19200);
+      expect(resolveProgrammingBaudRate(multipleRates, 19200)).toBe(19200);
     });
 
     it('should fall back to the driver default when the remembered rate is not listed', () => {
-      expect(resolveProgrammingBaudRate(multipleRates, 115200)).to.equal(9600);
+      expect(resolveProgrammingBaudRate(multipleRates, 115200)).toBe(9600);
     });
 
     it('should use the first listed rate when the default is missing from baudRates', () => {
-      expect(resolveProgrammingBaudRate({ baudRate: 4800, baudRates: [9600, 19200] }, undefined)).to.equal(9600);
+      expect(resolveProgrammingBaudRate({ baudRate: 4800, baudRates: [9600, 19200] }, undefined)).toBe(9600);
     });
   });
 
   describe('programmingBaudRateSelectItems', () => {
     it('should map listed rates to select items', () => {
-      expect(programmingBaudRateSelectItems(multipleRates)).to.deep.equal([
+      expect(programmingBaudRateSelectItems(multipleRates)).toEqual([
         { label: '9600', value: 9600 },
         { label: '19200', value: 19200 },
         { label: '38400', value: 38400 },
@@ -80,10 +79,10 @@ describe('radio baud rate', () => {
 
   describe('remembered baud rates', () => {
     it('should fall back to an empty map when storage is empty or invalid', () => {
-      expect(parseRememberedBaudRates(null)).to.deep.equal({});
-      expect(parseRememberedBaudRates('')).to.deep.equal({});
-      expect(parseRememberedBaudRates('{')).to.deep.equal({});
-      expect(parseRememberedBaudRates('[]')).to.deep.equal({});
+      expect(parseRememberedBaudRates(null)).toEqual({});
+      expect(parseRememberedBaudRates('')).toEqual({});
+      expect(parseRememberedBaudRates('{')).toEqual({});
+      expect(parseRememberedBaudRates('[]')).toEqual({});
     });
 
     it('should keep integer baud rates keyed by radio model', () => {
@@ -95,7 +94,7 @@ describe('radio baud rate', () => {
         }),
       );
 
-      expect(parsed).to.deep.equal({
+      expect(parsed).toEqual({
         'kenwood-tm-d710a': 19200,
       });
     });
@@ -103,7 +102,7 @@ describe('radio baud rate', () => {
     it('should round-trip remembered rates through serialize and parse', () => {
       const remembered = { 'kenwood-tm-d710a': 38400, 'kenwood-th-f6': 4800 };
 
-      expect(parseRememberedBaudRates(serializeRememberedBaudRates(remembered))).to.deep.equal(remembered);
+      expect(parseRememberedBaudRates(serializeRememberedBaudRates(remembered))).toEqual(remembered);
     });
   });
 });

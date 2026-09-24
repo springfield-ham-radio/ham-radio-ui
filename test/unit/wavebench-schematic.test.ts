@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { designFilter, type FilterDesign } from '../../app/utils/wavebench-filters.ts';
 import {
   layoutSchematic,
@@ -58,7 +57,7 @@ function bandPass(): FilterDesign {
 function seriesSlot(layout: SchematicLayout, id: string) {
   const slot = layout.seriesSlots.find((candidate) => candidate.component.id === id);
 
-  expect(slot, `missing series part ${id}`).to.exist;
+  expect(slot, `missing series part ${id}`).toEqual(expect.anything());
 
   return slot!;
 }
@@ -75,17 +74,17 @@ function assertContinuousRail(layout: SchematicLayout): void {
     ...layout.seriesWires.map((wire) => [Math.min(wire.x1, wire.x2), Math.max(wire.x1, wire.x2)] as [number, number]),
   ].sort((left, right) => left[0] - right[0]);
 
-  expect(ranges.length).to.be.greaterThan(1);
+  expect(ranges.length).toBeGreaterThan(1);
 
   let coveredEnd = ranges[0]![1];
 
   for (const [rangeStart, rangeEnd] of ranges.slice(1)) {
-    expect(rangeStart, 'series rail has a gap between parts').to.be.at.most(coveredEnd);
+    expect(rangeStart, 'series rail has a gap between parts').toBeLessThanOrEqual(coveredEnd);
     coveredEnd = Math.max(coveredEnd, rangeEnd);
   }
 
-  expect(ranges[0]![0]).to.equal(SCHEMATIC_SOURCE_X + SCHEMATIC_SOURCE_RADIUS);
-  expect(coveredEnd).to.be.at.least(layout.voutX);
+  expect(ranges[0]![0]).toBe(SCHEMATIC_SOURCE_X + SCHEMATIC_SOURCE_RADIUS);
+  expect(coveredEnd).toBeGreaterThanOrEqual(layout.voutX);
 }
 
 describe('wavebench-schematic', () => {
@@ -95,8 +94,8 @@ describe('wavebench-schematic', () => {
       const source = seriesSlot(layout, 'Rs');
       const inductor = seriesSlot(layout, 'L');
 
-      expect(inductor.left).to.be.greaterThan(source.right);
-      expect(railWireFrom(layout, source.right, inductor.left)).to.exist;
+      expect(inductor.left).toBeGreaterThan(source.right);
+      expect(railWireFrom(layout, source.right, inductor.left)).toEqual(expect.anything());
       assertContinuousRail(layout);
     });
 
@@ -105,7 +104,7 @@ describe('wavebench-schematic', () => {
       const source = seriesSlot(layout, 'Rs');
       const capacitor = seriesSlot(layout, 'C');
 
-      expect(railWireFrom(layout, source.right, capacitor.left)).to.exist;
+      expect(railWireFrom(layout, source.right, capacitor.left)).toEqual(expect.anything());
       assertContinuousRail(layout);
     });
 
@@ -114,7 +113,7 @@ describe('wavebench-schematic', () => {
       const capacitor = seriesSlot(layout, 'C');
       const inductor = seriesSlot(layout, 'L');
 
-      expect(railWireFrom(layout, capacitor.right, inductor.left)).to.exist;
+      expect(railWireFrom(layout, capacitor.right, inductor.left)).toEqual(expect.anything());
       assertContinuousRail(layout);
     });
 
@@ -122,16 +121,16 @@ describe('wavebench-schematic', () => {
       const layout = layoutSchematic(rcLowPass());
       const resistor = seriesSlot(layout, 'R');
 
-      expect(layout.seriesSlots).to.have.length(1);
-      expect(railWireFrom(layout, SCHEMATIC_SOURCE_X + SCHEMATIC_SOURCE_RADIUS, resistor.left)).to.exist;
-      expect(railWireFrom(layout, resistor.right, layout.voutX + SCHEMATIC_OUTPUT_RAIL_PADDING)).to.exist;
+      expect(layout.seriesSlots).toHaveLength(1);
+      expect(railWireFrom(layout, SCHEMATIC_SOURCE_X + SCHEMATIC_SOURCE_RADIUS, resistor.left)).toEqual(expect.anything());
+      expect(railWireFrom(layout, resistor.right, layout.voutX + SCHEMATIC_OUTPUT_RAIL_PADDING)).toEqual(expect.anything());
       assertContinuousRail(layout);
     });
 
     it('should drop shunt leads from the rail onto each part body', () => {
       const layout = layoutSchematic(lcLowPass());
 
-      expect(layout.shuntSlots.map((slot) => slot.component.id)).to.deep.equal(['C', 'RL']);
+      expect(layout.shuntSlots.map((slot) => slot.component.id)).toEqual(['C', 'RL']);
 
       for (const slot of layout.shuntSlots) {
         const topLead = layout.shuntWires.find((wire) => {
@@ -141,10 +140,10 @@ describe('wavebench-schematic', () => {
           return wire.x1 === slot.x && wire.x2 === slot.x && wire.y1 === slot.bottom && wire.y2 === SCHEMATIC_GROUND_LEAD_Y;
         });
 
-        expect(topLead, `missing top lead for ${slot.component.id}`).to.exist;
-        expect(bottomLead, `missing bottom lead for ${slot.component.id}`).to.exist;
-        expect(slot.top).to.be.greaterThan(SCHEMATIC_RAIL_Y);
-        expect(slot.bottom).to.be.lessThan(SCHEMATIC_GROUND_LEAD_Y);
+        expect(topLead, `missing top lead for ${slot.component.id}`).toEqual(expect.anything());
+        expect(bottomLead, `missing bottom lead for ${slot.component.id}`).toEqual(expect.anything());
+        expect(slot.top).toBeGreaterThan(SCHEMATIC_RAIL_Y);
+        expect(slot.bottom).toBeLessThan(SCHEMATIC_GROUND_LEAD_Y);
       }
     });
   });

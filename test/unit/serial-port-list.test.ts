@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { serialPortSelectItems } from '../../app/utils/serial-port-list.ts';
 
 describe('serial port list', () => {
@@ -16,7 +15,7 @@ describe('serial port list', () => {
   it('should keep only macOS callout devices and drop the tty twins', () => {
     expect(
       serialPortSelectItems(macPorts, { filterCommonPorts: false }).map((port) => port.value),
-    ).to.deep.equal([
+    ).toEqual([
       '/dev/cu.usbserial-A50285BI',
       '/dev/cu.Bluetooth-Incoming-Port',
       '/dev/cu.debug-console',
@@ -28,11 +27,11 @@ describe('serial port list', () => {
   it('should hide common macOS system ports when the preference is on', () => {
     expect(
       serialPortSelectItems(macPorts, { filterCommonPorts: true }).map((port) => port.value),
-    ).to.deep.equal(['/dev/cu.usbserial-A50285BI', '/dev/cu.usbmodem123456']);
+    ).toEqual(['/dev/cu.usbserial-A50285BI', '/dev/cu.usbmodem123456']);
   });
 
   it('should strip the macOS callout prefix from labels', () => {
-    expect(serialPortSelectItems(['/dev/cu.usbserial-A50285BI'], { filterCommonPorts: true })).to.deep.equal([
+    expect(serialPortSelectItems(['/dev/cu.usbserial-A50285BI'], { filterCommonPorts: true })).toEqual([
       {
         label: 'usbserial-A50285BI',
         value: '/dev/cu.usbserial-A50285BI',
@@ -43,7 +42,7 @@ describe('serial port list', () => {
   it('should leave Windows and Linux paths unchanged', () => {
     expect(
       serialPortSelectItems(['COM3', '/dev/ttyUSB0', '/dev/ttyACM0'], { filterCommonPorts: true }),
-    ).to.deep.equal([
+    ).toEqual([
       { label: 'COM3', value: 'COM3' },
       { label: '/dev/ttyUSB0', value: '/dev/ttyUSB0' },
       { label: '/dev/ttyACM0', value: '/dev/ttyACM0' },
@@ -55,7 +54,7 @@ describe('serial port list', () => {
       serialPortSelectItems(['/dev/cu.DEBUG-CONSOLE', '/dev/cu.usbserial-1'], { filterCommonPorts: true }).map(
         (port) => port.value,
       ),
-    ).to.deep.equal(['/dev/cu.usbserial-1']);
+    ).toEqual(['/dev/cu.usbserial-1']);
   });
 
   it('should hide Bluetooth incoming ports without the -Port suffix', () => {
@@ -63,7 +62,7 @@ describe('serial port list', () => {
       serialPortSelectItems(['/dev/cu.Bluetooth-Incoming', '/dev/cu.usbserial-1'], { filterCommonPorts: true }).map(
         (port) => port.value,
       ),
-    ).to.deep.equal(['/dev/cu.usbserial-1']);
+    ).toEqual(['/dev/cu.usbserial-1']);
   });
 
   it('should hide custom names such as BryansHeadphones', () => {
@@ -72,7 +71,7 @@ describe('serial port list', () => {
         filterCommonPorts: false,
         excludedPortNames: ['BryansHeadphones'],
       }).map((port) => port.value),
-    ).to.deep.equal(['/dev/cu.usbserial-AI2SP9LC']);
+    ).toEqual(['/dev/cu.usbserial-AI2SP9LC']);
   });
 
   it('should match custom names case-insensitively and against a pasted callout path', () => {
@@ -81,6 +80,6 @@ describe('serial port list', () => {
         filterCommonPorts: true,
         excludedPortNames: ['/dev/cu.bryansheadphones'],
       }).map((port) => port.value),
-    ).to.deep.equal(['/dev/cu.usbserial-1']);
+    ).toEqual(['/dev/cu.usbserial-1']);
   });
 });

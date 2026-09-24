@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { extraChannelTableFields } from '../../app/utils/channel-table.ts';
 
 describe('channel-table', () => {
@@ -12,7 +11,7 @@ describe('channel-table', () => {
         { fieldId: 'tuning_step' },
       ]);
 
-      expect(fields.map((field) => field.fieldId)).to.deep.equal(['lockout', 'tuning_step']);
+      expect(fields.map((field) => field.fieldId)).toEqual(['lockout', 'tuning_step']);
     });
   });
 });

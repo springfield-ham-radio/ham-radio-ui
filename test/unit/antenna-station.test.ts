@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   addAntennaToStore,
   addStationToStore,
@@ -47,52 +46,52 @@ describe('station antennas', () => {
   it('should default the store to Home with no antennas', () => {
     const store = defaultStationAntennaStore();
 
-    expect(store.stations).to.have.length(1);
-    expect(store.stations[0]?.id).to.equal(HOME_STATION_ID);
-    expect(store.stations[0]?.nickname).to.equal('Home');
-    expect(store.selectedStationId).to.equal(HOME_STATION_ID);
-    expect(store.antennas).to.deep.equal([]);
-    expect(store.selectedId).to.equal(undefined);
+    expect(store.stations).toHaveLength(1);
+    expect(store.stations[0]?.id).toBe(HOME_STATION_ID);
+    expect(store.stations[0]?.nickname).toBe('Home');
+    expect(store.selectedStationId).toBe(HOME_STATION_ID);
+    expect(store.antennas).toEqual([]);
+    expect(store.selectedId).toBe(undefined);
   });
 
   it('should fill a dipole draft from the generic type', () => {
     const draft = defaultAntennaDraft('dipole');
 
-    expect(draft.typeId).to.equal('dipole');
-    expect(draft.heightAglM).to.equal(10);
-    expect(draft.headingDeg).to.equal(45);
-    expect(draft.bands).to.deep.equal(['40m']);
-    expect(draft.trapped).to.equal(false);
+    expect(draft.typeId).toBe('dipole');
+    expect(draft.heightAglM).toBe(10);
+    expect(draft.headingDeg).toBe(45);
+    expect(draft.bands).toEqual(['40m']);
+    expect(draft.trapped).toBe(false);
   });
 
   it('should default a tribander Yagi to trapped 20/15/10', () => {
     const draft = defaultAntennaDraft('yagi-3el');
 
-    expect(draft.bands).to.deep.equal(['20m', '15m', '10m']);
-    expect(draft.trapped).to.equal(true);
+    expect(draft.bands).toEqual(['20m', '15m', '10m']);
+    expect(draft.trapped).toBe(true);
   });
 
   it('should default a dual-band vertical to 2 m / 70 cm without heading', () => {
     const draft = defaultAntennaDraft('dual-band-vertical');
 
-    expect(draft.typeId).to.equal('dual-band-vertical');
-    expect(draft.heightAglM).to.equal(8);
-    expect(draft.headingDeg).to.equal(undefined);
-    expect(draft.bands).to.deep.equal(['2m', '70cm']);
+    expect(draft.typeId).toBe('dual-band-vertical');
+    expect(draft.heightAglM).toBe(8);
+    expect(draft.headingDeg).toBe(undefined);
+    expect(draft.bands).toEqual(['2m', '70cm']);
   });
 
   it('should default a 2 m Yagi to 2 m with a boom heading', () => {
     const draft = defaultAntennaDraft('vhf-yagi');
 
-    expect(draft.bands).to.deep.equal(['2m']);
-    expect(draft.headingDeg).to.equal(45);
+    expect(draft.bands).toEqual(['2m']);
+    expect(draft.headingDeg).toBe(45);
   });
 
   it('should omit heading on an omni what-if', () => {
     const whatIf = defaultAntennaWhatIf(defaultAntennaDraft('quarter-wave-vertical'));
 
-    expect(whatIf.typeId).to.equal('quarter-wave-vertical');
-    expect(whatIf.headingDeg).to.equal(undefined);
+    expect(whatIf.typeId).toBe('quarter-wave-vertical');
+    expect(whatIf.headingDeg).toBe(undefined);
   });
 
   it('should name an antenna after its type when the nickname is blank', () => {
@@ -101,8 +100,8 @@ describe('station antennas', () => {
       { id: 'ant-1', now: 1 },
     );
 
-    expect(antenna.nickname).to.equal('3-element Yagi');
-    expect(antenna.id).to.equal('ant-1');
+    expect(antenna.nickname).toBe('3-element Yagi');
+    expect(antenna.id).toBe('ant-1');
   });
 
   it('should drop heading when saving a vertical', () => {
@@ -117,29 +116,29 @@ describe('station antennas', () => {
       { id: 'ant-v', now: 1 },
     );
 
-    expect(antenna.headingDeg).to.equal(undefined);
+    expect(antenna.headingDeg).toBe(undefined);
   });
 
   it('should reject a missing height and a non-numeric heading', () => {
-    expect(antennaDraftErrors({ ...sampleDraft(), heightAglM: Number.NaN })?.heightAglM).to.be.a('string');
-    expect(antennaDraftErrors({ ...sampleDraft(), headingDeg: Number.NaN })?.headingDeg).to.be.a('string');
-    expect(antennaDraftErrors(sampleDraft())).to.equal(undefined);
+    expect(antennaDraftErrors({ ...sampleDraft(), heightAglM: Number.NaN })?.heightAglM).toBeTypeOf('string');
+    expect(antennaDraftErrors({ ...sampleDraft(), headingDeg: Number.NaN })?.headingDeg).toBeTypeOf('string');
+    expect(antennaDraftErrors(sampleDraft())).toBe(undefined);
   });
 
   it('should wrap a heading of 360 to 0', () => {
     const antenna = createStationAntenna({ ...sampleDraft(), headingDeg: 360 }, { id: 'ant-1', now: 1 });
 
-    expect(antenna.headingDeg).to.equal(0);
+    expect(antenna.headingDeg).toBe(0);
   });
 
   it('should reset height and bands when the type changes', () => {
     const next = applyAntennaTypeToDraft(sampleDraft(), 'dipole');
 
-    expect(next.typeId).to.equal('dipole');
-    expect(next.heightAglM).to.equal(10);
-    expect(next.bands).to.deep.equal(['40m']);
-    expect(next.trapped).to.equal(false);
-    expect(next.nickname).to.equal('Backyard Yagi');
+    expect(next.typeId).toBe('dipole');
+    expect(next.heightAglM).toBe(10);
+    expect(next.bands).toEqual(['40m']);
+    expect(next.trapped).toBe(false);
+    expect(next.nickname).toBe('Backyard Yagi');
   });
 
   it('should round-trip the store and ignore unknown fields', () => {
@@ -156,11 +155,11 @@ describe('station antennas', () => {
       }),
     );
 
-    expect(parsed.selectedId).to.equal('ant-1');
-    expect(parsed.antennas).to.have.length(1);
-    expect(parsed.antennas[0]?.nickname).to.equal('Backyard Yagi');
-    expect(parsed.antennas[0]?.typeId).to.equal('yagi-3el');
-    expect(parsed.antennas[0]?.trapped).to.equal(true);
+    expect(parsed.selectedId).toBe('ant-1');
+    expect(parsed.antennas).toHaveLength(1);
+    expect(parsed.antennas[0]?.nickname).toBe('Backyard Yagi');
+    expect(parsed.antennas[0]?.typeId).toBe('yagi-3el');
+    expect(parsed.antennas[0]?.trapped).toBe(true);
   });
 
   it('should treat a stored tribander without a trapped flag as trapped', () => {
@@ -182,7 +181,7 @@ describe('station antennas', () => {
       }),
     );
 
-    expect(parsed.antennas[0]?.trapped).to.equal(true);
+    expect(parsed.antennas[0]?.trapped).toBe(true);
   });
 
   it('should keep an 80/40 dipole trapped and ignore traps on a magloop', () => {
@@ -198,8 +197,8 @@ describe('station antennas', () => {
       { id: 'ant-d', now: 1 },
     );
 
-    expect(dipole.trapped).to.equal(true);
-    expect(formatAntennaBands(dipole.bands, dipole.trapped === true)).to.equal('80 m, 40 m · traps at 40 m');
+    expect(dipole.trapped).toBe(true);
+    expect(formatAntennaBands(dipole.bands, dipole.trapped === true)).toBe('80 m, 40 m · traps at 40 m');
 
     const parsed = parseStationAntennaStore(
       JSON.stringify({
@@ -218,7 +217,7 @@ describe('station antennas', () => {
       }),
     );
 
-    expect(parsed.antennas[0]?.trapped).to.equal(undefined);
+    expect(parsed.antennas[0]?.trapped).toBe(undefined);
   });
 
   it('should keep 2 m / 70 cm tags and drop unknown bands', () => {
@@ -239,14 +238,14 @@ describe('station antennas', () => {
       }),
     );
 
-    expect(parsed.antennas[0]?.bands).to.deep.equal(['2m', '70cm']);
+    expect(parsed.antennas[0]?.bands).toEqual(['2m', '70cm']);
   });
 
   it('should fall back to defaults when storage is empty or invalid', () => {
-    expect(parseStationAntennaStore(null).stations[0]?.id).to.equal(HOME_STATION_ID);
-    expect(parseStationAntennaStore('').antennas).to.deep.equal([]);
-    expect(parseStationAntennaStore('{').stations[0]?.nickname).to.equal('Home');
-    expect(parseStationAntennaStore('[]').selectedStationId).to.equal(HOME_STATION_ID);
+    expect(parseStationAntennaStore(null).stations[0]?.id).toBe(HOME_STATION_ID);
+    expect(parseStationAntennaStore('').antennas).toEqual([]);
+    expect(parseStationAntennaStore('{').stations[0]?.nickname).toBe('Home');
+    expect(parseStationAntennaStore('[]').selectedStationId).toBe(HOME_STATION_ID);
   });
 
   it('should drop unknown types and fall selectedId back to the first remaining antenna', () => {
@@ -269,8 +268,8 @@ describe('station antennas', () => {
       }),
     );
 
-    expect(parsed.antennas.map((antenna) => antenna.id)).to.deep.equal(['ant-1']);
-    expect(parsed.selectedId).to.equal('ant-1');
+    expect(parsed.antennas.map((antenna) => antenna.id)).toEqual(['ant-1']);
+    expect(parsed.selectedId).toBe('ant-1');
   });
 
   it('should select the added antenna and move selection after remove', () => {
@@ -279,23 +278,23 @@ describe('station antennas', () => {
     let store = addAntennaToStore(defaultStationAntennaStore(), first);
     store = addAntennaToStore(store, second);
 
-    expect(selectedStationAntenna(store)?.id).to.equal('ant-2');
+    expect(selectedStationAntenna(store)?.id).toBe('ant-2');
 
     store = selectAntennaInStore(store, 'ant-1');
-    expect(selectedStationAntenna(store)?.id).to.equal('ant-1');
+    expect(selectedStationAntenna(store)?.id).toBe('ant-1');
 
     store = removeAntennaFromStore(store, 'ant-1');
-    expect(selectedStationAntenna(store)?.id).to.equal('ant-2');
+    expect(selectedStationAntenna(store)?.id).toBe('ant-2');
   });
 
   it('should preserve id and createdAt on update', () => {
     const antenna = createStationAntenna(sampleDraft(), { id: 'ant-1', now: 5 });
     const updated = updateStationAntenna(antenna, { ...sampleDraft(), heightAglM: 18 }, 9);
 
-    expect(updated.id).to.equal('ant-1');
-    expect(updated.createdAt).to.equal(5);
-    expect(updated.updatedAt).to.equal(9);
-    expect(updated.heightAglM).to.equal(18);
+    expect(updated.id).toBe('ant-1');
+    expect(updated.createdAt).toBe(5);
+    expect(updated.updatedAt).toBe(9);
+    expect(updated.heightAglM).toBe(18);
   });
 
   it('should move a selected antenna to another station on update', () => {
@@ -308,10 +307,10 @@ describe('station antennas', () => {
     const updated = updateStationAntenna(antenna, { ...sampleDraft(), stationId: 'station-cabin' }, 9);
     store = replaceAntennaInStore(store, updated);
 
-    expect(updated.stationId).to.equal('station-cabin');
-    expect(store.antennas[0]?.stationId).to.equal('station-cabin');
-    expect(store.selectedStationId).to.equal('station-cabin');
-    expect(store.selectedId).to.equal('ant-1');
+    expect(updated.stationId).toBe('station-cabin');
+    expect(store.antennas[0]?.stationId).toBe('station-cabin');
+    expect(store.selectedStationId).toBe('station-cabin');
+    expect(store.selectedId).toBe('ant-1');
   });
 
   it('should resolve a station view from the selected antenna and a what-if from the scratch draft', () => {
@@ -324,27 +323,27 @@ describe('station antennas', () => {
       headingDeg: 90,
     });
 
-    expect(station?.source).to.equal('station');
-    expect(station?.nickname).to.equal('Backyard Yagi');
-    expect(station?.type.id).to.equal('yagi-3el');
-    expect(station?.trapped).to.equal(true);
-    expect(station?.gainDbi).to.equal(6.5);
-    expect(whatIf?.source).to.equal('what-if');
-    expect(whatIf?.type.id).to.equal('dipole');
-    expect(whatIf?.heightAglM).to.equal(12);
-    expect(whatIf?.headingDeg).to.equal(90);
-    expect(whatIf?.takeoffDeg).to.be.a('number');
+    expect(station?.source).toBe('station');
+    expect(station?.nickname).toBe('Backyard Yagi');
+    expect(station?.type.id).toBe('yagi-3el');
+    expect(station?.trapped).toBe(true);
+    expect(station?.gainDbi).toBe(6.5);
+    expect(whatIf?.source).toBe('what-if');
+    expect(whatIf?.type.id).toBe('dipole');
+    expect(whatIf?.heightAglM).toBe(12);
+    expect(whatIf?.headingDeg).toBe(90);
+    expect(whatIf?.takeoffDeg).toBeTypeOf('number');
   });
 
   it('should format geometry and omit a nickname that matches the type', () => {
     const antenna = createStationAntenna({ ...sampleDraft(), nickname: '3-element Yagi' }, { id: 'ant-1', now: 1 });
 
-    expect(formatAntennaGeometry(antenna)).to.equal('3-element Yagi · 15 m AGL · 045°');
-    expect(formatAntennaSummary(antenna)).to.equal('3-element Yagi · 15 m AGL · 045°');
-    expect(formatAntennaSummary(createStationAntenna(sampleDraft(), { id: 'ant-2', now: 1 }))).to.equal(
+    expect(formatAntennaGeometry(antenna)).toBe('3-element Yagi · 15 m AGL · 045°');
+    expect(formatAntennaSummary(antenna)).toBe('3-element Yagi · 15 m AGL · 045°');
+    expect(formatAntennaSummary(createStationAntenna(sampleDraft(), { id: 'ant-2', now: 1 }))).toBe(
       'Backyard Yagi · 3-element Yagi · 15 m AGL · 045°',
     );
-    expect(formatHeadingDeg(undefined, false)).to.equal(undefined);
+    expect(formatHeadingDeg(undefined, false)).toBe(undefined);
   });
 });
 
@@ -369,9 +368,9 @@ describe('radio stations', () => {
       }),
     );
 
-    expect(parsed.stations[0]?.gridsquare).to.equal('FN42');
-    expect(parsed.stations[0]?.latitude).to.equal(42.5);
-    expect(parsed.stations[0]?.createdAt).to.equal(1);
+    expect(parsed.stations[0]?.gridsquare).toBe('FN42');
+    expect(parsed.stations[0]?.latitude).toBe(42.5);
+    expect(parsed.stations[0]?.createdAt).toBe(1);
   });
 
   it('should attach legacy antennas to Home when stations are missing', () => {
@@ -393,10 +392,10 @@ describe('radio stations', () => {
       }),
     );
 
-    expect(parsed.stations[0]?.id).to.equal(HOME_STATION_ID);
-    expect(parsed.selectedStationId).to.equal(HOME_STATION_ID);
-    expect(parsed.antennas[0]?.stationId).to.equal(HOME_STATION_ID);
-    expect(parsed.selectedId).to.equal('ant-1');
+    expect(parsed.stations[0]?.id).toBe(HOME_STATION_ID);
+    expect(parsed.selectedStationId).toBe(HOME_STATION_ID);
+    expect(parsed.antennas[0]?.stationId).toBe(HOME_STATION_ID);
+    expect(parsed.selectedId).toBe('ant-1');
   });
 
   it('should put FN42 at the cell center when the operator edits the grid', () => {
@@ -406,10 +405,10 @@ describe('radio stations', () => {
       locationSource: 'grid',
     });
 
-    expect(location.gridsquare).to.equal('FN42');
-    expect(location.latitude).to.equal(42.5);
-    expect(location.longitude).to.equal(-71);
-    expect(location.locationSource).to.equal('grid');
+    expect(location.gridsquare).toBe('FN42');
+    expect(location.latitude).toBe(42.5);
+    expect(location.longitude).toBe(-71);
+    expect(location.locationSource).toBe('grid');
   });
 
   it('should keep exact coordinates and derive a 6-character grid', () => {
@@ -420,17 +419,17 @@ describe('radio stations', () => {
       locationSource: 'coordinates',
     });
 
-    expect(location.locationSource).to.equal('coordinates');
-    expect(location.latitude).to.equal(38.627);
-    expect(location.longitude).to.equal(-90.1994);
-    expect(location.gridsquare).to.equal('EM48VP');
+    expect(location.locationSource).toBe('coordinates');
+    expect(location.latitude).toBe(38.627);
+    expect(location.longitude).toBe(-90.1994);
+    expect(location.gridsquare).toBe('EM48VP');
   });
 
   it('should reject a blank name and a half-filled lat/lon pair', () => {
-    expect(stationDraftErrors({ nickname: '  ' })?.nickname).to.be.a('string');
-    expect(stationDraftErrors({ nickname: 'Cabin', latitude: 38.6 })?.longitude).to.be.a('string');
-    expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'nope' })?.gridsquare).to.be.a('string');
-    expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'EM48' })).to.equal(undefined);
+    expect(stationDraftErrors({ nickname: '  ' })?.nickname).toBeTypeOf('string');
+    expect(stationDraftErrors({ nickname: 'Cabin', latitude: 38.6 })?.longitude).toBeTypeOf('string');
+    expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'nope' })?.gridsquare).toBeTypeOf('string');
+    expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'EM48' })).toBe(undefined);
   });
 
   it('should keep at least one station and delete antennas with a removed site', () => {
@@ -444,31 +443,31 @@ describe('radio stations', () => {
     store = addStationToStore(store, cabin);
     store = addAntennaToStore(store, cabinAntenna);
 
-    expect(store.stations).to.have.length(2);
-    expect(selectedRadioStation(store)?.id).to.equal('station-cabin');
-    expect(selectedStationAntenna(store)?.id).to.equal('ant-cabin');
+    expect(store.stations).toHaveLength(2);
+    expect(selectedRadioStation(store)?.id).toBe('station-cabin');
+    expect(selectedStationAntenna(store)?.id).toBe('ant-cabin');
 
     store = selectStationInStore(store, HOME_STATION_ID);
-    expect(selectedStationAntenna(store)?.id).to.equal('ant-home');
+    expect(selectedStationAntenna(store)?.id).toBe('ant-home');
 
     const unchanged = removeStationFromStore(defaultStationAntennaStore(), HOME_STATION_ID);
-    expect(unchanged.stations).to.have.length(1);
+    expect(unchanged.stations).toHaveLength(1);
 
     store = removeStationFromStore(store, 'station-cabin');
-    expect(store.stations.map((station) => station.id)).to.deep.equal([HOME_STATION_ID]);
-    expect(store.antennas.map((antenna) => antenna.id)).to.deep.equal(['ant-home']);
+    expect(store.stations.map((station) => station.id)).toEqual([HOME_STATION_ID]);
+    expect(store.antennas.map((antenna) => antenna.id)).toEqual(['ant-home']);
   });
 
   it('should seed a license grid onto Home only when location is empty', () => {
     const empty = applyLicenseGridToHomeIfEmpty(defaultStationAntennaStore(), 'em48', 5);
-    expect(empty.stations[0]?.gridsquare).to.equal('EM48');
-    expect(empty.stations[0]?.latitude).to.equal(38.5);
-    expect(empty.stations[0]?.longitude).to.equal(-91);
-    expect(empty.stations[0]?.locationSource).to.equal('grid');
-    expect(empty.stations[0]?.updatedAt).to.equal(5);
+    expect(empty.stations[0]?.gridsquare).toBe('EM48');
+    expect(empty.stations[0]?.latitude).toBe(38.5);
+    expect(empty.stations[0]?.longitude).toBe(-91);
+    expect(empty.stations[0]?.locationSource).toBe('grid');
+    expect(empty.stations[0]?.updatedAt).toBe(5);
 
     const alreadySet = applyLicenseGridToHomeIfEmpty(empty, 'FN42', 9);
-    expect(alreadySet.stations[0]?.gridsquare).to.equal('EM48');
+    expect(alreadySet.stations[0]?.gridsquare).toBe('EM48');
   });
 
   it('should format a station location line', () => {
@@ -477,7 +476,7 @@ describe('radio stations', () => {
       { id: HOME_STATION_ID, now: 1 },
     );
 
-    expect(formatStationLocation(station)).to.equal('FN42 · 42° 30\' 00.00" N 71° 00\' 00.00" W');
-    expect(formatStationLocation(defaultHomeStation())).to.equal('Location not set');
+    expect(formatStationLocation(station)).toBe('FN42 · 42° 30\' 00.00" N 71° 00\' 00.00" W');
+    expect(formatStationLocation(defaultHomeStation())).toBe('Location not set');
   });
 });

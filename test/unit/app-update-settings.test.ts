@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   defaultAppUpdateSettings,
   parseAppUpdateSettings,
@@ -8,17 +7,17 @@ import {
 
 describe('app update settings', () => {
   it('should enable auto-update by default', () => {
-    expect(defaultAppUpdateSettings()).to.deep.equal({
+    expect(defaultAppUpdateSettings()).toEqual({
       autoUpdateEnabled: true,
       lastCheckAt: undefined,
     });
   });
 
   it('should fall back to defaults when storage is empty or invalid', () => {
-    expect(parseAppUpdateSettings(null)).to.deep.equal(defaultAppUpdateSettings());
-    expect(parseAppUpdateSettings('')).to.deep.equal(defaultAppUpdateSettings());
-    expect(parseAppUpdateSettings('{')).to.deep.equal(defaultAppUpdateSettings());
-    expect(parseAppUpdateSettings('[]')).to.deep.equal(defaultAppUpdateSettings());
+    expect(parseAppUpdateSettings(null)).toEqual(defaultAppUpdateSettings());
+    expect(parseAppUpdateSettings('')).toEqual(defaultAppUpdateSettings());
+    expect(parseAppUpdateSettings('{')).toEqual(defaultAppUpdateSettings());
+    expect(parseAppUpdateSettings('[]')).toEqual(defaultAppUpdateSettings());
   });
 
   it('should parse stored settings and ignore unknown fields', () => {
@@ -30,14 +29,14 @@ describe('app update settings', () => {
       }),
     );
 
-    expect(parsed).to.deep.equal({
+    expect(parsed).toEqual({
       autoUpdateEnabled: false,
       lastCheckAt: '2026-08-28T12:00:00.000Z',
     });
   });
 
   it('should treat a missing auto-update flag as enabled', () => {
-    expect(parseAppUpdateSettings(JSON.stringify({ lastCheckAt: '2026-08-28T12:00:00.000Z' }))).to.deep.equal({
+    expect(parseAppUpdateSettings(JSON.stringify({ lastCheckAt: '2026-08-28T12:00:00.000Z' }))).toEqual({
       autoUpdateEnabled: true,
       lastCheckAt: '2026-08-28T12:00:00.000Z',
     });
@@ -49,6 +48,6 @@ describe('app update settings', () => {
       lastCheckAt: '2026-08-28T12:00:00.000Z',
     };
 
-    expect(parseAppUpdateSettings(serializeAppUpdateSettings(settings))).to.deep.equal(settings);
+    expect(parseAppUpdateSettings(serializeAppUpdateSettings(settings))).toEqual(settings);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { renderEquationHtml } from '../../app/utils/wavebench-math.ts';
 import {
   MODULATION_PRESETS,
@@ -30,9 +29,9 @@ const lab = {
 describe('wavebench-modulation', () => {
   describe('wave equation', () => {
     it('should evaluate a sine as A sin(2πft + φ)', () => {
-      expect(sineWave(0, 2, 1_000)).to.equal(0);
-      expect(sineWave(1 / 4_000, 2, 1_000)).to.be.closeTo(2, 1e-12);
-      expect(sineWave(0, 1, 1_000, Math.PI / 2)).to.be.closeTo(1, 1e-12);
+      expect(sineWave(0, 2, 1_000)).toBe(0);
+      expect(Math.abs((sineWave(1 / 4_000, 2, 1_000)) - (2))).toBeLessThanOrEqual(1e-12);
+      expect(Math.abs((sineWave(0, 1, 1_000, Math.PI / 2)) - (1))).toBeLessThanOrEqual(1e-12);
     });
   });
 
@@ -42,19 +41,19 @@ describe('wavebench-modulation', () => {
       const carrier = sineWave(time, lab.carrierAmplitude, lab.carrierHz);
       const message = Math.sin(TWO_PI * lab.messageHz * time);
 
-      expect(amSignal(time, lab)).to.be.closeTo(carrier * (1 + lab.amIndex * message), 1e-12);
+      expect(Math.abs((amSignal(time, lab)) - (carrier * (1 + lab.amIndex * message)))).toBeLessThanOrEqual(1e-12);
     });
 
     it('should peak the envelope at A_c (1 + μ) a quarter-tone later', () => {
       const peakTime = 1 / (4 * lab.messageHz);
-      expect(amEnvelope(peakTime, lab)).to.be.closeTo(1.5, 1e-12);
+      expect(Math.abs((amEnvelope(peakTime, lab)) - (1.5))).toBeLessThanOrEqual(1e-12);
     });
 
     it('should fold through zero when μ > 1', () => {
       const over = { ...lab, amIndex: 1.4 };
       const troughTime = 3 / (4 * over.messageHz);
-      expect(amEnvelope(troughTime, over)).to.be.closeTo(1 - 1.4, 1e-12);
-      expect(modulationReadings(over).overmodulated).to.equal(true);
+      expect(Math.abs((amEnvelope(troughTime, over)) - (1 - 1.4))).toBeLessThanOrEqual(1e-12);
+      expect(modulationReadings(over).overmodulated).toBe(true);
     });
   });
 
@@ -62,14 +61,14 @@ describe('wavebench-modulation', () => {
     it('should match the carrier when deviation is zero', () => {
       const quiet = { ...lab, fmDeviationHz: 0 };
       const time = 0.00037;
-      expect(fmSignal(time, quiet)).to.be.closeTo(sineWave(time, quiet.carrierAmplitude, quiet.carrierHz), 1e-12);
-      expect(fmModulationIndex(0, 100)).to.equal(0);
+      expect(Math.abs((fmSignal(time, quiet)) - (sineWave(time, quiet.carrierAmplitude, quiet.carrierHz)))).toBeLessThanOrEqual(1e-12);
+      expect(fmModulationIndex(0, 100)).toBe(0);
     });
 
     it('should use β = Δf / f_m and peak f_i at t = 0', () => {
-      expect(fmModulationIndex(2_500, 1_000)).to.equal(2.5);
-      expect(instantaneousFrequencyHz(0, lab)).to.equal(lab.carrierHz + lab.fmDeviationHz);
-      expect(instantaneousFrequencyHz(1 / (2 * lab.messageHz), lab)).to.be.closeTo(lab.carrierHz - lab.fmDeviationHz, 1e-9);
+      expect(fmModulationIndex(2_500, 1_000)).toBe(2.5);
+      expect(instantaneousFrequencyHz(0, lab)).toBe(lab.carrierHz + lab.fmDeviationHz);
+      expect(Math.abs((instantaneousFrequencyHz(1 / (2 * lab.messageHz), lab)) - (lab.carrierHz - lab.fmDeviationHz))).toBeLessThanOrEqual(1e-9);
     });
   });
 
@@ -79,9 +78,9 @@ describe('wavebench-modulation', () => {
       const carrierOnly = modulationWindow(scoped, { enableAm: false, enableFm: false });
       const withAm = modulationWindow(scoped, { enableAm: true, enableFm: false });
 
-      expect(carrierOnly.durationSeconds).to.be.closeTo(4 / scoped.carrierHz, 1e-12);
-      expect(withAm.durationSeconds).to.be.closeTo(3 / scoped.messageHz, 1e-12);
-      expect(withAm.sampleCount).to.be.greaterThan(carrierOnly.sampleCount);
+      expect(Math.abs((carrierOnly.durationSeconds) - (4 / scoped.carrierHz))).toBeLessThanOrEqual(1e-12);
+      expect(Math.abs((withAm.durationSeconds) - (3 / scoped.messageHz))).toBeLessThanOrEqual(1e-12);
+      expect(withAm.sampleCount).toBeGreaterThan(carrierOnly.sampleCount);
     });
 
     it('should put AM and its envelope in the same scope group', () => {
@@ -95,34 +94,34 @@ describe('wavebench-modulation', () => {
         showEnvelope: true,
       });
 
-      expect(samples).to.have.length(window.sampleCount);
-      expect(channels.map((channel) => channel.id)).to.deep.equal(['carrier', 'message', 'am', 'env-hi', 'env-lo', 'fm']);
-      expect(channels.filter((channel) => channel.group === 'am')).to.have.length(3);
+      expect(samples).toHaveLength(window.sampleCount);
+      expect(channels.map((channel) => channel.id)).toEqual(['carrier', 'message', 'am', 'env-hi', 'env-lo', 'fm']);
+      expect(channels.filter((channel) => channel.group === 'am')).toHaveLength(3);
     });
   });
 
   describe('presets and equations', () => {
     it('should expose a wave equation and ham-oriented AM/FM starting points', () => {
-      expect(WAVE_EQUATION).to.include('sin');
-      expect(MODULATION_PRESETS.map((preset) => preset.id)).to.include.members(['carrier', 'am-lab', 'nbfm', 'compare']);
+      expect(WAVE_EQUATION).toContain('sin');
+      expect(MODULATION_PRESETS.map((preset) => preset.id)).toEqual(expect.arrayContaining(['carrier', 'am-lab', 'nbfm', 'compare']));
     });
 
     it('should typeset every equation for carrier, AM, and FM', () => {
       const equations = modulationEquations({ enableAm: true, enableFm: true });
-      expect(equations[0]?.id).to.equal('wave');
+      expect(equations[0]?.id).toBe('wave');
 
       for (const equation of equations) {
-        expect(() => renderEquationHtml(equation.expression), equation.id).not.to.throw();
-        expect(renderEquationHtml(equation.expression)).to.include('katex');
+        expect(() => renderEquationHtml(equation.expression), equation.id).not.toThrow();
+        expect(renderEquationHtml(equation.expression)).toContain('katex');
       }
     });
 
     it('should report AM bandwidth and Carson FM bandwidth', () => {
       const readings = modulationReadings(lab);
-      expect(readings.amBandwidthHz).to.equal(200);
-      expect(readings.carsonBandwidthHz).to.equal(2 * (250 + 100));
-      expect(readings.fmBeta).to.equal(2.5);
-      expect(readings.carrierTooLow).to.equal(false);
+      expect(readings.amBandwidthHz).toBe(200);
+      expect(readings.carsonBandwidthHz).toBe(2 * (250 + 100));
+      expect(readings.fmBeta).toBe(2.5);
+      expect(readings.carrierTooLow).toBe(false);
     });
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { reactive } from 'vue';
 import { getSettingAtPath, setSettingAtPath } from '../../app/utils/settings-path.ts';
 
@@ -9,8 +8,8 @@ describe('settings-path', () => {
       block1: { pcbaud: '9600', pwdon: true },
     };
 
-    expect(getSettingAtPath(settings, 'block1.pcbaud')).to.equal('9600');
-    expect(getSettingAtPath(settings, 'block1.pwdon')).to.equal(true);
+    expect(getSettingAtPath(settings, 'block1.pcbaud')).toBe('9600');
+    expect(getSettingAtPath(settings, 'block1.pwdon')).toBe(true);
   });
 
   it('should write a nested setting without mutating the original', () => {
@@ -20,8 +19,8 @@ describe('settings-path', () => {
 
     const next = setSettingAtPath(settings, 'block1.pcbaud', '57600');
 
-    expect(next.block1).to.deep.equal({ pcbaud: '57600', pwdon: true });
-    expect(settings.block1).to.deep.equal({ pcbaud: '9600', pwdon: true });
+    expect(next.block1).toEqual({ pcbaud: '57600', pwdon: true });
+    expect(settings.block1).toEqual({ pcbaud: '9600', pwdon: true });
   });
 
   it('should write through Vue reactive settings used by the form', () => {
@@ -32,9 +31,9 @@ describe('settings-path', () => {
 
     const next = setSettingAtPath(settings, 'block1.pcbaud', '57600');
 
-    expect(getSettingAtPath(next, 'block1.pcbaud')).to.equal('57600');
-    expect(getSettingAtPath(next, 'powerOn.0.pwron')).to.equal('HELLO !!');
-    expect(settings.block1.pcbaud).to.equal('9600');
+    expect(getSettingAtPath(next, 'block1.pcbaud')).toBe('57600');
+    expect(getSettingAtPath(next, 'powerOn.0.pwron')).toBe('HELLO !!');
+    expect(settings.block1.pcbaud).toBe('9600');
   });
 
   it('should write an array element by numeric path segment', () => {
@@ -44,7 +43,7 @@ describe('settings-path', () => {
 
     const next = setSettingAtPath(settings, 'powerOn.0.pwron', 'HAMBENCH');
 
-    expect(next.powerOn).to.deep.equal([{ pwron: 'HAMBENCH' }, { pwron: 'PM ONE' }]);
-    expect(settings.powerOn[0]).to.deep.equal({ pwron: 'HELLO !!' });
+    expect(next.powerOn).toEqual([{ pwron: 'HAMBENCH' }, { pwron: 'PM ONE' }]);
+    expect(settings.powerOn[0]).toEqual({ pwron: 'HELLO !!' });
   });
 });

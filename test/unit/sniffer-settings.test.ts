@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SNIFFER_BASE_URL,
   DEFAULT_SNIFFER_HOST,
@@ -21,21 +20,21 @@ import { snifferSettingsToRemoteConfig } from '../../app/utils/sniffer-ssh.ts';
 
 describe('sniffer settings', () => {
   it('should default to localhost with SSH disabled', () => {
-    expect(parseSnifferSettings(null)).to.deep.equal({
+    expect(parseSnifferSettings(null)).toEqual({
       host: DEFAULT_SNIFFER_HOST,
       port: DEFAULT_SNIFFER_PORT,
       installDirectory: DEFAULT_SNIFFER_INSTALL_DIRECTORY,
       startCommand: DEFAULT_SNIFFER_START_COMMAND,
       sshEnabled: false,
     });
-    expect(isSnifferSshConfigured(parseSnifferSettings(null))).to.equal(false);
-    expect(snifferHttpUrl(parseSnifferSettings(null))).to.equal(DEFAULT_SNIFFER_BASE_URL);
+    expect(isSnifferSshConfigured(parseSnifferSettings(null))).toBe(false);
+    expect(snifferHttpUrl(parseSnifferSettings(null))).toBe(DEFAULT_SNIFFER_BASE_URL);
   });
 
   it('should fall back to the default host when storage is invalid', () => {
-    expect(parseSnifferSettings('').host).to.equal(DEFAULT_SNIFFER_HOST);
-    expect(parseSnifferSettings('{').host).to.equal(DEFAULT_SNIFFER_HOST);
-    expect(parseSnifferSettings('[]').host).to.equal(DEFAULT_SNIFFER_HOST);
+    expect(parseSnifferSettings('').host).toBe(DEFAULT_SNIFFER_HOST);
+    expect(parseSnifferSettings('{').host).toBe(DEFAULT_SNIFFER_HOST);
+    expect(parseSnifferSettings('[]').host).toBe(DEFAULT_SNIFFER_HOST);
   });
 
   it('should accept a host, port, install directory, run command, and the SSH checkbox', () => {
@@ -49,7 +48,7 @@ describe('sniffer settings', () => {
           sshEnabled: true,
         }),
       ),
-    ).to.deep.equal({
+    ).toEqual({
       host: '192.168.1.10',
       port: 3010,
       installDirectory: '/opt/sniffer',
@@ -66,7 +65,7 @@ describe('sniffer settings', () => {
           sshEnabled: true,
         }),
       ),
-    ).to.deep.equal({
+    ).toEqual({
       host: '192.168.1.10',
       port: 4010,
       installDirectory: DEFAULT_SNIFFER_INSTALL_DIRECTORY,
@@ -83,7 +82,7 @@ describe('sniffer settings', () => {
           remoteStartCommand: 'node .output/server/index.mjs',
         }),
       ).startCommand,
-    ).to.equal('node .output/server/index.mjs');
+    ).toBe('node .output/server/index.mjs');
   });
 
   it('should enable SSH from a legacy sshHost and move it into host when needed', () => {
@@ -96,7 +95,7 @@ describe('sniffer settings', () => {
           port: 3010,
         }),
       ),
-    ).to.deep.equal({
+    ).toEqual({
       host: 'pi@192.168.1.10',
       port: 3010,
       installDirectory: '~/ham-radio-sniffer',
@@ -113,7 +112,7 @@ describe('sniffer settings', () => {
           sshHost: 'pi@192.168.1.10',
         }),
       ),
-    ).to.deep.equal({
+    ).toEqual({
       host: 'pi@192.168.1.10',
       port: 3010,
       installDirectory: DEFAULT_SNIFFER_INSTALL_DIRECTORY,
@@ -123,21 +122,21 @@ describe('sniffer settings', () => {
   });
 
   it('should derive HTTP URL, SSH target, and bind address from host and port', () => {
-    expect(snifferHttpUrl({ host: 'pi@192.168.1.10', port: 3010 })).to.equal('http://192.168.1.10:3010');
-    expect(snifferSshTarget({ host: 'pi@192.168.1.10', port: 3010 })).to.deep.equal({
+    expect(snifferHttpUrl({ host: 'pi@192.168.1.10', port: 3010 })).toBe('http://192.168.1.10:3010');
+    expect(snifferSshTarget({ host: 'pi@192.168.1.10', port: 3010 })).toEqual({
       sshHost: 'pi@192.168.1.10',
       port: 3010,
     });
-    expect(snifferSshTarget({ host: '192.168.1.10', port: DEFAULT_SNIFFER_PORT })).to.deep.equal({
+    expect(snifferSshTarget({ host: '192.168.1.10', port: DEFAULT_SNIFFER_PORT })).toEqual({
       sshHost: '192.168.1.10',
       port: DEFAULT_SNIFFER_PORT,
     });
-    expect(snifferBindHost('127.0.0.1')).to.equal('127.0.0.1');
-    expect(snifferBindHost('192.168.1.10')).to.equal('0.0.0.0');
+    expect(snifferBindHost('127.0.0.1')).toBe('127.0.0.1');
+    expect(snifferBindHost('192.168.1.10')).toBe('0.0.0.0');
   });
 
   it('should join API paths onto the HTTP origin', () => {
-    expect(snifferApiUrl('http://127.0.0.1:3010/', '/api/health')).to.equal('http://127.0.0.1:3010/api/health');
+    expect(snifferApiUrl('http://127.0.0.1:3010/', '/api/health')).toBe('http://127.0.0.1:3010/api/health');
   });
 
   it('should map local install/start onto bind-localhost without an SSH host', () => {
@@ -149,7 +148,7 @@ describe('sniffer settings', () => {
         startCommand: 'yarn start',
         sshEnabled: false,
       }),
-    ).to.deep.equal({
+    ).toEqual({
       sshEnabled: false,
       sshHost: '',
       sshPort: DEFAULT_SNIFFER_SSH_PORT,
@@ -169,7 +168,7 @@ describe('sniffer settings', () => {
         startCommand: 'node .output/server/index.mjs',
         sshEnabled: true,
       }),
-    ).to.deep.equal({
+    ).toEqual({
       sshEnabled: true,
       sshHost: 'pi@192.168.1.10',
       sshPort: DEFAULT_SNIFFER_SSH_PORT,
@@ -181,13 +180,13 @@ describe('sniffer settings', () => {
   });
 
   it('should quote remote shell arguments for bash -lc', () => {
-    expect(quoteRemoteShellArg(`/tmp/o'sniffer`)).to.equal(`'/tmp/o'\\''sniffer'`);
+    expect(quoteRemoteShellArg(`/tmp/o'sniffer`)).toBe(`'/tmp/o'\\''sniffer'`);
   });
 
   it('should expand a leading tilde for remote directory assignments', () => {
-    expect(remoteDirectoryAssignmentRhs('~')).to.equal('"$HOME"');
-    expect(remoteDirectoryAssignmentRhs('~/ham-radio-sniffer')).to.equal('"$HOME/ham-radio-sniffer"');
-    expect(remoteDirectoryAssignmentRhs('/opt/sniffer')).to.equal("'/opt/sniffer'");
+    expect(remoteDirectoryAssignmentRhs('~')).toBe('"$HOME"');
+    expect(remoteDirectoryAssignmentRhs('~/ham-radio-sniffer')).toBe('"$HOME/ham-radio-sniffer"');
+    expect(remoteDirectoryAssignmentRhs('/opt/sniffer')).toBe("'/opt/sniffer'");
   });
 
   it('should round-trip settings through serialize and parse', () => {
@@ -199,7 +198,7 @@ describe('sniffer settings', () => {
       sshEnabled: true,
     };
 
-    expect(parseSnifferSettings(serializeSnifferSettings(settings))).to.deep.equal(settings);
-    expect(isSnifferSshConfigured(settings)).to.equal(true);
+    expect(parseSnifferSettings(serializeSnifferSettings(settings))).toEqual(settings);
+    expect(isSnifferSshConfigured(settings)).toBe(true);
   });
 });

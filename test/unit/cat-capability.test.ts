@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import type { RadioProtocolStep } from '@springfield/ham-radio-api';
 import { radioSupportsLiveCat } from '../../app/utils/cat-capability.ts';
 
@@ -49,11 +48,11 @@ describe('radioSupportsLiveCat', () => {
         capabilities: { liveControl: true },
         cat: { protocol: 'kenwood', vfoCount: 2, vfoChannel: true },
       }),
-    ).to.equal(true);
+    ).toBe(true);
   });
 
   it('should be true when liveControl is set and cat protocol is omitted', () => {
-    expect(radioSupportsLiveCat({ capabilities: { liveControl: true } })).to.equal(true);
+    expect(radioSupportsLiveCat({ capabilities: { liveControl: true } })).toBe(true);
   });
 
   it('should be false when liveControl is true but the protocol is not Kenwood', () => {
@@ -62,7 +61,7 @@ describe('radioSupportsLiveCat', () => {
         capabilities: { liveControl: true },
         cat: { protocol: 'icom-ci-v' },
       }),
-    ).to.equal(false);
+    ).toBe(false);
   });
 
   it('should be false when liveControl is false even for Kenwood clone radios', () => {
@@ -72,15 +71,15 @@ describe('radioSupportsLiveCat', () => {
         capabilities: { liveControl: false },
         readMemory: tmD710CloneRead,
       }),
-    ).to.equal(false);
+    ).toBe(false);
   });
 
   it('should infer CAT from catRead when liveControl is omitted', () => {
-    expect(radioSupportsLiveCat({ readMemory: kenwoodRead, writeMemory: [] })).to.equal(true);
+    expect(radioSupportsLiveCat({ readMemory: kenwoodRead, writeMemory: [] })).toBe(true);
   });
 
   it('should infer CAT from a Kenwood ID handshake when liveControl is omitted', () => {
-    expect(radioSupportsLiveCat({ readMemory: tmD710CloneRead, writeMemory: [] })).to.equal(true);
+    expect(radioSupportsLiveCat({ readMemory: tmD710CloneRead, writeMemory: [] })).toBe(true);
   });
 
   it('should infer CAT from manufacturer Kenwood when liveControl is omitted', () => {
@@ -90,14 +89,14 @@ describe('radioSupportsLiveCat', () => {
         readMemory: cloneRead,
         writeMemory: cloneRead,
       }),
-    ).to.equal(true);
+    ).toBe(true);
   });
 
   it('should be false for clone-only protocols when liveControl is omitted', () => {
-    expect(radioSupportsLiveCat({ readMemory: cloneRead, writeMemory: cloneRead })).to.equal(false);
+    expect(radioSupportsLiveCat({ readMemory: cloneRead, writeMemory: cloneRead })).toBe(false);
   });
 
   it('should be false when protocol steps are missing', () => {
-    expect(radioSupportsLiveCat({})).to.equal(false);
+    expect(radioSupportsLiveCat({})).toBe(false);
   });
 });

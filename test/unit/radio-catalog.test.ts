@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,13 +29,13 @@ describe('radio catalog hydrate', () => {
     const validation = validateConfiguration(radio);
     const entry = extractCatalogMetadata(radio, 'bundled');
 
-    expect(validation.isValid).to.be.true;
-    expect(radio.id.model).to.equal('baofeng-uv5r');
-    expect(radio.memoryMap).to.be.an('object');
-    expect(radio.memoryMap).to.have.property('structs');
-    expect(entry.manufacturer).to.equal('Baofeng');
-    expect(entry.source).to.equal('bundled');
-    expect(entry.contentHash).to.match(/^[0-9a-f]{8}$/);
+    expect(validation.isValid).toBe(true);
+    expect(radio.id.model).toBe('baofeng-uv5r');
+    expect(radio.memoryMap).toBeTypeOf('object');
+    expect(radio.memoryMap).toHaveProperty('structs');
+    expect(entry.manufacturer).toBe('Baofeng');
+    expect(entry.source).toBe('bundled');
+    expect(entry.contentHash).toMatch(/^[0-9a-f]{8}$/);
   });
 
   it('should keep an in-memory catalog outside Tauri', async () => {
@@ -51,6 +50,6 @@ describe('radio catalog hydrate', () => {
     await upsertRadioCatalogRecord(radio, 'bundled');
     const records = await listRadioCatalogRecords();
 
-    expect(records.some((record) => record.modelId === 'baofeng-uv5r')).to.be.true;
+    expect(records.some((record) => record.modelId === 'baofeng-uv5r')).toBe(true);
   });
 });

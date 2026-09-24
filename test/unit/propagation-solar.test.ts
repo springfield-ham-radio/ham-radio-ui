@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   fluxToXrayClass,
   parseDailySolarIndices,
@@ -44,16 +43,16 @@ describe('propagation-solar', () => {
     it('should extract SFI, A-index, K-index, issued time, and storm summary', () => {
       const parsed = parseWwvAlert(WWV_FIXTURE);
 
-      expect(parsed.solarFlux).to.equal(114);
-      expect(parsed.aIndex).to.equal(8);
-      expect(parsed.kIndex).to.be.closeTo(0.33, 1e-9);
-      expect(parsed.issuedAt).to.equal('2026 Sep 13 2105 UTC');
-      expect(parsed.stormSummary).to.include('No space weather storms were observed');
-      expect(parsed.stormSummary).to.include('No space weather storms are predicted');
+      expect(parsed.solarFlux).toBe(114);
+      expect(parsed.aIndex).toBe(8);
+      expect(Math.abs((parsed.kIndex) - (0.33))).toBeLessThanOrEqual(1e-9);
+      expect(parsed.issuedAt).toBe('2026 Sep 13 2105 UTC');
+      expect(parsed.stormSummary).toContain('No space weather storms were observed');
+      expect(parsed.stormSummary).toContain('No space weather storms are predicted');
     });
 
     it('should throw when the WWV body is missing required indices', () => {
-      expect(() => parseWwvAlert('Solar flux only')).to.throw(/solar flux/i);
+      expect(() => parseWwvAlert('Solar flux only')).toThrow(/solar flux/i);
     });
   });
 
@@ -61,24 +60,24 @@ describe('propagation-solar', () => {
     it('should parse the last 30 days of SFI and sunspot number', () => {
       const days = parseDailySolarIndices(DAILY_INDICES_FIXTURE);
 
-      expect(days).to.have.length(3);
-      expect(days[0]).to.deep.equal({ date: '2026-09-11', solarFlux: 110, sunspotNumber: 62 });
-      expect(days[2]).to.deep.equal({ date: '2026-09-13', solarFlux: 114, sunspotNumber: 48 });
+      expect(days).toHaveLength(3);
+      expect(days[0]).toEqual({ date: '2026-09-11', solarFlux: 110, sunspotNumber: 62 });
+      expect(days[2]).toEqual({ date: '2026-09-13', solarFlux: 114, sunspotNumber: 48 });
     });
 
     it('should return the most recent sunspot number for the dashboard card', () => {
       const days = parseDailySolarIndices(DAILY_INDICES_FIXTURE);
-      expect(days.at(-1)?.sunspotNumber).to.equal(48);
+      expect(days.at(-1)?.sunspotNumber).toBe(48);
     });
   });
 
   describe('fluxToXrayClass', () => {
     it('should map GOES long-channel flux to A/B/C/M/X class labels', () => {
-      expect(fluxToXrayClass(5.2e-8)).to.equal('A5.2');
-      expect(fluxToXrayClass(3.1e-7)).to.equal('B3.1');
-      expect(fluxToXrayClass(1.4e-6)).to.equal('C1.4');
-      expect(fluxToXrayClass(2.5e-5)).to.equal('M2.5');
-      expect(fluxToXrayClass(1.2e-4)).to.equal('X1.2');
+      expect(fluxToXrayClass(5.2e-8)).toBe('A5.2');
+      expect(fluxToXrayClass(3.1e-7)).toBe('B3.1');
+      expect(fluxToXrayClass(1.4e-6)).toBe('C1.4');
+      expect(fluxToXrayClass(2.5e-5)).toBe('M2.5');
+      expect(fluxToXrayClass(1.2e-4)).toBe('X1.2');
     });
   });
 
@@ -91,12 +90,12 @@ describe('propagation-solar', () => {
         { time_tag: '2026-09-13T21:00:00Z', energy: '0.05-0.4nm', flux: 2e-7 },
       ];
 
-      expect(selectLatestXrayFlux(samples)).to.equal(3.4e-6);
-      expect(fluxToXrayClass(selectLatestXrayFlux(samples)!)).to.equal('C3.4');
+      expect(selectLatestXrayFlux(samples)).toBe(3.4e-6);
+      expect(fluxToXrayClass(selectLatestXrayFlux(samples)!)).toBe('C3.4');
     });
 
     it('should return undefined when no long-channel samples exist', () => {
-      expect(selectLatestXrayFlux([{ time_tag: '2026-09-13T20:00:00Z', energy: '0.05-0.4nm', flux: 1e-7 }])).to.equal(
+      expect(selectLatestXrayFlux([{ time_tag: '2026-09-13T20:00:00Z', energy: '0.05-0.4nm', flux: 1e-7 }])).toBe(
         undefined,
       );
     });

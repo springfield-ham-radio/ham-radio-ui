@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import { RadioModelId, type RadioId } from '@springfield/ham-radio-api';
 import {
   defaultMemoryFileName,
@@ -21,18 +20,18 @@ describe('serializeRadioMemoryFile', () => {
     const json = serializeRadioMemoryFile(radioId, Uint8Array.from([0x00, 0xab, 0xff]));
     const parsed = JSON.parse(json) as Record<string, unknown>;
 
-    expect(parsed.kind).to.equal('springfield-ham-radio-memory');
-    expect(parsed.version).to.equal(1);
-    expect(parsed.radioId).to.deep.equal({
+    expect(parsed.kind).toBe('springfield-ham-radio-memory');
+    expect(parsed.version).toBe(1);
+    expect(parsed.radioId).toEqual({
       model: 'baofeng-uv5r',
       name: 'Baofeng UV-5R',
       manufacturer: 'Baofeng',
     });
-    expect(parsed.contents).to.equal('00ABFF');
+    expect(parsed.contents).toBe('00ABFF');
   });
 
   it('rejects empty memory', () => {
-    expect(() => serializeRadioMemoryFile(radioId, new Uint8Array())).to.throw('Memory is empty');
+    expect(() => serializeRadioMemoryFile(radioId, new Uint8Array())).toThrow('Memory is empty');
   });
 });
 
@@ -42,8 +41,8 @@ describe('parseRadioMemoryFile', () => {
     const json = serializeRadioMemoryFile(radioId, contents);
     const loaded = parseRadioMemoryFile(json);
 
-    expect(loaded.radioId).to.deep.equal(radioId);
-    expect(Array.from(loaded.contents)).to.deep.equal(Array.from(contents));
+    expect(loaded.radioId).toEqual(radioId);
+    expect(Array.from(loaded.contents)).toEqual(Array.from(contents));
   });
 
   it('accepts lowercase and whitespace in the hex contents', () => {
@@ -55,15 +54,15 @@ describe('parseRadioMemoryFile', () => {
     });
     const loaded = parseRadioMemoryFile(json);
 
-    expect(Array.from(loaded.contents)).to.deep.equal([0x00, 0xab, 0xff]);
+    expect(Array.from(loaded.contents)).toEqual([0x00, 0xab, 0xff]);
   });
 
   it('rejects invalid JSON', () => {
-    expect(() => parseRadioMemoryFile('{')).to.throw('not valid JSON');
+    expect(() => parseRadioMemoryFile('{')).toThrow('not valid JSON');
   });
 
   it('rejects files that are not radio memory documents', () => {
-    expect(() => parseRadioMemoryFile(JSON.stringify({ version: 1 }))).to.throw('not a radio memory file');
+    expect(() => parseRadioMemoryFile(JSON.stringify({ version: 1 }))).toThrow('not a radio memory file');
   });
 
   it('rejects unsupported versions', () => {
@@ -74,7 +73,7 @@ describe('parseRadioMemoryFile', () => {
       contents: '00',
     });
 
-    expect(() => parseRadioMemoryFile(json)).to.throw('Unsupported radio memory file version');
+    expect(() => parseRadioMemoryFile(json)).toThrow('Unsupported radio memory file version');
   });
 
   it('rejects odd-length hex contents', () => {
@@ -85,7 +84,7 @@ describe('parseRadioMemoryFile', () => {
       contents: 'ABC',
     });
 
-    expect(() => parseRadioMemoryFile(json)).to.throw('even number of hex digits');
+    expect(() => parseRadioMemoryFile(json)).toThrow('even number of hex digits');
   });
 
   it('rejects non-hex contents', () => {
@@ -96,7 +95,7 @@ describe('parseRadioMemoryFile', () => {
       contents: 'GG',
     });
 
-    expect(() => parseRadioMemoryFile(json)).to.throw('hex');
+    expect(() => parseRadioMemoryFile(json)).toThrow('hex');
   });
 
   it('rejects missing radio identity fields', () => {
@@ -107,50 +106,50 @@ describe('parseRadioMemoryFile', () => {
       contents: '00',
     });
 
-    expect(() => parseRadioMemoryFile(json)).to.throw('radio identity');
+    expect(() => parseRadioMemoryFile(json)).toThrow('radio identity');
   });
 });
 
 describe('defaultMemoryFileName', () => {
   it('uses the radio model as the file name', () => {
-    expect(defaultMemoryFileName(radioId)).to.equal('baofeng-uv5r.json');
+    expect(defaultMemoryFileName(radioId)).toBe('baofeng-uv5r.json');
   });
 });
 
 describe('memoryFileDisplayName', () => {
   it('returns the last path segment', () => {
-    expect(memoryFileDisplayName('/Users/me/Radios/uv5r.json')).to.equal('uv5r.json');
+    expect(memoryFileDisplayName('/Users/me/Radios/uv5r.json')).toBe('uv5r.json');
   });
 
   it('handles Windows-style paths', () => {
-    expect(memoryFileDisplayName('C:\\Radios\\uv5r.json')).to.equal('uv5r.json');
+    expect(memoryFileDisplayName('C:\\Radios\\uv5r.json')).toBe('uv5r.json');
   });
 
   it('returns the original value when there is no separator', () => {
-    expect(memoryFileDisplayName('uv5r.json')).to.equal('uv5r.json');
+    expect(memoryFileDisplayName('uv5r.json')).toBe('uv5r.json');
   });
 });
 
 describe('shouldPromptForSavePath', () => {
   it('reuses the current path for Save', () => {
-    expect(shouldPromptForSavePath('/Radios/uv5r.json', false)).to.equal(false);
+    expect(shouldPromptForSavePath('/Radios/uv5r.json', false)).toBe(false);
   });
 
   it('prompts when Save has no current path', () => {
-    expect(shouldPromptForSavePath(undefined, false)).to.equal(true);
+    expect(shouldPromptForSavePath(undefined, false)).toBe(true);
   });
 
   it('always prompts for Save As', () => {
-    expect(shouldPromptForSavePath('/Radios/uv5r.json', true)).to.equal(true);
+    expect(shouldPromptForSavePath('/Radios/uv5r.json', true)).toBe(true);
   });
 });
 
 describe('withJsonExtension', () => {
   it('leaves an existing .json suffix alone', () => {
-    expect(withJsonExtension('/Radios/uv5r.json')).to.equal('/Radios/uv5r.json');
+    expect(withJsonExtension('/Radios/uv5r.json')).toBe('/Radios/uv5r.json');
   });
 
   it('appends .json when the path has no extension', () => {
-    expect(withJsonExtension('/Radios/uv5r')).to.equal('/Radios/uv5r.json');
+    expect(withJsonExtension('/Radios/uv5r')).toBe('/Radios/uv5r.json');
   });
 });

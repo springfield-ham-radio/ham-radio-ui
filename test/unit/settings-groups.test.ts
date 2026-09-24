@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMap } from '@springfield/ham-radio-api';
 import { collectMemoryMapUiGroups } from '../../app/utils/settings-groups.ts';
 
@@ -83,10 +82,10 @@ describe('collectMemoryMapUiGroups', () => {
       ],
     });
 
-    expect(grouped.map((group) => group.id)).to.deep.equal(['service', 'basic']);
-    expect(grouped[0]?.label).to.equal('Service Settings');
-    expect(grouped[0]?.warning?.title).to.equal('Service calibration values');
-    expect(grouped[1]?.fields.map((field) => field.fieldId)).to.deep.equal(['squelch', 'timeout']);
+    expect(grouped.map((group) => group.id)).toEqual(['service', 'basic']);
+    expect(grouped[0]?.label).toBe('Service Settings');
+    expect(grouped[0]?.warning?.title).toBe('Service calibration values');
+    expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['squelch', 'timeout']);
   });
 
   it('should use declared sub-groups as panel sections', () => {
@@ -101,7 +100,7 @@ describe('collectMemoryMapUiGroups', () => {
       ],
     });
 
-    expect(grouped[0]?.groups.map((subgroup) => ({ id: subgroup.id, label: subgroup.label }))).to.deep.equal([
+    expect(grouped[0]?.groups.map((subgroup) => ({ id: subgroup.id, label: subgroup.label }))).toEqual([
       { id: 'timer', label: 'Timers' },
       { id: 'receive', label: 'Receive' },
     ]);
@@ -139,7 +138,7 @@ describe('collectMemoryMapUiGroups', () => {
       groups: [{ id: 'other', label: 'Other Settings', groups: [{ id: 'limits', label: 'Band Limits' }] }],
     } as RadioMemoryMap);
 
-    expect(grouped[0]?.groups[0]?.fields.map((field) => field.fieldId)).to.deep.equal([
+    expect(grouped[0]?.groups[0]?.fields.map((field) => field.fieldId)).toEqual([
       'vhf_enable',
       'uhf_enable',
       'vhf_lower',

@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import { expect } from 'chai';
+import { describe, expect, it } from 'vitest';
 import {
   SCOPE_H_DIVS,
   SCOPE_V_DIVS,
@@ -40,10 +39,10 @@ describe('wavebench-scope', () => {
     it('should leave a CRT margin inside the measured tile', () => {
       const plot = scopeViewportSize(640, 280);
 
-      expect(plot.width).to.equal(640);
-      expect(plot.height).to.equal(280);
-      expect(plot.plotWidth).to.equal(640 - 36 - 12);
-      expect(plot.plotHeight).to.equal(280 - 12 - 12);
+      expect(plot.width).toBe(640);
+      expect(plot.height).toBe(280);
+      expect(plot.plotWidth).toBe(640 - 36 - 12);
+      expect(plot.plotHeight).toBe(280 - 12 - 12);
     });
   });
 
@@ -51,10 +50,10 @@ describe('wavebench-scope', () => {
     it('should draw a 10×8 oscilloscope division grid', () => {
       const lines = scopeGraticule(box());
 
-      expect(lines.majorVertical).to.have.length(SCOPE_H_DIVS + 1);
-      expect(lines.majorHorizontal).to.have.length(SCOPE_V_DIVS + 1);
-      expect(lines.axisX).to.be.closeTo(box().left + box().plotWidth / 2, 1e-9);
-      expect(lines.axisY).to.be.closeTo(box().top + box().plotHeight / 2, 1e-9);
+      expect(lines.majorVertical).toHaveLength(SCOPE_H_DIVS + 1);
+      expect(lines.majorHorizontal).toHaveLength(SCOPE_V_DIVS + 1);
+      expect(Math.abs((lines.axisX) - (box().left + box().plotWidth / 2))).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs((lines.axisY) - (box().top + box().plotHeight / 2))).toBeLessThanOrEqual(1e-9);
     });
   });
 
@@ -62,23 +61,23 @@ describe('wavebench-scope', () => {
     it('should put t = 0 on the left and t = duration on the right', () => {
       const plot = box();
 
-      expect(mapScopeX(0, 1, plot)).to.equal(plot.left);
-      expect(mapScopeX(1, 1, plot)).to.equal(plot.left + plot.plotWidth);
+      expect(mapScopeX(0, 1, plot)).toBe(plot.left);
+      expect(mapScopeX(1, 1, plot)).toBe(plot.left + plot.plotWidth);
     });
 
     it('should put 0 V on the strip center and a positive peak above it', () => {
       const plot = box();
       const strip = scopeStrips(plot, [channel('ch', [1])], 'overlay')[0]!;
 
-      expect(mapScopeY(0, 1, strip)).to.be.closeTo(strip.centerY, 1e-9);
-      expect(mapScopeY(1, 1, strip)).to.be.lessThan(strip.centerY);
+      expect(Math.abs((mapScopeY(0, 1, strip)) - (strip.centerY))).toBeLessThanOrEqual(1e-9);
+      expect(mapScopeY(1, 1, strip)).toBeLessThan(strip.centerY);
     });
   });
 
   describe('stacking', () => {
     it('should share one strip in overlay mode', () => {
       const strips = scopeStrips(box(), [channel('a', [1]), channel('b', [1])], 'overlay');
-      expect(strips).to.have.length(1);
+      expect(strips).toHaveLength(1);
     });
 
     it('should stack unique groups and keep an AM envelope on the AM strip', () => {
@@ -88,30 +87,30 @@ describe('wavebench-scope', () => {
         channel('env', [1], 'am'),
       ];
 
-      expect(scopeStackKeys(channels)).to.deep.equal(['carrier', 'am']);
+      expect(scopeStackKeys(channels)).toEqual(['carrier', 'am']);
       const strips = scopeStrips(box(), channels, 'stack');
-      expect(strips).to.have.length(2);
-      expect(strips[1]!.top).to.be.greaterThan(strips[0]!.top);
-      expect(strips[0]!.top + strips[0]!.height).to.be.lessThan(strips[1]!.top + 1e-9);
+      expect(strips).toHaveLength(2);
+      expect(strips[1]!.top).toBeGreaterThan(strips[0]!.top);
+      expect(strips[0]!.top + strips[0]!.height).toBeLessThan(strips[1]!.top + 1e-9);
     });
 
     it('should hide channels marked not visible', () => {
       const hidden: ScopeChannel = { ...channel('off', [1]), visible: false };
-      expect(visibleScopeChannels([hidden, channel('on', [1])]).map((entry) => entry.id)).to.deep.equal(['on']);
+      expect(visibleScopeChannels([hidden, channel('on', [1])]).map((entry) => entry.id)).toEqual(['on']);
     });
   });
 
   describe('scale', () => {
     it('should pick 1-2-5 volts/div that fit the peak', () => {
-      expect(niceScopeStep(0.3)).to.equal(0.5);
-      expect(autoVoltsPerDiv(1, 8)).to.equal(0.5);
-      expect(scopePeakVoltage([{ timeSeconds: 0, voltage: -1.4 }, { timeSeconds: 1, voltage: 0.2 }])).to.equal(1.4);
+      expect(niceScopeStep(0.3)).toBe(0.5);
+      expect(autoVoltsPerDiv(1, 8)).toBe(0.5);
+      expect(scopePeakVoltage([{ timeSeconds: 0, voltage: -1.4 }, { timeSeconds: 1, voltage: 0.2 }])).toBe(1.4);
     });
 
     it('should format CRT readouts', () => {
-      expect(formatVoltsPerDiv(0.5)).to.equal('500 mV/div');
-      expect(formatTimePerDiv(1e-4)).to.equal('100 µs/div');
-      expect(scopeTimePerDiv(1e-3)).to.equal(1e-4);
+      expect(formatVoltsPerDiv(0.5)).toBe('500 mV/div');
+      expect(formatTimePerDiv(1e-4)).toBe('100 µs/div');
+      expect(scopeTimePerDiv(1e-3)).toBe(1e-4);
     });
   });
 
@@ -121,9 +120,9 @@ describe('wavebench-scope', () => {
       const strip = scopeStrips(plot, [channel('ch', [0, 1])], 'overlay')[0]!;
       const path = scopeTracePath(channel('ch', [0, 1]).samples, 1, 1, plot, strip);
 
-      expect(path.startsWith('M')).to.equal(true);
-      expect(path).to.include(' L');
-      expect(scopeDurationSeconds([channel('ch', [0, 0, 0])])).to.equal(2);
+      expect(path.startsWith('M')).toBe(true);
+      expect(path).toContain(' L');
+      expect(scopeDurationSeconds([channel('ch', [0, 0, 0])])).toBe(2);
     });
   });
 });
