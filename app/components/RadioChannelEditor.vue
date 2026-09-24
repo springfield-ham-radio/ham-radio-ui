@@ -4,6 +4,7 @@ import {
   collectChannelMemoryMapUiFields,
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
+import { settingsFieldHelp } from '~/utils/settings-field-help';
 import {
   applyChannelPatch,
   channelFieldEditor,
@@ -64,6 +65,30 @@ const radioChannel = computed(() => {
 const nameMaxLength = computed(() => channelNameMaxLength(props.memoryMap));
 const toneItems = toneSelectItems();
 const extraFields = computed(() => (props.memoryMap ? collectChannelMemoryMapUiFields(props.memoryMap) : []));
+
+const isUv5r = computed(() => props.memoryMap?.description?.includes('UV-5R') ?? false);
+
+const receiveToneHelp = computed(() =>
+  isUv5r.value
+    ? {
+        menu: 'Menu 10 · R-DCS · Menu 11 · R-CTCS',
+        text: 'Tone required to open the speaker on this channel. A DCS code is menu 10. A CTCSS tone is menu 11. None leaves the squelch carrier-only.',
+      }
+    : undefined,
+);
+
+const transmitToneHelp = computed(() =>
+  isUv5r.value
+    ? {
+        menu: 'Menu 12 · T-DCS · Menu 13 · T-CTCS',
+        text: 'Tone sent while transmitting on this channel. A DCS code is menu 12. A CTCSS tone is menu 13. None sends carrier only.',
+      }
+    : undefined,
+);
+
+function extraHelp(field: RadioMemoryMapUiField) {
+  return settingsFieldHelp(field);
+}
 
 const title = computed(() => {
   if (isCreate.value) {
@@ -423,7 +448,10 @@ function submitCreate(): void {
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="RX Tone">
+          <UFormField label="RX Tone" :ui="receiveToneHelp ? { labelWrapper: 'justify-start' } : undefined">
+            <template v-if="receiveToneHelp" #hint>
+              <HelpTooltip :menu="receiveToneHelp.menu" :text="receiveToneHelp.text" />
+            </template>
             <USelect
               :model-value="toneToKey(radioChannel.receiveTone)"
               :items="toneItems"
@@ -432,7 +460,10 @@ function submitCreate(): void {
             />
           </UFormField>
 
-          <UFormField label="TX Tone">
+          <UFormField label="TX Tone" :ui="transmitToneHelp ? { labelWrapper: 'justify-start' } : undefined">
+            <template v-if="transmitToneHelp" #hint>
+              <HelpTooltip :menu="transmitToneHelp.menu" :text="transmitToneHelp.text" />
+            </template>
             <USelect
               :model-value="toneToKey(radioChannel.transmitTone)"
               :items="toneItems"
@@ -447,8 +478,15 @@ function submitCreate(): void {
             v-for="field in extraFields"
             :key="field.fieldId"
             :label="field.ui.label"
-            :description="field.ui.description"
+            :ui="extraHelp(field) ? { labelWrapper: 'justify-start' } : undefined"
           >
+            <template v-if="extraHelp(field)" #hint>
+              <HelpTooltip
+                :menu="extraHelp(field)?.menuLabel"
+                :text="extraHelp(field)?.description"
+                :constraint="extraHelp(field)?.constraint"
+              />
+            </template>
             <USelect
               v-if="extraEditor(field).kind === 'select'"
               :model-value="serializeChannelFieldValue(field, extraValue(field))"

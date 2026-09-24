@@ -2,6 +2,7 @@
 import type { RadioMemoryMap, RadioSettings, RadioSettingValue } from '@springfield/ham-radio-api';
 import { type RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups';
+import { settingsFieldHelp } from '~/utils/settings-field-help';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
 
 const props = defineProps<{
@@ -46,6 +47,22 @@ watch(selectedGroup, () => {
 
 const selectedEntry = computed(() => {
   return groupEntries.value.find((entry) => entry.id === selectedGroup.value) ?? groupEntries.value[0];
+});
+
+const helpByPath = computed(() => {
+  const help = new Map<string, NonNullable<ReturnType<typeof settingsFieldHelp>>>();
+
+  for (const entry of groupEntries.value) {
+    for (const field of entry.fields) {
+      const fieldHelp = settingsFieldHelp(field);
+
+      if (fieldHelp) {
+        help.set(field.path, fieldHelp);
+      }
+    }
+  }
+
+  return help;
 });
 
 const selectedSections = computed(() => {
@@ -170,9 +187,9 @@ function selectGroup(group: string): void {
 
 function fieldFormUi(field: RadioMemoryMapUiField) {
   const isSwitch = field.ui.widget === 'switch';
-  const hasDescription = Boolean(field.ui.description);
+  const hasHelp = helpByPath.value.has(field.path);
 
-  if (!isSwitch && !hasDescription) {
+  if (!isSwitch && !hasHelp) {
     return undefined;
   }
 
@@ -184,7 +201,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
           container: 'mt-0 shrink-0',
         }
       : {}),
-    ...(hasDescription ? { labelWrapper: 'justify-start' } : {}),
+    ...(hasHelp ? { labelWrapper: 'justify-start' } : {}),
   };
 }
 </script>
@@ -260,8 +277,12 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
                 :label="field.ui.label"
                 :ui="fieldFormUi(field)"
               >
-                <template v-if="field.ui.description" #hint>
-                  <HelpTooltip :text="field.ui.description" />
+                <template v-if="helpByPath.get(field.path)" #hint>
+                  <HelpTooltip
+                    :menu="helpByPath.get(field.path)?.menuLabel"
+                    :text="helpByPath.get(field.path)?.description"
+                    :constraint="helpByPath.get(field.path)?.constraint"
+                  />
                 </template>
 
                 <UInputNumber
