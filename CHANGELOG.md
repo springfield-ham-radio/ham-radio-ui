@@ -1,3 +1,9 @@
+## [0.37.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.36.0...v0.37.0) (2026-09-25)
+
+### Features
+
+* update the app icon and macOS window details ([49f2fc4](https://github.com/springfield-ham-radio/ham-radio-ui/commit/49f2fc460b118d95bc093bd717e309b053f124b4))
+
 ## [0.36.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.35.0...v0.36.0) (2026-09-25)
 
 ### Features
