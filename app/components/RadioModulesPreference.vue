@@ -13,11 +13,11 @@ import {
   buildAvailableManufacturerGroups,
   buildInstalledRadioListItems,
   groupInstalledRadiosByManufacturer,
+  installedDriverVersionLabel,
   radioDisplayName,
   type AvailableManufacturerGroup,
   type AvailableRadioModelItem,
   type InstalledManufacturerGroup,
-  type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -72,14 +72,6 @@ function sourceBadge(record: RadioCatalogRecord): { label: string; color: 'warni
   }
 
   return { label: 'Bundled', color: 'success' };
-}
-
-function installedVersionLabel(item: InstalledRadioListItem): string {
-  if (item.updateAvailable && item.catalogEntry) {
-    return `v${item.record.version} → ${item.catalogEntry.version} · ${item.record.modelId}`;
-  }
-
-  return `v${item.record.version} · ${item.record.modelId}`;
 }
 
 const anyBusy = computed(() => busyKey.value !== undefined);
@@ -182,7 +174,7 @@ async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
     await refreshInstalledRadios();
     toast.add({
       title: 'Radio updated',
-      description: `${group.manufacturer} is now v${group.catalogEntry.version}.`,
+      description: `${group.manufacturer} drivers were updated.`,
       color: 'success',
       icon: 'i-lucide-check',
     });
@@ -386,7 +378,7 @@ onMounted(() => {
                   <p class="truncate text-sm text-highlighted">
                     {{ radioDisplayName(item.record.manufacturer, item.record.name) }}
                   </p>
-                  <p class="truncate text-xs text-muted">{{ installedVersionLabel(item) }}</p>
+                  <p class="truncate text-xs text-muted">{{ installedDriverVersionLabel(item.record) }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
                   <UBadge

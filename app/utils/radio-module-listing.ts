@@ -184,6 +184,10 @@ export function catalogModuleIdForRecord(record: RadioCatalogRecord): string | u
   return configModuleId(record);
 }
 
+/**
+ * Zip version used to decide whether the official catalog has a newer download.
+ * Installed rows show the radio config version instead.
+ */
 function installedModuleVersion(record: RadioCatalogRecord): string {
   if (record.sourcePath) {
     const parsed = parseModuleInstallPath(record.sourcePath);
@@ -194,6 +198,11 @@ function installedModuleVersion(record: RadioCatalogRecord): string {
   }
 
   return record.version;
+}
+
+/** Version label for an installed radio: the driver config version, not the module zip. */
+export function installedDriverVersionLabel(record: Pick<RadioCatalogRecord, 'version' | 'modelId'>): string {
+  return `v${record.version} · ${record.modelId}`;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   catalogRadioDisplayNames,
   formatCatalogRadioName,
   groupInstalledRadiosByManufacturer,
+  installedDriverVersionLabel,
   normalizeCatalogModuleId,
   radioDisplayName,
   radiosOnCatalogEntry,
@@ -89,6 +90,12 @@ describe('radio module listing', () => {
     expect(normalizeCatalogModuleId('baofeng')).toBe('baofeng');
     expect(normalizeCatalogModuleId('radio-module-baofeng')).toBe('baofeng');
     expect(normalizeCatalogModuleId('@springfield/radio-module-baofeng')).toBe('baofeng');
+  });
+
+  it('labels an installed radio with its driver version', () => {
+    expect(installedDriverVersionLabel({ version: '1.4.2', modelId: 'baofeng-uv5r' })).toBe(
+      'v1.4.2 · baofeng-uv5r',
+    );
   });
 
   it('should strip a leading manufacturer from radio names', () => {
