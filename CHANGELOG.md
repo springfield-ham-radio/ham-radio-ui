@@ -1,3 +1,9 @@
+## [0.34.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.4...v0.34.0) (2026-09-25)
+
+### Features
+
+* open several radios and replace a memory from the library ([78ad32f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78ad32ff1fe9ad27cdfbc01df57ae20009dce534))
+
 ## [0.33.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.3...v0.33.4) (2026-09-25)
 
 ### Bug Fixes
