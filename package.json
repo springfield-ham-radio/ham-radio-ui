@@ -33,10 +33,10 @@
   },
   "dependencies": {
     "@nuxt/ui": "4.11.1",
-    "@springfield/ham-radio-api": "^17.10.0",
-    "@springfield/ham-radio-driver": "^3.4.2",
+    "@springfield/ham-radio-api": "^17.12.0",
+    "@springfield/ham-radio-driver": "^3.5.0",
     "@springfield/ham-radio-registry": "^1.6.6",
-    "@springfield/ham-radio-utils": "^4.14.0",
+    "@springfield/ham-radio-utils": "^4.15.0",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-opener": "^2.5.5",
