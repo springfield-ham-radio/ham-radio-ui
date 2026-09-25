@@ -52,12 +52,31 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # bash, not PowerShell. windows-latest ships Yarn 1.22 as yarn.ps1, and
-      # PowerShell runs that instead of the Corepack yarn.cmd shim.
+      # Node 26 does not ship Corepack. windows-latest also has Yarn 1.22
+      # ahead of the Node 22 Corepack shims: PowerShell picks yarn.ps1 and
+      # Git bash picks the extensionless yarn script. Wrappers at the front
+      # of PATH make every later step, including Tauri's beforeBuildCommand,
+      # call `corepack yarn` (the version in packageManager).
       - name: Install dependencies
         shell: bash
         run: |
-          corepack enable
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            shim_dir="$(cygpath -u "$RUNNER_TEMP")/corepack-bin"
+            mkdir -p "$shim_dir"
+            printf '%s\n' '#!/bin/sh' 'exec corepack yarn "$@"' > "$shim_dir/yarn"
+            printf '%s\n' '#!/bin/sh' 'exec corepack yarnpkg "$@"' > "$shim_dir/yarnpkg"
+            printf '%s\r\n' '@echo off' 'corepack yarn %*' > "$shim_dir/yarn.cmd"
+            printf '%s\r\n' '@echo off' 'corepack yarnpkg %*' > "$shim_dir/yarnpkg.cmd"
+            printf '%s\n' 'corepack yarn @args' > "$shim_dir/yarn.ps1"
+            printf '%s\n' 'corepack yarnpkg @args' > "$shim_dir/yarnpkg.ps1"
+            chmod +x "$shim_dir/yarn" "$shim_dir/yarnpkg"
+            export PATH="$shim_dir:$PATH"
+            cygpath -w "$shim_dir" >> "$GITHUB_PATH"
+          else
+            corepack enable
+          fi
+          hash -r
+          echo "yarn $(yarn --version) ($(command -v yarn))"
           yarn install --immutable
 
       - name: Install Rust stable
