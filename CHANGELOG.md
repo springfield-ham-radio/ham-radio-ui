@@ -1,3 +1,9 @@
+## [0.35.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.34.0...v0.35.0) (2026-09-25)
+
+### Features
+
+* choose a radio for library channels and check privileges per person ([cfef0a9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/cfef0a9ec2b999b690a801b93a494d15b5e58e3d))
+
 ## [0.34.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.4...v0.34.0) (2026-09-25)
 
 ### Features
