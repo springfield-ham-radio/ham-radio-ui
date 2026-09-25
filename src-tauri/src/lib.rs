@@ -1,6 +1,8 @@
 mod radio_modules;
 mod sniffer_ssh;
 
+#[cfg(target_os = "macos")]
+use tauri::menu::WINDOW_SUBMENU_ID;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -65,8 +67,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        let window_menu = Submenu::with_items(
+        let window_menu = Submenu::with_id_and_items(
             app,
+            WINDOW_SUBMENU_ID,
             "Window",
             true,
             &[
