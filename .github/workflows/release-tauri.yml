@@ -83,3 +83,21 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(inputs.tag || github.event.release.tag_name, '-') }}
           args: ${{ matrix.args }}
+
+  rename-downloads:
+    needs: publish-tauri
+    if: always() && (needs.publish-tauri.result == 'success' || needs.publish-tauri.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Rename installer downloads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: node scripts/rename-release-installers.ts

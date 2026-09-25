@@ -28,11 +28,13 @@ Baseline tag `v0.0.0` exists so the first automated release is `0.1.0` instead o
 
 ## Downloadable artifacts
 
-Unsigned builds (no Apple notarization or Windows Authenticode yet):
+Unsigned builds (no Apple notarization or Windows Authenticode yet). After the platform builds upload, a follow-up job renames the installers so the platform is in the filename:
 
-- **macOS (Apple Silicon):** `.dmg`
-- **Windows:** NSIS `.exe` and `.msi`
-- **Linux (x64):** `.deb`, `.rpm`, and `.AppImage`
+- **macOS (Apple Silicon):** `HamBench-X.Y.Z-macOS-Apple-Silicon.dmg`
+- **Windows:** `HamBench-X.Y.Z-Windows-x64.exe` and `HamBench-X.Y.Z-Windows-x64.msi`
+- **Linux (x64):** `HamBench-X.Y.Z-Linux-x64.deb`, `.rpm`, and `.AppImage`
+
+Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid.
 
 CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
 
