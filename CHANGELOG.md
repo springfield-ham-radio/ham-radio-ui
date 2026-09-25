@@ -1,3 +1,9 @@
+## [0.39.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.0...v0.39.1) (2026-09-25)
+
+### Bug Fixes
+
+* show each installed radio's driver version ([43b6110](https://github.com/springfield-ham-radio/ham-radio-ui/commit/43b6110dbacd7e7e9a9f87b213b29f8e404654c4))
+
 ## [0.39.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.38.0...v0.39.0) (2026-09-25)
 
 ### Features
