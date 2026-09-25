@@ -1,3 +1,9 @@
+## [0.38.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.37.0...v0.38.0) (2026-09-25)
+
+### Features
+
+* name serial ports in preferences ([814d584](https://github.com/springfield-ham-radio/ham-radio-ui/commit/814d584a158ffd5ea7d32e2c5723d1b0b3106564))
+
 ## [0.37.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.36.0...v0.37.0) (2026-09-25)
 
 ### Features
