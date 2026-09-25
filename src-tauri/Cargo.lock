@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "ham-radio"
-version = "0.33.1"
+version = "0.33.4"
 dependencies = [
  "log",
  "reqwest 0.12.28",
