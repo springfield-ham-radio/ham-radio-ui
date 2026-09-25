@@ -74,6 +74,52 @@ describe('serial port list', () => {
     ).toEqual(['/dev/cu.usbserial-AI2SP9LC']);
   });
 
+  it('should show a preference name in the selector and keep the system name as the description', () => {
+    expect(
+      serialPortSelectItems(['/dev/cu.usbserial-A50285BI', '/dev/ttyUSB0', 'COM3'], {
+        filterCommonPorts: true,
+        portAliases: [
+          { systemName: 'usbserial-A50285BI', name: 'Kenwood cable' },
+          { systemName: 'ttyUSB0', name: 'Baofeng cable' },
+        ],
+      }),
+    ).toEqual([
+      {
+        label: 'Kenwood cable',
+        value: '/dev/cu.usbserial-A50285BI',
+        description: 'usbserial-A50285BI',
+      },
+      {
+        label: 'Baofeng cable',
+        value: '/dev/ttyUSB0',
+        description: '/dev/ttyUSB0',
+      },
+      { label: 'COM3', value: 'COM3' },
+    ]);
+  });
+
+  it('should match a full system path and ignore a fragment that would match every adapter', () => {
+    expect(
+      serialPortSelectItems(['/dev/cu.usbserial-A50285BI'], {
+        filterCommonPorts: false,
+        portAliases: [{ systemName: '/dev/cu.usbserial-A50285BI', name: 'Kenwood cable' }],
+      }),
+    ).toEqual([
+      {
+        label: 'Kenwood cable',
+        value: '/dev/cu.usbserial-A50285BI',
+        description: 'usbserial-A50285BI',
+      },
+    ]);
+
+    expect(
+      serialPortSelectItems(['/dev/cu.usbserial-A50285BI'], {
+        filterCommonPorts: false,
+        portAliases: [{ systemName: 'usb', name: 'Too broad' }],
+      }),
+    ).toEqual([{ label: 'usbserial-A50285BI', value: '/dev/cu.usbserial-A50285BI' }]);
+  });
+
   it('should match custom names case-insensitively and against a pasted callout path', () => {
     expect(
       serialPortSelectItems(['/dev/cu.BryansHeadphones', '/dev/cu.usbserial-1'], {

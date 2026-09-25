@@ -9,6 +9,7 @@ import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { serialLogEntryCount } from '~/utils/serial-log-file';
 import { serialPortLabel } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import {
   createBlankStationLogQso,
   type StationLogQsoInput,
@@ -83,7 +84,7 @@ const items = computed<TabsItem[]>(() => [
 
 const debugPortItems = computed(() => {
   const liveItems = visibleLiveRadios.value.map((radio) => ({
-    label: `${radio.radio.name} · ${serialPortLabel(radio.port)}`,
+    label: `${radio.radio.name} · ${serialPortLabel(radio.port, readSerialPortSettings().portAliases)}`,
     value: radio.port,
   }));
 

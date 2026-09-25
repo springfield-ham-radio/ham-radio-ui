@@ -6,7 +6,7 @@ import {
   programmingBaudRateSelectItems,
   shouldSelectProgrammingBaudRate,
 } from '~/utils/radio-baud-rate';
-import { serialPortLabel, serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import {
   draftFromSavedRadio,
@@ -92,7 +92,7 @@ const portItems = computed(() => {
   const current = serialPort.value;
 
   if (current && !items.some((port) => port.value === current)) {
-    items.unshift({ label: `${serialPortLabel(current)} (saved)`, value: current });
+    items.unshift(serialPortOption(current, readSerialPortSettings().portAliases, { suffix: ' (saved)' }));
   }
 
   return items;

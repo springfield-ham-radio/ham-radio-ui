@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { serialPortLabel } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { savedRadioModelLabel, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
 
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
@@ -71,7 +72,10 @@ async function confirmRemove(): Promise<void> {
 }
 
 function radioDetail(radio: SavedRadio): string {
-  const parts = [savedRadioModelLabel(radio, configurations.value), serialPortLabel(radio.serialPort)];
+  const parts = [
+    savedRadioModelLabel(radio, configurations.value),
+    serialPortLabel(radio.serialPort, readSerialPortSettings().portAliases),
+  ];
 
   if (radio.baudRate !== undefined) {
     parts.splice(1, 0, `${radio.baudRate} baud`);

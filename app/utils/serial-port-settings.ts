@@ -1,3 +1,7 @@
+import { serialPortMatchKey, type SerialPortAlias } from '~/utils/serial-port-list';
+
+export type { SerialPortAlias } from '~/utils/serial-port-list';
+
 export const SERIAL_PORT_SETTINGS_STORAGE_KEY = 'ham-radio-serial-ports';
 
 export interface SerialPortSettings {
@@ -5,6 +9,8 @@ export interface SerialPortSettings {
   filterCommonPorts: boolean;
   /** User-entered device names to hide, for example `BryansHeadphones`. */
   excludedPortNames: string[];
+  /** System ports renamed for serial-port selectors. */
+  portAliases: SerialPortAlias[];
 }
 
 /**
@@ -42,11 +48,49 @@ export function normalizeExcludedPortNames(value: unknown): string[] {
   return names;
 }
 
+/**
+ * Trim, drop incomplete rows, and de-duplicate by system port while keeping the first name.
+ */
+export function normalizeSerialPortAliases(value: unknown): SerialPortAlias[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const aliases: SerialPortAlias[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const systemName = typeof record.systemName === 'string' ? record.systemName.trim() : '';
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
+
+    if (systemName.length === 0 || name.length === 0) {
+      continue;
+    }
+
+    const key = serialPortMatchKey(systemName);
+
+    if (key.length === 0 || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    aliases.push({ systemName, name });
+  }
+
+  return aliases;
+}
+
 /** Default serial-port preferences: hide common system devices. */
 export function defaultSerialPortSettings(): SerialPortSettings {
   return {
     filterCommonPorts: true,
     excludedPortNames: [],
+    portAliases: [],
   };
 }
 
@@ -55,7 +99,7 @@ export function defaultSerialPortSettings(): SerialPortSettings {
  *
  * Filtering is on by default so Import, Write, and Sniffer lists stay usable
  * on a Mac without a settings visit. A missing flag is treated as enabled.
- * Custom names are optional and stored as the user typed them.
+ * Custom names and port aliases are optional and stored as the user typed them.
  */
 export function parseSerialPortSettings(raw: string | null): SerialPortSettings {
   const defaults = defaultSerialPortSettings();
@@ -76,6 +120,7 @@ export function parseSerialPortSettings(raw: string | null): SerialPortSettings 
     return {
       filterCommonPorts: record.filterCommonPorts === undefined ? true : record.filterCommonPorts === true,
       excludedPortNames: normalizeExcludedPortNames(record.excludedPortNames),
+      portAliases: normalizeSerialPortAliases(record.portAliases),
     };
   } catch {
     return defaults;
@@ -86,6 +131,7 @@ export function serializeSerialPortSettings(settings: SerialPortSettings): strin
   return JSON.stringify({
     filterCommonPorts: settings.filterCommonPorts,
     excludedPortNames: normalizeExcludedPortNames(settings.excludedPortNames),
+    portAliases: normalizeSerialPortAliases(settings.portAliases),
   });
 }
 

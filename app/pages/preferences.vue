@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div
           class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
-          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' ? 'max-w-2xl' : 'max-w-xl'"
+          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' || currentSection === 'serial' ? 'max-w-2xl' : 'max-w-xl'"
         >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
@@ -169,6 +169,8 @@
               </UFormField>
             </div>
           </div>
+
+          <SerialPortNamesPreference v-model="portAliases" />
         </section>
 
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
@@ -414,6 +416,7 @@ const {
 const initialSerialPortSettings = readSerialPortSettings();
 const filterCommonPorts = ref(initialSerialPortSettings.filterCommonPorts);
 const excludedPortNames = ref([...initialSerialPortSettings.excludedPortNames]);
+const portAliases = ref(initialSerialPortSettings.portAliases.map((alias) => ({ ...alias })));
 const initialSnifferSettings = readSnifferSettings();
 const snifferHostInput = ref(initialSnifferSettings.host);
 const snifferPortInput = ref(initialSnifferSettings.port);
@@ -881,6 +884,7 @@ function persistSerialPortSettings(): void {
   writeSerialPortSettings({
     filterCommonPorts: filterCommonPorts.value,
     excludedPortNames: excludedPortNames.value,
+    portAliases: portAliases.value,
   });
 }
 
@@ -890,7 +894,7 @@ function setFilterCommonPorts(enabled: boolean): void {
 }
 
 watch(
-  excludedPortNames,
+  [excludedPortNames, portAliases],
   () => {
     persistSerialPortSettings();
   },

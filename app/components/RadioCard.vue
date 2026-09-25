@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import { serialPortLabel } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { savedRadioModelLabel, type SavedRadio } from '~/utils/saved-radios';
 
 const props = defineProps<{
@@ -23,7 +24,10 @@ const driverInstalled = computed(() =>
 );
 const modelLabel = computed(() => savedRadioModelLabel(props.radio, configurations.value));
 const detail = computed(() => {
-  const parts = [modelLabel.value, serialPortLabel(props.radio.serialPort)];
+  const parts = [
+    modelLabel.value,
+    serialPortLabel(props.radio.serialPort, readSerialPortSettings().portAliases),
+  ];
 
   if (props.radio.baudRate !== undefined) {
     parts.splice(1, 0, `${props.radio.baudRate} baud`);

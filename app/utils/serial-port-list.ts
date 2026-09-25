@@ -1,6 +1,16 @@
+/** A system serial port shown under a name the operator chose. */
+export interface SerialPortAlias {
+  /** System path or device name, for example `usbserial-A50285BI` or `COM3`. */
+  systemName: string;
+  /** Name shown in serial-port selectors. */
+  name: string;
+}
+
 export interface SerialPortOption {
   label: string;
   value: string;
+  /** System name, kept visible when the label is a user-chosen port name. */
+  description?: string;
 }
 
 /**
@@ -46,6 +56,47 @@ export function normalizeSerialPortFilterPattern(value: string): string {
 }
 
 /**
+ * Identity used to match a system path, a short device name, and a typed alias.
+ *
+ * `/dev/cu.usbserial-A50285BI`, `usbserial-A50285BI`, and `COM3` each collapse
+ * to one key. Matching is exact, so a short fragment such as `usb` does not
+ * claim every USB adapter.
+ */
+export function serialPortMatchKey(value: string): string {
+  let key = normalizeSerialPortFilterPattern(value);
+
+  if (key.startsWith('/dev/')) {
+    key = key.slice('/dev/'.length);
+  }
+
+  if (key.startsWith('\\\\.\\')) {
+    key = key.slice(4);
+  }
+
+  return key;
+}
+
+/**
+ * User-chosen name for this path, when the system port was mapped in preferences.
+ */
+export function findSerialPortAlias(
+  path: string,
+  aliases: readonly SerialPortAlias[],
+): SerialPortAlias | undefined {
+  const key = serialPortMatchKey(path);
+
+  if (key.length === 0) {
+    return undefined;
+  }
+
+  return aliases.find((alias) => {
+    const aliasKey = serialPortMatchKey(alias.systemName);
+
+    return aliasKey.length > 0 && alias.name.trim().length > 0 && aliasKey === key;
+  });
+}
+
+/**
  * True for macOS dial-in devices (`/dev/tty.*`).
  *
  * The matching `/dev/cu.*` callout path is the one that programming software
@@ -84,8 +135,16 @@ export function isExcludedCustomSerialPort(path: string, excludedPortNames: stri
 
 /**
  * Short label for a serial path, dropping the macOS `/dev/cu.` prefix.
+ *
+ * When `aliases` includes this port, the label is the name from preferences.
  */
-export function serialPortLabel(path: string): string {
+export function serialPortLabel(path: string, aliases: readonly SerialPortAlias[] = []): string {
+  const alias = findSerialPortAlias(path, aliases);
+
+  if (alias) {
+    return alias.name.trim();
+  }
+
   if (path.startsWith('/dev/cu.')) {
     return path.slice('/dev/cu.'.length);
   }
@@ -93,9 +152,38 @@ export function serialPortLabel(path: string): string {
   return path;
 }
 
+/**
+ * Select-menu item for a serial path.
+ *
+ * A mapped port uses the preference name as the label and keeps the system
+ * name as the description. `suffix` is appended to the label, for example
+ * ` (saved)`.
+ */
+export function serialPortOption(
+  path: string,
+  aliases: readonly SerialPortAlias[] = [],
+  options?: { suffix?: string },
+): SerialPortOption {
+  const systemLabel = serialPortLabel(path);
+  const displayLabel = serialPortLabel(path, aliases);
+  const suffix = options?.suffix ?? '';
+  const label = `${displayLabel}${suffix}`;
+
+  if (displayLabel === systemLabel) {
+    return { label, value: path };
+  }
+
+  return {
+    label,
+    value: path,
+    description: systemLabel,
+  };
+}
+
 export interface SerialPortSelectOptions {
   filterCommonPorts: boolean;
   excludedPortNames?: string[];
+  portAliases?: readonly SerialPortAlias[];
 }
 
 /**
@@ -103,17 +191,16 @@ export interface SerialPortSelectOptions {
  *
  * Always drops macOS `/dev/tty.*` twins. When `filterCommonPorts` is on,
  * also hides Bluetooth Incoming, debug-console, and wlan-debug. Custom
- * `excludedPortNames` always apply.
+ * `excludedPortNames` always apply. `portAliases` replace the system label
+ * with the name from preferences.
  */
 export function serialPortSelectItems(paths: string[], options: SerialPortSelectOptions): SerialPortOption[] {
   const excludedPortNames = options.excludedPortNames ?? [];
+  const portAliases = options.portAliases ?? [];
 
   return paths
     .filter((path) => !isMacDialInSerialPort(path))
     .filter((path) => !options.filterCommonPorts || !isCommonSystemSerialPort(path))
     .filter((path) => !isExcludedCustomSerialPort(path, excludedPortNames))
-    .map((path) => ({
-      label: serialPortLabel(path),
-      value: path,
-    }));
+    .map((path) => serialPortOption(path, portAliases));
 }

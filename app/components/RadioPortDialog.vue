@@ -2,7 +2,7 @@
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import { markCatBusySerialPorts } from '~/utils/cat-memory-transfer';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
-import { serialPortLabel, serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const props = defineProps<{
@@ -64,14 +64,12 @@ async function loadPorts(): Promise<void> {
   try {
     await releaseSerialPortHold();
     const available = await SerialPort.available_ports();
-    const listed = serialPortSelectItems(Object.keys(available), readSerialPortSettings());
+    const settings = readSerialPortSettings();
+    const listed = serialPortSelectItems(Object.keys(available), settings);
     const fallback = props.defaultPort?.trim();
 
     if (fallback && !listed.some((port) => port.value === fallback)) {
-      listed.unshift({
-        label: `${serialPortLabel(fallback)} (saved)`,
-        value: fallback,
-      });
+      listed.unshift(serialPortOption(fallback, settings.portAliases, { suffix: ' (saved)' }));
     }
 
     ports.value = listed;
@@ -86,7 +84,7 @@ async function loadPorts(): Promise<void> {
     const fallback = props.defaultPort?.trim();
 
     if (fallback) {
-      ports.value = [{ label: `${serialPortLabel(fallback)} (saved)`, value: fallback }];
+      ports.value = [serialPortOption(fallback, readSerialPortSettings().portAliases, { suffix: ' (saved)' })];
       selectedPort.value = unavailable.value.includes(fallback) ? undefined : fallback;
     } else {
       ports.value = [];
