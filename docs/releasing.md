@@ -34,7 +34,7 @@ Unsigned builds (no Apple notarization or Windows Authenticode yet). After the p
 - **Windows:** `HamBench-X.Y.Z-Windows-x64.exe` and `HamBench-X.Y.Z-Windows-x64.msi`
 - **Linux (x64):** `HamBench-X.Y.Z-Linux-x64.deb`, `.rpm`, and `.AppImage`
 
-Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid.
+Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
 
 CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
 

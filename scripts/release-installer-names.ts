@@ -6,8 +6,43 @@ const ALREADY_LABELED = /^HamBench-[\d.]+-(?:macOS|Linux|Windows)-/;
  * Filename for a release asset a person downloads.
  *
  * Updater payloads (`.sig`, `.tar.gz`, `latest.json`) stay as Tauri named them.
- * An already labeled installer is left alone so the rename can run twice.
+ * An already labeled installer is left alone. A later publish of the same tag
+ * replaces that file instead of trying to rename onto it.
  */
+export interface ReleaseAssetRef {
+  name: string;
+  apiUrl: string;
+}
+
+export interface ReleaseInstallerRename {
+  asset: ReleaseAssetRef;
+  downloadName: string;
+  /** Previous asset already using `downloadName`, from an earlier publish of this tag. */
+  replace?: ReleaseAssetRef;
+}
+
+/**
+ * Installers to rename on a release. A second publish of the same tag uploads
+ * Tauri's original filenames beside the names from the first publish; those
+ * earlier files are replaced.
+ */
+export function releaseInstallerRenames(assets: ReleaseAssetRef[], version: string): ReleaseInstallerRename[] {
+  const byName = new Map(assets.map((asset) => [asset.name, asset]));
+
+  return assets.flatMap((asset) => {
+    const downloadName = releaseInstallerDownloadName(asset.name, version);
+
+    if (!downloadName || downloadName === asset.name) {
+      return [];
+    }
+
+    const occupant = byName.get(downloadName);
+    const replace = occupant && occupant.apiUrl !== asset.apiUrl ? occupant : undefined;
+
+    return [{ asset, downloadName, replace }];
+  });
+}
+
 export function releaseInstallerDownloadName(filename: string, version: string): string | undefined {
   const base = filename.split(/[/\\]/).pop() ?? filename;
 

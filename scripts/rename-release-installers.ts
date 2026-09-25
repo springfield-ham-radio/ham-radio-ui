@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { releaseInstallerDownloadName } from './release-installer-names.ts';
+import { releaseInstallerRenames } from './release-installer-names.ts';
 
 interface ReleaseAsset {
   name: string;
@@ -48,15 +48,7 @@ function repositoryName(): string {
   return parsed.nameWithOwner;
 }
 
-const planned = listAssets().flatMap((asset) => {
-  const downloadName = releaseInstallerDownloadName(asset.name, version);
-
-  if (!downloadName || downloadName === asset.name) {
-    return [];
-  }
-
-  return [{ asset, downloadName }];
-});
+const planned = releaseInstallerRenames(listAssets(), version);
 
 if (planned.length === 0) {
   console.log(`No installer names to change on ${tag}`);
@@ -65,7 +57,16 @@ if (planned.length === 0) {
 
 const repo = repositoryName();
 
-for (const { asset, downloadName } of planned) {
+for (const { asset, downloadName, replace } of planned) {
+  if (replace) {
+    execFileSync(
+      'gh',
+      ['api', '--method', 'DELETE', `repos/${repo}/releases/assets/${assetId(replace.apiUrl)}`],
+      { encoding: 'utf8' },
+    );
+    console.log(`removed previous ${replace.name}`);
+  }
+
   execFileSync(
     'gh',
     [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { releaseInstallerDownloadName } from '../../scripts/release-installer-names.ts';
+import { releaseInstallerDownloadName, releaseInstallerRenames } from '../../scripts/release-installer-names.ts';
 
 describe('release installer names', () => {
   const version = '0.36.0';
@@ -25,6 +25,21 @@ describe('release installer names', () => {
     expect(releaseInstallerDownloadName('HamBench_0.36.0_x64_en-US.msi', version)).toBe(
       'HamBench-0.36.0-Windows-x64.msi',
     );
+  });
+
+  it('should replace an installer already labeled by an earlier publish of the same tag', () => {
+    const previous = {
+      name: 'HamBench-0.36.0-Linux-x64.rpm',
+      apiUrl: 'https://api.github.com/repos/example/releases/assets/1',
+    };
+    const uploaded = {
+      name: 'HamBench-0.36.0-1.x86_64.rpm',
+      apiUrl: 'https://api.github.com/repos/example/releases/assets/2',
+    };
+
+    expect(releaseInstallerRenames([previous, uploaded], version)).toEqual([
+      { asset: uploaded, downloadName: 'HamBench-0.36.0-Linux-x64.rpm', replace: previous },
+    ]);
   });
 
   it('should leave updater artifacts and already labeled installers unchanged', () => {
