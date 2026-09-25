@@ -1,3 +1,9 @@
+## [0.39.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.38.0...v0.39.0) (2026-09-25)
+
+### Features
+
+* highlight JSON in the driver view ([8cbc35b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8cbc35b665a902b37ed798e9f7d231eb07ec98b3))
+
 ## [0.38.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.37.0...v0.38.0) (2026-09-25)
 
 ### Features
