@@ -1,3 +1,9 @@
+## [0.33.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.2...v0.33.3) (2026-09-25)
+
+### Bug Fixes
+
+* **macos:** register the Window menu for half-screen tiling ([78233cf](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78233cf0f375423de55f545c42745b02b1338c8d))
+
 ## [0.33.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.1...v0.33.2) (2026-09-24)
 
 ### Bug Fixes
