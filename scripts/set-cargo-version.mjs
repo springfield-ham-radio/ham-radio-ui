@@ -1,21 +1,50 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const version = process.argv[2]
-if (!version) {
-  console.error('Usage: node scripts/set-cargo-version.mjs <version>')
-  process.exit(1)
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+
+export function setCargoTomlVersion(content, version) {
+  if (!/^version\s*=\s*"[^"]+"/m.test(content)) {
+    throw new Error('Failed to find version field in Cargo.toml')
+  }
+
+  return content.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`)
 }
 
-const cargoPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src-tauri/Cargo.toml')
-const content = readFileSync(cargoPath, 'utf8')
+export function setCargoLockPackageVersion(content, version) {
+  const pattern = /\[\[package\]\](\r?\n)name = "ham-radio"\1version = "[^"]+"/
 
-if (!/^version\s*=\s*"[^"]+"/m.test(content)) {
-  console.error('Failed to find version field in Cargo.toml')
-  process.exit(1)
+  if (!pattern.test(content)) {
+    throw new Error('Failed to find ham-radio package in Cargo.lock')
+  }
+
+  return content.replace(pattern, `[[package]]$1name = "ham-radio"$1version = "${version}"`)
 }
 
-const updated = content.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`)
-writeFileSync(cargoPath, updated)
-console.log(`Updated Cargo.toml version to ${version}`)
+function writeVersion(path, transform, version) {
+  const content = readFileSync(path, 'utf8')
+  writeFileSync(path, transform(content, version))
+}
+
+function main() {
+  const version = process.argv[2]
+  if (!version) {
+    console.error('Usage: node scripts/set-cargo-version.mjs <version>')
+    process.exit(1)
+  }
+
+  try {
+    writeVersion(resolve(root, 'src-tauri/Cargo.toml'), setCargoTomlVersion, version)
+    writeVersion(resolve(root, 'src-tauri/Cargo.lock'), setCargoLockPackageVersion, version)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  }
+
+  console.log(`Updated Cargo.toml and Cargo.lock version to ${version}`)
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main()
+}

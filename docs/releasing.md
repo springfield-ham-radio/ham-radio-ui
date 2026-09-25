@@ -4,7 +4,7 @@ This app ships as native installers attached to [GitHub Releases](https://github
 
 ## Versioning
 
-`package.json` is the source of truth. [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) reads that version via `"version": "../package.json"`. On each release, semantic-release also updates `src-tauri/Cargo.toml` through [`scripts/set-cargo-version.mjs`](../scripts/set-cargo-version.mjs).
+`package.json` is the source of truth. [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) reads that version via `"version": "../package.json"`. On each release, semantic-release also updates `src-tauri/Cargo.toml` and the `ham-radio` package version in `src-tauri/Cargo.lock` through [`scripts/set-cargo-version.mjs`](../scripts/set-cargo-version.mjs). Cargo rewrites that lock entry the next time it runs, so leaving it behind shows up as a local change.
 
 | Commit on `main` | Bump |
 | --- | --- |
