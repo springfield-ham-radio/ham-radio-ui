@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div
           class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
-          :class="currentSection === 'radios' || currentSection === 'stations' ? 'max-w-2xl' : 'max-w-xl'"
+          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' ? 'max-w-2xl' : 'max-w-xl'"
         >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
@@ -305,6 +305,10 @@
         </section>
 
         <section v-else-if="currentSection === 'radios'">
+          <SavedRadiosPreference />
+        </section>
+
+        <section v-else-if="currentSection === 'drivers'">
           <RadioModulesPreference />
         </section>
 
@@ -515,7 +519,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'stations' | 'serial' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'drivers' | 'stations' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -541,6 +545,12 @@ const sections = [
     label: 'Radios',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
+  },
+  {
+    id: 'drivers' as const,
+    label: 'Drivers',
+    icon: 'i-lucide-cpu',
+    tileClass: 'bg-cyan-600',
   },
   {
     id: 'stations' as const,
@@ -1024,6 +1034,7 @@ const currentSection = computed<PreferenceSection>(() => {
   if (
     section === 'licenses' ||
     section === 'radios' ||
+    section === 'drivers' ||
     section === 'serial' ||
     section === 'updates' ||
     section === 'sniffer'

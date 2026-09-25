@@ -20,3 +20,7 @@ You can also mark or unmark a row as a repeater in the channel editor. Repeater 
 2. On **Channels**, select one or more rows.
 3. Choose **Add to radio**. HamBench fills unused slots in order.
 4. Use **Write** on the Radio page (or **File → Write to Radio…**) to program the device.
+
+## Replace a memory slot
+
+On the Radio page, open a memory channel and choose **Replace from library**. The picker shows the same group tabs as the Channels page. That copies the saved channel’s name, frequencies, and tones into the open slot. The slot number stays the same, and radio-specific settings such as power and mode stay as they are.

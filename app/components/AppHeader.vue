@@ -18,7 +18,6 @@ const currentFileName = computed(() => {
 
 const sectionItems = computed<TabsItem[]>(() => [
   { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
-  { label: 'CAT', icon: 'i-lucide-cable', value: 'cat' },
   { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
   { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
   { label: 'Propagation', icon: 'i-lucide-sun', value: 'propagation' },
@@ -43,10 +42,6 @@ const activeSection = computed({
       return 'wavebench';
     }
 
-    if (route.path.startsWith('/cat')) {
-      return 'cat';
-    }
-
     return 'radio';
   },
   set: (value: string | number) => {
@@ -67,11 +62,6 @@ const activeSection = computed({
 
     if (value === 'wavebench') {
       void router.push('/wavebench');
-      return;
-    }
-
-    if (value === 'cat') {
-      void router.push('/cat');
       return;
     }
 

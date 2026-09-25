@@ -5,21 +5,28 @@ import { filterMemoryConfig, filterMemoryMap, formatCodecJson } from '~/utils/co
 import { formatProtocolJson, formatSerialSummary } from '~/utils/protocol-display';
 import { memoryMapFromConfig } from '~/utils/radio-catalog-db';
 
+const props = defineProps<{
+  modelId?: string;
+}>();
+
 const { configurations, activeRadioId } = useRadio();
 const toast = useToast();
+
+const resolvedModelId = computed(() => props.modelId ?? activeRadioId.value?.model);
+const hasRadio = computed(() => Boolean(resolvedModelId.value));
 
 const driverTab = ref('read');
 const viewMode = ref<'diagram' | 'json'>('diagram');
 const copying = ref(false);
 
 const selectedConfig = computed(() => {
-  const modelId = activeRadioId.value?.model;
+  const modelId = resolvedModelId.value;
 
   if (!modelId) {
     return undefined;
   }
 
-  return configurations.value.find((config) => config.id.model === modelId);
+  return configurations.value.find((config) => String(config.id.model) === modelId);
 });
 
 const driverItems = computed<TabsItem[]>(() => [
@@ -104,7 +111,7 @@ async function copyJson(): Promise<void> {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-    <RadioMemoryEmpty v-if="!activeRadioId" />
+    <RadioMemoryEmpty v-if="!hasRadio" />
     <p v-else-if="!selectedConfig" class="pt-2 text-sm text-muted">
       No driver configuration is installed for this radio.
     </p>

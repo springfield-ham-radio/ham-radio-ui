@@ -2,9 +2,14 @@
 import type { TabsItem } from '@nuxt/ui';
 import { ALL_CHANNELS_TAB_ID, type ChannelGroup } from '~/utils/channel-groups';
 
-const props = defineProps<{
-  groups: ChannelGroup[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    groups: ChannelGroup[];
+    /** Show create, rename, and remove. The picker lists groups without those actions. */
+    manage?: boolean;
+  }>(),
+  { manage: true },
+);
 
 const activeId = defineModel<string>('activeId', { required: true });
 
@@ -38,7 +43,7 @@ const items = computed<TabsItem[]>(() => [
       class="min-w-0"
       :ui="{ list: 'overflow-x-auto', trigger: 'shrink-0' }"
     />
-    <UTooltip text="Create an empty group, then import a CSV">
+    <UTooltip v-if="manage" text="Create an empty group, then import a CSV">
       <UButton
         icon="i-lucide-folder-plus"
         color="neutral"
@@ -48,7 +53,7 @@ const items = computed<TabsItem[]>(() => [
         @click="emit('createEmpty')"
       />
     </UTooltip>
-    <UTooltip v-if="canRemove" text="Rename this group">
+    <UTooltip v-if="manage && canRemove" text="Rename this group">
       <UButton
         icon="i-lucide-folder-pen"
         color="neutral"
@@ -58,7 +63,7 @@ const items = computed<TabsItem[]>(() => [
         @click="emit('rename')"
       />
     </UTooltip>
-    <UTooltip v-if="canRemove" text="Remove this group. Channels stay in All.">
+    <UTooltip v-if="manage && canRemove" text="Remove this group. Channels stay in All.">
       <UButton
         icon="i-lucide-folder-minus"
         color="error"

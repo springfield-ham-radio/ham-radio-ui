@@ -47,6 +47,7 @@ import {
   writeTextFile,
   writeTextFileWithPicker,
 } from '~/utils/radio-memory-file-io';
+import { radioCardIdKey } from '~/composables/radio-card-context';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import {
   defaultSerialLogFileName,
@@ -64,8 +65,6 @@ const logger = new LogLayer({
   ],
 });
 
-let persistQueue: Promise<void> = Promise.resolve();
-
 interface CapturedSerialLog {
   fileName: string;
   contents: string;
@@ -77,6 +76,22 @@ interface CapturedSerialLog {
 interface SerialLoggedDriver {
   getSerialLogData(): unknown;
 }
+
+interface RadioCardSession {
+  memory?: Uint8Array;
+  channels: ChannelRow[];
+  program?: RadioProgram;
+  settingsMemoryMap?: RadioMemoryMap;
+  activeRadioId?: RadioId;
+  memoryFilePath?: string;
+  serialLog?: CapturedSerialLog;
+}
+
+function emptyRadioCardSession(): RadioCardSession {
+  return { channels: [] };
+}
+
+const cardPersistQueues = new Map<string, Promise<void>>();
 
 export interface ChannelRow {
   channelNumber: number;
@@ -106,16 +121,97 @@ export function useRadio() {
   const progressError = useState<string | null>('radio-progress-error', () => null);
   const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
   const canceled = useState('radio-canceled', () => false);
-  const memory = useState<Uint8Array | undefined>('radio-memory', () => undefined);
-  const channels = useState<ChannelRow[]>('radio-channels', () => []);
-  const program = useState<RadioProgram | undefined>('radio-program', () => undefined);
-  const settingsMemoryMap = useState<RadioMemoryMap | undefined>('radio-settings-memory-map', () => undefined);
-  const activeRadioId = useState<RadioId | undefined>('radio-active-id', () => undefined);
-  const memoryFilePath = useState<string | undefined>('radio-memory-file-path', () => undefined);
-  const serialLog = useState<CapturedSerialLog | undefined>('radio-serial-log', () => undefined);
+  const sessions = useState<Record<string, RadioCardSession>>('radio-card-sessions', () => ({}));
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const { lockedPorts: catLockedPorts } = useCatPortLock();
+  const { radios } = useSavedRadios();
+  const { transferCardId, focusedCardId } = useRadioBoard();
+  const injectedCardId = getCurrentInstance() ? inject(radioCardIdKey, undefined) : undefined;
+  /** Card this component belongs to. Import and Write dialogs use `transferCardId` instead. */
+  const cardId = computed(() => injectedCardId?.value ?? focusedCardId.value);
+  const savedRadio = computed(() => radios.value.find((radio) => radio.id === cardId.value));
+
+  function readSession(id: string | undefined): RadioCardSession | undefined {
+    if (!id) {
+      return undefined;
+    }
+
+    return sessions.value[id];
+  }
+
+  function patchSession(id: string | undefined, patch: Partial<RadioCardSession>): void {
+    if (!id) {
+      return;
+    }
+
+    const current = sessions.value[id] ?? emptyRadioCardSession();
+    sessions.value = {
+      ...sessions.value,
+      [id]: { ...current, ...patch },
+    };
+  }
+
+  /**
+   * Card that should receive an import, write, or file opened from outside the card.
+   */
+  function actingCardId(): string | undefined {
+    return transferCardId.value ?? cardId.value;
+  }
+
+  const memory = computed({
+    get: () => readSession(cardId.value)?.memory,
+    set: (value) => {
+      patchSession(cardId.value, { memory: value });
+    },
+  });
+  const channels = computed({
+    get: () => readSession(cardId.value)?.channels ?? [],
+    set: (value) => {
+      patchSession(cardId.value, { channels: value });
+    },
+  });
+  const program = computed({
+    get: () => readSession(cardId.value)?.program,
+    set: (value) => {
+      patchSession(cardId.value, { program: value });
+    },
+  });
+  const settingsMemoryMap = computed({
+    get: () => readSession(cardId.value)?.settingsMemoryMap,
+    set: (value) => {
+      patchSession(cardId.value, { settingsMemoryMap: value });
+    },
+  });
+  const activeRadioId = computed({
+    get: () => readSession(cardId.value)?.activeRadioId,
+    set: (value) => {
+      patchSession(cardId.value, { activeRadioId: value });
+    },
+  });
+  const memoryFilePath = computed({
+    get: () => readSession(cardId.value)?.memoryFilePath,
+    set: (value) => {
+      patchSession(cardId.value, { memoryFilePath: value });
+    },
+  });
+  const serialLog = computed({
+    get: () => readSession(cardId.value)?.serialLog,
+    set: (value) => {
+      patchSession(cardId.value, { serialLog: value });
+    },
+  });
+
+  function clearCardSession(id: string): void {
+    const next = { ...sessions.value };
+    delete next[id];
+    sessions.value = next;
+    cardPersistQueues.delete(id);
+  }
+
+  function sessionQueue(id: string): Promise<void> {
+    return cardPersistQueues.get(id) ?? Promise.resolve();
+  }
 
   async function refreshCatalogState(): Promise<void> {
     await reloadUserJsonCatalogRecords();
@@ -154,16 +250,18 @@ export function useRadio() {
   async function uninstallRadio(record: RadioCatalogRecord): Promise<void> {
     try {
       const removedModelIds = await uninstallRadioCatalogRecord(record);
-      const activeModel = activeRadioId.value?.model;
+      const removed = new Set(removedModelIds);
+      const nextSessions = { ...sessions.value };
 
-      if (activeModel && removedModelIds.includes(activeModel)) {
-        activeRadioId.value = undefined;
-        memory.value = undefined;
-        channels.value = [];
-        program.value = undefined;
-        settingsMemoryMap.value = undefined;
-        memoryFilePath.value = undefined;
+      for (const [id, session] of Object.entries(nextSessions)) {
+        const model = session.activeRadioId?.model;
+
+        if (model && removed.has(String(model))) {
+          nextSessions[id] = emptyRadioCardSession();
+        }
       }
+
+      sessions.value = nextSessions;
 
       await refreshCatalogState();
 
@@ -262,11 +360,48 @@ export function useRadio() {
    * Open the import dialog. CAT on another serial port does not block this.
    */
   function openImportFromRadio(): void {
+    const id = cardId.value;
+
+    if (!id) {
+      toast.add({
+        title: 'No radio open',
+        description: 'Add a radio on the Radio page, then import into that card.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    transferCardId.value = id;
     importOpen.value = true;
   }
 
   async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
+    const sessionId = actingCardId();
+
+    if (!sessionId) {
+      toast.add({
+        title: 'No radio open',
+        description: 'Add a radio on the Radio page, then import into that card.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
     if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      return;
+    }
+
+    const saved = radios.value.find((radio) => radio.id === sessionId);
+
+    if (saved && saved.model !== String(radioId.model)) {
+      toast.add({
+        title: 'Wrong radio',
+        description: `${saved.name} uses ${saved.manufacturer} ${saved.model}.`,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
       return;
     }
 
@@ -289,8 +424,8 @@ export function useRadio() {
         outcome = 'canceled';
       } else {
         importedBytes = memoryData.length;
-        await applyLoadedMemory(memoryData, radioId);
-        memoryFilePath.value = undefined;
+        await applyLoadedMemory(memoryData, radioId, sessionId);
+        patchSession(sessionId, { memoryFilePath: undefined });
         clearBrowserFileHandle();
       }
     } catch (cause) {
@@ -304,7 +439,7 @@ export function useRadio() {
         logger.withError(cause).error('Failed to read radio');
       }
     } finally {
-      captureSerialLog(driver, 'import', radioId, serialPortPath);
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
     }
 
     if (outcome === 'success') {
@@ -332,7 +467,9 @@ export function useRadio() {
    * Open the write dialog unless no memory is loaded.
    */
   function openWriteToRadio(): void {
-    if (!memory.value || !activeRadioId.value) {
+    const session = readSession(cardId.value);
+
+    if (!session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to write',
         description: 'Open a memory file or import from a radio first.',
@@ -342,11 +479,15 @@ export function useRadio() {
       return;
     }
 
+    transferCardId.value = cardId.value;
     writeOpen.value = true;
   }
 
   async function writeToRadio(serialPortPath: string, baudRate?: number): Promise<void> {
-    if (!memory.value || !activeRadioId.value) {
+    const sessionId = actingCardId();
+    const session = readSession(sessionId);
+
+    if (!sessionId || !session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to write',
         description: 'Open a memory file or import from a radio first.',
@@ -356,7 +497,7 @@ export function useRadio() {
       return;
     }
 
-    const radioId = activeRadioId.value;
+    const radioId = session.activeRadioId;
     const config = getConfiguration(radioId);
 
     if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
@@ -377,9 +518,11 @@ export function useRadio() {
       return;
     }
 
-    await persistQueue;
+    await sessionQueue(sessionId);
 
-    if (!memory.value || !activeRadioId.value) {
+    const latest = readSession(sessionId);
+
+    if (!latest?.memory || !latest.activeRadioId) {
       return;
     }
 
@@ -387,10 +530,10 @@ export function useRadio() {
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
-    const writtenBytes = memory.value.length;
+    const writtenBytes = latest.memory.length;
 
     try {
-      await driver.writeRadio(serialPortPath, memory.value, progressIndicator);
+      await driver.writeRadio(serialPortPath, latest.memory, progressIndicator);
     } catch (cause) {
       if (isCancelledTransfer(cause)) {
         outcome = 'canceled';
@@ -402,7 +545,7 @@ export function useRadio() {
         logger.withError(cause).error('Failed to write radio');
       }
     } finally {
-      captureSerialLog(driver, 'write', radioId, serialPortPath);
+      captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
     }
 
     if (outcome === 'success') {
@@ -594,30 +737,43 @@ export function useRadio() {
   }
 
   function persistProgram(nextProgram: RadioProgram): void {
-    program.value = nextProgram;
-    channels.value = rowsFromProgram(nextProgram);
-    persistQueue = persistQueue
+    const id = cardId.value;
+
+    if (!id) {
+      return;
+    }
+
+    patchSession(id, {
+      program: nextProgram,
+      channels: rowsFromProgram(nextProgram),
+    });
+
+    const queued = sessionQueue(id)
       .then(async () => {
-        if (!program.value || !memory.value || !activeRadioId.value) {
+        const session = readSession(id);
+
+        if (!session?.program || !session.memory || !session.activeRadioId) {
           return;
         }
 
-        const codec = await getCodec(activeRadioId.value);
+        const codec = await getCodec(session.activeRadioId);
 
         if (!codec) {
           return;
         }
 
-        const encoded = codec.encode(program.value, {
-          radioModel: activeRadioId.value.model,
-          contents: memory.value,
+        const encoded = codec.encode(session.program, {
+          radioModel: session.activeRadioId.model,
+          contents: session.memory,
         });
 
-        memory.value = encoded.contents;
+        patchSession(id, { memory: encoded.contents });
       })
       .catch((cause) => {
         logger.withError(cause).error('Failed to encode radio program');
       });
+
+    cardPersistQueues.set(id, queued);
   }
 
   function cancelTransfer(): void {
@@ -626,6 +782,7 @@ export function useRadio() {
   }
 
   function captureSerialLog(
+    sessionId: string,
     driver: SerialLoggedDriver,
     operation: SerialLogOperation,
     radioId: RadioId,
@@ -635,22 +792,24 @@ export function useRadio() {
     const entryCount = serialLogEntryCount(log);
 
     if (entryCount === 0) {
-      serialLog.value = undefined;
+      patchSession(sessionId, { serialLog: undefined });
       return;
     }
 
-    serialLog.value = {
-      fileName: defaultSerialLogFileName(operation, radioId),
-      contents: serializeSerialLogFile({
+    patchSession(sessionId, {
+      serialLog: {
+        fileName: defaultSerialLogFileName(operation, radioId),
+        contents: serializeSerialLogFile({
+          operation,
+          radioId,
+          serialPortPath,
+          log,
+        }),
+        entryCount,
         operation,
-        radioId,
-        serialPortPath,
         log,
-      }),
-      entryCount,
-      operation,
-      log,
-    };
+      },
+    });
   }
 
   async function saveSerialLog(): Promise<void> {
@@ -695,6 +854,18 @@ export function useRadio() {
   }
 
   async function openMemoryFile(): Promise<void> {
+    const sessionId = cardId.value;
+
+    if (!sessionId) {
+      toast.add({
+        title: 'No radio open',
+        description: 'Add a radio on the Radio page, then open a memory file into that card.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
     try {
       const picked = await readTextFileWithPicker();
 
@@ -703,8 +874,8 @@ export function useRadio() {
       }
 
       const loaded = parseRadioMemoryFile(picked.text);
-      await applyLoadedMemory(loaded.contents, loaded.radioId);
-      memoryFilePath.value = picked.path;
+      await applyLoadedMemory(loaded.contents, loaded.radioId, sessionId);
+      patchSession(sessionId, { memoryFilePath: picked.path });
       toast.add({
         title: 'Memory opened',
         description: `${memoryFileDisplayName(picked.path)} · ${loaded.radioId.name} (${loaded.contents.length} bytes)`,
@@ -732,7 +903,10 @@ export function useRadio() {
   }
 
   async function saveMemory(saveAs: boolean): Promise<void> {
-    if (!memory.value || !activeRadioId.value) {
+    const sessionId = cardId.value;
+    const session = readSession(sessionId);
+
+    if (!sessionId || !session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to save',
         description: 'Open a memory file or import from a radio first.',
@@ -743,18 +917,20 @@ export function useRadio() {
     }
 
     try {
-      await persistQueue;
+      await sessionQueue(sessionId);
 
-      if (!memory.value || !activeRadioId.value) {
+      const latest = readSession(sessionId);
+
+      if (!latest?.memory || !latest.activeRadioId) {
         return;
       }
 
-      const contents = serializeRadioMemoryFile(activeRadioId.value, memory.value);
-      const currentPath = memoryFilePath.value;
+      const contents = serializeRadioMemoryFile(latest.activeRadioId, latest.memory);
+      const currentPath = latest.memoryFilePath;
       let destination: string;
 
       if (shouldPromptForSavePath(currentPath, saveAs) || currentPath === undefined) {
-        const suggestedPath = currentPath ?? defaultMemoryFileName(activeRadioId.value);
+        const suggestedPath = currentPath ?? defaultMemoryFileName(latest.activeRadioId);
         const picked = await writeTextFileWithPicker(contents, suggestedPath);
 
         if (picked === undefined) {
@@ -767,10 +943,10 @@ export function useRadio() {
         await writeTextFile(destination, contents);
       }
 
-      memoryFilePath.value = destination;
+      patchSession(sessionId, { memoryFilePath: destination });
       toast.add({
         title: saveAs ? 'Memory saved as' : 'Memory saved',
-        description: `${memoryFileDisplayName(destination)} (${memory.value.length} bytes)`,
+        description: `${memoryFileDisplayName(destination)} (${latest.memory.length} bytes)`,
         color: 'success',
         icon: 'i-lucide-save',
       });
@@ -786,8 +962,22 @@ export function useRadio() {
     }
   }
 
-  async function applyLoadedMemory(memoryData: Uint8Array, radioId: RadioId): Promise<void> {
-    await persistQueue;
+  async function applyLoadedMemory(memoryData: Uint8Array, radioId: RadioId, sessionId?: string): Promise<void> {
+    const id = sessionId ?? actingCardId();
+
+    if (!id) {
+      throw new Error('Open a radio card before loading memory');
+    }
+
+    const saved = radios.value.find((radio) => radio.id === id);
+
+    if (saved && saved.model !== String(radioId.model)) {
+      throw new Error(
+        `${saved.name} is set up as ${saved.manufacturer} ${saved.model}. This memory is ${radioId.manufacturer} ${radioId.name}.`,
+      );
+    }
+
+    await sessionQueue(id);
 
     const config = getConfiguration(radioId);
 
@@ -795,8 +985,6 @@ export function useRadio() {
       throw new Error(`No configuration found for ${radioId.manufacturer} ${radioId.name}`);
     }
 
-    memory.value = memoryData;
-    activeRadioId.value = radioId;
     writeRememberedRadio(radioId);
     const codec = await getCodec(radioId);
     const decoded = codec?.decode({
@@ -804,9 +992,13 @@ export function useRadio() {
       contents: memoryData,
     });
 
-    program.value = decoded;
-    settingsMemoryMap.value = memoryMapFromConfig(config);
-    channels.value = rowsFromProgram(decoded);
+    patchSession(id, {
+      memory: memoryData,
+      activeRadioId: radioId,
+      program: decoded,
+      settingsMemoryMap: memoryMapFromConfig(config),
+      channels: rowsFromProgram(decoded),
+    });
   }
 
   return {
@@ -828,6 +1020,7 @@ export function useRadio() {
     activeRadioId,
     memoryFilePath,
     serialLog,
+    savedRadio,
     modulesInstallOpen,
     modulesInstallRequired,
     initialize,
@@ -850,6 +1043,7 @@ export function useRadio() {
     openMemoryFile,
     saveMemoryFile,
     saveMemoryFileAs,
+    clearCardSession,
   };
 }
 

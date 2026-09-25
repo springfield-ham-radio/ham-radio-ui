@@ -287,6 +287,20 @@ export function createProgrammedChannel(options: {
 }
 
 /**
+ * Name, frequencies, and tones from a portable library channel.
+ * Radio-specific settings are left for the caller to keep.
+ */
+export function channelPatchFromLibrary(source: Partial<RadioChannel>): ChannelPatch {
+  return {
+    name: source.name ?? '',
+    receiveFrequencyHz: source.receiveFrequency,
+    transmitFrequencyHz: source.transmitFrequency,
+    receiveTone: source.receiveTone,
+    transmitTone: source.transmitTone,
+  };
+}
+
+/**
  * Fill unused radio slots from portable saved channels, in order.
  * Extra sources are skipped when the radio is full.
  */

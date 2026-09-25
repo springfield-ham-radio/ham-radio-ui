@@ -22,6 +22,7 @@ import {
   channelCapacity,
   channelFieldEditor,
   channelNameMaxLength,
+  channelPatchFromLibrary,
   createProgrammedChannel,
   assignLibraryChannelsToSlots,
   formatFrequencyMHz,
@@ -340,6 +341,57 @@ describe('createProgrammedChannel', () => {
     }
 
     expect(created.radioChannel.name).toBe('VERYLON');
+  });
+});
+
+describe('channelPatchFromLibrary', () => {
+  it('copies name, frequencies, and tones', () => {
+    expect(
+      channelPatchFromLibrary({
+        name: 'Local',
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_940_000),
+        receiveTone: { tone: DCS.D023, type: RadioToneType.DCS },
+        transmitTone: { tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS },
+      }),
+    ).toEqual({
+      name: 'Local',
+      receiveFrequencyHz: 146_520_000,
+      transmitFrequencyHz: 146_940_000,
+      receiveTone: { tone: DCS.D023, type: RadioToneType.DCS },
+      transmitTone: { tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS },
+    });
+  });
+
+  it('uses an empty name when the library channel has none', () => {
+    expect(channelPatchFromLibrary({}).name).toBe('');
+  });
+
+  it('keeps the memory slot and radio settings when applied', () => {
+    const next = applyChannelPatch(
+      programmedChannel(),
+      channelPatchFromLibrary({
+        name: 'Library',
+        receiveFrequency: Frequency(446_000_000),
+        transmitFrequency: Frequency(441_000_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      }),
+    );
+
+    expect(next.channelNumber).toBe(3);
+    expect(next.settings?.lowpower).toBe(0);
+    expect(next.settings?.wide).toBe(true);
+    expect(next.settings?.scan).toBe(true);
+    expect(next.settings?.isuhf).toBe(true);
+
+    if (typeof next.radioChannel === 'string') {
+      return;
+    }
+
+    expect(next.radioChannel.name).toBe('Library');
+    expect(next.radioChannel.receiveFrequency).toBe(446_000_000);
+    expect(next.radioChannel.transmitFrequency).toBe(441_000_000);
   });
 });
 

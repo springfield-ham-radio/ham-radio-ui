@@ -502,6 +502,7 @@ export function useSavedChannels() {
   return {
     channels,
     groups,
+    memberships,
     activeGroupId,
     activeGroup,
     filteredChannels,

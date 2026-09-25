@@ -311,10 +311,10 @@ onMounted(() => {
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="text-sm font-medium text-highlighted">Installed</p>
+            <p class="text-sm font-medium text-highlighted">Installed drivers</p>
             <p class="text-xs text-muted">
-              Official modules show a marker when a newer catalog version is available. Local files are Unverified and
-              are not updated from the catalog.
+              Drivers are the modules HamBench uses to talk to each model. Official modules show a marker when a newer
+              catalog version is available. Local files are Unverified and are not updated from the catalog.
             </p>
           </div>
           <UButton
@@ -400,7 +400,7 @@ onMounted(() => {
                     variant="ghost"
                     icon="i-lucide-trash-2"
                     size="xs"
-                    aria-label="Remove radio"
+                    aria-label="Remove driver"
                     :disabled="anyBusy"
                     @click="requestRemoveRadio(item.record)"
                   />
@@ -409,16 +409,17 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
-        <p v-else class="text-sm text-muted">No radios installed yet.</p>
+        <p v-else class="text-sm text-muted">No drivers installed yet.</p>
       </div>
     </div>
 
     <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="min-w-0">
-          <p class="text-sm font-medium text-highlighted">Available</p>
+          <p class="text-sm font-medium text-highlighted">Available drivers</p>
           <p class="text-xs text-muted">
-            Official modules grouped by manufacturer. Install only the models you own.
+            Official modules grouped by manufacturer. Install only the models you own, then add each radio under
+            Preferences → Radios.
           </p>
         </div>
 
@@ -488,7 +489,7 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
-        <p v-else class="text-sm text-muted">All official radios are installed.</p>
+        <p v-else class="text-sm text-muted">All official drivers are installed.</p>
 
         <div>
           <UButton
@@ -508,7 +509,7 @@ onMounted(() => {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Remove radio?</h2>
+          <h2 class="text-lg font-semibold text-highlighted">Remove driver?</h2>
           <p class="mt-2 text-sm text-muted">
             {{ removeConfirmMessage }}
           </p>
