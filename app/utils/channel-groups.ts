@@ -5,11 +5,17 @@ export const ALL_CHANNELS_TAB_ID = 'all';
 
 export const CHANNEL_GROUP_NAME_MAX_LENGTH = 40;
 
+/** Tab labels that cannot be used for a group the operator creates. */
+export const RESERVED_CHANNEL_GROUP_NAMES = ['All', 'Weather', 'FRS', 'GMRS'] as const;
+
 export interface ChannelGroup {
   id: string;
   name: string;
   createdAt: number;
   updatedAt: number;
+  /** Built-in groups are not stored and cannot be renamed or removed. */
+  builtin?: boolean;
+  icon?: string;
 }
 
 export interface ChannelGroupMembership {
@@ -31,8 +37,14 @@ export function validateChannelGroupName(name: string, existingNames: readonly s
     return 'Enter a group name';
   }
 
-  if (normalized.toLowerCase() === 'all') {
+  const reserved = RESERVED_CHANNEL_GROUP_NAMES.find((name) => name.toLowerCase() === normalized.toLowerCase());
+
+  if (reserved === 'All') {
     return 'All is reserved for every channel';
+  }
+
+  if (reserved) {
+    return `${reserved} is reserved for a built-in group`;
   }
 
   if (normalized.length > CHANNEL_GROUP_NAME_MAX_LENGTH) {

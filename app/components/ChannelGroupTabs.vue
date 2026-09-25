@@ -19,14 +19,15 @@ const emit = defineEmits<{
   remove: [];
 }>();
 
-const canRemove = computed(() => activeId.value !== ALL_CHANNELS_TAB_ID);
+const activeGroup = computed(() => props.groups.find((group) => group.id === activeId.value));
+const canEditGroup = computed(() => Boolean(activeGroup.value) && activeGroup.value?.builtin !== true);
 
 const items = computed<TabsItem[]>(() => [
   { label: 'All', value: ALL_CHANNELS_TAB_ID, icon: 'i-lucide-library' },
   ...props.groups.map((group) => ({
     label: group.name,
     value: group.id,
-    icon: 'i-lucide-folder',
+    icon: group.icon ?? 'i-lucide-folder',
   })),
 ]);
 </script>
@@ -53,7 +54,7 @@ const items = computed<TabsItem[]>(() => [
         @click="emit('createEmpty')"
       />
     </UTooltip>
-    <UTooltip v-if="manage && canRemove" text="Rename this group">
+    <UTooltip v-if="manage && canEditGroup" text="Rename this group">
       <UButton
         icon="i-lucide-folder-pen"
         color="neutral"
@@ -63,7 +64,7 @@ const items = computed<TabsItem[]>(() => [
         @click="emit('rename')"
       />
     </UTooltip>
-    <UTooltip v-if="manage && canRemove" text="Remove this group. Channels stay in All.">
+    <UTooltip v-if="manage && canEditGroup" text="Remove this group. Channels stay in All.">
       <UButton
         icon="i-lucide-folder-minus"
         color="error"

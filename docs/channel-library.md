@@ -1,6 +1,6 @@
 # Channel library
 
-The **Channels** tab is HamBench’s portable channel list. Rows can be ordinary channels or imported repeaters. Select either kind and use **Add to radio** to copy them into unused memory slots. The dialog asks which open radio receives them.
+The **Channels** tab is HamBench’s portable channel list. Rows can be ordinary channels or imported repeaters. **Weather**, **FRS**, and **GMRS** are built-in groups (not stored in the library). Hide each one under **Preferences → Channels**. Select either kind and use **Add to radio** to copy them into unused memory slots. The dialog asks which open radio receives them.
 
 ## Import
 

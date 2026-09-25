@@ -7,6 +7,9 @@ describe('channel-groups', () => {
     it('rejects a blank name, the reserved All tab, and duplicates', () => {
       expect(validateChannelGroupName('   ', [])).toBe('Enter a group name');
       expect(validateChannelGroupName('All', [])).toBe('All is reserved for every channel');
+      expect(validateChannelGroupName('weather', [])).toBe('Weather is reserved for a built-in group');
+      expect(validateChannelGroupName('FRS', [])).toBe('FRS is reserved for a built-in group');
+      expect(validateChannelGroupName('gmrs', [])).toBe('GMRS is reserved for a built-in group');
       expect(validateChannelGroupName('travel', ['Travel'])).toBe('A group with that name already exists');
       expect(validateChannelGroupName('Local', ['Travel'])).toBeUndefined();
     });

@@ -2,6 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 import type { RadioChannel, RadioChannelId } from '@springfield/ham-radio-api';
 import { ALL_CHANNELS_TAB_ID, channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
 import {
+  findPredefinedChannel,
+  isPredefinedChannelId,
+  isPredefinedGroupId,
+  predefinedChannelsForGroup,
+} from '~/utils/predefined-channel-groups';
+import {
   addChannelsToGroup,
   deleteChannelGroup,
   insertChannelGroup,
@@ -32,20 +38,36 @@ import {
 export function useSavedChannels() {
   const toast = useToast();
   const channels = useState<SavedChannel[]>('saved-channels', () => []);
-  const groups = useState<ChannelGroup[]>('channel-groups', () => []);
+  const storedGroups = useState<ChannelGroup[]>('channel-groups', () => []);
+  const { visibleGroups: predefinedGroups } = usePredefinedChannelGroups();
+  const groups = computed(() => [...predefinedGroups.value, ...storedGroups.value]);
   const memberships = useState<ChannelGroupMembership[]>('channel-group-memberships', () => []);
   const activeGroupId = useState('channel-group-active', () => ALL_CHANNELS_TAB_ID);
   const isLoading = useState('saved-channels-loading', () => false);
   const error = useState<string | null>('saved-channels-error', () => null);
   const search = useState('saved-channels-search', () => '');
 
-  const scopedChannels = computed(() => channelsInGroup(channels.value, memberships.value, activeGroupId.value));
+  const scopedChannels = computed(() => channelsForGroup(activeGroupId.value));
 
   const filteredChannels = computed(() => {
     return scopedChannels.value.filter((channel) => matchesSavedChannelSearch(channel, search.value));
   });
 
   const activeGroup = computed(() => groups.value.find((group) => group.id === activeGroupId.value));
+
+  function channelsForGroup(groupId: string): SavedChannel[] {
+    const predefined = predefinedChannelsForGroup(groupId);
+
+    if (predefined) {
+      return predefined;
+    }
+
+    return channelsInGroup(channels.value, memberships.value, groupId);
+  }
+
+  function findLibraryChannel(id: RadioChannelId): SavedChannel | undefined {
+    return findPredefinedChannel(id) ?? channels.value.find((channel) => channel.id === id);
+  }
 
   function ensureActiveGroup(): void {
     if (activeGroupId.value === ALL_CHANNELS_TAB_ID) {
@@ -57,6 +79,10 @@ export function useSavedChannels() {
     }
   }
 
+  watch(groups, () => {
+    ensureActiveGroup();
+  });
+
   async function reloadLibrary(): Promise<void> {
     const [nextChannels, nextGroups, nextMemberships] = await Promise.all([
       listSavedChannels(),
@@ -65,7 +91,7 @@ export function useSavedChannels() {
     ]);
 
     channels.value = nextChannels;
-    groups.value = nextGroups;
+    storedGroups.value = nextGroups;
     memberships.value = nextMemberships;
     ensureActiveGroup();
   }
@@ -79,9 +105,12 @@ export function useSavedChannels() {
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Failed to load saved channels';
       channels.value = [];
-      groups.value = [];
+      storedGroups.value = [];
       memberships.value = [];
-      activeGroupId.value = ALL_CHANNELS_TAB_ID;
+
+      if (!isPredefinedGroupId(activeGroupId.value) || !groups.value.some((group) => group.id === activeGroupId.value)) {
+        activeGroupId.value = ALL_CHANNELS_TAB_ID;
+      }
     } finally {
       isLoading.value = false;
     }
@@ -137,15 +166,16 @@ export function useSavedChannels() {
         throw new Error('Failed to create channel');
       }
 
-      if (activeGroup.value) {
+      if (activeGroup.value && !activeGroup.value.builtin) {
         await addChannelsToGroup(activeGroup.value.id, [saved.id]);
       }
 
       await reloadLibrary();
+      const addedToGroup = activeGroup.value && !activeGroup.value.builtin ? activeGroup.value : undefined;
       toast.add({
         title: 'Channel created',
-        description: activeGroup.value
-          ? `The channel was added to ${activeGroup.value.name}.`
+        description: addedToGroup
+          ? `The channel was added to ${addedToGroup.name}.`
           : 'The channel was added to the library.',
         color: 'success',
         icon: 'i-lucide-plus',
@@ -165,6 +195,10 @@ export function useSavedChannels() {
 
   async function updateChannel(channel: SavedChannel): Promise<SavedChannel> {
     try {
+      if (isPredefinedChannelId(channel.id)) {
+        throw new Error('Built-in channels cannot be changed');
+      }
+
       const updated = await updateSavedChannel(channel);
       channels.value = await listSavedChannels();
       toast.add({
@@ -188,6 +222,10 @@ export function useSavedChannels() {
 
   async function removeChannel(id: RadioChannelId): Promise<void> {
     try {
+      if (isPredefinedChannelId(id)) {
+        throw new Error('Built-in channels cannot be deleted');
+      }
+
       await deleteSavedChannel(id);
       channels.value = channels.value.filter((channel) => channel.id !== id);
       memberships.value = memberships.value.filter((membership) => membership.channelId !== id);
@@ -211,7 +249,7 @@ export function useSavedChannels() {
 
 
   async function removeChannels(ids: readonly RadioChannelId[]): Promise<number> {
-    const unique = [...new Set(ids)];
+    const unique = [...new Set(ids)].filter((id) => !isPredefinedChannelId(id));
 
     if (unique.length === 0) {
       return 0;
@@ -288,6 +326,16 @@ export function useSavedChannels() {
   }
 
   async function importLibraryCsv(): Promise<number> {
+    if (isPredefinedGroupId(activeGroupId.value)) {
+      toast.add({
+        title: 'Built-in group',
+        description: 'Import into All or a group you created. Built-in groups cannot be changed.',
+        color: 'warning',
+        icon: 'i-lucide-folder',
+      });
+      return 0;
+    }
+
     try {
       const text = await readChannelLibraryCsvWithPicker();
 
@@ -379,7 +427,7 @@ export function useSavedChannels() {
 
       await insertSavedChannelModels(toInsert);
 
-      if (activeGroup.value) {
+      if (activeGroup.value && !activeGroup.value.builtin) {
         await addChannelsToGroup(activeGroup.value.id, memberIds);
       }
 
@@ -417,6 +465,10 @@ export function useSavedChannels() {
 
   async function createGroup(name: string, channelIds: readonly RadioChannelId[]): Promise<ChannelGroup> {
     try {
+      if (channelIds.some((id) => isPredefinedChannelId(id))) {
+        throw new Error('Built-in channels are already in a group');
+      }
+
       const group = await insertChannelGroup(name, channelIds);
       await reloadLibrary();
       activeGroupId.value = group.id;
@@ -446,6 +498,10 @@ export function useSavedChannels() {
 
   async function renameGroup(id: string, name: string): Promise<ChannelGroup> {
     try {
+      if (isPredefinedGroupId(id)) {
+        throw new Error('Built-in groups cannot be renamed');
+      }
+
       const group = await renameChannelGroup(id, name);
       await reloadLibrary();
       toast.add({
@@ -468,11 +524,15 @@ export function useSavedChannels() {
   }
 
   async function removeGroup(id: string): Promise<void> {
-    const group = groups.value.find((candidate) => candidate.id === id);
+    const group = storedGroups.value.find((candidate) => candidate.id === id);
 
     try {
+      if (isPredefinedGroupId(id)) {
+        throw new Error('Built-in groups cannot be removed');
+      }
+
       await deleteChannelGroup(id);
-      groups.value = groups.value.filter((candidate) => candidate.id !== id);
+      storedGroups.value = storedGroups.value.filter((candidate) => candidate.id !== id);
       memberships.value = memberships.value.filter((membership) => membership.groupId !== id);
 
       if (activeGroupId.value === id) {
@@ -510,6 +570,8 @@ export function useSavedChannels() {
     error,
     search,
     refresh,
+    channelsForGroup,
+    findLibraryChannel,
     saveChannels,
     createChannel,
     updateChannel,

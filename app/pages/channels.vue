@@ -3,6 +3,7 @@ import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
+import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
@@ -94,12 +95,21 @@ const addToRadioTooltip = computed(() => {
   return 'Add selected channels to a radio';
 });
 
-const newGroupTooltip = computed(() =>
-  selectedCount.value === 0 ? 'Select one or more channels' : 'Create a group from the selected channels',
-);
-const deleteChannelsTooltip = computed(() =>
-  selectedCount.value === 0 ? 'Select channels to delete' : 'Delete the selected channels from the library',
-);
+const builtinGroup = computed(() => activeGroup.value?.builtin === true);
+const newGroupTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in groups cannot be changed';
+  }
+
+  return selectedCount.value === 0 ? 'Select one or more channels' : 'Create a group from the selected channels';
+});
+const deleteChannelsTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in channels cannot be deleted';
+  }
+
+  return selectedCount.value === 0 ? 'Select channels to delete' : 'Delete the selected channels from the library';
+});
 const deleteChannelsDescription = computed(() => {
   const count = selectedCount.value;
 
@@ -109,14 +119,25 @@ const deleteChannelsDescription = computed(() => {
 
   return `Delete ${count} channels from the library? They are also removed from every group.`;
 });
-const importTooltip = computed(() =>
-  activeGroup.value ? `Import CSV into ${activeGroup.value.name}` : 'Import channel library, RepeaterBook, or CHIRP CSV',
+const importTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in groups cannot be changed';
+  }
+
+  return activeGroup.value ? `Import CSV into ${activeGroup.value.name}` : 'Import channel library, RepeaterBook, or CHIRP CSV';
+});
+const addChannelTooltip = computed(() =>
+  builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
 );
-const emptyMessage = computed(() =>
-  activeGroup.value
+const emptyMessage = computed(() => {
+  if (builtinGroup.value) {
+    return 'Select rows and choose Add to radio to copy these channels.';
+  }
+
+  return activeGroup.value
     ? 'This group is empty. Add a channel or import a CSV to fill it.'
-    : 'No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page.',
-);
+    : 'No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page.';
+});
 const groupNameTitle = computed(() => {
   if (groupNameMode.value === 'rename') {
     return 'Rename group';
@@ -322,6 +343,10 @@ function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void
     return;
   }
 
+  if (isPredefinedChannelId(row.original.id)) {
+    return;
+  }
+
   openEdit(row.original);
 }
 
@@ -437,7 +462,7 @@ onMounted(() => {
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
         <p class="text-xs text-muted">
-          Portable channels and imported repeaters. Group them with the tabs below, or select rows and choose Add to radio.
+          Portable channels and imported repeaters. Weather, FRS, and GMRS are built-in groups. Hide them in Preferences.
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
@@ -460,7 +485,7 @@ onMounted(() => {
               variant="outline"
               size="sm"
               label="New group"
-              :disabled="selectedCount === 0"
+              :disabled="builtinGroup || selectedCount === 0"
               @click="openGroupFromSelection"
             />
           </span>
@@ -473,7 +498,7 @@ onMounted(() => {
               variant="outline"
               size="sm"
               label="Delete"
-              :disabled="selectedCount === 0 || isDeletingChannels"
+              :disabled="builtinGroup || selectedCount === 0 || isDeletingChannels"
               @click="deleteChannelsOpen = true"
             />
           </span>
@@ -485,6 +510,7 @@ onMounted(() => {
             variant="outline"
             size="sm"
             :aria-label="importTooltip"
+            :disabled="builtinGroup"
             :loading="isImporting"
             @click="onImportCsv"
           />
@@ -503,13 +529,18 @@ onMounted(() => {
             />
           </span>
         </UTooltip>
-        <UButton
-          icon="i-lucide-plus"
-          color="primary"
-          size="sm"
-          label="Add channel"
-          @click="openCreate"
-        />
+        <UTooltip :text="addChannelTooltip">
+          <span class="inline-flex">
+            <UButton
+              icon="i-lucide-plus"
+              color="primary"
+              size="sm"
+              label="Add channel"
+              :disabled="builtinGroup"
+              @click="openCreate"
+            />
+          </span>
+        </UTooltip>
       </div>
     </div>
 
@@ -552,7 +583,7 @@ onMounted(() => {
           th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
           td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
           empty: 'py-8 text-center text-sm text-muted',
-          tr: 'cursor-pointer',
+          tr: builtinGroup ? '' : 'cursor-pointer',
         }"
         :empty="emptyMessage"
         @select="onSelectChannel"
@@ -595,7 +626,7 @@ onMounted(() => {
           </div>
         </template>
         <template #actions-cell="{ row }">
-          <div class="flex items-center justify-end gap-0.5" @click.stop>
+          <div v-if="!isPredefinedChannelId(row.original.id)" class="flex items-center justify-end gap-0.5" @click.stop>
             <UButton
               icon="i-lucide-pencil"
               color="neutral"

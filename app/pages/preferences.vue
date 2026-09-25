@@ -123,6 +123,10 @@
           <SavedRadiosPreference />
         </section>
 
+        <section v-else-if="currentSection === 'channels'">
+          <PredefinedChannelGroupsPreference />
+        </section>
+
         <section v-else-if="currentSection === 'drivers'">
           <RadioModulesPreference />
         </section>
@@ -333,7 +337,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'drivers' | 'stations' | 'serial' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'channels' | 'drivers' | 'stations' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -359,6 +363,12 @@ const sections = [
     label: 'Radios',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
+  },
+  {
+    id: 'channels' as const,
+    label: 'Channels',
+    icon: 'i-lucide-library',
+    tileClass: 'bg-blue-600',
   },
   {
     id: 'drivers' as const,
@@ -848,6 +858,7 @@ const currentSection = computed<PreferenceSection>(() => {
   if (
     section === 'licenses' ||
     section === 'radios' ||
+    section === 'channels' ||
     section === 'drivers' ||
     section === 'serial' ||
     section === 'updates' ||

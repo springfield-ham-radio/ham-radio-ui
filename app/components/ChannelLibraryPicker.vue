@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RadioChannelId } from '@springfield/ham-radio-api';
-import { ALL_CHANNELS_TAB_ID, channelsInGroup } from '~/utils/channel-groups';
+import { ALL_CHANNELS_TAB_ID } from '~/utils/channel-groups';
+import { isPredefinedGroupId } from '~/utils/predefined-channel-groups';
 import { describeLibrarySlotAssignment, formatFrequencyMHz } from '~/utils/channel-edit';
 import { formatSavedTone, matchesSavedChannelSearch, type SavedChannel } from '~/utils/saved-channels-db';
 
@@ -25,18 +26,22 @@ const emit = defineEmits<{
   add: [channels: SavedChannel[]];
 }>();
 
-const { channels, groups, memberships, isLoading, error, refresh } = useSavedChannels();
+const { channels, groups, channelsForGroup, findLibraryChannel, isLoading, error, refresh } = useSavedChannels();
 
 const query = shallowRef('');
 const selectedId = shallowRef<RadioChannelId | undefined>();
 const selectedIds = shallowRef<RadioChannelId[]>([]);
 const groupId = shallowRef(ALL_CHANNELS_TAB_ID);
 
-const scopedChannels = computed(() => channelsInGroup(channels.value, memberships.value, groupId.value));
+const scopedChannels = computed(() => channelsForGroup(groupId.value));
 const filteredChannels = computed(() => scopedChannels.value.filter((channel) => matchesSavedChannelSearch(channel, query.value)));
 
-const showLoading = computed(() => isLoading.value && channels.value.length === 0);
-const libraryEmpty = computed(() => !isLoading.value && !error.value && channels.value.length === 0);
+const showLoading = computed(
+  () => isLoading.value && channels.value.length === 0 && !isPredefinedGroupId(groupId.value),
+);
+const libraryEmpty = computed(
+  () => !isPredefinedGroupId(groupId.value) && !isLoading.value && !error.value && channels.value.length === 0,
+);
 const groupEmpty = computed(
   () => !showLoading.value && channels.value.length > 0 && scopedChannels.value.length === 0 && query.value.trim() === '',
 );
@@ -79,6 +84,12 @@ watch(open, (isOpen) => {
   selectedIds.value = [];
   groupId.value = ALL_CHANNELS_TAB_ID;
   void refresh();
+});
+
+watch(groups, () => {
+  if (groupId.value !== ALL_CHANNELS_TAB_ID && !groups.value.some((group) => group.id === groupId.value)) {
+    groupId.value = ALL_CHANNELS_TAB_ID;
+  }
 });
 
 watch(groupId, () => {
@@ -150,7 +161,7 @@ function onRowClick(channel: SavedChannel, event: Event): void {
 function confirmSelection(): void {
   if (props.mode === 'add') {
     const chosen = selectedIds.value.flatMap((id) => {
-      const channel = channels.value.find((item) => item.id === id);
+      const channel = findLibraryChannel(id);
       return channel ? [channel] : [];
     });
 
@@ -163,7 +174,13 @@ function confirmSelection(): void {
     return;
   }
 
-  const channel = channels.value.find((item) => item.id === selectedId.value);
+  const selected = selectedId.value;
+
+  if (!selected) {
+    return;
+  }
+
+  const channel = findLibraryChannel(selected);
 
   if (!channel) {
     return;
