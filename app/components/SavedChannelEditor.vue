@@ -29,7 +29,7 @@ const emit = defineEmits<{
   ];
 }>();
 
-const { getTransmitPrivilegeWarning } = useOperatorLicense();
+const { solePrivilege, getTransmitPrivilegeWarning } = useOperatorLicense();
 
 const name = ref('');
 const callsign = ref('');
@@ -59,7 +59,7 @@ const description = computed(() =>
 
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(transmitMHz.value);
-  return getTransmitPrivilegeWarning(hz);
+  return getTransmitPrivilegeWarning(hz, solePrivilege.value);
 });
 
 watch(

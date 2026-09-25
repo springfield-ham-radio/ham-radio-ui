@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { CatLiveRadio } from '~/composables/useCat';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
+import type { RadioPrivilegeChoice } from '~/utils/license-people';
 import { serialPortLabel } from '~/utils/serial-port-list';
 
 const props = defineProps<{
   radio: CatLiveRadio;
+  privilege?: RadioPrivilegeChoice;
 }>();
 
 const emit = defineEmits<{
@@ -65,6 +67,7 @@ const disabled = computed(() => props.radio.busy);
         :is-control="vfo.band === radio.status.controlBand"
         :transmitting="radio.status.transmitting"
         :disabled="disabled"
+        :privilege="privilege"
         @frequency="emit('frequency', vfo, $event)"
         @mode="emit('mode', vfo, $event)"
         @power="emit('power', vfo, $event)"

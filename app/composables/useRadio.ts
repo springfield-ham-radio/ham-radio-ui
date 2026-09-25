@@ -14,6 +14,7 @@ import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import {
   applyChannelPatch,
+  availableChannelNumbers,
   channelCapacity,
   channelNameMaxLength,
   reorderProgrammedChannels,
@@ -49,6 +50,7 @@ import {
 } from '~/utils/radio-memory-file-io';
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
+import { savedRadioModelLabel } from '~/utils/saved-radios';
 import {
   defaultSerialLogFileName,
   serializeSerialLogFile,
@@ -93,6 +95,18 @@ function emptyRadioCardSession(): RadioCardSession {
 
 const cardPersistQueues = new Map<string, Promise<void>>();
 
+/** An open radio card that can receive library channels. */
+export interface RadioAddTarget {
+  /** Card id, which is also the session id. */
+  id: string;
+  name: string;
+  modelLabel: string;
+  /** True when this card has a loaded memory image. */
+  ready: boolean;
+  freeSlotNumbers: number[];
+  settingsMemoryMap?: RadioMemoryMap;
+}
+
 export interface ChannelRow {
   channelNumber: number;
   name: string;
@@ -126,11 +140,37 @@ export function useRadio() {
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const { lockedPorts: catLockedPorts } = useCatPortLock();
   const { radios } = useSavedRadios();
-  const { transferCardId, focusedCardId } = useRadioBoard();
+  const { transferCardId, focusedCardId, cards } = useRadioBoard();
   const injectedCardId = getCurrentInstance() ? inject(radioCardIdKey, undefined) : undefined;
   /** Card this component belongs to. Import and Write dialogs use `transferCardId` instead. */
   const cardId = computed(() => injectedCardId?.value ?? focusedCardId.value);
   const savedRadio = computed(() => radios.value.find((radio) => radio.id === cardId.value));
+  const addTargets = computed<RadioAddTarget[]>(() =>
+    cards.value.flatMap((card) => {
+      const saved = radios.value.find((radio) => radio.id === card.savedRadioId);
+
+      if (!saved) {
+        return [];
+      }
+
+      const session = sessions.value[card.id];
+      const ready = Boolean(session?.program && session.memory && session.activeRadioId);
+      const occupied = session?.program?.channels.map((channel) => channel.channelNumber) ?? [];
+
+      return [
+        {
+          id: card.id,
+          name: saved.name,
+          modelLabel: savedRadioModelLabel(saved, configurations.value),
+          ready,
+          freeSlotNumbers: ready
+            ? availableChannelNumbers(occupied, channelCapacity(session?.settingsMemoryMap))
+            : [],
+          settingsMemoryMap: session?.settingsMemoryMap,
+        },
+      ];
+    }),
+  );
 
   function readSession(id: string | undefined): RadioCardSession | undefined {
     if (!id) {
@@ -645,8 +685,11 @@ export function useRadio() {
     return true;
   }
 
-  async function addChannels(programmed: RadioProgrammedChannel[]): Promise<number> {
-    if (!program.value || !memory.value || !activeRadioId.value) {
+  async function addChannels(programmed: RadioProgrammedChannel[], sessionId?: string): Promise<number> {
+    const id = sessionId ?? cardId.value;
+    const session = readSession(id);
+
+    if (!id || !session?.program || !session.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to add to',
         description: 'Open a memory file or import from a radio first.',
@@ -660,8 +703,8 @@ export function useRadio() {
       return 0;
     }
 
-    const capacity = channelCapacity(settingsMemoryMap.value);
-    const occupied = new Set(program.value.channels.map((channel) => channel.channelNumber));
+    const capacity = channelCapacity(session.settingsMemoryMap);
+    const occupied = new Set(session.program.channels.map((channel) => channel.channelNumber));
     const accepted = programmed.filter((channel) => {
       return channel.channelNumber >= 0 && channel.channelNumber < capacity && !occupied.has(channel.channelNumber);
     });
@@ -676,14 +719,20 @@ export function useRadio() {
       return 0;
     }
 
-    persistProgram({
-      ...program.value,
-      channels: [...program.value.channels, ...accepted].sort((left, right) => left.channelNumber - right.channelNumber),
-    });
+    persistProgram(
+      {
+        ...session.program,
+        channels: [...session.program.channels, ...accepted].sort(
+          (left, right) => left.channelNumber - right.channelNumber,
+        ),
+      },
+      id,
+    );
 
     const first = accepted[0]!.channelNumber;
     const last = accepted[accepted.length - 1]!.channelNumber;
-    const radioName = activeRadioId.value.name;
+    const saved = radios.value.find((radio) => radio.id === id);
+    const radioName = saved?.name ?? session.activeRadioId.name;
     const slotLabel = accepted.length === 1 ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
 
     toast.add({
@@ -736,8 +785,8 @@ export function useRadio() {
     });
   }
 
-  function persistProgram(nextProgram: RadioProgram): void {
-    const id = cardId.value;
+  function persistProgram(nextProgram: RadioProgram, sessionId?: string): void {
+    const id = sessionId ?? cardId.value;
 
     if (!id) {
       return;
@@ -1018,6 +1067,7 @@ export function useRadio() {
     program,
     settingsMemoryMap,
     activeRadioId,
+    addTargets,
     memoryFilePath,
     serialLog,
     savedRadio,

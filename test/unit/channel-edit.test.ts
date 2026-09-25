@@ -25,6 +25,7 @@ import {
   channelPatchFromLibrary,
   createProgrammedChannel,
   assignLibraryChannelsToSlots,
+  describeLibrarySlotAssignment,
   formatFrequencyMHz,
   keyToTone,
   nextAvailableChannelNumber,
@@ -418,6 +419,52 @@ describe('assignLibraryChannelsToSlots', () => {
     if (typeof assigned.programmed[0]?.radioChannel === 'object') {
       expect(assigned.programmed[0].radioChannel.name).toBe('A');
     }
+  });
+});
+
+describe('describeLibrarySlotAssignment', () => {
+  it('names the saved radio and the slots that will be filled', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 1,
+        slotNumbers: [4, 5],
+      }),
+    ).toBe(
+      'Add this channel to Mobile in unused memory slot 4? Write to the radio to apply the change on the device.',
+    );
+  });
+
+  it('limits the copy when the radio cannot hold every channel', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Base',
+        sourceCount: 3,
+        slotNumbers: [1, 2],
+      }),
+    ).toBe(
+      'Only 2 unused slots remain on Base. Add the first 2 selected channels to memory slots 1 to 2? Write to the radio to apply the change on the device.',
+    );
+  });
+
+  it('explains an empty selection when slots remain', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 0,
+        slotNumbers: [0, 1],
+      }),
+    ).toBe('Mobile has 2 unused memory slots. Select channels to fill them.');
+  });
+
+  it('reports a radio with no unused slots', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 2,
+        slotNumbers: [],
+      }),
+    ).toBe('There are no unused memory slots on Mobile.');
   });
 });
 

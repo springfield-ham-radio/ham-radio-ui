@@ -2,12 +2,7 @@
 import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
-import {
-  assignLibraryChannelsToSlots,
-  availableChannelNumbers,
-  channelCapacity,
-  formatFrequencyMHz,
-} from '~/utils/channel-edit';
+import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
@@ -34,7 +29,8 @@ const {
   renameGroup,
   removeGroup,
 } = useSavedChannels();
-const { program, memory, settingsMemoryMap, activeRadioId, addChannels } = useRadio();
+const { addChannels, addTargets } = useRadio();
+const { focusedCardId } = useRadioBoard();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
@@ -73,27 +69,29 @@ const selectedLibraryChannels = computed(() => {
 });
 
 const selectedCount = computed(() => selectedLibraryChannels.value.length);
-const occupiedChannelNumbers = computed(() => program.value?.channels.map((channel) => channel.channelNumber) ?? []);
-const freeSlotCount = computed(() => {
-  return availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value)).length;
-});
-const radioReady = computed(() => Boolean(program.value && memory.value && activeRadioId.value));
-const canAddToRadio = computed(() => selectedCount.value > 0 && radioReady.value && freeSlotCount.value > 0);
+const radiosWithRoom = computed(() =>
+  addTargets.value.filter((target) => target.ready && target.freeSlotNumbers.length > 0),
+);
+const canAddToRadio = computed(() => selectedCount.value > 0 && radiosWithRoom.value.length > 0);
 
 const addToRadioTooltip = computed(() => {
   if (selectedCount.value === 0) {
     return 'Select saved channels to add';
   }
 
-  if (!radioReady.value) {
+  if (addTargets.value.length === 0) {
+    return 'Open a radio and load its memory first';
+  }
+
+  if (!addTargets.value.some((target) => target.ready)) {
     return 'Open a memory file or import from a radio first';
   }
 
-  if (freeSlotCount.value === 0) {
-    return `All memory slots on ${activeRadioId.value?.name ?? 'this radio'} are programmed`;
+  if (radiosWithRoom.value.length === 0) {
+    return 'All memory slots on open radios are programmed';
   }
 
-  return 'Add selected channels to the loaded radio';
+  return 'Add selected channels to a radio';
 });
 
 const newGroupTooltip = computed(() =>
@@ -152,30 +150,6 @@ const removeGroupDescription = computed(() =>
     ? `Remove ${activeGroup.value.name}? Its channels stay in All and in any other groups.`
     : 'Remove this group? Its channels stay in All.',
 );
-
-const addToRadioTitle = computed(() => (selectedCount.value === 1 ? 'Add channel to radio' : 'Add channels to radio'));
-
-const addToRadioDescription = computed(() => {
-  const radioName = activeRadioId.value?.name ?? 'the loaded radio';
-  const count = selectedCount.value;
-  const slots = availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value));
-  const take = Math.min(count, slots.length);
-
-  if (take === 0) {
-    return `There are no unused memory slots on ${radioName}.`;
-  }
-
-  const first = slots[0];
-  const last = slots[take - 1];
-  const slotLabel = first === last ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
-
-  if (take < count) {
-    return `Only ${slots.length} unused slots remain on ${radioName}. Add the first ${take} selected channels to ${slotLabel}? Write to the radio to apply the change on the device.`;
-  }
-
-  const channelLabel = count === 1 ? 'this channel' : `${count} channels`;
-  return `Add ${channelLabel} to ${radioName} in unused ${slotLabel}? Write to the radio to apply the change on the device.`;
-});
 
 const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
@@ -359,17 +333,23 @@ function requestAddToRadio(): void {
   addToRadioOpen.value = true;
 }
 
-async function confirmAddToRadio(): Promise<void> {
-  const assignment = assignLibraryChannelsToSlots(
+async function confirmAddToRadio(sessionId: string): Promise<void> {
+  const target = addTargets.value.find((candidate) => candidate.id === sessionId);
+
+  if (!target?.ready) {
+    return;
+  }
+
+  const assignment = programLibraryChannelsIntoSlots(
     selectedLibraryChannels.value,
-    occupiedChannelNumbers.value,
-    settingsMemoryMap.value,
+    target.freeSlotNumbers,
+    target.settingsMemoryMap,
   );
 
   isAddingToRadio.value = true;
 
   try {
-    const added = await addChannels(assignment.programmed);
+    const added = await addChannels(assignment.programmed, target.id);
 
     if (added > 0) {
       rowSelection.value = {};
@@ -670,21 +650,13 @@ onMounted(() => {
         <UButton color="error" label="Remove group" :loading="isRemovingGroup" @click="confirmRemoveGroup" />
       </template>
     </UModal>
-    <UModal
+    <AddToRadioDialog
       v-model:open="addToRadioOpen"
-      :title="addToRadioTitle"
-      :description="addToRadioDescription"
-      :ui="{ footer: 'justify-end' }"
-    >
-      <template #footer="{ close }">
-        <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-        <UButton
-          color="primary"
-          label="Add to radio"
-          :loading="isAddingToRadio"
-          @click="confirmAddToRadio"
-        />
-      </template>
-    </UModal>
+      :source-count="selectedCount"
+      :targets="addTargets"
+      :preferred-id="focusedCardId"
+      :pending="isAddingToRadio"
+      @confirm="confirmAddToRadio"
+    />
   </div>
 </template>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyRadioPrivilege,
   createSavedRadio,
   draftFromSavedRadio,
   parseSavedRadioStore,
@@ -122,6 +123,25 @@ describe('saved radios', () => {
     const store = upsertSavedRadio(upsertSavedRadio({ radios: [] }, created), base);
 
     expect(removeSavedRadio(store, created.id).radios).toEqual([base]);
+  });
+
+  it('should store the license selected for channel warnings', () => {
+    const withLicense = applyRadioPrivilege(mobile, { personId: 'ada', licenseId: 'lic-ada' });
+    const handheld: SavedRadio = { ...base };
+    delete handheld.baudRate;
+    const frsOnly = applyRadioPrivilege(handheld, { personId: 'sam' });
+    const cleared = applyRadioPrivilege(withLicense, undefined);
+
+    expect(withLicense.privilegePersonId).toBe('ada');
+    expect(withLicense.privilegeLicenseId).toBe('lic-ada');
+    expect(withLicense.updatedAt).toBe(mobile.updatedAt);
+    expect(frsOnly.privilegePersonId).toBe('sam');
+    expect(frsOnly.privilegeLicenseId).toBeUndefined();
+    expect(cleared.privilegePersonId).toBeUndefined();
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withLicense, frsOnly] })).radios).toEqual([
+      withLicense,
+      frsOnly,
+    ]);
   });
 
   it('should prefer an installed driver name over the stored model id', () => {

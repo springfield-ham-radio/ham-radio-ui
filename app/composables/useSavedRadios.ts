@@ -7,6 +7,7 @@ import {
   savedRadioDraftIssues,
   updateSavedRadio,
   upsertSavedRadio,
+  applyRadioPrivilege,
   writeSavedRadioStore,
   type SavedRadio,
   type SavedRadioDraft,
@@ -82,6 +83,22 @@ export function useSavedRadios() {
     persist(removeSavedRadio(store.value, id));
   }
 
+  function assignPrivilege(id: string, choice: { personId: string; licenseId?: string } | undefined): void {
+    const current = radioById(id);
+
+    if (!current) {
+      return;
+    }
+
+    const next = applyRadioPrivilege(current, choice);
+
+    if (next.privilegePersonId === current.privilegePersonId && next.privilegeLicenseId === current.privilegeLicenseId) {
+      return;
+    }
+
+    persist(upsertSavedRadio(store.value, next));
+  }
+
   return {
     radios,
     radioById,
@@ -90,5 +107,6 @@ export function useSavedRadios() {
     addRadio,
     saveRadio,
     deleteRadio,
+    assignPrivilege,
   };
 }

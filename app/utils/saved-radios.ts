@@ -15,6 +15,10 @@ export interface SavedRadio {
   serialPort: string;
   createdAt: number;
   updatedAt: number;
+  /** Person whose license is used for channel privilege warnings. */
+  privilegePersonId?: string;
+  /** Grant to check. Absent when that person holds no license (FRS only). */
+  privilegeLicenseId?: string;
 }
 
 export interface SavedRadioDraft {
@@ -87,6 +91,14 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     radio.baudRate = value.baudRate;
   }
 
+  if (nonEmpty(value.privilegePersonId)) {
+    radio.privilegePersonId = value.privilegePersonId.trim();
+
+    if (nonEmpty(value.privilegeLicenseId)) {
+      radio.privilegeLicenseId = value.privilegeLicenseId.trim();
+    }
+  }
+
   return radio;
 }
 
@@ -140,6 +152,14 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.baudRate !== undefined) {
         stored.baudRate = radio.baudRate;
+      }
+
+      if (radio.privilegePersonId) {
+        stored.privilegePersonId = radio.privilegePersonId;
+
+        if (radio.privilegeLicenseId) {
+          stored.privilegeLicenseId = radio.privilegeLicenseId;
+        }
       }
 
       return stored;
@@ -306,4 +326,30 @@ export function upsertSavedRadio(store: SavedRadioStore, radio: SavedRadio): Sav
 
 export function removeSavedRadio(store: SavedRadioStore, id: string): SavedRadioStore {
   return { radios: store.radios.filter((radio) => radio.id !== id) };
+}
+
+/**
+ * Set or clear the license used for this radio's channel warnings.
+ *
+ * Does not change `updatedAt`. A missing license id means the person holds no license.
+ */
+export function applyRadioPrivilege(
+  radio: SavedRadio,
+  choice: { personId: string; licenseId?: string } | undefined,
+): SavedRadio {
+  const next: SavedRadio = { ...radio };
+  delete next.privilegePersonId;
+  delete next.privilegeLicenseId;
+
+  if (!choice) {
+    return next;
+  }
+
+  next.privilegePersonId = choice.personId;
+
+  if (choice.licenseId) {
+    next.privilegeLicenseId = choice.licenseId;
+  }
+
+  return next;
 }

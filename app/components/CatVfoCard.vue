@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
+import type { RadioPrivilegeChoice } from '~/utils/license-people';
 
 const props = defineProps<{
   vfo: CatVfo;
@@ -9,6 +10,7 @@ const props = defineProps<{
   isControl: boolean;
   transmitting: boolean;
   disabled: boolean;
+  privilege?: RadioPrivilegeChoice;
 }>();
 
 const emit = defineEmits<{
@@ -31,7 +33,7 @@ const powerItems = computed(() =>
   })),
 );
 
-const privilegeWarning = computed(() => getTransmitPrivilegeWarning(props.vfo.frequencyHz));
+const privilegeWarning = computed(() => getTransmitPrivilegeWarning(props.vfo.frequencyHz, props.privilege));
 
 watch(
   () => props.vfo.frequencyHz,

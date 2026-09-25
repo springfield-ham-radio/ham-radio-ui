@@ -153,7 +153,7 @@ const emit = defineEmits<{
   save: [payload: StationLogQsoInput & { id?: string }];
 }>();
 
-const { license, getTransmitPrivilegeWarning } = useOperatorLicense();
+const { solePrivilege, amateurIdentity, getTransmitPrivilegeWarning } = useOperatorLicense();
 
 const startDate = ref('');
 const startTime = ref('');
@@ -194,7 +194,7 @@ const description = computed(() =>
 
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(frequencyMHz.value);
-  return getTransmitPrivilegeWarning(hz);
+  return getTransmitPrivilegeWarning(hz, solePrivilege.value);
 });
 
 function pad2(value: number): string {
@@ -256,10 +256,11 @@ watch(
       return;
     }
 
+    const identity = amateurIdentity.value;
     const blank = createBlankStationLogQso({
-      operatorCallsign: license.value?.callSign,
-      stationCallsign: license.value?.callSign,
-      myGridsquare: license.value?.gridsquare,
+      operatorCallsign: identity.callSign,
+      stationCallsign: identity.callSign,
+      myGridsquare: identity.gridsquare,
     });
     const source = props.qso ?? { ...blank, ...props.defaults };
     const startedAt = source.startedAt ?? Date.now();
@@ -280,9 +281,9 @@ watch(
     theirGridsquare.value = source.theirGridsquare ?? '';
     txPowerWatts.value = source.txPowerWatts !== undefined ? String(source.txPowerWatts) : '';
     comment.value = source.comment ?? '';
-    operatorCallsign.value = source.operatorCallsign ?? license.value?.callSign;
-    stationCallsign.value = source.stationCallsign ?? license.value?.callSign;
-    myGridsquare.value = source.myGridsquare ?? license.value?.gridsquare;
+    operatorCallsign.value = source.operatorCallsign ?? identity.callSign;
+    stationCallsign.value = source.stationCallsign ?? identity.callSign;
+    myGridsquare.value = source.myGridsquare ?? identity.gridsquare;
     adifExtra.value = source.adifExtra;
     resetErrors();
     isSaving.value = false;

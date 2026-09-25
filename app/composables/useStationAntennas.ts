@@ -52,7 +52,7 @@ export function useStationAntennas() {
   const store = useState('station-antenna-store', () => defaultStationAntennaStore());
   const source = useState<AntennaViewSource>('station-antenna-source', () => 'station');
   const whatIf = useState<AntennaWhatIf>('station-antenna-what-if', () => defaultAntennaWhatIf());
-  const { license } = useOperatorLicense();
+  const { homeGridsquare } = useOperatorLicense();
 
   const hydrated = useState('station-antenna-store-hydrated', () => false);
 
@@ -72,7 +72,7 @@ export function useStationAntennas() {
   const canRemoveStation = computed(() => store.value.stations.length > 1);
 
   watch(
-    () => license.value?.gridsquare,
+    () => homeGridsquare.value,
     (gridsquare) => {
       if (!import.meta.client) {
         return;

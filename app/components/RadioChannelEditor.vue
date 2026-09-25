@@ -23,6 +23,7 @@ import {
   type ChannelPatch,
 } from '~/utils/channel-edit';
 import { settingsFieldHelp } from '~/utils/settings-field-help';
+import type { RadioPrivilegeChoice } from '~/utils/license-people';
 import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
@@ -31,6 +32,7 @@ const props = defineProps<{
   memoryMap?: RadioMemoryMap;
   occupiedChannelNumbers?: number[];
   channelCapacity?: number;
+  privilege?: RadioPrivilegeChoice;
 }>();
 
 const emit = defineEmits<{
@@ -128,7 +130,7 @@ const canCreate = computed(() => isCreate.value && slotError.value === undefined
 
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(transmitMHz.value) ?? radioChannel.value?.transmitFrequency;
-  return getTransmitPrivilegeWarning(hz);
+  return getTransmitPrivilegeWarning(hz, props.privilege);
 });
 
 watch(

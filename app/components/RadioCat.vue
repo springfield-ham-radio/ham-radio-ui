@@ -21,7 +21,7 @@ const props = defineProps<{
 const { configurations, openModulesInstall } = useRadio();
 const { radioById } = useSavedRadios();
 const { cardById, setCatPort } = useRadioBoard();
-const { license } = useOperatorLicense();
+const { choiceForRadio, identityFor } = useOperatorLicense();
 const {
   liveRadios,
   connecting,
@@ -229,11 +229,12 @@ function onTransmit(port: string, transmit: boolean): void {
 }
 
 function openLog(vfo: CatVfo): void {
+  const identity = identityFor(choiceForRadio(savedRadio.value));
   logDefaults.value = {
     ...createBlankStationLogQso({
-      operatorCallsign: license.value?.callSign,
-      stationCallsign: license.value?.callSign,
-      myGridsquare: license.value?.gridsquare,
+      operatorCallsign: identity.callSign,
+      stationCallsign: identity.callSign,
+      myGridsquare: identity.gridsquare,
     }),
     ...stationLogDraftFromCatVfo(vfo),
   };
@@ -392,6 +393,7 @@ onBeforeUnmount(() => {
                 v-for="radio in visibleLiveRadios"
                 :key="radio.port"
                 :radio="radio"
+                :privilege="choiceForRadio(savedRadio)"
                 @disconnect="disconnectSavedRadio(radio.port)"
                 @frequency="(vfo, frequencyHz) => onFrequency(radio.port, vfo, frequencyHz)"
                 @mode="(vfo, mode) => onMode(radio.port, vfo, mode)"

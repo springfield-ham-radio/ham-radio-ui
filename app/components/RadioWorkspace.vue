@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import type { RadioChannel, RadioProgrammedChannel, RadioSettingValue } from '@springfield/ham-radio-api';
+import type { SavedChannel } from '~/utils/saved-channels-db';
 import {
   collectChannelMemoryMapUiFields,
   formatMemoryMapFieldValue,
@@ -13,9 +14,10 @@ import type { ChannelRow } from '~/composables/useRadio';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
-import { channelCapacity, nextAvailableChannelNumber } from '~/utils/channel-edit';
+import { assignLibraryChannelsToSlots, availableChannelNumbers, channelCapacity, nextAvailableChannelNumber } from '~/utils/channel-edit';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
+import { privilegeValue } from '~/utils/license-people';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
@@ -33,6 +35,7 @@ const {
   updateSettings,
   updateChannel,
   addChannel,
+  addChannels,
   reorderChannels,
   removeChannels,
   saveSerialLog,
@@ -46,7 +49,14 @@ const {
 } = useRadio();
 const { cards } = useRadioBoard();
 const { radioById } = useSavedRadios();
-const { getTransmitPrivilegeWarning, privilegeLicenseLabel, hasPrivilegeContext } = useOperatorLicense();
+const {
+  privilegeGroups,
+  privilegeChoices,
+  choiceForRadio,
+  setRadioPrivilege,
+  assessmentFor,
+  getTransmitPrivilegeWarning,
+} = useOperatorLicense();
 const { saveChannels } = useSavedChannels();
 
 interface DisplayChannelRow extends ChannelRow {
@@ -178,6 +188,21 @@ const channelUiFields = computed<RadioMemoryMapUiField[]>(() => {
   return collectChannelMemoryMapUiFields(settingsMemoryMap.value);
 });
 
+const radioPrivilege = computed(() => choiceForRadio(savedRadio.value));
+const privilegeAssessment = computed(() => assessmentFor(radioPrivilege.value));
+const selectedPrivilegeValue = computed(() => (radioPrivilege.value ? privilegeValue(radioPrivilege.value) : undefined));
+
+const privilegeSelection = computed({
+  get: () => selectedPrivilegeValue.value,
+  set: (value: string | undefined) => {
+    if (!savedRadio.value || !value) {
+      return;
+    }
+
+    setRadioPrivilege(savedRadio.value.id, value);
+  },
+});
+
 const displayChannels = computed<DisplayChannelRow[]>(() => {
   return channels.value.map((channel) => {
     const extras: Record<string, string> = {};
@@ -189,7 +214,7 @@ const displayChannels = computed<DisplayChannelRow[]>(() => {
 
     return {
       ...channel,
-      privilegeWarning: getTransmitPrivilegeWarning(channel.transmitFrequencyHz),
+      privilegeWarning: getTransmitPrivilegeWarning(channel.transmitFrequencyHz, radioPrivilege.value),
       band: bandNameForFrequency(channel.transmitFrequencyHz),
       extras,
     };
@@ -369,6 +394,22 @@ const addChannelTooltip = computed(() => {
 
   return 'Add a memory channel';
 });
+const freeSlotNumbers = computed(() =>
+  availableChannelNumbers(occupiedChannelNumbers.value, radioChannelCapacity.value),
+);
+const libraryRadioName = computed(() => savedRadio.value?.name ?? activeRadioId.value?.name ?? 'this radio');
+const addFromLibraryTooltip = computed(() => {
+  if (!program.value || !memory.value) {
+    return 'Open a memory file or import from a radio first';
+  }
+
+  if (freeSlotNumbers.value.length === 0) {
+    return 'All memory slots are programmed';
+  }
+
+  return 'Add saved channels into unused memory slots';
+});
+const libraryAddOpen = shallowRef(false);
 
 const editingChannel = computed(() => {
   if (editingChannelNumber.value === undefined) {
@@ -500,6 +541,15 @@ function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
 
 function onCreateChannel(programmed: RadioProgrammedChannel): void {
   void addChannel(programmed);
+}
+
+function onAddFromLibrary(sources: SavedChannel[]): void {
+  const assignment = assignLibraryChannelsToSlots(
+    sources,
+    occupiedChannelNumbers.value,
+    settingsMemoryMap.value,
+  );
+  void addChannels(assignment.programmed);
 }
 
 function requestRemoveChannel(channelNumber: number): void {
@@ -690,13 +740,33 @@ async function onSaveSerialLog(): Promise<void> {
         <RadioMemoryEmpty v-if="!activeRadioId" />
         <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
           <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
-            <div class="min-w-0">
-              <p v-if="hasPrivilegeContext && outOfClassCount > 0" class="text-xs text-warning">
-                {{ outOfClassCount }} channel{{ outOfClassCount === 1 ? '' : 's' }} have transmit frequencies outside your
-                {{ privilegeLicenseLabel }} privileges.
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <USelectMenu
+                v-if="privilegeChoices > 1"
+                v-model="privilegeSelection"
+                :items="privilegeGroups"
+                value-key="value"
+                placeholder="Select a license"
+                color="neutral"
+                :search-input="false"
+                class="w-64"
+                size="sm"
+              />
+              <p v-if="privilegeAssessment.active && outOfClassCount > 0" class="text-xs text-warning">
+                {{ outOfClassCount }} channel{{ outOfClassCount === 1 ? '' : 's' }} have transmit frequencies outside
+                {{ privilegeAssessment.label }} privileges.
               </p>
-              <p v-else-if="!hasPrivilegeContext && channels.length > 0" class="text-xs text-muted">
-                Set your amateur or GMRS call sign in Preferences to flag channels outside your license privileges.
+              <p v-else-if="privilegeAssessment.active && privilegeChoices === 1" class="text-xs text-muted">
+                Checking {{ privilegeAssessment.label }} privileges. FRS is allowed for everyone.
+              </p>
+              <p v-else-if="radioPrivilege && !privilegeAssessment.active && channels.length > 0" class="text-xs text-muted">
+                Choose a license class for this grant in Preferences before privilege checks can run.
+              </p>
+              <p v-else-if="privilegeChoices === 0 && channels.length > 0" class="text-xs text-muted">
+                Add a person in Preferences to flag channels. Someone with no license can still use FRS.
+              </p>
+              <p v-else-if="privilegeChoices > 1 && !radioPrivilege && channels.length > 0" class="text-xs text-muted">
+                Select a license to flag channels outside that grant. FRS is allowed for everyone.
               </p>
             </div>
             <div class="flex shrink-0 items-center gap-1.5">
@@ -709,6 +779,19 @@ async function onSaveSerialLog(): Promise<void> {
                     label="Add channel"
                     :disabled="!canAddChannel"
                     @click="openAddChannel"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="addFromLibraryTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    icon="i-lucide-library"
+                    color="primary"
+                    variant="soft"
+                    size="sm"
+                    label="Add from library"
+                    :disabled="!canAddChannel"
+                    @click="libraryAddOpen = true"
                   />
                 </span>
               </UTooltip>
@@ -803,9 +886,10 @@ async function onSaveSerialLog(): Promise<void> {
           <p class="mt-2 shrink-0 text-xs text-muted">
             Drag the handle to move a channel into another occupied memory slot. Empty slots stay empty. Select
             channels to save them to the library or remove them from this radio. Shift-click selects a range, and
-            Command-click adds or removes one channel. Add a channel to the next unused memory slot, or select saved
-            channels on the Channels page and choose Add to radio. Click a row to edit the loaded memory. While
-            editing, Replace from library copies a saved channel into that slot.
+            Command-click adds or removes one channel. Add a channel to the next unused memory slot, or choose Add
+            from library to copy saved channels into unused slots. You can also select saved channels on the Channels
+            page and choose Add to radio. Click a row to edit the loaded memory. While editing, Replace from library
+            copies a saved channel into that slot.
           </p>
         </div>
       </template>
@@ -870,12 +954,20 @@ async function onSaveSerialLog(): Promise<void> {
         <RadioSniffer v-if="activeTab === 'sniffer'" />
       </template>
     </UTabs>
+    <ChannelLibraryPicker
+      v-model:open="libraryAddOpen"
+      mode="add"
+      :radio-name="libraryRadioName"
+      :free-slot-numbers="freeSlotNumbers"
+      @add="onAddFromLibrary"
+    />
     <RadioChannelEditor
       v-model:open="editorOpen"
       :channel="editingChannel"
       :memory-map="settingsMemoryMap"
       :occupied-channel-numbers="occupiedChannelNumbers"
       :channel-capacity="radioChannelCapacity"
+      :privilege="radioPrivilege"
       @update:channel="onChannelPatch"
       @create="onCreateChannel"
     />
