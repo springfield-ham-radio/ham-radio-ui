@@ -52,8 +52,13 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - run: corepack enable
-      - run: yarn install --immutable
+      # bash, not PowerShell. windows-latest ships Yarn 1.22 as yarn.ps1, and
+      # PowerShell runs that instead of the Corepack yarn.cmd shim.
+      - name: Install dependencies
+        shell: bash
+        run: |
+          corepack enable
+          yarn install --immutable
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
