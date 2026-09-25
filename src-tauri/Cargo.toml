@@ -6,6 +6,13 @@ authors = ["Bryan Hunt"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.85.0"
+autobins = false
+default-run = "HamBench"
+
+# The macOS Dock tooltip uses this filename while `tauri dev` is running.
+[[bin]]
+name = "HamBench"
+path = "src/main.rs"
 
 [lib]
 name = "ham_radio_lib"

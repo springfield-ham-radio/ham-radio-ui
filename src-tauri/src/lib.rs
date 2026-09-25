@@ -2,7 +2,7 @@ mod radio_modules;
 mod sniffer_ssh;
 
 #[cfg(target_os = "macos")]
-use tauri::menu::WINDOW_SUBMENU_ID;
+use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -38,7 +38,14 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             "HamBench",
             true,
             &[
-                &PredefinedMenuItem::about(app, None, None)?,
+                &PredefinedMenuItem::about(
+                    app,
+                    None,
+                    Some(AboutMetadata {
+                        credits: Some("By KF5UFJ".into()),
+                        ..Default::default()
+                    }),
+                )?,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
                 &check_updates,

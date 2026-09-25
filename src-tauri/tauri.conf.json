@@ -14,8 +14,9 @@
     "windows": [
       {
         "title": "HamBench",
-        "width": 1200,
-        "height": 800,
+        "width": 1512,
+        "height": 982,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }
