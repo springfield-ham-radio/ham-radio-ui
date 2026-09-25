@@ -1,3 +1,9 @@
+## [0.36.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.35.0...v0.36.0) (2026-09-25)
+
+### Features
+
+* add hideable Weather, FRS, and GMRS channel groups ([1f8a09e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1f8a09e745afd73d4a3b2baf652459d2f4072378))
+
 ## [0.35.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.34.0...v0.35.0) (2026-09-25)
 
 ### Features
