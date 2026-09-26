@@ -145,9 +145,23 @@ export function useRadio() {
   /** Card this component belongs to. Import and Write dialogs use `transferCardId` instead. */
   const cardId = computed(() => injectedCardId?.value ?? focusedCardId.value);
   const savedRadio = computed(() => radios.value.find((radio) => radio.id === cardId.value));
+  const cardRadio = computed(() => {
+    if (savedRadio.value) {
+      return savedRadio.value;
+    }
+
+    const id = cardId.value;
+    const guest = cards.value.find((card) => card.id === id)?.guest;
+
+    if (!guest || !id) {
+      return undefined;
+    }
+
+    return { id, ...guest };
+  });
   const addTargets = computed<RadioAddTarget[]>(() =>
     cards.value.flatMap((card) => {
-      const saved = radios.value.find((radio) => radio.id === card.savedRadioId);
+      const saved = radios.value.find((radio) => radio.id === card.savedRadioId) ?? card.guest;
 
       if (!saved) {
         return [];
@@ -171,6 +185,16 @@ export function useRadio() {
       ];
     }),
   );
+
+  function boundRadio(sessionId: string): { name: string; manufacturer: string; model: string } | undefined {
+    const saved = radios.value.find((radio) => radio.id === sessionId);
+
+    if (saved) {
+      return saved;
+    }
+
+    return cards.value.find((card) => card.id === sessionId)?.guest;
+  }
 
   function readSession(id: string | undefined): RadioCardSession | undefined {
     if (!id) {
@@ -433,7 +457,7 @@ export function useRadio() {
       return;
     }
 
-    const saved = radios.value.find((radio) => radio.id === sessionId);
+    const saved = boundRadio(sessionId);
 
     if (saved && saved.model !== String(radioId.model)) {
       toast.add({
@@ -1018,7 +1042,7 @@ export function useRadio() {
       throw new Error('Open a radio card before loading memory');
     }
 
-    const saved = radios.value.find((radio) => radio.id === id);
+    const saved = boundRadio(id);
 
     if (saved && saved.model !== String(radioId.model)) {
       throw new Error(
@@ -1071,6 +1095,7 @@ export function useRadio() {
     memoryFilePath,
     serialLog,
     savedRadio,
+    cardRadio,
     modulesInstallOpen,
     modulesInstallRequired,
     initialize,

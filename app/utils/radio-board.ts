@@ -1,6 +1,15 @@
 export const RADIO_BOARD_STORAGE_KEY = 'ham-radio-board';
 
-export type RadioBoardLayout = 'stack' | 'tile';
+export type RadioBoardLayout = 'tabs' | 'tile';
+
+/** A clone opened from Import, not stored under Preferences → Radios. */
+export interface GuestRadio {
+  name: string;
+  manufacturer: string;
+  model: string;
+  baudRate?: number;
+  serialPort: string;
+}
 
 export interface RadioBoardSettings {
   layout: RadioBoardLayout;
@@ -10,13 +19,14 @@ export interface RadioBoardSettings {
 
 export function defaultRadioBoardSettings(): RadioBoardSettings {
   return {
-    layout: 'stack',
+    layout: 'tabs',
     openIds: [],
   };
 }
 
 /**
  * Parse the radio-page layout and which radios are open.
+ * Older saves used `stack` for the column layout; that is now tabs.
  */
 export function parseRadioBoardSettings(raw: string | null): RadioBoardSettings {
   if (!raw) {
@@ -31,7 +41,7 @@ export function parseRadioBoardSettings(raw: string | null): RadioBoardSettings 
     }
 
     const record = parsed as Record<string, unknown>;
-    const layout: RadioBoardLayout = record.layout === 'tile' ? 'tile' : 'stack';
+    const layout: RadioBoardLayout = record.layout === 'tile' ? 'tile' : 'tabs';
     const openIds: string[] = [];
     const seen = new Set<string>();
 
@@ -60,7 +70,7 @@ export function parseRadioBoardSettings(raw: string | null): RadioBoardSettings 
 
 export function serializeRadioBoardSettings(settings: RadioBoardSettings): string {
   return JSON.stringify({
-    layout: settings.layout === 'tile' ? 'tile' : 'stack',
+    layout: settings.layout === 'tile' ? 'tile' : 'tabs',
     openIds: settings.openIds,
   });
 }
@@ -91,4 +101,11 @@ export function writeRadioBoardSettings(settings: RadioBoardSettings): void {
 export function reconcileOpenRadioIds(openIds: readonly string[], validIds: readonly string[]): string[] {
   const valid = new Set(validIds);
   return openIds.filter((id) => valid.has(id));
+}
+
+/**
+ * Saved-radio ids to keep on the board. Guest clones are session-only.
+ */
+export function persistedBoardOpenIds(cards: readonly { savedRadioId?: string }[]): string[] {
+  return cards.flatMap((card) => (card.savedRadioId ? [card.savedRadioId] : []));
 }

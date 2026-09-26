@@ -44,6 +44,7 @@ const {
   openMemoryFile,
   saveMemoryFile,
   savedRadio,
+  cardRadio,
   isLoading,
   modulesInstallRequired,
 } = useRadio();
@@ -75,9 +76,9 @@ function modelSupportsCat(model: string | undefined): boolean {
   return config ? radioSupportsLiveCat(config) : false;
 }
 
-const supportsCat = computed(() => modelSupportsCat(savedRadio.value?.model));
+const supportsCat = computed(() => modelSupportsCat(cardRadio.value?.model));
 const anyOpenCardSupportsCat = computed(() =>
-  cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model)),
+  cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model ?? card.guest?.model)),
 );
 
 const items = computed<TabsItem[]>(() => {
@@ -397,7 +398,7 @@ const addChannelTooltip = computed(() => {
 const freeSlotNumbers = computed(() =>
   availableChannelNumbers(occupiedChannelNumbers.value, radioChannelCapacity.value),
 );
-const libraryRadioName = computed(() => savedRadio.value?.name ?? activeRadioId.value?.name ?? 'this radio');
+const libraryRadioName = computed(() => cardRadio.value?.name ?? activeRadioId.value?.name ?? 'this radio');
 const addFromLibraryTooltip = computed(() => {
   if (!program.value || !memory.value) {
     return 'Open a memory file or import from a radio first';
@@ -652,7 +653,7 @@ async function onSaveSerialLog(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-4 pt-1">
+  <div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden px-4 pb-4 pt-1">
     <UTabs
       v-model="activeTab"
       color="primary"
@@ -671,15 +672,15 @@ async function onSaveSerialLog(): Promise<void> {
       <template #list-trailing>
         <div class="ml-auto flex shrink-0 items-center gap-1.5 ps-2">
           <UTooltip
-            v-if="savedRadio || activeRadioId"
+            v-if="cardRadio || activeRadioId"
             :text="
-              savedRadio
-                ? savedRadioModelLabel(savedRadio, configurations)
+              cardRadio
+                ? savedRadioModelLabel(cardRadio, configurations)
                 : `${activeRadioId?.manufacturer} · ${activeRadioId?.model}`
             "
           >
             <UBadge
-              :label="savedRadio?.name ?? activeRadioId?.name"
+              :label="cardRadio?.name ?? activeRadioId?.name"
               color="neutral"
               variant="subtle"
               size="sm"
@@ -894,7 +895,7 @@ async function onSaveSerialLog(): Promise<void> {
         </div>
       </template>
       <template #cat>
-        <RadioCat v-if="supportsCat && activeTab === 'cat'" :saved-radio-id="savedRadio?.id" />
+        <RadioCat v-if="supportsCat && activeTab === 'cat'" :saved-radio-id="cardRadio?.id" />
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />
@@ -909,7 +910,7 @@ async function onSaveSerialLog(): Promise<void> {
         </div>
       </template>
       <template #driver>
-        <RadioDriver :model-id="savedRadio?.model" />
+        <RadioDriver :model-id="cardRadio?.model" />
       </template>
       <template #hex>
         <RadioMemoryEmpty v-if="!activeRadioId" />

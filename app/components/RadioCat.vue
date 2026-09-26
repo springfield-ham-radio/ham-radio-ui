@@ -52,7 +52,21 @@ const activeTab = ref('control');
 const savingSerialLog = ref(false);
 const debugPort = ref<string | undefined>();
 
-const savedRadio = computed(() => radioById(props.savedRadioId));
+const savedRadio = computed(() => {
+  const saved = radioById(props.savedRadioId);
+
+  if (saved) {
+    return saved;
+  }
+
+  const guest = cardById(props.savedRadioId)?.guest;
+
+  if (!guest || !props.savedRadioId) {
+    return undefined;
+  }
+
+  return { id: props.savedRadioId, ...guest };
+});
 const boundConfig = computed(() => {
   if (!savedRadio.value) {
     return undefined;

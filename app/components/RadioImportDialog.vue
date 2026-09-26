@@ -3,12 +3,12 @@ import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const { importFromRadio, importOpen, configurations } = useRadio();
-const { transferCardId, clearTransfer } = useRadioBoard();
+const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
 
-const saved = computed(() => radioById(transferCardId.value));
+const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
 
 const description = computed(() => {
   if (!saved.value) {

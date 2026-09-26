@@ -1,13 +1,18 @@
 import {
+  persistedBoardOpenIds,
   readRadioBoardSettings,
   reconcileOpenRadioIds,
   writeRadioBoardSettings,
+  type GuestRadio,
   type RadioBoardLayout,
 } from '~/utils/radio-board';
 
 export interface RadioBoardCard {
   id: string;
-  savedRadioId: string;
+  /** Preferences radio. Absent when this card is a guest clone. */
+  savedRadioId?: string;
+  /** Clone that was not added under Preferences. */
+  guest?: GuestRadio;
   /** Serial port used the last time CAT connected for this card. */
   catPort?: string;
 }
@@ -19,13 +24,13 @@ export interface RadioBoardCard {
  */
 export function useRadioBoard() {
   const cards = useState<RadioBoardCard[]>('radio-board-cards', () => []);
-  const layout = useState<RadioBoardLayout>('radio-board-layout', () => 'stack');
+  const layout = useState<RadioBoardLayout>('radio-board-layout', () => 'tabs');
   const focusedCardId = useState<string | undefined>('radio-board-focus', () => undefined);
   /** Card that Import or Write was opened for, so the dialog does not follow a later click. */
   const transferCardId = useState<string | undefined>('radio-transfer-card', () => undefined);
   const hydrated = useState('radio-board-hydrated', () => false);
 
-  const openIds = computed(() => cards.value.map((card) => card.savedRadioId));
+  const openIds = computed(() => persistedBoardOpenIds(cards.value));
 
   function persist(): void {
     writeRadioBoardSettings({
@@ -77,6 +82,17 @@ export function useRadioBoard() {
     persist();
   }
 
+  /**
+   * Open a card for a clone that is not saved under Preferences.
+   * The card lasts until it is closed or the app reloads.
+   */
+  function openGuestCard(guest: GuestRadio): string {
+    const id = crypto.randomUUID();
+    cards.value = [...cards.value, { id, guest }];
+    focusedCardId.value = id;
+    return id;
+  }
+
   function closeCard(id: string): void {
     cards.value = cards.value.filter((card) => card.id !== id);
 
@@ -103,7 +119,9 @@ export function useRadioBoard() {
       }
 
       if (port === undefined) {
-        return { id: card.id, savedRadioId: card.savedRadioId };
+        const rest = { ...card };
+        delete rest.catPort;
+        return rest;
       }
 
       return { ...card, catPort: port };
@@ -128,6 +146,7 @@ export function useRadioBoard() {
     cardById,
     focusCard,
     openCard,
+    openGuestCard,
     closeCard,
     setLayout,
     setCatPort,

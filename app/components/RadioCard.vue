@@ -36,16 +36,16 @@ const detail = computed(() => {
   return parts.join(' · ');
 });
 const cardClass = computed(() => ({
-  'ring-primary': props.focused,
-  'ring-default': !props.focused,
-  'h-full': props.fill,
+  'border-primary': props.focused,
+  'border-default': !props.focused,
+  'h-full min-h-0 flex-1': props.fill,
   'min-h-[36rem]': !props.fill,
 }));
 </script>
 
 <template>
   <section
-    class="flex min-h-0 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1"
+    class="flex min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border-2 bg-default shadow-sm"
     :class="cardClass"
     @pointerdown="emit('focus')"
   >
