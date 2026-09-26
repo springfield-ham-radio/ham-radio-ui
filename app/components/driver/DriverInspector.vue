@@ -23,6 +23,8 @@ const sectionGuides: Record<DriverEditorSection, string> = {
     'Bindings name the channel struct and the fields for the name, frequencies, and tones. Settings groups are a tab menu, and the selected tab edits that group. The JSON panel is the memory-map file. Copy it, then point the Memory map path on Setup at that file.',
   read: 'The diagram draws the whole read protocol. The highlighted step is the one open in the form. Hex, one ASCII character, and placeholders are the only byte forms, so the JSON cannot contain a malformed token.',
   write: 'The diagram draws the whole write protocol the same way. $data in a chunked write is the slice of the memory image sent to the radio.',
+  debug:
+    'Read the radio, change one channel or setting on the radio, then read it again. The hex dump highlights the bytes that differ. Those bytes are where that field is stored.',
 };
 
 const side = computed(() => (section.value === 'write' ? 'write' : 'read'));

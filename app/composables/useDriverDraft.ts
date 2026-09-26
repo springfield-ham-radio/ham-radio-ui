@@ -2,6 +2,7 @@ import { compileChannelSchema } from '~/utils/channel-schema';
 import { compileDriverDraft } from '~/utils/driver-compile';
 import { compileMemoryMap } from '~/utils/memory-map';
 import {
+  DRIVER_EDITOR_SECTIONS,
   readStoredDriverDraft,
   writeStoredDriverDraft,
   type DriverDraft,
@@ -17,13 +18,10 @@ export function useDriverDraft() {
   const sectionState = useState<string>('driver-editor-section', () => 'setup');
   const section = computed<DriverEditorSection>({
     get() {
-      if (
-        sectionState.value === 'read' ||
-        sectionState.value === 'write' ||
-        sectionState.value === 'channel' ||
-        sectionState.value === 'memory'
-      ) {
-        return sectionState.value;
+      const value = sectionState.value;
+
+      if ((DRIVER_EDITOR_SECTIONS as readonly string[]).includes(value)) {
+        return value as DriverEditorSection;
       }
 
       return 'setup';

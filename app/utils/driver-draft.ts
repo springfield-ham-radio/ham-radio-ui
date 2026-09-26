@@ -239,7 +239,7 @@ export interface DriverDraft {
   memoryMap: DriverMemoryMapDraft;
 }
 
-export const DRIVER_EDITOR_SECTIONS = ['setup', 'channel', 'memory', 'read', 'write'] as const;
+export const DRIVER_EDITOR_SECTIONS = ['setup', 'channel', 'memory', 'read', 'write', 'debug'] as const;
 
 /** Speeds offered for the programming port. A radio may accept more than one. */
 export const DRIVER_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] as const;

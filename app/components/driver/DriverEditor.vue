@@ -14,6 +14,7 @@ const sectionItems: TabsItem[] = [
   { label: 'Memory', value: 'memory', icon: 'i-lucide-grid-3x3' },
   { label: 'Read', value: 'read', icon: 'i-lucide-download' },
   { label: 'Write', value: 'write', icon: 'i-lucide-upload' },
+  { label: 'Debug', value: 'debug', icon: 'i-lucide-bug' },
 ];
 
 const activeSection = computed({
@@ -42,6 +43,7 @@ const cautionDismissed = useState('driver-caution-dismissed', () => false);
 const channelMounted = shallowRef(section.value === 'channel');
 const memoryMounted = shallowRef(section.value === 'memory');
 const protocolMounted = shallowRef(section.value === 'read' || section.value === 'write');
+const debugMounted = shallowRef(section.value === 'debug');
 
 watch(section, (value) => {
   if (value === 'channel') {
@@ -54,6 +56,10 @@ watch(section, (value) => {
 
   if (value === 'read' || value === 'write') {
     protocolMounted.value = true;
+  }
+
+  if (value === 'debug') {
+    debugMounted.value = true;
   }
 });
 
@@ -234,9 +240,10 @@ async function exportFile(): Promise<void> {
     >
       <template #form>
         <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
-          <DriverSetupForm v-show="section !== 'channel' && section !== 'memory'" />
+          <DriverSetupForm v-show="section === 'setup'" />
           <DriverChannelSchemaForm v-if="channelMounted" v-show="section === 'channel'" />
           <DriverMemoryMapForm v-if="memoryMounted" v-show="section === 'memory'" />
+          <DriverDebugForm v-if="debugMounted" v-show="section === 'debug'" />
         </div>
       </template>
       <template #guide>
