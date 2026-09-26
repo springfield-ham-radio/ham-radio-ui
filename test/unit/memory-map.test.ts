@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coerceDriverDraft, createMemoryMapDraft } from '../../app/utils/driver-draft.ts';
+import { coerceDriverDraft, createMemoryField, createMemoryMapDraft } from '../../app/utils/driver-draft.ts';
 import { compileMemoryMap } from '../../app/utils/memory-map.ts';
 
 describe('memory map', () => {
@@ -79,6 +79,40 @@ describe('memory map', () => {
 
     expect(compiled.errorCount).toBeGreaterThan(0);
     expect(document.structs.map((struct) => struct.id)).toEqual(['names', 'settings']);
+  });
+
+  it('accepts channel as the group for a per-channel extra', () => {
+    const map = createMemoryMapDraft();
+    map.structs[0]?.fields.push(
+      createMemoryField({
+        fieldId: 'lowpower',
+        kind: 'integer',
+        minimum: '0',
+        maximum: '3',
+        showUi: true,
+        uiGroup: 'channel',
+        uiLabel: 'Power',
+        uiWidget: 'select',
+      }),
+    );
+    const compiled = compileMemoryMap(map);
+    const document = JSON.parse(compiled.json) as { structs: Array<{ fields: Array<{ id: string; ui?: { group: string } }> }> };
+
+    expect(compiled.warningCount).toBe(0);
+    expect(document.structs[0]?.fields.find((field) => field.id === 'lowpower')?.ui).toMatchObject({ group: 'channel', label: 'Power' });
+  });
+
+  it('warns when a settings field names a group that was not declared', () => {
+    const map = createMemoryMapDraft();
+    const squelch = map.structs[2]?.fields[0];
+
+    if (squelch) {
+      squelch.uiGroup = 'missing';
+    }
+
+    const compiled = compileMemoryMap(map);
+
+    expect(compiled.issues.filter((issue) => issue.message === 'No settings group is named missing.')).toHaveLength(1);
   });
 
   it('leaves a settings group with no label out of the map', () => {

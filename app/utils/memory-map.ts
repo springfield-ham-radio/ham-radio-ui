@@ -18,6 +18,9 @@ export interface CompiledMemoryMap {
   warningCount: number;
 }
 
+/** Per-channel extras use this `ui.group`. It is not declared with the settings groups. */
+const CHANNEL_UI_GROUP = 'channel';
+
 const LENGTH_KINDS = new Set<DriverMemoryFieldKind>(['ascii', 'digits', 'dtmf', 'bbcd', 'lbcd']);
 const SCALE_KINDS = new Set<DriverMemoryFieldKind>(['digits', 'lbcd']);
 const INTEGER_LIST_KINDS = new Set<DriverMemoryFieldKind>(['tone', 'ctcss-index', 'dcs-index']);
@@ -524,7 +527,7 @@ function compileFieldUi(
 
   const declared = groups.map((item) => item.groupId.trim()).filter((id) => id.length > 0);
 
-  if (declared.length > 0 && !declared.includes(group)) {
+  if (group !== CHANNEL_UI_GROUP && declared.length > 0 && !declared.includes(group)) {
     issues.push({
       level: 'warning',
       path: `${path}.uiGroup`,

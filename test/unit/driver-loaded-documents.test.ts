@@ -65,6 +65,7 @@ describe('installed driver documents', () => {
 
     expect(channel.errorCount).toBe(0);
     expect(map.errorCount).toBe(0);
+    expect(map.warningCount).toBe(0);
 
     const source = uv5rMemoryMap as { structs: Array<{ id: string; fields: Array<{ id: string }> }> };
     const compiled = JSON.parse(map.json) as { structs: Array<{ id: string; fields: Array<{ id: string }> }> };
