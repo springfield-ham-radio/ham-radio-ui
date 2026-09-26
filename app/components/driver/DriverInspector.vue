@@ -15,9 +15,8 @@ const panelItems: TabsItem[] = [
 ];
 
 const sectionGuides: Record<DriverEditorSection, string> = {
-  identity: 'Name the radio. The model id is the catalog key. Schema and memory-map paths are optional while you are still learning the protocol.',
-  serial: 'These settings open the programming port. A speed change in the middle of a clone belongs on an exchange step, not here.',
-  memory: 'Segments name the address ranges later steps read and write. The end address is inclusive, so 0–1023 is 1024 bytes.',
+  setup:
+    'Name the radio, then set the programming port and the memory segments. Schema and memory-map paths are optional while you are still learning the protocol. A speed change in the middle of a clone belongs on an exchange step. Segment end addresses are inclusive, so 0x0000–0x03FF is 1024 bytes.',
   read: 'The diagram draws the whole read protocol. The highlighted step is the one open in the form. Hex, one ASCII character, and placeholders are the only byte forms, so the JSON cannot contain a malformed token.',
   write: 'The diagram draws the whole write protocol the same way. $data in a chunked write is the slice of the memory image sent to the radio.',
 };
@@ -83,22 +82,12 @@ const diagram = computed(() => {
 });
 
 const sectionIssues = computed(() => {
-  if (section.value === 'identity') {
-    return compiled.value.issues.filter((issue) => {
-      return (
-        issue.path.startsWith('id.') ||
-        issue.path === 'version' ||
-        issue.path.startsWith('schemas')
-      );
+  if (section.value === 'setup') {
+    const identity = compiled.value.issues.filter((issue) => {
+      return issue.path.startsWith('id.') || issue.path === 'version' || issue.path.startsWith('schemas');
     });
-  }
 
-  if (section.value === 'serial') {
-    return driverIssuesUnder(compiled.value.issues, 'serial');
-  }
-
-  if (section.value === 'memory') {
-    return driverIssuesUnder(compiled.value.issues, 'memory');
+    return [...identity, ...driverIssuesUnder(compiled.value.issues, 'serial'), ...driverIssuesUnder(compiled.value.issues, 'memory')];
   }
 
   return driverIssuesUnder(compiled.value.issues, side.value);

@@ -51,15 +51,21 @@ function setFlag(
 </script>
 
 <template>
-  <div class="flex max-w-3xl flex-col gap-4">
+  <div class="flex w-full flex-col gap-4">
     <div class="grid gap-3 sm:grid-cols-2">
       <UFormField label="Manufacturer" required :error="errorAt('id.manufacturer')">
         <UInput v-model="manufacturer" class="w-full" placeholder="Example" />
       </UFormField>
-      <UFormField label="Model id" required :error="errorAt('id.model')" description="Lowercase, used as the catalog key.">
+      <UFormField label="Model id" required :error="errorAt('id.model')">
+        <template #hint>
+          <HelpTooltip text="Lowercase, used as the catalog key." />
+        </template>
         <UInput v-model="model" class="w-full font-mono" placeholder="example-radio" />
       </UFormField>
-      <UFormField label="Name" required :error="errorAt('id.name')" description="Shown in the radio list.">
+      <UFormField label="Name" required :error="errorAt('id.name')">
+        <template #hint>
+          <HelpTooltip text="Shown in the radio list." />
+        </template>
         <UInput v-model="name" class="w-full" placeholder="Example Radio" />
       </UFormField>
       <UFormField label="Version" required :error="errorAt('version')">
@@ -90,31 +96,35 @@ function setFlag(
         label="Settings programming"
         @update:model-value="setFlag('settingsProgramming', $event)"
       />
-      <UCheckbox
-        :model-value="draft.liveControl"
-        label="Live control"
-        description="Separate from CAT memory steps."
-        @update:model-value="setFlag('liveControl', $event)"
-      />
+      <div class="flex items-center gap-1">
+        <UCheckbox
+          :model-value="draft.liveControl"
+          label="Live control"
+          @update:model-value="setFlag('liveControl', $event)"
+        />
+        <HelpTooltip text="Separate from CAT memory steps." />
+      </div>
     </div>
     <div class="grid gap-3">
-      <UFormField
-        label="Settings schema path"
-        hint="Optional"
-        :error="errorAt('schemas.settings')"
-        description="Relative path inside the module, for example ../src/shared/schemas/settings-schema.json"
-      >
+      <UFormField label="Settings schema path" :error="errorAt('schemas.settings')">
+        <template #hint>
+          <span class="inline-flex items-center gap-1.5">
+            Optional
+            <HelpTooltip text="Relative path inside the module, for example ../src/shared/schemas/settings-schema.json" />
+          </span>
+        </template>
         <UInput v-model="settingsSchemaPath" class="w-full font-mono" />
       </UFormField>
       <UFormField label="Channel schema path" hint="Optional" :error="errorAt('schemas.channel')">
         <UInput v-model="channelSchemaPath" class="w-full font-mono" />
       </UFormField>
-      <UFormField
-        label="Memory map path"
-        hint="Optional"
-        :error="errorAt('schemas.memoryMap')"
-        description="Field layout stays in that JSON file. This editor does not build the map."
-      >
+      <UFormField label="Memory map path" :error="errorAt('schemas.memoryMap')">
+        <template #hint>
+          <span class="inline-flex items-center gap-1.5">
+            Optional
+            <HelpTooltip text="Field layout stays in that JSON file. This editor does not build the map." />
+          </span>
+        </template>
         <UInput v-model="memoryMapPath" class="w-full font-mono" />
       </UFormField>
     </div>

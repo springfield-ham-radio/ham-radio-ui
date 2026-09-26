@@ -5,6 +5,7 @@ import {
   DRIVER_STEP_KIND_LABELS,
   DRIVER_WRITE_STEP_KINDS,
   canonicalizeSkipAddress,
+  formatFinishedDriverAddress,
   createDriverId,
   type DriverStepDraft,
   type DriverStepKind,
@@ -75,14 +76,7 @@ function addSkip(): void {
 }
 
 function formattedSkipAddress(raw: string): string {
-  const text = raw.trim();
-  const digits = text.replace(/^0x/i, '');
-  const finished =
-    /^0x[0-9a-fA-F]+$/i.test(text) ||
-    (/[a-fA-F]/.test(digits) && digits.length >= 3) ||
-    /^\d{4,}$/.test(text);
-
-  return finished ? canonicalizeSkipAddress(text) : raw;
+  return formatFinishedDriverAddress(raw);
 }
 
 watch(
@@ -148,7 +142,10 @@ function removeSkip(id: string): void {
           @update:model-value="patch({ description: String($event ?? '') })"
         />
       </UFormField>
-      <UFormField label="Step type" description="The type decides which fields are written into the JSON.">
+      <UFormField label="Step type">
+        <template #hint>
+          <HelpTooltip text="The type decides which fields are written into the JSON." />
+        </template>
         <USelect
           :model-value="step.kind"
           :items="kindItems"
@@ -170,12 +167,10 @@ function removeSkip(id: string): void {
           @update:model-value="patch({ timeout: String($event ?? '') })"
         />
       </UFormField>
-      <UFormField
-        v-if="step.kind === 'read' || step.kind === 'write'"
-        label="Segments"
-        :error="errorAt('segments')"
-        description="Address ranges from the Memory tab."
-      >
+      <UFormField v-if="step.kind === 'read' || step.kind === 'write'" label="Segments" :error="errorAt('segments')">
+        <template #hint>
+          <HelpTooltip text="Address ranges from the Setup tab." />
+        </template>
         <p v-if="segmentNames.length === 0" class="text-sm text-muted">Add a memory segment before choosing one.</p>
         <div v-else class="flex flex-col gap-2">
           <UCheckbox
@@ -201,7 +196,10 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ catSegment: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField label="Packer" description="How CAT replies become channel records.">
+        <UFormField label="Packer">
+          <template #hint>
+            <HelpTooltip text="How CAT replies become channel records." />
+          </template>
           <UInput :model-value="step.catPack" class="w-full font-mono" disabled />
         </UFormField>
         <UFormField label="Channel count" :error="errorAt('catCount')">
@@ -292,12 +290,14 @@ function removeSkip(id: string): void {
     </template>
 
     <template v-if="step.kind === 'read'">
-      <UCheckbox
-        :model-value="step.includeAck"
-        label="Ack after each chunk"
-        description="A second exchange after the radio accepts a block."
-        @update:model-value="patch({ includeAck: $event === true })"
-      />
+      <div class="flex items-center gap-1">
+        <UCheckbox
+          :model-value="step.includeAck"
+          label="Ack after each chunk"
+          @update:model-value="patch({ includeAck: $event === true })"
+        />
+        <HelpTooltip text="A second exchange after the radio accepts a block." />
+      </div>
       <div v-if="step.includeAck" class="flex flex-col gap-3">
         <DriverExchangeSection title="Ack send" direction="send">
           <DriverTokenField
@@ -326,12 +326,14 @@ function removeSkip(id: string): void {
           />
         </UFormField>
       </div>
-      <UCheckbox
-        :model-value="step.includeReady"
-        label="Ready byte when the ack times out"
-        description="Prefix the next reply with this byte if the radio stays silent."
-        @update:model-value="patch({ includeReady: $event === true })"
-      />
+      <div class="flex items-center gap-1">
+        <UCheckbox
+          :model-value="step.includeReady"
+          label="Ready byte when the ack times out"
+          @update:model-value="patch({ includeReady: $event === true })"
+        />
+        <HelpTooltip text="Prefix the next reply with this byte if the radio stays silent." />
+      </div>
       <DriverTokenField
         v-if="step.includeReady"
         :tokens="[step.ready]"
@@ -342,9 +344,12 @@ function removeSkip(id: string): void {
       />
     </template>
 
-    <DriverFormSection v-if="step.kind === 'write'" title="Skip ranges">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-xs text-muted">Inclusive addresses, written as 0x0000, that must not be uploaded.</p>
+    <DriverFormSection
+      v-if="step.kind === 'write'"
+      title="Skip ranges"
+      help="Inclusive addresses, written as 0x0000, that must not be uploaded."
+    >
+      <div class="flex justify-end">
         <UButton label="Add range" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addSkip" />
       </div>
       <div v-for="range in step.skip" :key="range.id" class="flex flex-wrap items-end gap-2">

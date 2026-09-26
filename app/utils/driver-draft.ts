@@ -116,7 +116,31 @@ export interface DriverDraft {
   writeSteps: DriverStepDraft[];
 }
 
-export const DRIVER_EDITOR_SECTIONS = ['identity', 'serial', 'memory', 'read', 'write'] as const;
+export const DRIVER_EDITOR_SECTIONS = ['setup', 'read', 'write'] as const;
+
+/** Speeds offered for the programming port. A radio may accept more than one. */
+export const DRIVER_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] as const;
+
+/** Parse the comma-separated baud list stored on a draft. */
+export function parseDriverBaudRates(raw: string): number[] {
+  const rates = raw.split(',').flatMap((part) => {
+    const text = part.trim();
+
+    if (!/^\d+$/.test(text)) {
+      return [];
+    }
+
+    const value = Number.parseInt(text, 10);
+    return Number.isSafeInteger(value) && value > 0 ? [value] : [];
+  });
+
+  return [...new Set(rates)].sort((left, right) => left - right);
+}
+
+/** Store selected baud rates as a comma-separated list. */
+export function formatDriverBaudRates(rates: readonly number[]): string {
+  return [...new Set(rates)].sort((left, right) => left - right).join(', ');
+}
 
 export type DriverEditorSection = (typeof DRIVER_EDITOR_SECTIONS)[number];
 
@@ -177,7 +201,7 @@ export function formatDriverAddress(value: number): string {
   return `0x${value.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
-/** Store a skip address as 0x0000. Incomplete text is left as typed. */
+/** Store an address as 0x0000. Incomplete text is left as typed. */
 export function canonicalizeSkipAddress(raw: string): string {
   const text = raw.trim();
 
@@ -187,6 +211,19 @@ export function canonicalizeSkipAddress(raw: string): string {
 
   const value = parseDriverAddress(text);
   return value === undefined ? text : formatDriverAddress(value);
+}
+
+/**
+ * Format an address once it looks finished, so a single typed digit does not snap to 0x0000.
+ * A 0x prefix, three or more hex digits, or four or more decimal digits counts as finished.
+ */
+export function formatFinishedDriverAddress(raw: string): string {
+  const text = raw.trim();
+  const digits = text.replace(/^0x/i, '');
+  const finished =
+    /^0x[0-9a-fA-F]+$/i.test(text) || (/[a-fA-F]/.test(digits) && digits.length >= 3) || /^\d{4,}$/.test(text);
+
+  return finished ? canonicalizeSkipAddress(text) : raw;
 }
 
 export function createDriverToken(kind: DriverTokenKind, value = ''): DriverToken {
@@ -311,11 +348,12 @@ export function exampleDriverDraft(): DriverDraft {
   draft.name = 'Example Radio';
   draft.version = '0.1.0';
   draft.description = 'Sample clone driver. Replace the handshake bytes with the radio you are bringing up.';
+  draft.baudRates = '9600';
   draft.channelProgramming = true;
   draft.settingsProgramming = true;
   draft.segments = [
-    createDriverSegment('channels', '0', '1023'),
-    createDriverSegment('settings', '1024', '1279'),
+    createDriverSegment('channels', '0x0000', '0x03FF'),
+    createDriverSegment('settings', '0x0400', '0x04FF'),
   ];
 
   const magic = createDriverStep('exchange');

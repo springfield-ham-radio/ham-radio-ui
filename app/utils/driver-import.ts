@@ -279,7 +279,7 @@ export function importDriverModule(value: unknown): DriverImportResult {
           return [];
         }
 
-        return [createDriverSegment(name, numberText(segment.startAddress), numberText(segment.endAddress))];
+        return [createDriverSegment(name, addressText(segment.startAddress), addressText(segment.endAddress))];
       });
     }
   }

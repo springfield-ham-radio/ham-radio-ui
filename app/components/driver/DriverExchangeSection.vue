@@ -18,9 +18,9 @@ defineProps<{
       >
         <UIcon :name="direction === 'send' ? 'i-lucide-arrow-right' : 'i-lucide-arrow-left'" class="size-3.5" />
       </span>
-      <div class="min-w-0">
+      <div class="flex min-w-0 items-center gap-1">
         <h3 class="text-sm font-medium text-highlighted">{{ title }}</h3>
-        <p v-if="description" class="text-xs text-muted">{{ description }}</p>
+        <HelpTooltip v-if="description" :text="description" />
       </div>
     </div>
     <slot />

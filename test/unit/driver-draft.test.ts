@@ -5,6 +5,8 @@ import { importDriverModule } from '../../app/utils/driver-import.ts';
 import {
   canonicalizeSkipAddress,
   coerceDriverDraft,
+  formatDriverBaudRates,
+  parseDriverBaudRates,
   createDriverDraft,
   createDriverStep,
   createDriverToken,
@@ -32,6 +34,15 @@ describe('driver draft', () => {
       expect: '0x06',
     });
     expect(compiled.json).not.toContain('undefined');
+    expect(compiled.document.serialConfig.baudRates).toEqual([9600]);
+  });
+
+  it('requires at least one supported baud rate', () => {
+    const draft = exampleDriverDraft();
+    draft.baudRates = '';
+    const compiled = compileDriverDraft(draft);
+
+    expect(compiled.issues.some((issue) => issue.path === 'serial.baudRates')).toBe(true);
   });
 
   it('round-trips the example protocol through JSON', () => {
@@ -46,6 +57,10 @@ describe('driver draft', () => {
     expect(again.document.id).toEqual(compiled.document.id);
     expect(again.document.serialConfig).toEqual(compiled.document.serialConfig);
     expect(again.document.memoryConfig).toEqual(compiled.document.memoryConfig);
+    expect(imported.draft?.segments.map((segment) => [segment.startAddress, segment.endAddress])).toEqual([
+      ['0x0000', '0x03FF'],
+      ['0x0400', '0x04FF'],
+    ]);
     expect(again.document.readMemory).toEqual(compiled.document.readMemory);
     expect(again.document.writeMemory).toEqual(compiled.document.writeMemory);
     expect(again.errorCount).toBe(0);
@@ -148,5 +163,11 @@ describe('driver draft', () => {
     expect(stored.readSteps).toHaveLength(1);
     expect(coerceDriverDraft(null).model).toBe('');
     expect(coerceDriverDraft('{').model).toBe('');
+  });
+
+  it('keeps extra baud rates as a sorted set', () => {
+    expect(parseDriverBaudRates('57600, 9600, 9600')).toEqual([9600, 57600]);
+    expect(parseDriverBaudRates('9600, fast')).toEqual([9600]);
+    expect(formatDriverBaudRates([57600, 9600, 9600])).toBe('9600, 57600');
   });
 });

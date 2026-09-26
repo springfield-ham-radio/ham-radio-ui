@@ -225,7 +225,7 @@ function exchangeNotes(exchange: RadioExchange): string[] {
 }
 
 function formatAddress(address: number): string {
-  return String(address);
+  return `0x${address.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
 function formatSegmentList(segmentNames: string[], memoryConfig?: RadioMemoryConfig): string {

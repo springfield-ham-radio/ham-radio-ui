@@ -12,7 +12,15 @@ import {
  */
 export function useDriverDraft() {
   const draft = useState<DriverDraft>('driver-editor-draft', () => readStoredDriverDraft());
-  const section = useState<DriverEditorSection>('driver-editor-section', () => 'identity');
+  const sectionState = useState<string>('driver-editor-section', () => 'setup');
+  const section = computed<DriverEditorSection>({
+    get() {
+      return sectionState.value === 'read' || sectionState.value === 'write' ? sectionState.value : 'setup';
+    },
+    set(value) {
+      sectionState.value = value;
+    },
+  });
   const readStepId = useState<string | undefined>('driver-editor-read-step', () => undefined);
   const writeStepId = useState<string | undefined>('driver-editor-write-step', () => undefined);
   const compiled = computed(() => compileDriverDraft(draft.value));

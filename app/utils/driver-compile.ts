@@ -279,7 +279,7 @@ function compileSegments(step: DriverStepDraft, path: string, known: Set<string>
     issues.push({
       level: 'error',
       path: `${path}.segments`,
-      message: `Unknown segment ${missing.join(', ')}. Add it on the Memory tab.`,
+      message: `Unknown segment ${missing.join(', ')}. Add it on the Setup tab.`,
     });
   }
 
@@ -476,7 +476,7 @@ function compileStep(
     issues.push({
       level: 'error',
       path: `${path}.chunkSize`,
-      message: 'Set a chunk size here or on the Memory tab.',
+      message: 'Set a chunk size here or on the Setup tab.',
     });
   }
 
@@ -572,6 +572,10 @@ function compileSerial(draft: DriverDraft, issues: DriverIssue[]): { config: Rad
     .filter((part) => part.length > 0);
   const baudRates: number[] = [];
 
+  if (extra.length === 0) {
+    issues.push({ level: 'error', path: 'serial.baudRates', message: 'Select at least one supported baud rate.' });
+  }
+
   for (const part of extra) {
     const value = parseDriverInteger(part);
 
@@ -644,8 +648,8 @@ function compileMemory(draft: DriverDraft, issues: DriverIssue[]): RadioMemoryCo
       names.add(name);
     }
 
-    const start = parseDriverInteger(segment.startAddress);
-    const end = parseDriverInteger(segment.endAddress);
+    const start = parseDriverAddress(segment.startAddress);
+    const end = parseDriverAddress(segment.endAddress);
 
     if (start === undefined) {
       issues.push({ level: 'error', path: `${path}.startAddress`, message: 'Enter a start address.' });

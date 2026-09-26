@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { driverFieldError } from '~/utils/driver-compile';
-import type { DriverDraft, DriverLineLevel } from '~/utils/driver-draft';
+import {
+  DRIVER_BAUD_RATES,
+  formatDriverBaudRates,
+  parseDriverBaudRates,
+  type DriverDraft,
+  type DriverLineLevel,
+} from '~/utils/driver-draft';
 
 const { draft, compiled, patch } = useDriverDraft();
 
@@ -29,14 +35,45 @@ const lineItems = [
   { label: 'Cleared', value: 'off' },
 ];
 
-const baudRate = computed({
-  get: () => draft.value.baudRate,
-  set: (value: string) => patch({ baudRate: value }),
+const selectedBaudRates = computed(() => new Set(parseDriverBaudRates(draft.value.baudRates)));
+const baudChoices = computed(() => {
+  const extra = parseDriverBaudRates(draft.value.baudRates).filter(
+    (rate) => !(DRIVER_BAUD_RATES as readonly number[]).includes(rate),
+  );
+
+  return [...DRIVER_BAUD_RATES, ...extra];
 });
-const baudRates = computed({
-  get: () => draft.value.baudRates,
-  set: (value: string) => patch({ baudRates: value }),
+
+const supportedBaudRates = computed(() => parseDriverBaudRates(draft.value.baudRates));
+const defaultBaudItems = computed(() => {
+  return supportedBaudRates.value.map((rate) => ({ label: String(rate), value: String(rate) }));
 });
+const defaultBaudValue = computed(() => {
+  const value = draft.value.baudRate;
+  return defaultBaudItems.value.some((item) => item.value === value) ? value : undefined;
+});
+
+watch(supportedBaudRates, (rates) => {
+  if (rates.length === 1 && draft.value.baudRate !== String(rates[0])) {
+    patch({ baudRate: String(rates[0]) });
+  }
+});
+
+function setBaudRate(rate: number, value: boolean | 'indeterminate'): void {
+  if (value === 'indeterminate') {
+    return;
+  }
+
+  const selected = parseDriverBaudRates(draft.value.baudRates);
+  const next = value ? [...selected, rate] : selected.filter((item) => item !== rate);
+  patch({ baudRates: formatDriverBaudRates(next) });
+}
+
+function onDefaultBaud(value: unknown): void {
+  if (typeof value === 'string' || typeof value === 'number') {
+    patch({ baudRate: String(value) });
+  }
+}
 
 function errorAt(path: string): string | undefined {
   return driverFieldError(compiled.value.issues, path);
@@ -74,19 +111,35 @@ function setRtscts(value: boolean | 'indeterminate'): void {
 </script>
 
 <template>
-  <div class="flex max-w-3xl flex-col gap-4">
+  <div class="flex w-full flex-col gap-4">
+    <UFormField label="Supported baud rates" required :error="errorAt('serial.baudRates')">
+      <template #hint>
+        <HelpTooltip text="Every speed the programming port accepts." />
+      </template>
+      <div class="flex flex-wrap gap-x-4 gap-y-2" role="group" aria-label="Supported baud rates">
+        <UCheckbox
+          v-for="rate in baudChoices"
+          :key="rate"
+          :model-value="selectedBaudRates.has(rate)"
+          :label="String(rate)"
+          @update:model-value="setBaudRate(rate, $event)"
+        />
+      </div>
+    </UFormField>
+    <UFormField label="Default baud rate" required :error="errorAt('serial.baudRate')">
+      <template #hint>
+        <HelpTooltip text="Speed used to open the programming port. Choose one of the supported speeds. Filled in when only one is selected." />
+      </template>
+      <USelect
+        :model-value="defaultBaudValue"
+        :items="defaultBaudItems"
+        value-key="value"
+        placeholder="Select a speed"
+        class="w-full font-mono sm:max-w-xs"
+        @update:model-value="onDefaultBaud"
+      />
+    </UFormField>
     <div class="grid gap-3 sm:grid-cols-2">
-      <UFormField label="Baud rate" required :error="errorAt('serial.baudRate')" description="Speed used to open the programming port.">
-        <UInput v-model="baudRate" class="w-full font-mono" inputmode="numeric" placeholder="9600" />
-      </UFormField>
-      <UFormField
-        label="Other baud rates"
-        hint="Optional"
-        :error="errorAt('serial.baudRates')"
-        description="Comma-separated. Include the default when the radio accepts more than one speed."
-      >
-        <UInput v-model="baudRates" class="w-full font-mono" placeholder="9600, 57600" />
-      </UFormField>
       <UFormField label="Data bits">
         <USelect :model-value="draft.dataBits" :items="dataBitItems" value-key="value" class="w-full" @update:model-value="onDataBits" />
       </UFormField>
@@ -97,17 +150,21 @@ function setRtscts(value: boolean | 'indeterminate'): void {
         <USelect :model-value="draft.parity" :items="parityItems" value-key="value" class="w-full" @update:model-value="onParity" />
       </UFormField>
     </div>
-    <UCheckbox
-      :model-value="draft.rtscts"
-      label="Hardware RTS/CTS"
-      description="Some Kenwood clone modes need this on macOS."
-      @update:model-value="setRtscts"
-    />
+    <div class="flex items-center gap-1">
+      <UCheckbox :model-value="draft.rtscts" label="Hardware RTS/CTS" @update:model-value="setRtscts" />
+      <HelpTooltip text="Some Kenwood clone modes need this on macOS." />
+    </div>
     <div class="grid gap-3 sm:grid-cols-2">
-      <UFormField label="RTS" description="Default leaves the line asserted after open.">
+      <UFormField label="RTS">
+        <template #hint>
+          <HelpTooltip text="Default leaves the line asserted after open." />
+        </template>
         <USelect :model-value="draft.rts" :items="lineItems" value-key="value" class="w-full" @update:model-value="onLine('rts', $event)" />
       </UFormField>
-      <UFormField label="DTR" description="Default leaves the line asserted after open.">
+      <UFormField label="DTR">
+        <template #hint>
+          <HelpTooltip text="Default leaves the line asserted after open." />
+        </template>
         <USelect :model-value="draft.dtr" :items="lineItems" value-key="value" class="w-full" @update:model-value="onLine('dtr', $event)" />
       </UFormField>
     </div>

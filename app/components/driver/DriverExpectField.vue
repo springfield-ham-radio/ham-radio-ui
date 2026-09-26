@@ -48,9 +48,11 @@ function onUntil(tokens: DriverToken[]): void {
   <div class="flex flex-col gap-3">
     <UFormField
       :label="label"
-      :description="hideLabel ? undefined : description"
       :ui="hideLabel ? { label: 'sr-only' } : undefined"
     >
+      <template v-if="description && !hideLabel" #hint>
+        <HelpTooltip :text="description" />
+      </template>
       <USelect
         :model-value="expect.mode"
         :items="modeItems"

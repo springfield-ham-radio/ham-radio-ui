@@ -9,9 +9,7 @@ const { configurations } = useRadio();
 const toast = useToast();
 
 const sectionItems: TabsItem[] = [
-  { label: 'Identity', value: 'identity', icon: 'i-lucide-tag' },
-  { label: 'Serial', value: 'serial', icon: 'i-lucide-cable' },
-  { label: 'Memory', value: 'memory', icon: 'i-lucide-database' },
+  { label: 'Setup', value: 'setup', icon: 'i-lucide-settings' },
   { label: 'Read', value: 'read', icon: 'i-lucide-download' },
   { label: 'Write', value: 'write', icon: 'i-lucide-upload' },
 ];
@@ -19,7 +17,7 @@ const sectionItems: TabsItem[] = [
 const activeSection = computed({
   get: () => section.value,
   set: (value: string | number) => {
-    if (value === 'identity' || value === 'serial' || value === 'memory' || value === 'read' || value === 'write') {
+    if (value === 'setup' || value === 'read' || value === 'write') {
       section.value = value satisfies DriverEditorSection;
     }
   },
@@ -216,10 +214,8 @@ async function exportFile(): Promise<void> {
       :ui="{ handle: 'w-3' }"
     >
       <template #form>
-        <div class="h-full min-h-0 min-w-0 overflow-auto">
-          <DriverIdentityForm v-if="section === 'identity'" />
-          <DriverSerialForm v-else-if="section === 'serial'" />
-          <DriverMemoryForm v-else />
+        <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
+          <DriverSetupForm />
         </div>
       </template>
       <template #guide>

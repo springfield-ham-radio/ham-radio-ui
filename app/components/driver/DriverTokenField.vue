@@ -135,10 +135,12 @@ useSortable(tokenList, sortableTokens, {
 <template>
   <UFormField
     :label="label"
-    :description="hideLabel ? undefined : description"
     :error="error"
     :ui="hideLabel ? { label: 'sr-only' } : undefined"
   >
+    <template v-if="description && !hideLabel" #hint>
+      <HelpTooltip :text="description" />
+    </template>
     <div class="flex w-full flex-col gap-2">
       <div v-if="tokens.length === 0" class="text-xs text-muted">No bytes yet.</div>
       <div v-else ref="tokenList" class="flex w-full flex-col gap-2">

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { driverFieldError } from '~/utils/driver-compile';
-import { createDriverSegment, type DriverSegmentDraft } from '~/utils/driver-draft';
+import {
+  canonicalizeSkipAddress,
+  createDriverSegment,
+  formatFinishedDriverAddress,
+  type DriverSegmentDraft,
+} from '~/utils/driver-draft';
 
 const { draft, compiled, patch } = useDriverDraft();
 
@@ -34,6 +39,50 @@ function updateSegment(id: string, partial: Partial<DriverSegmentDraft>): void {
   });
 }
 
+function displayAddress(raw: string, force: boolean): string {
+  if (!raw.trim()) {
+    return raw;
+  }
+
+  return force ? canonicalizeSkipAddress(raw) : formatFinishedDriverAddress(raw);
+}
+
+const addressesOpened = shallowRef(false);
+
+watch(
+  () => draft.value.segments.map((segment) => `${segment.id}:${segment.startAddress}:${segment.endAddress}`).join('|'),
+  () => {
+    const force = !addressesOpened.value;
+    addressesOpened.value = true;
+    let changed = false;
+    const segments = draft.value.segments.map((segment) => {
+      const startAddress = displayAddress(segment.startAddress, force);
+      const endAddress = displayAddress(segment.endAddress, force);
+
+      if (startAddress !== segment.startAddress || endAddress !== segment.endAddress) {
+        changed = true;
+      }
+
+      return { ...segment, startAddress, endAddress };
+    });
+
+    if (changed) {
+      patch({ segments });
+    }
+  },
+  { immediate: true },
+);
+
+function commitAddress(id: string, field: 'startAddress' | 'endAddress', event: FocusEvent): void {
+  const target = event.target;
+  const value = canonicalizeSkipAddress(target instanceof HTMLInputElement ? target.value : '');
+  const current = draft.value.segments.find((segment) => segment.id === id);
+
+  if (current && current[field] !== value) {
+    updateSegment(id, { [field]: value });
+  }
+}
+
 function addSegment(): void {
   patch({ segments: [...draft.value.segments, createDriverSegment()] });
 }
@@ -44,12 +93,18 @@ function removeSegment(id: string): void {
 </script>
 
 <template>
-  <div class="flex max-w-3xl flex-col gap-4">
+  <div class="flex w-full flex-col gap-4">
     <div class="grid gap-3 sm:grid-cols-3">
-      <UFormField label="Chunk size" required :error="errorAt('memory.chunkSize')" description="Default bytes per block.">
+      <UFormField label="Chunk size" required :error="errorAt('memory.chunkSize')">
+        <template #hint>
+          <HelpTooltip text="Default bytes per block." />
+        </template>
         <UInput v-model="chunkSize" class="w-full font-mono" inputmode="numeric" />
       </UFormField>
-      <UFormField label="Address size" required :error="errorAt('memory.addressSize')" description="Bytes used for $address.">
+      <UFormField label="Address size" required :error="errorAt('memory.addressSize')">
+        <template #hint>
+          <HelpTooltip text="Bytes used for $address." />
+        </template>
         <UInput v-model="addressSize" class="w-full font-mono" inputmode="numeric" />
       </UFormField>
       <UFormField label="Address endianness">
@@ -63,9 +118,9 @@ function removeSegment(id: string): void {
       </UFormField>
     </div>
     <div class="flex items-center justify-between gap-2">
-      <div>
+      <div class="flex items-center gap-1">
         <p class="text-sm font-medium text-highlighted">Segments</p>
-        <p class="text-xs text-muted">End address is inclusive. 0–1023 is 1024 bytes.</p>
+        <HelpTooltip text="End address is inclusive. 0x0000–0x03FF is 1024 bytes." />
       </div>
       <UButton label="Add segment" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addSegment" />
     </div>
@@ -83,16 +138,22 @@ function removeSegment(id: string): void {
         <UInput
           :model-value="segment.startAddress"
           class="w-full font-mono"
-          inputmode="numeric"
+          placeholder="0x0000"
+          spellcheck="false"
+          autocapitalize="characters"
           @update:model-value="updateSegment(segment.id, { startAddress: String($event ?? '') })"
+          @blur="commitAddress(segment.id, 'startAddress', $event)"
         />
       </UFormField>
       <UFormField label="End" :error="errorAt(`memory.segments.${segment.id}.endAddress`)">
         <UInput
           :model-value="segment.endAddress"
           class="w-full font-mono"
-          inputmode="numeric"
+          placeholder="0x0000"
+          spellcheck="false"
+          autocapitalize="characters"
           @update:model-value="updateSegment(segment.id, { endAddress: String($event ?? '') })"
+          @blur="commitAddress(segment.id, 'endAddress', $event)"
         />
       </UFormField>
       <UButton
