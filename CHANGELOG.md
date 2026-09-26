@@ -1,3 +1,9 @@
+## [0.42.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.4...v0.42.5) (2026-09-26)
+
+### Bug Fixes
+
+* **deps:** align tauri-plugin-updater with the npm package ([2b4135f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2b4135f50e2ffaaf7566d7153f56ae3299d0cb6c))
+
 ## [0.42.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.3...v0.42.4) (2026-09-26)
 
 ### Bug Fixes
