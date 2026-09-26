@@ -34,6 +34,11 @@ const installedItems = computed(() => {
 
 const copying = shallowRef(false);
 const installedModel = shallowRef<string | undefined>();
+const cautionDismissed = useState('driver-caution-dismissed', () => false);
+
+function dismissCaution(): void {
+  cautionDismissed.value = true;
+}
 
 function confirmReplace(): boolean {
   const dirty =
@@ -181,6 +186,17 @@ async function copyJson(): Promise<void> {
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-3 p-3">
+    <UAlert
+      v-if="!cautionDismissed"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-triangle-alert"
+      title="This is an advanced tool"
+      description="You are editing the protocol a radio uses to read and write memory. A wrong step can produce a module that will not program the radio. Proceed with caution."
+      close
+      :ui="{ root: 'items-center', icon: 'size-12' }"
+      @update:open="dismissCaution"
+    />
     <div class="flex flex-wrap items-center gap-2">
       <UTabs
         v-model="activeSection"
