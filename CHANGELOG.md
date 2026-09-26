@@ -1,3 +1,9 @@
+## [0.42.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.1...v0.42.0) (2026-09-26)
+
+### Features
+
+* **view:** add zoom in, out, and 100% ([7fc33cb](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7fc33cb815fb3ed651a831286a83ef1e5bb58e86))
+
 ## [0.41.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.0...v0.41.1) (2026-09-26)
 
 ### Bug Fixes
