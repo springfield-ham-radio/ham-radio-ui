@@ -3,9 +3,50 @@ mod sniffer_ssh;
 
 #[cfg(target_os = "macos")]
 use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
 use tauri_plugin_sql::{Migration, MigrationKind};
+
+fn find_check_in_items<R: tauri::Runtime>(
+    items: &[MenuItemKind<R>],
+    id: &str,
+) -> Option<CheckMenuItem<R>> {
+    for item in items {
+        match item {
+            MenuItemKind::Check(check) if check.id().as_ref() == id => {
+                return Some(check.clone());
+            }
+            MenuItemKind::Submenu(submenu) => {
+                if let Ok(children) = submenu.items() {
+                    if let Some(found) = find_check_in_items(&children, id) {
+                        return Some(found);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn find_check_item<R: tauri::Runtime>(menu: &Menu<R>, id: &str) -> Option<CheckMenuItem<R>> {
+    let items = menu.items().ok()?;
+    find_check_in_items(&items, id)
+}
+
+fn emit_developer_mode(app: &tauri::AppHandle) {
+    let checked = app
+        .menu()
+        .as_ref()
+        .and_then(|menu| find_check_item(menu, "developer-mode"))
+        .and_then(|item| item.is_checked().ok())
+        .unwrap_or(false);
+
+    if let Err(error) = app.emit("developer-mode-changed", checked) {
+        log::error!("Failed to emit developer-mode-changed: {error}");
+    }
+}
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
@@ -30,6 +71,16 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
+
+    let developer_mode = CheckMenuItem::with_id(
+        app,
+        "developer-mode",
+        "Developer Mode",
+        true,
+        false,
+        None::<&str>,
+    )?;
+    let view_menu = Submenu::with_items(app, "View", true, &[&developer_mode])?;
 
     #[cfg(target_os = "macos")]
     {
@@ -87,7 +138,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &window_menu])
+        Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -111,7 +162,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        Menu::with_items(app, &[&file_menu, &edit_menu])
+        Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu])
     }
 }
 
@@ -119,6 +170,16 @@ fn emit_menu_event(app: &tauri::AppHandle, event_name: &str) {
     if let Err(error) = app.emit(event_name, ()) {
         log::error!("Failed to emit {event_name}: {error}");
     }
+}
+
+#[tauri::command]
+fn set_developer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let menu = app
+        .menu()
+        .ok_or_else(|| "Application menu is not available".to_string())?;
+    let item = find_check_item(&menu, "developer-mode")
+        .ok_or_else(|| "Developer Mode menu item is missing".to_string())?;
+    item.set_checked(enabled).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -327,6 +388,7 @@ ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            set_developer_mode,
             save_text_file,
             load_text_file,
             fetch_repeaterbook_search,
@@ -350,6 +412,7 @@ ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
                 "save-memory-as" => emit_menu_event(app, "save-memory-as"),
                 "import-from-radio" => emit_menu_event(app, "import-from-radio"),
                 "write-to-radio" => emit_menu_event(app, "write-to-radio"),
+                "developer-mode" => emit_developer_mode(app),
                 _ => {}
             }
         })

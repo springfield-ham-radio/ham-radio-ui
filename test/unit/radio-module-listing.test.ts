@@ -13,6 +13,7 @@ import {
   installedDriverVersionLabel,
   normalizeCatalogModuleId,
   radioDisplayName,
+  radioMenuLabel,
   radiosOnCatalogEntry,
 } from '../../app/utils/radio-module-listing.ts';
 
@@ -101,6 +102,12 @@ describe('radio module listing', () => {
   it('should strip a leading manufacturer from radio names', () => {
     expect(radioDisplayName('Baofeng', 'Baofeng UV-5R')).toBe('UV-5R');
     expect(radioDisplayName('Kenwood', 'TH-D74')).toBe('TH-D74');
+  });
+
+  it('should name a radio once in a menu', () => {
+    expect(radioMenuLabel('Baofeng', 'Baofeng UV-5R')).toBe('Baofeng UV-5R');
+    expect(radioMenuLabel('Kenwood', 'Kenwood TM-D710A')).toBe('Kenwood TM-D710A');
+    expect(radioMenuLabel('Kenwood', 'TH-D74')).toBe('Kenwood TH-D74');
   });
 
   it('should format catalog radio ids into display names', () => {
