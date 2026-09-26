@@ -196,7 +196,10 @@ async function closeRadio(id: string): Promise<void> {
       </div>
     </div>
 
-    <div v-if="radios.length === 0" class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4">
+    <div
+      v-if="openRadios.length === 0 && radios.length === 0"
+      class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4"
+    >
       <p class="max-w-md text-center text-sm text-muted">
         Import from a connected radio, or add the radios you use under Preferences. Each saved radio keeps a name, model, baud rate, and default serial port.
       </p>
