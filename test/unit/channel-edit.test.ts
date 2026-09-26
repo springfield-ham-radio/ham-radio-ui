@@ -22,8 +22,10 @@ import {
   channelCapacity,
   channelFieldEditor,
   channelNameMaxLength,
+  channelPatchFromLibrary,
   createProgrammedChannel,
   assignLibraryChannelsToSlots,
+  describeLibrarySlotAssignment,
   formatFrequencyMHz,
   keyToTone,
   nextAvailableChannelNumber,
@@ -343,6 +345,57 @@ describe('createProgrammedChannel', () => {
   });
 });
 
+describe('channelPatchFromLibrary', () => {
+  it('copies name, frequencies, and tones', () => {
+    expect(
+      channelPatchFromLibrary({
+        name: 'Local',
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_940_000),
+        receiveTone: { tone: DCS.D023, type: RadioToneType.DCS },
+        transmitTone: { tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS },
+      }),
+    ).toEqual({
+      name: 'Local',
+      receiveFrequencyHz: 146_520_000,
+      transmitFrequencyHz: 146_940_000,
+      receiveTone: { tone: DCS.D023, type: RadioToneType.DCS },
+      transmitTone: { tone: CTCSS.TONE_88_5, type: RadioToneType.CTCSS },
+    });
+  });
+
+  it('uses an empty name when the library channel has none', () => {
+    expect(channelPatchFromLibrary({}).name).toBe('');
+  });
+
+  it('keeps the memory slot and radio settings when applied', () => {
+    const next = applyChannelPatch(
+      programmedChannel(),
+      channelPatchFromLibrary({
+        name: 'Library',
+        receiveFrequency: Frequency(446_000_000),
+        transmitFrequency: Frequency(441_000_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      }),
+    );
+
+    expect(next.channelNumber).toBe(3);
+    expect(next.settings?.lowpower).toBe(0);
+    expect(next.settings?.wide).toBe(true);
+    expect(next.settings?.scan).toBe(true);
+    expect(next.settings?.isuhf).toBe(true);
+
+    if (typeof next.radioChannel === 'string') {
+      return;
+    }
+
+    expect(next.radioChannel.name).toBe('Library');
+    expect(next.radioChannel.receiveFrequency).toBe(446_000_000);
+    expect(next.radioChannel.transmitFrequency).toBe(441_000_000);
+  });
+});
+
 describe('assignLibraryChannelsToSlots', () => {
   it('fills unused slots in order and skips extras when the radio is full', () => {
     const tightMap: RadioMemoryMap = {
@@ -366,6 +419,52 @@ describe('assignLibraryChannelsToSlots', () => {
     if (typeof assigned.programmed[0]?.radioChannel === 'object') {
       expect(assigned.programmed[0].radioChannel.name).toBe('A');
     }
+  });
+});
+
+describe('describeLibrarySlotAssignment', () => {
+  it('names the saved radio and the slots that will be filled', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 1,
+        slotNumbers: [4, 5],
+      }),
+    ).toBe(
+      'Add this channel to Mobile in unused memory slot 4? Write to the radio to apply the change on the device.',
+    );
+  });
+
+  it('limits the copy when the radio cannot hold every channel', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Base',
+        sourceCount: 3,
+        slotNumbers: [1, 2],
+      }),
+    ).toBe(
+      'Only 2 unused slots remain on Base. Add the first 2 selected channels to memory slots 1 to 2? Write to the radio to apply the change on the device.',
+    );
+  });
+
+  it('explains an empty selection when slots remain', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 0,
+        slotNumbers: [0, 1],
+      }),
+    ).toBe('Mobile has 2 unused memory slots. Select channels to fill them.');
+  });
+
+  it('reports a radio with no unused slots', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 2,
+        slotNumbers: [],
+      }),
+    ).toBe('There are no unused memory slots on Mobile.');
   });
 });
 

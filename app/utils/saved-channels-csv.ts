@@ -10,17 +10,22 @@ import {
   importedRepeaterNotes,
   importedRepeaterToRadioChannel,
   parseRepeaterImportCsv,
+  repeaterOnAirFromStatus,
+  repeaterUseFromLabel,
 } from '~/utils/repeater-import';
-import type { SavedChannel, SavedChannelKind } from '~/utils/saved-channels-db';
+import type { RepeaterUse, SavedChannel, SavedChannelKind } from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign';
 
 export interface ParsedSavedChannelsCsv {
   source: 'library' | 'repeaterbook' | 'chirp';
   channels: RadioChannel[];
   notes: Array<string | undefined>;
   kinds: SavedChannelKind[];
+  uses: Array<RepeaterUse | undefined>;
+  onAir: Array<boolean | undefined>;
+  callsigns: Array<string | undefined>;
 }
 
 function escapeCsvField(value: string): string {
@@ -51,6 +56,18 @@ function formatToneValue(tone: RadioTone | undefined): string {
   return (tone.tone / 10).toFixed(1);
 }
 
+function formatOnAir(value: boolean | undefined): string {
+  if (value === true) {
+    return 'yes';
+  }
+
+  if (value === false) {
+    return 'no';
+  }
+
+  return '';
+}
+
 /**
  * Serialize library channels to a portable CSV document.
  */
@@ -69,6 +86,9 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         formatToneValue(channel.receiveTone),
         escapeCsvField(channel.notes ?? ''),
         channel.kind === 'repeater' ? 'repeater' : 'channel',
+        channel.kind === 'repeater' ? (channel.use ?? '') : '',
+        channel.kind === 'repeater' ? formatOnAir(channel.onAir) : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.callsign ?? '') : '',
       ].join(','),
     );
   }
@@ -202,6 +222,11 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       channels: parsed.repeaters.map((repeater) => importedRepeaterToRadioChannel(repeater)),
       notes: parsed.repeaters.map((repeater) => importedRepeaterNotes(repeater)),
       kinds: parsed.repeaters.map(() => 'repeater'),
+      uses: parsed.repeaters.map((repeater) => repeater.use),
+      onAir: parsed.repeaters.map((repeater) => repeater.onAir),
+      callsigns: parsed.repeaters.map((repeater) =>
+        repeater.sourceFormat === 'repeaterbook' ? repeater.callsign || undefined : undefined,
+      ),
     };
   }
 
@@ -217,6 +242,9 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const channels: RadioChannel[] = [];
   const notes: Array<string | undefined> = [];
   const kinds: SavedChannelKind[] = [];
+  const uses: Array<RepeaterUse | undefined> = [];
+  const onAir: Array<boolean | undefined> = [];
+  const callsigns: Array<string | undefined> = [];
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -239,11 +267,19 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       transmitTone: parseTone(cell('tx_tone_type'), cell('tx_tone')),
       receiveTone: parseTone(cell('rx_tone_type'), cell('rx_tone')),
     });
+    const kind = indexOf('kind') === -1 ? 'channel' : parseSavedChannelKind(cell('kind'));
+    const use = kind === 'repeater' && indexOf('use') !== -1 ? repeaterUseFromLabel(cell('use')) : undefined;
+    const air = kind === 'repeater' && indexOf('on_air') !== -1 ? repeaterOnAirFromStatus(cell('on_air')) : undefined;
+    const callsign = kind === 'repeater' && indexOf('callsign') !== -1 ? cell('callsign') || undefined : undefined;
+
     notes.push(note || undefined);
-    kinds.push(indexOf('kind') === -1 ? 'channel' : parseSavedChannelKind(cell('kind')));
+    kinds.push(kind);
+    uses.push(use);
+    onAir.push(air);
+    callsigns.push(callsign);
   }
 
-  return { source: 'library', channels, notes, kinds };
+  return { source: 'library', channels, notes, kinds, uses, onAir, callsigns };
 }
 
 function parseSavedChannelKind(value: string): SavedChannelKind {

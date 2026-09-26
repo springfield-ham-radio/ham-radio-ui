@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tauri::{AppHandle, Manager};
 
-const MINIMUM_NODE_MAJOR: u32 = 24;
+const MINIMUM_NODE_MAJOR: u32 = 26;
 const SNIFFER_RESOURCE_RELATIVE: &str = "resources/ham-radio-sniffer";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1055,6 +1055,7 @@ mod tests {
 
     #[test]
     fn parses_node_major_versions() {
+        assert_eq!(parse_node_major("v26.10.0"), Some(26));
         assert_eq!(parse_node_major("v24.12.0"), Some(24));
         assert_eq!(parse_node_major("20.11.1"), Some(20));
         assert_eq!(parse_node_major("missing"), None);

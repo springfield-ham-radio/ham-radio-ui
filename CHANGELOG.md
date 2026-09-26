@@ -1,3 +1,124 @@
+## [0.42.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.0...v0.42.1) (2026-09-26)
+
+### Bug Fixes
+
+* **driver:** accept channel as a per-channel group ([afbb937](https://github.com/springfield-ham-radio/ham-radio-ui/commit/afbb9379e712da560346b12124c3b36f066740c4))
+
+## [0.42.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.1...v0.42.0) (2026-09-26)
+
+### Features
+
+* **view:** add zoom in, out, and 100% ([7fc33cb](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7fc33cb815fb3ed651a831286a83ef1e5bb58e86))
+
+## [0.41.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.0...v0.41.1) (2026-09-26)
+
+### Bug Fixes
+
+* **channels:** keep the selected group tab underline visible ([625d646](https://github.com/springfield-ham-radio/ham-radio-ui/commit/625d646807ceddad2df5107f3749aabf560e16a0))
+
+## [0.41.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.40.0...v0.41.0) (2026-09-26)
+
+### Features
+
+* **radio:** show open radios in tabs and clone without saving one ([b7fdc36](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b7fdc36f2582d7912c234f67c070ce252d9f67ce))
+
+## [0.40.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.1...v0.40.0) (2026-09-26)
+
+### Features
+
+* **driver:** add a channel schema tab ([4a5de3b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4a5de3be6edc7b10d4618a39b9b5167e473b9667))
+* **driver:** add a debug tab to locate a field in memory ([df4d362](https://github.com/springfield-ham-radio/ham-radio-ui/commit/df4d362b69c7efd0e3ea8fd937002d2451a25ecb))
+* **driver:** add a developer-mode protocol editor ([d5c360b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d5c360b3822e9231c03c969fd4dbf18a14776fec))
+* **driver:** add a memory map tab ([951baf5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/951baf5ce267398dc799e6c68b850e99aa695fb8))
+* **driver:** add settings groups to the memory map ([681dd86](https://github.com/springfield-ham-radio/ham-radio-ui/commit/681dd860f9d21cf343cdbc063db3274fc0ea7d81))
+* **driver:** drop the settings schema path from setup ([ec260c9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ec260c949c462a5a98ea15ef18a1d88f5e125411))
+* **driver:** edit settings by group and load installed maps ([56b71a5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/56b71a58c4f40ef7bcde01db955d7258c545d1fb))
+* **driver:** group setup fields and choose baud rates ([3453f0f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3453f0f707ebf497f8df6590f1e0ed37a8244e20))
+* **driver:** lay out the protocol editor in sections ([4ee07e6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4ee07e62c82a458c78a3c30e19014c500187dc47))
+* **driver:** warn that the protocol editor is advanced ([0902edf](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0902edfb5e066744e00299ab81f4046aae7b3856))
+
+### Bug Fixes
+
+* **driver:** show each installed radio once in the load menu ([cd271ac](https://github.com/springfield-ham-radio/ham-radio-ui/commit/cd271ac77b8e413aeaa394d755cb8ffb88e059e7))
+
+## [0.39.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.0...v0.39.1) (2026-09-25)
+
+### Bug Fixes
+
+* show each installed radio's driver version ([43b6110](https://github.com/springfield-ham-radio/ham-radio-ui/commit/43b6110dbacd7e7e9a9f87b213b29f8e404654c4))
+
+## [0.39.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.38.0...v0.39.0) (2026-09-25)
+
+### Features
+
+* highlight JSON in the driver view ([8cbc35b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8cbc35b665a902b37ed798e9f7d231eb07ec98b3))
+
+## [0.38.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.37.0...v0.38.0) (2026-09-25)
+
+### Features
+
+* name serial ports in preferences ([814d584](https://github.com/springfield-ham-radio/ham-radio-ui/commit/814d584a158ffd5ea7d32e2c5723d1b0b3106564))
+
+## [0.37.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.36.0...v0.37.0) (2026-09-25)
+
+### Features
+
+* update the app icon and macOS window details ([49f2fc4](https://github.com/springfield-ham-radio/ham-radio-ui/commit/49f2fc460b118d95bc093bd717e309b053f124b4))
+
+## [0.36.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.35.0...v0.36.0) (2026-09-25)
+
+### Features
+
+* add hideable Weather, FRS, and GMRS channel groups ([1f8a09e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1f8a09e745afd73d4a3b2baf652459d2f4072378))
+
+## [0.35.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.34.0...v0.35.0) (2026-09-25)
+
+### Features
+
+* choose a radio for library channels and check privileges per person ([cfef0a9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/cfef0a9ec2b999b690a801b93a494d15b5e58e3d))
+
+## [0.34.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.4...v0.34.0) (2026-09-25)
+
+### Features
+
+* open several radios and replace a memory from the library ([78ad32f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78ad32ff1fe9ad27cdfbc01df57ae20009dce534))
+
+## [0.33.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.3...v0.33.4) (2026-09-25)
+
+### Bug Fixes
+
+* update @springfield/ham-radio-api to 17.12.0, @springfield/ham-radio-utils to 4.15.0, and @springfield/ham-radio-driver to 3.5.0 ([94a42fa](https://github.com/springfield-ham-radio/ham-radio-ui/commit/94a42fa4ff278675b6f54d2d59243d9fc3621fff))
+
+## [0.33.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.2...v0.33.3) (2026-09-25)
+
+### Bug Fixes
+
+* **macos:** register the Window menu for half-screen tiling ([78233cf](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78233cf0f375423de55f545c42745b02b1338c8d))
+
+## [0.33.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.1...v0.33.2) (2026-09-24)
+
+### Bug Fixes
+
+* update @springfield/ham-radio-driver to 3.4.2 and @springfield/ham-radio-registry to 1.6.6 ([f21ff86](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f21ff86a3cd0127c94a87b36f522dad65e6797dd))
+
+## [0.33.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.33.0...v0.33.1) (2026-09-24)
+
+### Bug Fixes
+
+* update @springfield/ham-radio-utils to 4.14.0 ([d2c6897](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d2c6897b2e513af7baa527ab493d490880cc38ee))
+
+## [0.33.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.32.0...v0.33.0) (2026-09-24)
+
+### Features
+
+* organize the channel library into groups ([65225e8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/65225e8a410ed25d13987b5ff63f0a0e07eb4bed))
+
+## [0.32.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.9...v0.32.0) (2026-09-24)
+
+### Features
+
+* show radio menu number and range in settings tooltips ([a232270](https://github.com/springfield-ham-radio/ham-radio-ui/commit/a23227026ba05d9e9d739330f38add6b9fd3e681))
+
 ## [0.31.9](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.31.8...v0.31.9) (2026-09-15)
 
 ### Bug Fixes

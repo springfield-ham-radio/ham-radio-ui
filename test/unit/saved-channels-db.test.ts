@@ -41,6 +41,9 @@ describe('saved-channels-db', () => {
         receive_tone: 23,
         receive_tone_type: 'DCS',
         notes: 'Club repeater',
+        use_type: 'closed',
+        on_air: 0,
+        callsign: 'WJ1L',
         created_at: 1_000,
         updated_at: 2_000,
       };
@@ -55,6 +58,9 @@ describe('saved-channels-db', () => {
       expect(model.transmitTone).toEqual({ tone: 885, type: RadioToneType.CTCSS });
       expect(model.receiveTone).toEqual({ tone: 23, type: RadioToneType.DCS });
       expect(model.notes).toBe('Club repeater');
+      expect(model.callsign).toBe('WJ1L');
+      expect(model.use).toBe('closed');
+      expect(model.onAir).toBe(false);
       expect(model.createdAt).toBe(1_000);
       expect(model.updatedAt).toBe(2_000);
     });

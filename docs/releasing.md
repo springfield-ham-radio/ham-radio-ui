@@ -4,7 +4,7 @@ This app ships as native installers attached to [GitHub Releases](https://github
 
 ## Versioning
 
-`package.json` is the source of truth. [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) reads that version via `"version": "../package.json"`. On each release, semantic-release also updates `src-tauri/Cargo.toml` through [`scripts/set-cargo-version.mjs`](../scripts/set-cargo-version.mjs).
+`package.json` is the source of truth. [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) reads that version via `"version": "../package.json"`. On each release, semantic-release also updates `src-tauri/Cargo.toml` and the `ham-radio` package version in `src-tauri/Cargo.lock` through [`scripts/set-cargo-version.mjs`](../scripts/set-cargo-version.mjs). Cargo rewrites that lock entry the next time it runs, so leaving it behind shows up as a local change.
 
 | Commit on `main` | Bump |
 | --- | --- |
@@ -28,11 +28,13 @@ Baseline tag `v0.0.0` exists so the first automated release is `0.1.0` instead o
 
 ## Downloadable artifacts
 
-Unsigned builds (no Apple notarization or Windows Authenticode yet):
+Unsigned builds (no Apple notarization or Windows Authenticode yet). After the platform builds upload, a follow-up job renames the installers so the platform is in the filename:
 
-- **macOS (Apple Silicon):** `.dmg`
-- **Windows:** NSIS `.exe` and `.msi`
-- **Linux (x64):** `.deb`, `.rpm`, and `.AppImage`
+- **macOS (Apple Silicon):** `HamBench-X.Y.Z-macOS-Apple-Silicon.dmg`
+- **Windows:** `HamBench-X.Y.Z-Windows-x64.exe` and `HamBench-X.Y.Z-Windows-x64.msi`
+- **Linux (x64):** `HamBench-X.Y.Z-Linux-x64.deb`, `.rpm`, and `.AppImage`
+
+Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
 
 CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
 

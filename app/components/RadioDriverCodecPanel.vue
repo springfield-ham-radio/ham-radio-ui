@@ -29,11 +29,10 @@ const emptyMessage = computed(() => {
       :prefer-role="scope === 'channels' ? 'records' : undefined"
       :prefer-id="scope === 'settings' ? 'settings' : undefined"
     />
-    <div
+    <JsonCode
       v-else
+      :code="json"
       class="min-h-0 flex-1 overflow-auto rounded-xl bg-default shadow-sm ring-1 ring-default"
-    >
-      <pre class="px-4 py-3 font-mono text-xs leading-6 text-highlighted">{{ json }}</pre>
-    </div>
+    />
   </div>
 </template>

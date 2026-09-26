@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div
           class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
-          :class="currentSection === 'radios' || currentSection === 'stations' ? 'max-w-2xl' : 'max-w-xl'"
+          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' || currentSection === 'serial' ? 'max-w-2xl' : 'max-w-xl'"
         >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
@@ -115,196 +115,19 @@
           </div>
         </section>
 
-        <section v-else-if="currentSection === 'licenses'" class="flex flex-col gap-4">
-          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="flex flex-col gap-4 px-4 py-4">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted">Amateur</p>
-                <p class="text-xs text-muted">Look up your US amateur license to flag channels outside your privileges.</p>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-2">
-                <UInput
-                  v-model="callSignInput"
-                  placeholder="W1AW"
-                  class="min-w-40 flex-1 uppercase"
-                  :disabled="isLookingUp"
-                  @keydown.enter.prevent="onLookup"
-                />
-                <UButton
-                  label="Lookup"
-                  color="primary"
-                  :loading="isLookingUp"
-                  :disabled="isLookingUp"
-                  @click="onLookup"
-                />
-                <UButton
-                  v-if="license"
-                  label="Clear"
-                  color="neutral"
-                  variant="ghost"
-                  :disabled="isLookingUp"
-                  @click="clearLicense"
-                />
-              </div>
-
-              <p v-if="lookupError" class="text-xs text-error">{{ lookupError }}</p>
-
-              <div v-if="license" class="rounded-lg bg-muted px-3 py-3 text-sm">
-                <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-                  <dt class="text-muted">Call sign</dt>
-                  <dd class="font-medium text-highlighted">{{ license.callSign }}</dd>
-
-                  <template v-if="license.name">
-                    <dt class="text-muted">Name</dt>
-                    <dd class="font-medium text-highlighted">{{ license.name }}</dd>
-                  </template>
-
-                  <dt class="text-muted">Class</dt>
-                  <dd class="font-medium text-highlighted">{{ license.licenseClassName || license.operatorClass || 'Not available' }}</dd>
-
-                  <dt class="text-muted">Type</dt>
-                  <dd class="font-medium text-highlighted">{{ license.lookupType || 'Unknown' }}</dd>
-
-                  <dt class="text-muted">Status</dt>
-                  <dd class="font-medium text-highlighted">{{ license.status }}</dd>
-
-                  <dt class="text-muted">Granted</dt>
-                  <dd class="font-medium text-highlighted">{{ license.grantDate || 'Unknown' }}</dd>
-
-                  <dt class="text-muted">Expires</dt>
-                  <dd class="font-medium text-highlighted">{{ license.expiryDate || 'Unknown' }}</dd>
-
-                  <dt class="text-muted">Last action</dt>
-                  <dd class="font-medium text-highlighted">{{ license.lastActionDate || 'Unknown' }}</dd>
-
-                  <template v-if="previousLicenseLabel">
-                    <dt class="text-muted">Previous</dt>
-                    <dd class="font-medium text-highlighted">{{ previousLicenseLabel }}</dd>
-                  </template>
-
-                  <template v-if="trusteeLabel">
-                    <dt class="text-muted">Trustee</dt>
-                    <dd class="font-medium text-highlighted">{{ trusteeLabel }}</dd>
-                  </template>
-
-                  <template v-if="license.gridsquare">
-                    <dt class="text-muted">Grid</dt>
-                    <dd class="font-medium text-highlighted">{{ license.gridsquare }}</dd>
-                  </template>
-
-                  <template v-if="license.ulsUrl">
-                    <dt class="text-muted">FCC</dt>
-                    <dd>
-                      <a
-                        :href="license.ulsUrl"
-                        class="font-medium text-primary underline-offset-2 hover:underline"
-                        @click="onOpenUls"
-                      >
-                        View on ULS
-                      </a>
-                    </dd>
-                  </template>
-                </dl>
-              </div>
-
-              <div v-if="needsManualClass" class="flex flex-col gap-2 rounded-lg bg-muted px-3 py-3">
-                <p class="text-xs text-muted">
-                  This call sign has no personal operator class (for example a club license). Choose the class to use for privilege checks.
-                </p>
-                <USelectMenu
-                  v-model="selectedManualClass"
-                  :items="amateurLicenseClassOptions"
-                  value-key="value"
-                  placeholder="Select license class"
-                  color="neutral"
-                  :search-input="false"
-                  class="w-full"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="flex flex-col gap-4 px-4 py-4">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted">GMRS</p>
-                <p class="text-xs text-muted">Look up your GMRS call sign. An active grant covers FRS/GMRS channels for this household.</p>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-2">
-                <UInput
-                  v-model="gmrsCallSignInput"
-                  placeholder="WRKP365"
-                  class="min-w-40 flex-1 uppercase"
-                  :disabled="isLookingUpGmrs"
-                  @keydown.enter.prevent="onGmrsLookup"
-                />
-                <UButton
-                  label="Lookup"
-                  color="primary"
-                  :loading="isLookingUpGmrs"
-                  :disabled="isLookingUpGmrs"
-                  @click="onGmrsLookup"
-                />
-                <UButton
-                  v-if="gmrsLicense"
-                  label="Clear"
-                  color="neutral"
-                  variant="ghost"
-                  :disabled="isLookingUpGmrs"
-                  @click="clearGmrsLicense"
-                />
-              </div>
-
-              <p v-if="gmrsLookupError" class="text-xs text-error">{{ gmrsLookupError }}</p>
-
-              <div v-if="gmrsLicense" class="rounded-lg bg-muted px-3 py-3 text-sm">
-                <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-                  <dt class="text-muted">Call sign</dt>
-                  <dd class="font-medium text-highlighted">{{ gmrsLicense.callSign }}</dd>
-
-                  <template v-if="gmrsLicense.name">
-                    <dt class="text-muted">Name</dt>
-                    <dd class="font-medium text-highlighted">{{ gmrsLicense.name }}</dd>
-                  </template>
-
-                  <dt class="text-muted">Status</dt>
-                  <dd class="font-medium text-highlighted">{{ gmrsLicense.status === 'VALID' ? 'Active' : 'Inactive' }}</dd>
-
-                  <template v-if="gmrsLocationLabel">
-                    <dt class="text-muted">Location</dt>
-                    <dd class="font-medium text-highlighted">{{ gmrsLocationLabel }}</dd>
-                  </template>
-
-                  <dt class="text-muted">Granted</dt>
-                  <dd class="font-medium text-highlighted">{{ gmrsLicense.grantDate || 'Unknown' }}</dd>
-
-                  <dt class="text-muted">Expires</dt>
-                  <dd class="font-medium text-highlighted">{{ gmrsLicense.expiryDate || 'Unknown' }}</dd>
-
-                  <dt class="text-muted">Last action</dt>
-                  <dd class="font-medium text-highlighted">{{ gmrsLicense.lastActionDate || 'Unknown' }}</dd>
-
-                  <template v-if="gmrsLicense.ulsUrl">
-                    <dt class="text-muted">FCC</dt>
-                    <dd>
-                      <a
-                        :href="gmrsLicense.ulsUrl"
-                        class="font-medium text-primary underline-offset-2 hover:underline"
-                        @click="onOpenGmrsUls"
-                      >
-                        View on ULS
-                      </a>
-                    </dd>
-                  </template>
-                </dl>
-              </div>
-            </div>
-          </div>
+        <section v-else-if="currentSection === 'licenses'">
+          <LicensePeoplePreference />
         </section>
 
         <section v-else-if="currentSection === 'radios'">
+          <SavedRadiosPreference />
+        </section>
+
+        <section v-else-if="currentSection === 'channels'">
+          <PredefinedChannelGroupsPreference />
+        </section>
+
+        <section v-else-if="currentSection === 'drivers'">
           <RadioModulesPreference />
         </section>
 
@@ -346,6 +169,8 @@
               </UFormField>
             </div>
           </div>
+
+          <SerialPortNamesPreference v-model="portAliases" />
         </section>
 
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
@@ -493,7 +318,6 @@
 </template>
 
 <script setup lang="ts">
-import { openExternalUrl } from '~/utils/open-external-url';
 import { readSerialPortSettings, writeSerialPortSettings } from '~/utils/serial-port-settings';
 import { parseSnifferSettings, readSnifferSettings, snifferSshTarget, writeSnifferSettings } from '~/utils/sniffer-settings';
 import {
@@ -515,7 +339,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'stations' | 'serial' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'channels' | 'drivers' | 'stations' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -541,6 +365,18 @@ const sections = [
     label: 'Radios',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
+  },
+  {
+    id: 'channels' as const,
+    label: 'Channels',
+    icon: 'i-lucide-library',
+    tileClass: 'bg-blue-600',
+  },
+  {
+    id: 'drivers' as const,
+    label: 'Drivers',
+    icon: 'i-lucide-cpu',
+    tileClass: 'bg-cyan-600',
   },
   {
     id: 'stations' as const,
@@ -580,6 +416,7 @@ const {
 const initialSerialPortSettings = readSerialPortSettings();
 const filterCommonPorts = ref(initialSerialPortSettings.filterCommonPorts);
 const excludedPortNames = ref([...initialSerialPortSettings.excludedPortNames]);
+const portAliases = ref(initialSerialPortSettings.portAliases.map((alias) => ({ ...alias })));
 const initialSnifferSettings = readSnifferSettings();
 const snifferHostInput = ref(initialSnifferSettings.host);
 const snifferPortInput = ref(initialSnifferSettings.port);
@@ -1024,6 +861,8 @@ const currentSection = computed<PreferenceSection>(() => {
   if (
     section === 'licenses' ||
     section === 'radios' ||
+    section === 'channels' ||
+    section === 'drivers' ||
     section === 'serial' ||
     section === 'updates' ||
     section === 'sniffer'
@@ -1045,6 +884,7 @@ function persistSerialPortSettings(): void {
   writeSerialPortSettings({
     filterCommonPorts: filterCommonPorts.value,
     excludedPortNames: excludedPortNames.value,
+    portAliases: portAliases.value,
   });
 }
 
@@ -1054,7 +894,7 @@ function setFilterCommonPorts(enabled: boolean): void {
 }
 
 watch(
-  excludedPortNames,
+  [excludedPortNames, portAliases],
   () => {
     persistSerialPortSettings();
   },
@@ -1119,97 +959,4 @@ watch(
   },
   { immediate: true },
 );
-
-const {
-  license,
-  callSignInput,
-  isLookingUp,
-  lookupError,
-  needsManualClass,
-  amateurLicenseClassOptions,
-  lookupCallSign,
-  setManualLicenseClass,
-  clearLicense,
-  gmrsLicense,
-  gmrsCallSignInput,
-  isLookingUpGmrs,
-  gmrsLookupError,
-  lookupGmrsCallSign,
-  clearGmrsLicense,
-} = useOperatorLicense();
-
-const selectedManualClass = computed({
-  get: () => license.value?.licenseClassId ?? undefined,
-  set: (value: string | undefined) => {
-    if (value) {
-      setManualLicenseClass(value);
-    }
-  },
-});
-
-const previousLicenseLabel = computed(() => {
-  if (!license.value?.previousCallSign) {
-    return undefined;
-  }
-
-  if (license.value.previousOperatorClass) {
-    return `${license.value.previousCallSign} (${license.value.previousOperatorClass})`;
-  }
-
-  return license.value.previousCallSign;
-});
-
-const trusteeLabel = computed(() => {
-  if (!license.value?.trusteeCallSign && !license.value?.trusteeName) {
-    return undefined;
-  }
-
-  if (license.value.trusteeCallSign && license.value.trusteeName) {
-    return `${license.value.trusteeName} (${license.value.trusteeCallSign})`;
-  }
-
-  return license.value.trusteeName || license.value.trusteeCallSign;
-});
-
-const gmrsLocationLabel = computed(() => {
-  if (!gmrsLicense.value) {
-    return undefined;
-  }
-
-  const parts = [gmrsLicense.value.city, gmrsLicense.value.state].filter(Boolean);
-
-  if (parts.length === 0) {
-    return undefined;
-  }
-
-  return parts.join(', ');
-});
-
-async function onLookup(): Promise<void> {
-  await lookupCallSign();
-}
-
-async function onGmrsLookup(): Promise<void> {
-  await lookupGmrsCallSign();
-}
-
-async function onOpenUls(event: Event): Promise<void> {
-  event.preventDefault();
-
-  if (!license.value?.ulsUrl) {
-    return;
-  }
-
-  await openExternalUrl(license.value.ulsUrl);
-}
-
-async function onOpenGmrsUls(event: Event): Promise<void> {
-  event.preventDefault();
-
-  if (!gmrsLicense.value?.ulsUrl) {
-    return;
-  }
-
-  await openExternalUrl(gmrsLicense.value.ulsUrl);
-}
 </script>

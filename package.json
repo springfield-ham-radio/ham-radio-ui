@@ -1,7 +1,7 @@
 {
   "name": "@springfield/ham-radio-ui",
   "productName": "HamBench",
-  "version": "0.31.9",
+  "version": "0.42.1",
   "private": true,
   "type": "module",
   "description": "HamBench amateur radio management application",
@@ -33,10 +33,10 @@
   },
   "dependencies": {
     "@nuxt/ui": "4.11.1",
-    "@springfield/ham-radio-api": "^17.10.0",
-    "@springfield/ham-radio-driver": "^3.4.1",
-    "@springfield/ham-radio-registry": "^1.6.5",
-    "@springfield/ham-radio-utils": "^4.12.4",
+    "@springfield/ham-radio-api": "^17.12.0",
+    "@springfield/ham-radio-driver": "^3.5.0",
+    "@springfield/ham-radio-registry": "^1.6.6",
+    "@springfield/ham-radio-utils": "^4.15.0",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-opener": "^2.5.5",
@@ -57,14 +57,14 @@
     "@semantic-release/changelog": "7.0.0",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",
-    "@semantic-release/github": "12.0.9",
-    "@semantic-release/npm": "13.1.5",
+    "@semantic-release/github": "12.0.10",
+    "@semantic-release/npm": "13.2.0",
     "@springfield/radio-module-baofeng": "^3.1.0",
-    "@tauri-apps/cli": "^2.10.1",
-    "@types/node": "26.5.1",
+    "@tauri-apps/cli": "^2.11.5",
+    "@types/node": "26.6.2",
     "@types/sortablejs": "^1",
     "conventional-changelog-conventionalcommits": "9.3.1",
-    "oxlint": "1.82.0",
+    "oxlint": "1.85.0",
     "semantic-release": "25.0.9",
     "tailwindcss": "^4.1.18",
     "typescript": "7.0.2",
@@ -115,7 +115,8 @@
           "assets": [
             "CHANGELOG.md",
             "package.json",
-            "src-tauri/Cargo.toml"
+            "src-tauri/Cargo.toml",
+            "src-tauri/Cargo.lock"
           ],
           "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
         }

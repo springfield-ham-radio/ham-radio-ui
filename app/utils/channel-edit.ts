@@ -287,19 +287,32 @@ export function createProgrammedChannel(options: {
 }
 
 /**
- * Fill unused radio slots from portable saved channels, in order.
- * Extra sources are skipped when the radio is full.
+ * Name, frequencies, and tones from a portable library channel.
+ * Radio-specific settings are left for the caller to keep.
  */
-export function assignLibraryChannelsToSlots(
+export function channelPatchFromLibrary(source: Partial<RadioChannel>): ChannelPatch {
+  return {
+    name: source.name ?? '',
+    receiveFrequencyHz: source.receiveFrequency,
+    transmitFrequencyHz: source.transmitFrequency,
+    receiveTone: source.receiveTone,
+    transmitTone: source.transmitTone,
+  };
+}
+
+/**
+ * Place portable saved channels into explicit unused slot numbers, in order.
+ * Extra sources are skipped when there are not enough slots.
+ */
+export function programLibraryChannelsIntoSlots(
   sources: Array<Partial<RadioChannel>>,
-  occupied: Iterable<number>,
+  slotNumbers: readonly number[],
   memoryMap: RadioMemoryMap | undefined,
 ): { programmed: RadioProgrammedChannel[]; skipped: number } {
-  const slots = availableChannelNumbers(occupied, channelCapacity(memoryMap));
-  const take = Math.min(sources.length, slots.length);
+  const take = Math.min(sources.length, slotNumbers.length);
   const programmed = sources.slice(0, take).map((source, index) =>
     createProgrammedChannel({
-      channelNumber: slots[index]!,
+      channelNumber: slotNumbers[index]!,
       memoryMap,
       source,
     }),
@@ -309,6 +322,51 @@ export function assignLibraryChannelsToSlots(
     programmed,
     skipped: sources.length - take,
   };
+}
+
+/**
+ * Fill unused radio slots from portable saved channels, in order.
+ * Extra sources are skipped when the radio is full.
+ */
+export function assignLibraryChannelsToSlots(
+  sources: Array<Partial<RadioChannel>>,
+  occupied: Iterable<number>,
+  memoryMap: RadioMemoryMap | undefined,
+): { programmed: RadioProgrammedChannel[]; skipped: number } {
+  const slots = availableChannelNumbers(occupied, channelCapacity(memoryMap));
+  return programLibraryChannelsIntoSlots(sources, slots, memoryMap);
+}
+
+/**
+ * Confirmation copy for copying library channels into unused memory slots.
+ */
+export function describeLibrarySlotAssignment(options: {
+  radioName: string;
+  sourceCount: number;
+  slotNumbers: readonly number[];
+}): string {
+  const { radioName, sourceCount, slotNumbers } = options;
+
+  if (slotNumbers.length === 0) {
+    return `There are no unused memory slots on ${radioName}.`;
+  }
+
+  if (sourceCount === 0) {
+    const noun = slotNumbers.length === 1 ? 'unused memory slot' : 'unused memory slots';
+    return `${radioName} has ${slotNumbers.length} ${noun}. Select channels to fill them.`;
+  }
+
+  const take = Math.min(sourceCount, slotNumbers.length);
+  const first = slotNumbers[0];
+  const last = slotNumbers[take - 1];
+  const slotLabel = first === last ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
+
+  if (take < sourceCount) {
+    return `Only ${slotNumbers.length} unused slots remain on ${radioName}. Add the first ${take} selected channels to ${slotLabel}? Write to the radio to apply the change on the device.`;
+  }
+
+  const channelLabel = sourceCount === 1 ? 'this channel' : `${sourceCount} channels`;
+  return `Add ${channelLabel} to ${radioName} in unused ${slotLabel}? Write to the radio to apply the change on the device.`;
 }
 
 export interface ChannelReorder {

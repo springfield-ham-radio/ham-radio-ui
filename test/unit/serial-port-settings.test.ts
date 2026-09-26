@@ -10,6 +10,7 @@ describe('serial port settings', () => {
     expect(defaultSerialPortSettings()).toEqual({
       filterCommonPorts: true,
       excludedPortNames: [],
+      portAliases: [],
     });
   });
 
@@ -32,6 +33,7 @@ describe('serial port settings', () => {
     expect(parsed).toEqual({
       filterCommonPorts: false,
       excludedPortNames: ['BryansHeadphones', 'AirPods'],
+      portAliases: [],
     });
   });
 
@@ -39,6 +41,7 @@ describe('serial port settings', () => {
     expect(parseSerialPortSettings(JSON.stringify({}))).toEqual({
       filterCommonPorts: true,
       excludedPortNames: [],
+      portAliases: [],
     });
   });
 
@@ -56,6 +59,7 @@ describe('serial port settings', () => {
     expect(parseSerialPortSettings(JSON.stringify({ excludedPortNames: 'BryansHeadphones' }))).toEqual({
       filterCommonPorts: true,
       excludedPortNames: [],
+      portAliases: [],
     });
   });
 
@@ -63,6 +67,7 @@ describe('serial port settings', () => {
     const settings = {
       filterCommonPorts: false,
       excludedPortNames: ['BryansHeadphones'],
+      portAliases: [{ systemName: 'usbserial-A50285BI', name: 'Kenwood cable' }],
     };
 
     expect(parseSerialPortSettings(serializeSerialPortSettings(settings))).toEqual(settings);
@@ -74,9 +79,47 @@ describe('serial port settings', () => {
     const serialized = serializeSerialPortSettings({
       filterCommonPorts: true,
       excludedPortNames,
+      portAliases: [],
     });
 
     expect(excludedPortNames).toEqual([' BryansHeadphones ']);
     expect(parseSerialPortSettings(serialized).excludedPortNames).toEqual(['BryansHeadphones']);
+  });
+
+  it('should keep the first name for a system port and drop incomplete rows', () => {
+    expect(
+      parseSerialPortSettings(
+        JSON.stringify({
+          portAliases: [
+            { systemName: ' /dev/cu.usbserial-A50285BI ', name: ' Kenwood cable ' },
+            { systemName: 'usbserial-A50285BI', name: 'Other cable' },
+            { systemName: 'COM3', name: '   ' },
+            { systemName: '', name: 'Missing port' },
+            { systemName: 'COM4', name: 'Baofeng' },
+            'not-an-alias',
+          ],
+        }),
+      ).portAliases,
+    ).toEqual([
+      { systemName: '/dev/cu.usbserial-A50285BI', name: 'Kenwood cable' },
+      { systemName: 'COM4', name: 'Baofeng' },
+    ]);
+  });
+
+  it('should ignore a non-array portAliases value', () => {
+    expect(parseSerialPortSettings(JSON.stringify({ portAliases: 'Kenwood cable' })).portAliases).toEqual([]);
+  });
+
+  it('should serialize trimmed aliases without mutating the live list', () => {
+    const portAliases = [{ systemName: ' COM3 ', name: ' Kenwood cable ' }];
+
+    const serialized = serializeSerialPortSettings({
+      filterCommonPorts: true,
+      excludedPortNames: [],
+      portAliases,
+    });
+
+    expect(portAliases).toEqual([{ systemName: ' COM3 ', name: ' Kenwood cable ' }]);
+    expect(parseSerialPortSettings(serialized).portAliases).toEqual([{ systemName: 'COM3', name: 'Kenwood cable' }]);
   });
 });

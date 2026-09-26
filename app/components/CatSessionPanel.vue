@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { CatLiveRadio } from '~/composables/useCat';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
+import type { RadioPrivilegeChoice } from '~/utils/license-people';
 import { serialPortLabel } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const props = defineProps<{
   radio: CatLiveRadio;
+  privilege?: RadioPrivilegeChoice;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +19,9 @@ const emit = defineEmits<{
   log: [vfo: CatVfo];
 }>();
 
+const portLabel = computed(() =>
+  serialPortLabel(props.radio.port, readSerialPortSettings().portAliases),
+);
 const modes = computed(() => props.radio.status.modes);
 const powers = computed(() => props.radio.status.powers);
 const disabled = computed(() => props.radio.busy);
@@ -29,7 +35,7 @@ const disabled = computed(() => props.radio.busy);
         <p class="text-xs text-muted">
           {{ radio.status.radioIdentity }}
           <span v-if="radio.status.dualBand"> · dual band</span>
-          · {{ serialPortLabel(radio.port) }}
+          · {{ portLabel }}
         </p>
       </div>
       <UButton
@@ -65,6 +71,7 @@ const disabled = computed(() => props.radio.busy);
         :is-control="vfo.band === radio.status.controlBand"
         :transmitting="radio.status.transmitting"
         :disabled="disabled"
+        :privilege="privilege"
         @frequency="emit('frequency', vfo, $event)"
         @mode="emit('mode', vfo, $event)"
         @power="emit('power', vfo, $event)"

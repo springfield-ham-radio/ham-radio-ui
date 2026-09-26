@@ -8,6 +8,7 @@ import {
   applyChannelPatch,
   channelFieldEditor,
   channelNameMaxLength,
+  channelPatchFromLibrary,
   createProgrammedChannel,
   duplexFromFrequencies,
   formatFrequencyMHz,
@@ -21,6 +22,9 @@ import {
   toneToKey,
   type ChannelPatch,
 } from '~/utils/channel-edit';
+import { settingsFieldHelp } from '~/utils/settings-field-help';
+import type { RadioPrivilegeChoice } from '~/utils/license-people';
+import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
   open: boolean;
@@ -28,6 +32,7 @@ const props = defineProps<{
   memoryMap?: RadioMemoryMap;
   occupiedChannelNumbers?: number[];
   channelCapacity?: number;
+  privilege?: RadioPrivilegeChoice;
 }>();
 
 const emit = defineEmits<{
@@ -46,6 +51,7 @@ const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const draftChannel = ref<RadioProgrammedChannel | undefined>();
 const slotNumber = ref(0);
+const libraryPickerOpen = shallowRef(false);
 
 const isCreate = computed(() => props.channel === undefined);
 const occupiedSlots = computed(() => new Set(props.occupiedChannelNumbers ?? []));
@@ -64,6 +70,30 @@ const radioChannel = computed(() => {
 const nameMaxLength = computed(() => channelNameMaxLength(props.memoryMap));
 const toneItems = toneSelectItems();
 const extraFields = computed(() => (props.memoryMap ? collectChannelMemoryMapUiFields(props.memoryMap) : []));
+
+const isUv5r = computed(() => props.memoryMap?.description?.includes('UV-5R') ?? false);
+
+const receiveToneHelp = computed(() =>
+  isUv5r.value
+    ? {
+        menu: 'Menu 10 · R-DCS · Menu 11 · R-CTCS',
+        text: 'Tone required to open the speaker on this channel. A DCS code is menu 10. A CTCSS tone is menu 11. None leaves the squelch carrier-only.',
+      }
+    : undefined,
+);
+
+const transmitToneHelp = computed(() =>
+  isUv5r.value
+    ? {
+        menu: 'Menu 12 · T-DCS · Menu 13 · T-CTCS',
+        text: 'Tone sent while transmitting on this channel. A DCS code is menu 12. A CTCSS tone is menu 13. None sends carrier only.',
+      }
+    : undefined,
+);
+
+function extraHelp(field: RadioMemoryMapUiField) {
+  return settingsFieldHelp(field);
+}
 
 const title = computed(() => {
   if (isCreate.value) {
@@ -100,13 +130,14 @@ const canCreate = computed(() => isCreate.value && slotError.value === undefined
 
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(transmitMHz.value) ?? radioChannel.value?.transmitFrequency;
-  return getTransmitPrivilegeWarning(hz);
+  return getTransmitPrivilegeWarning(hz, props.privilege);
 });
 
 watch(
   () => [props.open, props.channel?.channelNumber] as const,
   () => {
     if (!props.open) {
+      libraryPickerOpen.value = false;
       return;
     }
 
@@ -323,6 +354,21 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
   });
 }
 
+function applyLibraryChannel(source: SavedChannel): void {
+  const patch = channelPatchFromLibrary(source);
+  const nextName = nameMaxLength.value === undefined ? (patch.name ?? '') : (patch.name ?? '').slice(0, nameMaxLength.value);
+
+  name.value = nextName;
+  receiveMHz.value = formatFrequencyMHz(patch.receiveFrequencyHz);
+  transmitMHz.value = formatFrequencyMHz(patch.transmitFrequencyHz);
+  receiveError.value = undefined;
+  transmitError.value = undefined;
+  patchCurrent({
+    ...patch,
+    name: nextName,
+  });
+}
+
 function submitCreate(): void {
   if (!draftChannel.value || typeof draftChannel.value.radioChannel === 'string') {
     return;
@@ -423,7 +469,10 @@ function submitCreate(): void {
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="RX Tone">
+          <UFormField label="RX Tone" :ui="receiveToneHelp ? { labelWrapper: 'justify-start' } : undefined">
+            <template v-if="receiveToneHelp" #hint>
+              <HelpTooltip :menu="receiveToneHelp.menu" :text="receiveToneHelp.text" />
+            </template>
             <USelect
               :model-value="toneToKey(radioChannel.receiveTone)"
               :items="toneItems"
@@ -432,7 +481,10 @@ function submitCreate(): void {
             />
           </UFormField>
 
-          <UFormField label="TX Tone">
+          <UFormField label="TX Tone" :ui="transmitToneHelp ? { labelWrapper: 'justify-start' } : undefined">
+            <template v-if="transmitToneHelp" #hint>
+              <HelpTooltip :menu="transmitToneHelp.menu" :text="transmitToneHelp.text" />
+            </template>
             <USelect
               :model-value="toneToKey(radioChannel.transmitTone)"
               :items="toneItems"
@@ -447,8 +499,15 @@ function submitCreate(): void {
             v-for="field in extraFields"
             :key="field.fieldId"
             :label="field.ui.label"
-            :description="field.ui.description"
+            :ui="extraHelp(field) ? { labelWrapper: 'justify-start' } : undefined"
           >
+            <template v-if="extraHelp(field)" #hint>
+              <HelpTooltip
+                :menu="extraHelp(field)?.menuLabel"
+                :text="extraHelp(field)?.description"
+                :constraint="extraHelp(field)?.constraint"
+              />
+            </template>
             <USelect
               v-if="extraEditor(field).kind === 'select'"
               :model-value="serializeChannelFieldValue(field, extraValue(field))"
@@ -484,11 +543,23 @@ function submitCreate(): void {
     </template>
 
     <template #footer="{ close }">
-      <div class="flex w-full items-center justify-end gap-2">
-        <UButton v-if="isCreate" type="button" color="neutral" variant="outline" label="Cancel" @click="closeEditor(close)" />
-        <UButton v-if="isCreate" type="button" color="primary" label="Add channel" :disabled="!canCreate" @click="submitCreate" />
-        <UButton v-else type="button" color="neutral" variant="outline" label="Done" @click="closeEditor(close)" />
+      <div class="flex w-full items-center gap-2" :class="isCreate ? 'justify-end' : 'justify-between'">
+        <UButton
+          v-if="!isCreate"
+          type="button"
+          icon="i-lucide-library"
+          color="neutral"
+          variant="outline"
+          label="Replace from library"
+          @click="libraryPickerOpen = true"
+        />
+        <div class="flex items-center gap-2">
+          <UButton v-if="isCreate" type="button" color="neutral" variant="outline" label="Cancel" @click="closeEditor(close)" />
+          <UButton v-if="isCreate" type="button" color="primary" label="Add channel" :disabled="!canCreate" @click="submitCreate" />
+          <UButton v-else type="button" color="neutral" variant="outline" label="Done" @click="closeEditor(close)" />
+        </div>
       </div>
     </template>
   </USlideover>
+  <ChannelLibraryPicker v-if="!isCreate" v-model:open="libraryPickerOpen" @select="applyLibraryChannel" />
 </template>

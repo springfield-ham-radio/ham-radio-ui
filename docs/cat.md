@@ -1,6 +1,6 @@
 # CAT
 
-The **CAT** page is live computer control for radios whose driver sets `capabilities.liveControl` and a Kenwood `cat` block. It is not a memory editor. Import and Write stay on the Radio page.
+The **CAT** tab on a radio card is live computer control when that radio's driver sets `capabilities.liveControl` and a Kenwood `cat` block. The tab is hidden when it does not. It is not a memory editor. Import and Write stay on the Radio page toolbar.
 
 You can run more than one CAT session at once. Each serial port is its own session, so a D710 on one cable and a TH-F6 on another can both stay connected. Import and Write only refuse the port a CAT session already holds; another adapter still works.
 
@@ -8,7 +8,7 @@ Memory protocol is separate: TH-F6 programs memories with live CAT (`catRead` / 
 
 ## Open the page
 
-Use the **CAT** tab in the header, between Radio and Channels.
+On the Radio page, open the **CAT** tab (between Channels and Settings).
 
 ## Connect
 

@@ -13,11 +13,11 @@ import {
   buildAvailableManufacturerGroups,
   buildInstalledRadioListItems,
   groupInstalledRadiosByManufacturer,
+  installedDriverVersionLabel,
   radioDisplayName,
   type AvailableManufacturerGroup,
   type AvailableRadioModelItem,
   type InstalledManufacturerGroup,
-  type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -72,14 +72,6 @@ function sourceBadge(record: RadioCatalogRecord): { label: string; color: 'warni
   }
 
   return { label: 'Bundled', color: 'success' };
-}
-
-function installedVersionLabel(item: InstalledRadioListItem): string {
-  if (item.updateAvailable && item.catalogEntry) {
-    return `v${item.record.version} → ${item.catalogEntry.version} · ${item.record.modelId}`;
-  }
-
-  return `v${item.record.version} · ${item.record.modelId}`;
 }
 
 const anyBusy = computed(() => busyKey.value !== undefined);
@@ -182,7 +174,7 @@ async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
     await refreshInstalledRadios();
     toast.add({
       title: 'Radio updated',
-      description: `${group.manufacturer} is now v${group.catalogEntry.version}.`,
+      description: `${group.manufacturer} drivers were updated.`,
       color: 'success',
       icon: 'i-lucide-check',
     });
@@ -311,10 +303,10 @@ onMounted(() => {
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="text-sm font-medium text-highlighted">Installed</p>
+            <p class="text-sm font-medium text-highlighted">Installed drivers</p>
             <p class="text-xs text-muted">
-              Official modules show a marker when a newer catalog version is available. Local files are Unverified and
-              are not updated from the catalog.
+              Drivers are the modules HamBench uses to talk to each model. Official modules show a marker when a newer
+              catalog version is available. Local files are Unverified and are not updated from the catalog.
             </p>
           </div>
           <UButton
@@ -386,7 +378,7 @@ onMounted(() => {
                   <p class="truncate text-sm text-highlighted">
                     {{ radioDisplayName(item.record.manufacturer, item.record.name) }}
                   </p>
-                  <p class="truncate text-xs text-muted">{{ installedVersionLabel(item) }}</p>
+                  <p class="truncate text-xs text-muted">{{ installedDriverVersionLabel(item.record) }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
                   <UBadge
@@ -400,7 +392,7 @@ onMounted(() => {
                     variant="ghost"
                     icon="i-lucide-trash-2"
                     size="xs"
-                    aria-label="Remove radio"
+                    aria-label="Remove driver"
                     :disabled="anyBusy"
                     @click="requestRemoveRadio(item.record)"
                   />
@@ -409,16 +401,17 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
-        <p v-else class="text-sm text-muted">No radios installed yet.</p>
+        <p v-else class="text-sm text-muted">No drivers installed yet.</p>
       </div>
     </div>
 
     <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="min-w-0">
-          <p class="text-sm font-medium text-highlighted">Available</p>
+          <p class="text-sm font-medium text-highlighted">Available drivers</p>
           <p class="text-xs text-muted">
-            Official modules grouped by manufacturer. Install only the models you own.
+            Official modules grouped by manufacturer. Install only the models you own, then add each radio under
+            Preferences → Radios.
           </p>
         </div>
 
@@ -488,7 +481,7 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
-        <p v-else class="text-sm text-muted">All official radios are installed.</p>
+        <p v-else class="text-sm text-muted">All official drivers are installed.</p>
 
         <div>
           <UButton
@@ -508,7 +501,7 @@ onMounted(() => {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Remove radio?</h2>
+          <h2 class="text-lg font-semibold text-highlighted">Remove driver?</h2>
           <p class="mt-2 text-sm text-muted">
             {{ removeConfirmMessage }}
           </p>

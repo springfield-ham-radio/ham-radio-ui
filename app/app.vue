@@ -45,7 +45,11 @@ const modulesDialogOpen = computed({
       return false;
     }
 
-    if (route.path.startsWith('/cat') && modulesInstallRequired.value) {
+    if (route.path.startsWith('/driver')) {
+      return false;
+    }
+
+    if (route.path === '/' && route.query.tab === 'cat' && modulesInstallRequired.value) {
       return false;
     }
 

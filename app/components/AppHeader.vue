@@ -8,6 +8,7 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 const route = useRoute();
 const router = useRouter();
 const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, memoryFilePath } = useRadio();
+const { enabled: developerMode } = useDeveloperMode();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const isRadioPage = computed(() => route.path === '/');
@@ -16,14 +17,21 @@ const currentFileName = computed(() => {
   return memoryFilePath.value ? memoryFileDisplayName(memoryFilePath.value) : undefined;
 });
 
-const sectionItems = computed<TabsItem[]>(() => [
-  { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
-  { label: 'CAT', icon: 'i-lucide-cable', value: 'cat' },
-  { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
-  { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
-  { label: 'Propagation', icon: 'i-lucide-sun', value: 'propagation' },
-  { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
-]);
+const sectionItems = computed<TabsItem[]>(() => {
+  const items: TabsItem[] = [
+    { label: 'Radio', icon: 'i-lucide-radio', value: 'radio' },
+    { label: 'Channels', icon: 'i-lucide-library', value: 'channels' },
+    { label: 'Log', icon: 'i-lucide-notebook-pen', value: 'log' },
+    { label: 'Propagation', icon: 'i-lucide-sun', value: 'propagation' },
+    { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
+  ];
+
+  if (developerMode.value) {
+    items.push({ label: 'Driver', icon: 'i-lucide-cpu', value: 'driver' });
+  }
+
+  return items;
+});
 
 const activeSection = computed({
   get: () => {
@@ -43,8 +51,8 @@ const activeSection = computed({
       return 'wavebench';
     }
 
-    if (route.path.startsWith('/cat')) {
-      return 'cat';
+    if (route.path.startsWith('/driver')) {
+      return 'driver';
     }
 
     return 'radio';
@@ -70,8 +78,8 @@ const activeSection = computed({
       return;
     }
 
-    if (value === 'cat') {
-      void router.push('/cat');
+    if (value === 'driver') {
+      void router.push('/driver');
       return;
     }
 

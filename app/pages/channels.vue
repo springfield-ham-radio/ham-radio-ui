@@ -2,13 +2,9 @@
 import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
-import {
-  assignLibraryChannelsToSlots,
-  availableChannelNumbers,
-  channelCapacity,
-  formatFrequencyMHz,
-} from '~/utils/channel-edit';
-import { formatSavedTone, type SavedChannel } from '~/utils/saved-channels-db';
+import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
+import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
+import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 useHead({ title: 'Channels' });
@@ -24,10 +20,18 @@ const {
   createChannel,
   updateChannel,
   removeChannel,
+  removeChannels,
+  groups,
+  activeGroupId,
+  activeGroup,
   exportLibraryCsv,
   importLibraryCsv,
+  createGroup,
+  renameGroup,
+  removeGroup,
 } = useSavedChannels();
-const { program, memory, settingsMemoryMap, activeRadioId, addChannels } = useRadio();
+const { addChannels, addTargets } = useRadio();
+const { focusedCardId } = useRadioBoard();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
@@ -36,6 +40,13 @@ const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
 const addToRadioOpen = ref(false);
 const rowSelection = ref<Record<string, boolean>>({});
+const groupNameOpen = shallowRef(false);
+const groupNameMode = shallowRef<'empty' | 'selection' | 'rename'>('empty');
+const isSavingGroup = shallowRef(false);
+const removeGroupOpen = shallowRef(false);
+const isRemovingGroup = shallowRef(false);
+const deleteChannelsOpen = shallowRef(false);
+const isDeletingChannels = shallowRef(false);
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
@@ -59,52 +70,107 @@ const selectedLibraryChannels = computed(() => {
 });
 
 const selectedCount = computed(() => selectedLibraryChannels.value.length);
-const occupiedChannelNumbers = computed(() => program.value?.channels.map((channel) => channel.channelNumber) ?? []);
-const freeSlotCount = computed(() => {
-  return availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value)).length;
-});
-const radioReady = computed(() => Boolean(program.value && memory.value && activeRadioId.value));
-const canAddToRadio = computed(() => selectedCount.value > 0 && radioReady.value && freeSlotCount.value > 0);
+const radiosWithRoom = computed(() =>
+  addTargets.value.filter((target) => target.ready && target.freeSlotNumbers.length > 0),
+);
+const canAddToRadio = computed(() => selectedCount.value > 0 && radiosWithRoom.value.length > 0);
 
 const addToRadioTooltip = computed(() => {
   if (selectedCount.value === 0) {
     return 'Select saved channels to add';
   }
 
-  if (!radioReady.value) {
+  if (addTargets.value.length === 0) {
+    return 'Open a radio and load its memory first';
+  }
+
+  if (!addTargets.value.some((target) => target.ready)) {
     return 'Open a memory file or import from a radio first';
   }
 
-  if (freeSlotCount.value === 0) {
-    return `All memory slots on ${activeRadioId.value?.name ?? 'this radio'} are programmed`;
+  if (radiosWithRoom.value.length === 0) {
+    return 'All memory slots on open radios are programmed';
   }
 
-  return 'Add selected channels to the loaded radio';
+  return 'Add selected channels to a radio';
 });
 
-const addToRadioTitle = computed(() => (selectedCount.value === 1 ? 'Add channel to radio' : 'Add channels to radio'));
+const builtinGroup = computed(() => activeGroup.value?.builtin === true);
+const newGroupTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in groups cannot be changed';
+  }
 
-const addToRadioDescription = computed(() => {
-  const radioName = activeRadioId.value?.name ?? 'the loaded radio';
+  return selectedCount.value === 0 ? 'Select one or more channels' : 'Create a group from the selected channels';
+});
+const deleteChannelsTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in channels cannot be deleted';
+  }
+
+  return selectedCount.value === 0 ? 'Select channels to delete' : 'Delete the selected channels from the library';
+});
+const deleteChannelsDescription = computed(() => {
   const count = selectedCount.value;
-  const slots = availableChannelNumbers(occupiedChannelNumbers.value, channelCapacity(settingsMemoryMap.value));
-  const take = Math.min(count, slots.length);
 
-  if (take === 0) {
-    return `There are no unused memory slots on ${radioName}.`;
+  if (count === 1) {
+    return 'Delete this channel from the library? It is also removed from every group.';
   }
 
-  const first = slots[0];
-  const last = slots[take - 1];
-  const slotLabel = first === last ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
-
-  if (take < count) {
-    return `Only ${slots.length} unused slots remain on ${radioName}. Add the first ${take} selected channels to ${slotLabel}? Write to the radio to apply the change on the device.`;
-  }
-
-  const channelLabel = count === 1 ? 'this channel' : `${count} channels`;
-  return `Add ${channelLabel} to ${radioName} in unused ${slotLabel}? Write to the radio to apply the change on the device.`;
+  return `Delete ${count} channels from the library? They are also removed from every group.`;
 });
+const importTooltip = computed(() => {
+  if (builtinGroup.value) {
+    return 'Built-in groups cannot be changed';
+  }
+
+  return activeGroup.value ? `Import CSV into ${activeGroup.value.name}` : 'Import channel library, RepeaterBook, or CHIRP CSV';
+});
+const addChannelTooltip = computed(() =>
+  builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
+);
+const emptyMessage = computed(() => {
+  if (builtinGroup.value) {
+    return 'Select rows and choose Add to radio to copy these channels.';
+  }
+
+  return activeGroup.value
+    ? 'This group is empty. Add a channel or import a CSV to fill it.'
+    : 'No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page.';
+});
+const groupNameTitle = computed(() => {
+  if (groupNameMode.value === 'rename') {
+    return 'Rename group';
+  }
+
+  return groupNameMode.value === 'selection' ? 'New group from selection' : 'New empty group';
+});
+const groupNameDescription = computed(() => {
+  if (groupNameMode.value === 'rename') {
+    return 'Change the name shown on this group\'s tab.';
+  }
+
+  if (groupNameMode.value === 'selection') {
+    const count = selectedCount.value;
+    return count === 1 ? 'Create a group containing the selected channel.' : `Create a group containing ${count} selected channels.`;
+  }
+
+  return 'Create an empty group, then import a CSV to fill it.';
+});
+const groupNameConfirmLabel = computed(() => (groupNameMode.value === 'rename' ? 'Rename' : 'Create group'));
+const groupNameInitial = computed(() => (groupNameMode.value === 'rename' ? activeGroup.value?.name : undefined));
+const groupNameExisting = computed(() => {
+  if (groupNameMode.value !== 'rename' || !activeGroup.value) {
+    return groups.value.map((group) => group.name);
+  }
+
+  return groups.value.filter((group) => group.id !== activeGroup.value?.id).map((group) => group.name);
+});
+const removeGroupDescription = computed(() =>
+  activeGroup.value
+    ? `Remove ${activeGroup.value.name}? Its channels stay in All and in any other groups.`
+    : 'Remove this group? Its channels stay in All.',
+);
 
 const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
@@ -136,6 +202,11 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     id: 'name',
     header: 'Name',
   },
+  {
+    id: 'callsign',
+    header: 'Call sign',
+    cell: ({ row }) => (row.original.kind === 'repeater' ? row.original.callsign ?? '' : ''),
+  },
   { accessorKey: 'band', header: 'Band' },
   {
     id: 'transmit',
@@ -158,10 +229,102 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     cell: ({ row }) => formatSavedTone(row.original.receiveTone),
   },
   {
+    id: 'use',
+    header: 'Use',
+  },
+  {
+    id: 'onAir',
+    header: 'On-air',
+  },
+  {
     id: 'actions',
     header: '',
   },
 ]);
+
+watch(activeGroupId, () => {
+  rowSelection.value = {};
+});
+
+function openEmptyGroup(): void {
+  groupNameMode.value = 'empty';
+  groupNameOpen.value = true;
+}
+
+function openGroupFromSelection(): void {
+  if (selectedCount.value === 0) {
+    return;
+  }
+
+  groupNameMode.value = 'selection';
+  groupNameOpen.value = true;
+}
+
+function openRenameGroup(): void {
+  if (!activeGroup.value) {
+    return;
+  }
+
+  groupNameMode.value = 'rename';
+  groupNameOpen.value = true;
+}
+
+async function confirmGroupName(name: string): Promise<void> {
+  isSavingGroup.value = true;
+
+  try {
+    if (groupNameMode.value === 'rename' && activeGroup.value) {
+      await renameGroup(activeGroup.value.id, name);
+    } else {
+      const channelIds = groupNameMode.value === 'selection' ? selectedLibraryChannels.value.map((channel) => channel.id) : [];
+      await createGroup(name, channelIds);
+      rowSelection.value = {};
+    }
+
+    groupNameOpen.value = false;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isSavingGroup.value = false;
+  }
+}
+
+async function confirmRemoveGroup(): Promise<void> {
+  if (!activeGroup.value) {
+    return;
+  }
+
+  isRemovingGroup.value = true;
+
+  try {
+    await removeGroup(activeGroup.value.id);
+    removeGroupOpen.value = false;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isRemovingGroup.value = false;
+  }
+}
+
+async function confirmDeleteChannels(): Promise<void> {
+  const ids = selectedLibraryChannels.value.map((channel) => channel.id);
+
+  if (ids.length === 0) {
+    return;
+  }
+
+  isDeletingChannels.value = true;
+
+  try {
+    await removeChannels(ids);
+    rowSelection.value = {};
+    deleteChannelsOpen.value = false;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isDeletingChannels.value = false;
+  }
+}
 
 function openCreate(): void {
   editingChannel.value = undefined;
@@ -180,6 +343,10 @@ function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void
     return;
   }
 
+  if (isPredefinedChannelId(row.original.id)) {
+    return;
+  }
+
   openEdit(row.original);
 }
 
@@ -191,17 +358,23 @@ function requestAddToRadio(): void {
   addToRadioOpen.value = true;
 }
 
-async function confirmAddToRadio(): Promise<void> {
-  const assignment = assignLibraryChannelsToSlots(
+async function confirmAddToRadio(sessionId: string): Promise<void> {
+  const target = addTargets.value.find((candidate) => candidate.id === sessionId);
+
+  if (!target?.ready) {
+    return;
+  }
+
+  const assignment = programLibraryChannelsIntoSlots(
     selectedLibraryChannels.value,
-    occupiedChannelNumbers.value,
-    settingsMemoryMap.value,
+    target.freeSlotNumbers,
+    target.settingsMemoryMap,
   );
 
   isAddingToRadio.value = true;
 
   try {
-    const added = await addChannels(assignment.programmed);
+    const added = await addChannels(assignment.programmed, target.id);
 
     if (added > 0) {
       rowSelection.value = {};
@@ -216,24 +389,36 @@ async function onSave(payload: {
   channel: RadioChannel;
   notes?: string;
   kind?: SavedChannel['kind'];
+  use?: RepeaterUse;
+  onAir?: boolean;
+  callsign?: string;
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
+    const kind = payload.kind ?? editingChannel.value?.kind ?? 'channel';
+
     if (payload.id) {
       await updateChannel({
         id: payload.id,
         name: payload.channel.name,
-        kind: payload.kind ?? editingChannel.value?.kind ?? 'channel',
+        kind,
         transmitFrequency: payload.channel.transmitFrequency,
         receiveFrequency: payload.channel.receiveFrequency,
         transmitTone: payload.channel.transmitTone,
         receiveTone: payload.channel.receiveTone,
         notes: payload.notes,
+        use: kind === 'repeater' ? payload.use : undefined,
+        onAir: kind === 'repeater' ? payload.onAir : undefined,
+        callsign: kind === 'repeater' ? payload.callsign : undefined,
         createdAt: editingChannel.value?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
     } else {
-      await createChannel(payload.channel, payload.notes, payload.kind);
+      await createChannel(payload.channel, payload.notes, kind, {
+        use: payload.use,
+        onAir: payload.onAir,
+        callsign: payload.callsign,
+      });
     }
 
     editorOpen.value = false;
@@ -277,7 +462,7 @@ onMounted(() => {
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
         <p class="text-xs text-muted">
-          Portable channels and imported repeaters. Select rows and choose Add to radio to copy them into unused slots on the loaded radio.
+          Portable channels and imported repeaters. Weather, FRS, and GMRS are built-in groups. Hide them in Preferences.
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
@@ -292,13 +477,40 @@ onMounted(() => {
             @click="onExportCsv"
           />
         </UTooltip>
-        <UTooltip text="Import CSV">
+        <UTooltip :text="newGroupTooltip">
+          <span class="inline-flex">
+            <UButton
+              icon="i-lucide-folder-plus"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              label="New group"
+              :disabled="builtinGroup || selectedCount === 0"
+              @click="openGroupFromSelection"
+            />
+          </span>
+        </UTooltip>
+        <UTooltip :text="deleteChannelsTooltip">
+          <span class="inline-flex">
+            <UButton
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="outline"
+              size="sm"
+              label="Delete"
+              :disabled="builtinGroup || selectedCount === 0 || isDeletingChannels"
+              @click="deleteChannelsOpen = true"
+            />
+          </span>
+        </UTooltip>
+        <UTooltip :text="importTooltip">
           <UButton
             icon="i-lucide-file-up"
             color="neutral"
             variant="outline"
             size="sm"
-            aria-label="Import channel library, RepeaterBook, or CHIRP CSV"
+            :aria-label="importTooltip"
+            :disabled="builtinGroup"
             :loading="isImporting"
             @click="onImportCsv"
           />
@@ -317,15 +529,28 @@ onMounted(() => {
             />
           </span>
         </UTooltip>
-        <UButton
-          icon="i-lucide-plus"
-          color="primary"
-          size="sm"
-          label="Add channel"
-          @click="openCreate"
-        />
+        <UTooltip :text="addChannelTooltip">
+          <span class="inline-flex">
+            <UButton
+              icon="i-lucide-plus"
+              color="primary"
+              size="sm"
+              label="Add channel"
+              :disabled="builtinGroup"
+              @click="openCreate"
+            />
+          </span>
+        </UTooltip>
       </div>
     </div>
+
+    <ChannelGroupTabs
+      v-model:active-id="activeGroupId"
+      :groups="groups"
+      @create-empty="openEmptyGroup"
+      @rename="openRenameGroup"
+      @remove="removeGroupOpen = true"
+    />
 
     <UInput
       v-model="search"
@@ -358,11 +583,33 @@ onMounted(() => {
           th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
           td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
           empty: 'py-8 text-center text-sm text-muted',
-          tr: 'cursor-pointer',
+          tr: builtinGroup ? '' : 'cursor-pointer',
         }"
-        empty="No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page."
+        :empty="emptyMessage"
         @select="onSelectChannel"
       >
+        <template #use-cell="{ row }">
+          <UBadge
+            v-if="row.original.kind === 'repeater' && row.original.use"
+            :color="row.original.use === 'open' ? 'success' : 'error'"
+            variant="subtle"
+            size="xs"
+            :label="row.original.use === 'open' ? 'Open' : 'Closed'"
+          />
+        </template>
+        <template #onAir-cell="{ row }">
+          <UTooltip
+            v-if="row.original.kind === 'repeater' && row.original.onAir !== undefined"
+            :text="row.original.onAir ? 'On-air' : 'Off-air'"
+          >
+            <UIcon
+              name="i-lucide-antenna"
+              class="size-4"
+              :class="row.original.onAir ? 'text-success' : 'text-default'"
+              :aria-label="row.original.onAir ? 'On-air' : 'Off-air'"
+            />
+          </UTooltip>
+        </template>
         <template #name-cell="{ row }">
           <div class="flex min-w-0 items-center gap-1.5">
             <UTooltip v-if="row.original.kind === 'repeater'" text="Repeater">
@@ -379,7 +626,7 @@ onMounted(() => {
           </div>
         </template>
         <template #actions-cell="{ row }">
-          <div class="flex items-center justify-end gap-0.5" @click.stop>
+          <div v-if="!isPredefinedChannelId(row.original.id)" class="flex items-center justify-end gap-0.5" @click.stop>
             <UButton
               icon="i-lucide-pencil"
               color="neutral"
@@ -402,21 +649,45 @@ onMounted(() => {
     </div>
 
     <SavedChannelEditor v-model:open="editorOpen" :channel="editingChannel" @save="onSave" />
+    <ChannelGroupNameDialog
+      v-model:open="groupNameOpen"
+      :title="groupNameTitle"
+      :description="groupNameDescription"
+      :confirm-label="groupNameConfirmLabel"
+      :existing-names="groupNameExisting"
+      :initial-name="groupNameInitial"
+      :pending="isSavingGroup"
+      @confirm="confirmGroupName"
+    />
     <UModal
-      v-model:open="addToRadioOpen"
-      :title="addToRadioTitle"
-      :description="addToRadioDescription"
+      v-model:open="deleteChannelsOpen"
+      :title="selectedCount === 1 ? 'Delete channel' : 'Delete channels'"
+      :description="deleteChannelsDescription"
       :ui="{ footer: 'justify-end' }"
     >
       <template #footer="{ close }">
         <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-        <UButton
-          color="primary"
-          label="Add to radio"
-          :loading="isAddingToRadio"
-          @click="confirmAddToRadio"
-        />
+        <UButton color="error" label="Delete" :loading="isDeletingChannels" @click="confirmDeleteChannels" />
       </template>
     </UModal>
+    <UModal
+      v-model:open="removeGroupOpen"
+      title="Remove group"
+      :description="removeGroupDescription"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #footer="{ close }">
+        <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
+        <UButton color="error" label="Remove group" :loading="isRemovingGroup" @click="confirmRemoveGroup" />
+      </template>
+    </UModal>
+    <AddToRadioDialog
+      v-model:open="addToRadioOpen"
+      :source-count="selectedCount"
+      :targets="addTargets"
+      :preferred-id="focusedCardId"
+      :pending="isAddingToRadio"
+      @confirm="confirmAddToRadio"
+    />
   </div>
 </template>

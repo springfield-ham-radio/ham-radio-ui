@@ -188,6 +188,7 @@ onBeforeUnmount(() => {
             <USelect
               v-model="computerPort"
               :items="ports"
+              value-key="value"
               placeholder="Select port"
               class="w-full"
               :disabled="!reachable || status.running"
@@ -203,6 +204,7 @@ onBeforeUnmount(() => {
             <USelect
               v-model="radioPort"
               :items="ports"
+              value-key="value"
               placeholder="Select port"
               class="w-full"
               :disabled="!reachable || status.running"

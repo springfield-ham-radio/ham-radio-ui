@@ -78,6 +78,25 @@ export function radioDisplayName(manufacturer: string, name: string): string {
   return trimmedName;
 }
 
+/**
+ * One line for a radio menu: keep the manufacturer once.
+ * "Baofeng" plus "Baofeng UV-5R" is "Baofeng UV-5R".
+ */
+export function radioMenuLabel(manufacturer: string, name: string): string {
+  const trimmedName = name.trim();
+  const prefix = manufacturer.trim();
+
+  if (prefix.length === 0) {
+    return trimmedName;
+  }
+
+  if (trimmedName.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return trimmedName;
+  }
+
+  return `${prefix} ${trimmedName}`;
+}
+
 type CatalogEntryWithRadios = RadioModuleCatalogEntry & {
   radios?: CatalogRadioRef[];
 };
@@ -184,6 +203,10 @@ export function catalogModuleIdForRecord(record: RadioCatalogRecord): string | u
   return configModuleId(record);
 }
 
+/**
+ * Zip version used to decide whether the official catalog has a newer download.
+ * Installed rows show the radio config version instead.
+ */
 function installedModuleVersion(record: RadioCatalogRecord): string {
   if (record.sourcePath) {
     const parsed = parseModuleInstallPath(record.sourcePath);
@@ -194,6 +217,11 @@ function installedModuleVersion(record: RadioCatalogRecord): string {
   }
 
   return record.version;
+}
+
+/** Version label for an installed radio: the driver config version, not the module zip. */
+export function installedDriverVersionLabel(record: Pick<RadioCatalogRecord, 'version' | 'modelId'>): string {
+  return `v${record.version} · ${record.modelId}`;
 }
 
 /**
