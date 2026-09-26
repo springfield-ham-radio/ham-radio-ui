@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
-import { serialPortMatchKey, serialPortSelectItems } from '~/utils/serial-port-list';
-import { readSerialPortSettings, type SerialPortAlias } from '~/utils/serial-port-settings';
+import { serialPortMatchKey, serialPortSelectItems, type SerialPortAlias } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
 const aliases = defineModel<SerialPortAlias[]>({ required: true });
 

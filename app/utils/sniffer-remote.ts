@@ -12,8 +12,6 @@ import type {
 } from '~/utils/sniffer-ssh';
 import { snifferSettingsToRemoteConfig } from '~/utils/sniffer-ssh';
 
-export { snifferSettingsToRemoteConfig };
-
 async function invokeRemote<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauriRuntime()) {
     throw new Error('Sniffer install/start/stop requires the Tauri desktop app.');

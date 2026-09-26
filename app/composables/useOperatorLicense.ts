@@ -37,9 +37,6 @@ import {
 } from '~/utils/license-people';
 import { transmitPrivilegeWarning, type TransmitPrivilegeWarning } from '~/utils/transmit-privileges';
 
-export type { AmateurLicense, HeldLicense, LicensePerson, RadioPrivilegeChoice, TransmitPrivilegeWarning };
-export { amateurLicenseClassOptions };
-
 /**
  * People and the licenses they hold, plus the grant each radio uses for warnings.
  *

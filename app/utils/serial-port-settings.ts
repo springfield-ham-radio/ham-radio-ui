@@ -1,7 +1,5 @@
 import { serialPortMatchKey, type SerialPortAlias } from '~/utils/serial-port-list';
 
-export type { SerialPortAlias } from '~/utils/serial-port-list';
-
 export const SERIAL_PORT_SETTINGS_STORAGE_KEY = 'ham-radio-serial-ports';
 
 export interface SerialPortSettings {
