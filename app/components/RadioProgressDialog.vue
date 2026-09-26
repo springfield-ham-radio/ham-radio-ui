@@ -101,12 +101,21 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
         {{ serialLog.entryCount }} serial frame{{ serialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
       <div v-else class="flex flex-col gap-3">
-        <UProgress
-          :model-value="percentValue"
-          :max="100"
-          color="primary"
-          :ui="{ indicator: 'bg-primary/55' }"
-        />
+        <!--
+          Size the fill by width. UProgress translates a full-width indicator, and that
+          percentage is resolved against the wrong box while the modal is opening, so the
+          fill paints left of the track and then slides into place.
+        -->
+        <div
+          class="h-2 w-full overflow-hidden rounded-full bg-accented"
+          role="progressbar"
+          :aria-valuenow="percentValue"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="`${percentValue}%`"
+        >
+          <div class="h-full rounded-full bg-primary/55" :style="{ width: `${percentValue}%` }" />
+        </div>
         <p class="flex gap-2 text-sm text-muted">
           <span class="w-10 shrink-0 tabular-nums">{{ percentValue }}%</span>
           <span v-if="remainingText" class="min-w-0 tabular-nums">{{ remainingText }}</span>
