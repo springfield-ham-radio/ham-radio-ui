@@ -1,3 +1,22 @@
+## [0.40.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.1...v0.40.0) (2026-09-26)
+
+### Features
+
+* **driver:** add a channel schema tab ([4a5de3b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4a5de3be6edc7b10d4618a39b9b5167e473b9667))
+* **driver:** add a debug tab to locate a field in memory ([df4d362](https://github.com/springfield-ham-radio/ham-radio-ui/commit/df4d362b69c7efd0e3ea8fd937002d2451a25ecb))
+* **driver:** add a developer-mode protocol editor ([d5c360b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d5c360b3822e9231c03c969fd4dbf18a14776fec))
+* **driver:** add a memory map tab ([951baf5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/951baf5ce267398dc799e6c68b850e99aa695fb8))
+* **driver:** add settings groups to the memory map ([681dd86](https://github.com/springfield-ham-radio/ham-radio-ui/commit/681dd860f9d21cf343cdbc063db3274fc0ea7d81))
+* **driver:** drop the settings schema path from setup ([ec260c9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ec260c949c462a5a98ea15ef18a1d88f5e125411))
+* **driver:** edit settings by group and load installed maps ([56b71a5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/56b71a58c4f40ef7bcde01db955d7258c545d1fb))
+* **driver:** group setup fields and choose baud rates ([3453f0f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3453f0f707ebf497f8df6590f1e0ed37a8244e20))
+* **driver:** lay out the protocol editor in sections ([4ee07e6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4ee07e62c82a458c78a3c30e19014c500187dc47))
+* **driver:** warn that the protocol editor is advanced ([0902edf](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0902edfb5e066744e00299ab81f4046aae7b3856))
+
+### Bug Fixes
+
+* **driver:** show each installed radio once in the load menu ([cd271ac](https://github.com/springfield-ham-radio/ham-radio-ui/commit/cd271ac77b8e413aeaa394d755cb8ffb88e059e7))
+
 ## [0.39.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.0...v0.39.1) (2026-09-25)
 
 ### Bug Fixes
