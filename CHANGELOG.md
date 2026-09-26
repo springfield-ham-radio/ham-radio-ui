@@ -1,3 +1,9 @@
+## [0.42.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.1...v0.42.2) (2026-09-26)
+
+### Bug Fixes
+
+* **deps:** bump the production-npm group across 1 directory with 2 updates ([09cd435](https://github.com/springfield-ham-radio/ham-radio-ui/commit/09cd4359188339e6cf66fbecfc4e3aed619ba573))
+
 ## [0.42.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.0...v0.42.1) (2026-09-26)
 
 ### Bug Fixes
