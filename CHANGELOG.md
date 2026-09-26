@@ -1,3 +1,9 @@
+## [0.42.6](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.5...v0.42.6) (2026-09-26)
+
+### Bug Fixes
+
+* **radio:** keep the transfer progress fill inside the track ([f71cf03](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f71cf03e8669a20b4786db2a1ea634b489b69307))
+
 ## [0.42.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.4...v0.42.5) (2026-09-26)
 
 ### Bug Fixes
