@@ -1,3 +1,9 @@
+## [0.41.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.0...v0.41.1) (2026-09-26)
+
+### Bug Fixes
+
+* **channels:** keep the selected group tab underline visible ([625d646](https://github.com/springfield-ham-radio/ham-radio-ui/commit/625d646807ceddad2df5107f3749aabf560e16a0))
+
 ## [0.41.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.40.0...v0.41.0) (2026-09-26)
 
 ### Features
