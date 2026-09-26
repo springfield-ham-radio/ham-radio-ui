@@ -23,10 +23,6 @@ const description = computed({
   get: () => draft.value.description,
   set: (value: string) => patch({ description: value }),
 });
-const settingsSchemaPath = computed({
-  get: () => draft.value.settingsSchemaPath,
-  set: (value: string) => patch({ settingsSchemaPath: value }),
-});
 const channelSchemaPath = computed({
   get: () => draft.value.channelSchemaPath,
   set: (value: string) => patch({ channelSchemaPath: value }),
@@ -106,15 +102,6 @@ function setFlag(
       </div>
     </div>
     <div class="grid gap-3">
-      <UFormField label="Settings schema path" :error="errorAt('schemas.settings')">
-        <template #hint>
-          <span class="inline-flex items-center gap-1.5">
-            Optional
-            <HelpTooltip text="Relative path inside the module, for example ../src/shared/schemas/settings-schema.json" />
-          </span>
-        </template>
-        <UInput v-model="settingsSchemaPath" class="w-full font-mono" />
-      </UFormField>
       <UFormField label="Channel schema path" :error="errorAt('schemas.channel')">
         <template #hint>
           <span class="inline-flex items-center gap-1.5">

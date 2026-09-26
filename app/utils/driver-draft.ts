@@ -219,7 +219,6 @@ export interface DriverDraft {
   channelProgramming: boolean;
   settingsProgramming: boolean;
   liveControl: boolean;
-  settingsSchemaPath: string;
   channelSchemaPath: string;
   memoryMapPath: string;
   baudRate: string;
@@ -616,7 +615,6 @@ export function createDriverDraft(): DriverDraft {
     channelProgramming: false,
     settingsProgramming: false,
     liveControl: false,
-    settingsSchemaPath: '',
     channelSchemaPath: '',
     memoryMapPath: '',
     baudRate: '9600',
@@ -1157,7 +1155,6 @@ function coerceDraftRecord(record: Record<string, unknown>): DriverDraft {
     channelProgramming: asBoolean(record.channelProgramming, false),
     settingsProgramming: asBoolean(record.settingsProgramming, false),
     liveControl: asBoolean(record.liveControl, false),
-    settingsSchemaPath: asString(record.settingsSchemaPath),
     channelSchemaPath: asString(record.channelSchemaPath),
     memoryMapPath: asString(record.memoryMapPath),
     baudRate: asString(record.baudRate, fallback.baudRate),

@@ -37,6 +37,18 @@ describe('driver draft', () => {
     expect(compiled.document.serialConfig.baudRates).toEqual([9600]);
   });
 
+  it('writes an open settings schema when the channel path is set', () => {
+    const draft = exampleDriverDraft();
+    draft.channelSchemaPath = '../src/shared/schemas/channel-schema.json';
+    const compiled = compileDriverDraft(draft);
+
+    expect(compiled.document.settingsSchema).toEqual({
+      model: draft.model,
+      settingsSchema: { type: 'object', additionalProperties: true },
+      channelSchema: { $ref: '../src/shared/schemas/channel-schema.json' },
+    });
+  });
+
   it('checks the default speed when the module has no baud list', () => {
     const imported = importDriverModule({
       serialConfig: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' },

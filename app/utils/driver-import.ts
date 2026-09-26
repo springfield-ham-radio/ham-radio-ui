@@ -211,7 +211,7 @@ function draftSteps(value: unknown, warnings: string[]): DriverStepDraft[] {
 /**
  * Load a radio-module JSON object into the form.
  * A path is stored as written. An inlined channel schema or memory map fills that tab.
- * The settings schema stays a path: the Settings screen is the memory map.
+ * The protocol writes an open settings schema. The Settings screen is the memory map.
  */
 export function importDriverModule(value: unknown): DriverImportResult {
   if (!isRecord(value)) {
@@ -294,17 +294,7 @@ export function importDriverModule(value: unknown): DriverImportResult {
   }
 
   const settings = isRecord(value.settingsSchema) ? value.settingsSchema : undefined;
-  const settingsRef = settings ? refOf(settings.settingsSchema) : undefined;
   const channelRef = settings ? refOf(settings.channelSchema) : undefined;
-
-  if (settings && settings.settingsSchema !== undefined && !settingsRef) {
-    const schema = settings.settingsSchema;
-    const properties = isRecord(schema) && isRecord(schema.properties) ? schema.properties : undefined;
-
-    if (properties && Object.keys(properties).length > 0) {
-      warnings.push('The settings schema lists fields. This editor does not edit that file. The Settings screen comes from the memory map.');
-    }
-  }
 
   if (settings && settings.channelSchema !== undefined && !channelRef) {
     const channelSchema = draftChannelSchema(settings.channelSchema, warnings);
@@ -314,7 +304,6 @@ export function importDriverModule(value: unknown): DriverImportResult {
     }
   }
 
-  draft.settingsSchemaPath = settingsRef ?? '';
   draft.channelSchemaPath = channelRef ?? '';
 
   const memoryMapRef = refOf(value.memoryMap);

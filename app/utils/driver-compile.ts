@@ -55,7 +55,7 @@ export interface DriverModuleDocument {
   writeMemory: RadioProtocolStep[];
   settingsSchema?: {
     model: string;
-    settingsSchema: { $ref: string };
+    settingsSchema: { type: 'object'; additionalProperties: true };
     channelSchema: { $ref: string };
   };
   memoryMap?: { $ref: string };
@@ -813,15 +813,14 @@ export function compileDriverDraft(draft: DriverDraft): CompiledDriver {
     });
   }
 
-  const settingsPath = compileJsonPath(draft.settingsSchemaPath, 'schemas.settings', issues, 'Settings schema');
   const channelPath = compileJsonPath(draft.channelSchemaPath, 'schemas.channel', issues, 'Channel schema');
   const memoryMapPath = compileJsonPath(draft.memoryMapPath, 'schemas.memoryMap', issues, 'Memory map');
 
-  if (!settingsPath || !channelPath) {
+  if (!channelPath) {
     issues.push({
       level: 'warning',
-      path: 'schemas',
-      message: 'A published module also needs settings and channel schema paths. Protocol JSON can omit them while you are debugging.',
+      path: 'schemas.channel',
+      message: 'A published module points the channel schema at a JSON file. Add that path on Setup.',
     });
   }
 
@@ -871,10 +870,10 @@ export function compileDriverDraft(draft: DriverDraft): CompiledDriver {
     writeMemory: write.flatMap((item) => (item.step ? [item.step] : [])),
   };
 
-  if (settingsPath && channelPath) {
+  if (channelPath) {
     document.settingsSchema = {
       model: id.model,
-      settingsSchema: { $ref: settingsPath },
+      settingsSchema: { type: 'object', additionalProperties: true },
       channelSchema: { $ref: channelPath },
     };
   }

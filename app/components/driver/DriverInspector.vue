@@ -16,7 +16,7 @@ const panelItems: TabsItem[] = [
 
 const sectionGuides: Record<DriverEditorSection, string> = {
   setup:
-    'Name the radio, then set the programming port and the memory segments. Schema and memory-map paths are optional while you are still learning the protocol. A speed change in the middle of a clone belongs on an exchange step. Segment end addresses are inclusive, so 0x0000–0x03FF is 1024 bytes.',
+    'Name the radio, then set the programming port and the memory segments. The channel schema and memory-map paths are optional while you are still learning the protocol. A speed change in the middle of a clone belongs on an exchange step. Segment end addresses are inclusive, so 0x0000–0x03FF is 1024 bytes.',
   channel:
     'This is the channel the editor edits: an optional name, receive and transmit frequencies in hertz, and optional CTCSS or DCS tones. The JSON panel is the schema file. Copy it, then point the Channel schema path on Setup at that file. The Memory tab places these fields into the radio image.',
   memory:
