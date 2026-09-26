@@ -86,6 +86,21 @@ export interface DriverSegmentDraft {
 
 export type DriverLineLevel = 'omit' | 'on' | 'off';
 
+/** Channel JSON Schema edited on the Channel tab. Frequencies are hertz. */
+export interface DriverChannelSchemaDraft {
+  includeName: boolean;
+  nameMaxLength: string;
+  receiveMinimum: string;
+  receiveMaximum: string;
+  transmitMinimum: string;
+  transmitMaximum: string;
+  includeReceiveTone: boolean;
+  includeTransmitTone: boolean;
+  ctcssMinimum: string;
+  ctcssMaximum: string;
+  dcsPattern: string;
+}
+
 export interface DriverDraft {
   manufacturer: string;
   model: string;
@@ -114,9 +129,10 @@ export interface DriverDraft {
   segments: DriverSegmentDraft[];
   readSteps: DriverStepDraft[];
   writeSteps: DriverStepDraft[];
+  channelSchema: DriverChannelSchemaDraft;
 }
 
-export const DRIVER_EDITOR_SECTIONS = ['setup', 'read', 'write'] as const;
+export const DRIVER_EDITOR_SECTIONS = ['setup', 'channel', 'read', 'write'] as const;
 
 /** Speeds offered for the programming port. A radio may accept more than one. */
 export const DRIVER_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] as const;
@@ -275,6 +291,23 @@ export function createDriverStep(kind: DriverStepKind): DriverStepDraft {
   };
 }
 
+/** Starting channel schema: a short name, a VHF frequency window, and CTCSS or DCS tones. */
+export function createChannelSchemaDraft(): DriverChannelSchemaDraft {
+  return {
+    includeName: true,
+    nameMaxLength: '7',
+    receiveMinimum: '136000000',
+    receiveMaximum: '174000000',
+    transmitMinimum: '136000000',
+    transmitMaximum: '174000000',
+    includeReceiveTone: true,
+    includeTransmitTone: true,
+    ctcssMinimum: '67',
+    ctcssMaximum: '254.1',
+    dcsPattern: '^D[0-9]{3}[N|I]$',
+  };
+}
+
 export function createDriverSegment(name = '', startAddress = '', endAddress = ''): DriverSegmentDraft {
   return {
     id: createDriverId(),
@@ -314,6 +347,7 @@ export function createDriverDraft(): DriverDraft {
     segments: [],
     readSteps: [],
     writeSteps: [],
+    channelSchema: createChannelSchemaDraft(),
   };
 }
 
@@ -627,6 +661,29 @@ function coerceSegments(value: unknown): DriverSegmentDraft[] {
   });
 }
 
+function coerceChannelSchema(value: unknown): DriverChannelSchemaDraft {
+  const fallback = createChannelSchemaDraft();
+  const record = asRecord(value);
+
+  if (!record) {
+    return fallback;
+  }
+
+  return {
+    includeName: asBoolean(record.includeName, fallback.includeName),
+    nameMaxLength: asString(record.nameMaxLength, fallback.nameMaxLength),
+    receiveMinimum: asString(record.receiveMinimum, fallback.receiveMinimum),
+    receiveMaximum: asString(record.receiveMaximum, fallback.receiveMaximum),
+    transmitMinimum: asString(record.transmitMinimum, fallback.transmitMinimum),
+    transmitMaximum: asString(record.transmitMaximum, fallback.transmitMaximum),
+    includeReceiveTone: asBoolean(record.includeReceiveTone, fallback.includeReceiveTone),
+    includeTransmitTone: asBoolean(record.includeTransmitTone, fallback.includeTransmitTone),
+    ctcssMinimum: asString(record.ctcssMinimum, fallback.ctcssMinimum),
+    ctcssMaximum: asString(record.ctcssMaximum, fallback.ctcssMaximum),
+    dcsPattern: asString(record.dcsPattern, fallback.dcsPattern),
+  };
+}
+
 function coerceDraftRecord(record: Record<string, unknown>): DriverDraft {
   const fallback = createDriverDraft();
 
@@ -657,6 +714,7 @@ function coerceDraftRecord(record: Record<string, unknown>): DriverDraft {
     addressSize: asString(record.addressSize, fallback.addressSize),
     addressEndianness: asEndianness(record.addressEndianness),
     segments: coerceSegments(record.segments),
+    channelSchema: coerceChannelSchema(record.channelSchema),
     readSteps: coerceSteps(record.readSteps),
     writeSteps: coerceSteps(record.writeSteps),
   };

@@ -10,6 +10,7 @@ const toast = useToast();
 
 const sectionItems: TabsItem[] = [
   { label: 'Setup', value: 'setup', icon: 'i-lucide-settings' },
+  { label: 'Channel', value: 'channel', icon: 'i-lucide-list' },
   { label: 'Read', value: 'read', icon: 'i-lucide-download' },
   { label: 'Write', value: 'write', icon: 'i-lucide-upload' },
 ];
@@ -17,7 +18,7 @@ const sectionItems: TabsItem[] = [
 const activeSection = computed({
   get: () => section.value,
   set: (value: string | number) => {
-    if (value === 'setup' || value === 'read' || value === 'write') {
+    if (value === 'setup' || value === 'channel' || value === 'read' || value === 'write') {
       section.value = value satisfies DriverEditorSection;
     }
   },
@@ -215,7 +216,8 @@ async function exportFile(): Promise<void> {
     >
       <template #form>
         <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
-          <DriverSetupForm />
+          <DriverChannelSchemaForm v-if="section === 'channel'" />
+          <DriverSetupForm v-else />
         </div>
       </template>
       <template #guide>

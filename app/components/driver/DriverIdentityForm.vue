@@ -115,7 +115,13 @@ function setFlag(
         </template>
         <UInput v-model="settingsSchemaPath" class="w-full font-mono" />
       </UFormField>
-      <UFormField label="Channel schema path" hint="Optional" :error="errorAt('schemas.channel')">
+      <UFormField label="Channel schema path" :error="errorAt('schemas.channel')">
+        <template #hint>
+          <span class="inline-flex items-center gap-1.5">
+            Optional
+            <HelpTooltip text="Path to the file edited on the Channel tab, for example ../src/shared/schemas/channel-schema.json" />
+          </span>
+        </template>
         <UInput v-model="channelSchemaPath" class="w-full font-mono" />
       </UFormField>
       <UFormField label="Memory map path" :error="errorAt('schemas.memoryMap')">

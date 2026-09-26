@@ -4,7 +4,7 @@ import { driverIssuesUnder, explainProtocolStep } from '~/utils/driver-compile';
 import { DRIVER_STEP_KIND_LABELS, type DriverEditorSection } from '~/utils/driver-draft';
 import { describeProtocolSteps, type ProtocolDisplayStep } from '~/utils/protocol-display';
 
-const { draft, compiled, section, readStepId, writeStepId } = useDriverDraft();
+const { draft, compiled, channelSchema, section, readStepId, writeStepId } = useDriverDraft();
 const toast = useToast();
 const copying = shallowRef(false);
 
@@ -17,6 +17,8 @@ const panelItems: TabsItem[] = [
 const sectionGuides: Record<DriverEditorSection, string> = {
   setup:
     'Name the radio, then set the programming port and the memory segments. Schema and memory-map paths are optional while you are still learning the protocol. A speed change in the middle of a clone belongs on an exchange step. Segment end addresses are inclusive, so 0x0000–0x03FF is 1024 bytes.',
+  channel:
+    'This is the channel the editor edits: an optional name, receive and transmit frequencies in hertz, and optional CTCSS or DCS tones. The JSON panel is the schema file. Copy it, then point the Channel schema path on Setup at that file. The memory map later places these fields into the radio image.',
   read: 'The diagram draws the whole read protocol. The highlighted step is the one open in the form. Hex, one ASCII character, and placeholders are the only byte forms, so the JSON cannot contain a malformed token.',
   write: 'The diagram draws the whole write protocol the same way. $data in a chunked write is the slice of the memory image sent to the radio.',
 };
@@ -54,6 +56,9 @@ const explanation = computed(() => {
 });
 
 const showDiagram = computed(() => section.value === 'read' || section.value === 'write');
+const previewJson = computed(() => (section.value === 'channel' ? channelSchema.value.json : compiled.value.json));
+const previewErrors = computed(() => (section.value === 'channel' ? channelSchema.value.errorCount : compiled.value.errorCount));
+const previewWarnings = computed(() => (section.value === 'channel' ? 0 : compiled.value.warningCount));
 
 const diagram = computed(() => {
   return steps.value.map((step, index): ProtocolDisplayStep => {
@@ -82,6 +87,10 @@ const diagram = computed(() => {
 });
 
 const sectionIssues = computed(() => {
+  if (section.value === 'channel') {
+    return channelSchema.value.issues;
+  }
+
   if (section.value === 'setup') {
     const identity = compiled.value.issues.filter((issue) => {
       return issue.path.startsWith('id.') || issue.path === 'version' || issue.path.startsWith('schemas');
@@ -113,10 +122,10 @@ async function copyJson(): Promise<void> {
   copying.value = true;
 
   try {
-    await navigator.clipboard.writeText(compiled.value.json);
+    await navigator.clipboard.writeText(previewJson.value);
     toast.add({
-      title: compiled.value.errorCount > 0 ? 'Copied JSON that still has errors' : 'Copied driver JSON',
-      color: compiled.value.errorCount > 0 ? 'warning' : 'success',
+      title: previewErrors.value > 0 ? 'Copied JSON that still has errors' : section.value === 'channel' ? 'Copied channel schema' : 'Copied driver JSON',
+      color: previewErrors.value > 0 ? 'warning' : 'success',
       icon: 'i-lucide-check',
     });
   } catch (cause) {
@@ -147,13 +156,13 @@ async function copyJson(): Promise<void> {
         :ui="{ list: 'w-auto', trigger: 'grow-0' }"
       />
       <UBadge
-        :color="compiled.errorCount > 0 ? 'error' : compiled.warningCount > 0 ? 'warning' : 'success'"
+        :color="previewErrors > 0 ? 'error' : previewWarnings > 0 ? 'warning' : 'success'"
         variant="subtle"
         :label="
-          compiled.errorCount > 0
-            ? `${compiled.errorCount} to fix`
-            : compiled.warningCount > 0
-              ? `${compiled.warningCount} notes`
+          previewErrors > 0
+            ? `${previewErrors} to fix`
+            : previewWarnings > 0
+              ? `${previewWarnings} notes`
               : 'Syntax ok'
         "
       />
@@ -161,10 +170,10 @@ async function copyJson(): Promise<void> {
 
     <div v-if="panel === 'json'" class="relative min-h-0 w-full min-w-0 flex-1">
       <div class="h-full overflow-auto rounded-lg bg-default ring-1 ring-default">
-        <p v-if="compiled.errorCount > 0" class="pt-3 pr-12 pl-3 text-xs text-muted">
+        <p v-if="previewErrors > 0" class="pt-3 pr-12 pl-3 text-xs text-muted">
           Fields that still have errors are left out, so this preview stays valid JSON.
         </p>
-        <JsonCode :code="compiled.json" class="!pr-12" />
+        <JsonCode :code="previewJson" class="!pr-12" />
       </div>
       <UTooltip text="Copy JSON">
         <UButton
