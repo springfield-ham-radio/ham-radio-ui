@@ -78,6 +78,25 @@ export function radioDisplayName(manufacturer: string, name: string): string {
   return trimmedName;
 }
 
+/**
+ * One line for a radio menu: keep the manufacturer once.
+ * "Baofeng" plus "Baofeng UV-5R" is "Baofeng UV-5R".
+ */
+export function radioMenuLabel(manufacturer: string, name: string): string {
+  const trimmedName = name.trim();
+  const prefix = manufacturer.trim();
+
+  if (prefix.length === 0) {
+    return trimmedName;
+  }
+
+  if (trimmedName.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return trimmedName;
+  }
+
+  return `${prefix} ${trimmedName}`;
+}
+
 type CatalogEntryWithRadios = RadioModuleCatalogEntry & {
   radios?: CatalogRadioRef[];
 };

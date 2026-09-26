@@ -3,6 +3,7 @@ import type { SplitterItem, TabsItem } from '@nuxt/ui';
 import { openDriverJsonFile, saveDriverJsonFile } from '~/utils/driver-file-io';
 import { importDriverModule } from '~/utils/driver-import';
 import { createDriverDraft, DRIVER_EDITOR_SECTIONS, exampleDriverDraft, type DriverEditorSection } from '~/utils/driver-draft';
+import { radioMenuLabel } from '~/utils/radio-module-listing';
 
 const { draft, compiled, section, replaceDraft } = useDriverDraft();
 const { configurations } = useRadio();
@@ -27,10 +28,12 @@ const activeSection = computed({
 });
 
 const installedItems = computed(() => {
-  return configurations.value.map((config) => ({
-    label: `${config.id.manufacturer} ${config.id.name}`,
-    value: String(config.id.model),
-  }));
+  return configurations.value
+    .map((config) => ({
+      label: radioMenuLabel(config.id.manufacturer, config.id.name),
+      value: String(config.id.model),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 });
 
 const fieldPanes: SplitterItem[] = [
@@ -223,6 +226,10 @@ async function exportFile(): Promise<void> {
           placeholder="Load installed"
           :disabled="installedItems.length === 0"
           class="w-44"
+          :ui="{
+            content: 'w-72 max-w-[var(--reka-combobox-content-available-width)]',
+            itemLabel: 'overflow-visible text-clip whitespace-nowrap',
+          }"
           @update:model-value="loadInstalled"
         />
         <UButton label="Import" color="neutral" variant="outline" size="xs" icon="i-lucide-folder-open" @click="importFile" />
