@@ -33,6 +33,9 @@ Unsigned builds (no Apple notarization or Windows Authenticode yet). After the p
 - **macOS (Apple Silicon):** `HamBench-X.Y.Z-macOS-Apple-Silicon.dmg`
 - **Windows:** `HamBench-X.Y.Z-Windows-x64.exe` and `HamBench-X.Y.Z-Windows-x64.msi`
 - **Linux (x64):** `HamBench-X.Y.Z-Linux-x64.deb`, `.rpm`, and `.AppImage`
+- **Linux (ARM64):** `HamBench-X.Y.Z-Linux-arm64.deb`, `.rpm`, and `.AppImage` — 64-bit Raspberry Pi OS (Pi 3, 4, 5, and Zero 2 W)
+
+The ARM64 job uses the `ubuntu-22.04-arm` runner, the same Ubuntu release as the x64 job, so the binary links glibc 2.35 and runs on Raspberry Pi OS Bookworm and later.
 
 Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
 

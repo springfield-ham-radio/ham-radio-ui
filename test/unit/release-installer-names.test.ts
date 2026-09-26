@@ -18,6 +18,18 @@ describe('release installer names', () => {
     );
   });
 
+  it('should name Linux ARM64 packages for a 64-bit Raspberry Pi', () => {
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_arm64.deb', version)).toBe(
+      'HamBench-0.36.0-Linux-arm64.deb',
+    );
+    expect(releaseInstallerDownloadName('HamBench-0.36.0-1.aarch64.rpm', version)).toBe(
+      'HamBench-0.36.0-Linux-arm64.rpm',
+    );
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_aarch64.AppImage', version)).toBe(
+      'HamBench-0.36.0-Linux-arm64.AppImage',
+    );
+  });
+
   it('should name Windows installers without the NSIS setup suffix', () => {
     expect(releaseInstallerDownloadName('ham-radio_0.36.0_x64-setup.exe', version)).toBe(
       'HamBench-0.36.0-Windows-x64.exe',
