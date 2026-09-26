@@ -1,3 +1,9 @@
+## [0.41.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.40.0...v0.41.0) (2026-09-26)
+
+### Features
+
+* **radio:** show open radios in tabs and clone without saving one ([b7fdc36](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b7fdc36f2582d7912c234f67c070ce252d9f67ce))
+
 ## [0.40.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.39.1...v0.40.0) (2026-09-26)
 
 ### Features
