@@ -1,3 +1,9 @@
+## [0.42.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.3...v0.42.4) (2026-09-26)
+
+### Bug Fixes
+
+* **serial:** settle the port before the first handshake ([e679ad6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e679ad63b721192033e121803ec1f4ce6ef96808))
+
 ## [0.42.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.2...v0.42.3) (2026-09-26)
 
 ### Bug Fixes
