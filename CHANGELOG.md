@@ -1,3 +1,9 @@
+## [0.42.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.2...v0.42.3) (2026-09-26)
+
+### Bug Fixes
+
+* **radio:** show memory after importing with no saved radio ([30a2068](https://github.com/springfield-ham-radio/ham-radio-ui/commit/30a20682af9c5e024b10244f9c3b5d6fc3da6a2a))
+
 ## [0.42.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.1...v0.42.2) (2026-09-26)
 
 ### Bug Fixes
