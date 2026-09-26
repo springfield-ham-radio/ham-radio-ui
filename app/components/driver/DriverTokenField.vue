@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import { DRIVER_PLACEHOLDERS, createDriverToken, type DriverToken, type DriverTokenKind } from '~/utils/driver-draft';
 
 const props = defineProps<{
@@ -8,6 +9,8 @@ const props = defineProps<{
   error?: string;
   /** Keep the existing tokens. Used for a single delimiter byte. */
   fixed?: boolean;
+  /** The parent section already shows the label. */
+  hideLabel?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,31 +84,74 @@ function remove(index: number): void {
   );
 }
 
-function move(index: number, direction: -1 | 1): void {
-  const nextIndex = index + direction;
-  const next = props.tokens.slice();
-  const item = next[index];
-  const other = next[nextIndex];
-
-  if (!item || !other) {
-    return;
-  }
-
-  next[index] = other;
-  next[nextIndex] = item;
-  emit('update:tokens', next);
-}
-
 function add(kind: DriverTokenKind): void {
   emit('update:tokens', [...props.tokens, createDriverToken(kind, kind === 'placeholder' ? '$address' : '')]);
 }
+
+const tokenList = useTemplateRef<HTMLElement>('tokenList');
+const sortableTokens = shallowRef<DriverToken[]>([]);
+
+watch(
+  () => props.tokens,
+  (tokens) => {
+    sortableTokens.value = [...tokens];
+  },
+  { immediate: true },
+);
+
+useSortable(tokenList, sortableTokens, {
+  animation: 150,
+  handle: '.token-drag-handle',
+  draggable: '.token-row',
+  ghostClass: 'token-row-ghost',
+  forceFallback: true,
+  onUpdate(event) {
+    const fromIndex = event.oldIndex;
+    const toIndex = event.newIndex;
+
+    if (fromIndex === undefined || toIndex === undefined || fromIndex === toIndex) {
+      return;
+    }
+
+    if (event.item && event.from) {
+      removeNode(event.item);
+      insertNodeAt(event.from, event.item, fromIndex);
+    }
+
+    const next = props.tokens.slice();
+    const [item] = next.splice(fromIndex, 1);
+
+    if (!item) {
+      return;
+    }
+
+    next.splice(toIndex, 0, item);
+    sortableTokens.value = next;
+    emit('update:tokens', next);
+  },
+});
 </script>
 
 <template>
-  <UFormField :label="label" :description="description" :error="error">
-    <div class="flex flex-col gap-2">
+  <UFormField
+    :label="label"
+    :description="hideLabel ? undefined : description"
+    :error="error"
+    :ui="hideLabel ? { label: 'sr-only' } : undefined"
+  >
+    <div class="flex w-full flex-col gap-2">
       <div v-if="tokens.length === 0" class="text-xs text-muted">No bytes yet.</div>
-      <div v-for="(token, index) in tokens" :key="token.id" class="flex flex-wrap items-center gap-1.5">
+      <div v-else ref="tokenList" class="flex w-full flex-col gap-2">
+      <div v-for="(token, index) in tokens" :key="token.id" class="token-row flex w-full flex-wrap items-center gap-1.5">
+        <span
+          v-if="!fixed && tokens.length > 1"
+          class="token-drag-handle inline-flex cursor-grab text-muted active:cursor-grabbing"
+          role="button"
+          tabindex="0"
+          :aria-label="`Drag ${label} token ${index + 1}`"
+        >
+          <UIcon name="i-lucide-grip-vertical" class="pointer-events-none size-4" />
+        </span>
         <USelect
           :model-value="token.kind"
           :items="kindItems"
@@ -133,26 +179,6 @@ function add(kind: DriverTokenKind): void {
         />
         <UButton
           v-if="!fixed"
-          icon="i-lucide-chevron-up"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          :disabled="index === 0"
-          :aria-label="`Move ${label} token ${index + 1} earlier`"
-          @click="move(index, -1)"
-        />
-        <UButton
-          v-if="!fixed"
-          icon="i-lucide-chevron-down"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          :disabled="index === tokens.length - 1"
-          :aria-label="`Move ${label} token ${index + 1} later`"
-          @click="move(index, 1)"
-        />
-        <UButton
-          v-if="!fixed"
           icon="i-lucide-x"
           color="neutral"
           variant="ghost"
@@ -160,6 +186,7 @@ function add(kind: DriverTokenKind): void {
           :aria-label="`Remove ${label} token ${index + 1}`"
           @click="remove(index)"
         />
+      </div>
       </div>
       <div v-if="!fixed" class="flex flex-wrap gap-1.5">
         <UButton label="Hex" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="add('hex')" />
@@ -176,3 +203,9 @@ function add(kind: DriverTokenKind): void {
     </div>
   </UFormField>
 </template>
+
+<style>
+.token-row-ghost {
+  opacity: 0.45;
+}
+</style>

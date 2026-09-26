@@ -6,6 +6,8 @@ const props = defineProps<{
   label: string;
   description?: string;
   error?: string;
+  /** The parent section already shows the label. */
+  hideLabel?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -44,7 +46,11 @@ function onUntil(tokens: DriverToken[]): void {
 
 <template>
   <div class="flex flex-col gap-3">
-    <UFormField :label="label" :description="description">
+    <UFormField
+      :label="label"
+      :description="hideLabel ? undefined : description"
+      :ui="hideLabel ? { label: 'sr-only' } : undefined"
+    >
       <USelect
         :model-value="expect.mode"
         :items="modeItems"

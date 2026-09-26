@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TabsItem } from '@nuxt/ui';
+import type { SplitterItem, TabsItem } from '@nuxt/ui';
 import { openDriverJsonFile, saveDriverJsonFile } from '~/utils/driver-file-io';
 import { importDriverModule } from '~/utils/driver-import';
 import { createDriverDraft, exampleDriverDraft, type DriverEditorSection } from '~/utils/driver-draft';
@@ -32,7 +32,11 @@ const installedItems = computed(() => {
   }));
 });
 
-const copying = shallowRef(false);
+const fieldPanes: SplitterItem[] = [
+  { id: 'form', slot: 'form', defaultSize: 50, minSize: 28, class: 'min-h-0 min-w-0' },
+  { id: 'guide', slot: 'guide', defaultSize: 50, minSize: 22, class: 'min-h-0 min-w-0' },
+];
+
 const installedModel = shallowRef<string | undefined>();
 const cautionDismissed = useState('driver-caution-dismissed', () => false);
 
@@ -160,28 +164,6 @@ async function exportFile(): Promise<void> {
   }
 }
 
-async function copyJson(): Promise<void> {
-  copying.value = true;
-
-  try {
-    await navigator.clipboard.writeText(compiled.value.json);
-    toast.add({
-      title: compiled.value.errorCount > 0 ? 'Copied JSON that still has errors' : 'Copied driver JSON',
-      color: compiled.value.errorCount > 0 ? 'warning' : 'success',
-      icon: 'i-lucide-check',
-    });
-  } catch (cause) {
-    const message = cause instanceof Error ? cause.message : 'Could not copy to the clipboard';
-    toast.add({
-      title: 'Copy failed',
-      description: message,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
-    });
-  } finally {
-    copying.value = false;
-  }
-}
 </script>
 
 <template>
@@ -222,26 +204,35 @@ async function copyJson(): Promise<void> {
         />
         <UButton label="Import" color="neutral" variant="outline" size="xs" icon="i-lucide-folder-open" @click="importFile" />
         <UButton label="Export" color="neutral" variant="outline" size="xs" icon="i-lucide-save" @click="exportFile" />
-        <UButton
-          label="Copy JSON"
-          color="neutral"
-          variant="outline"
-          size="xs"
-          icon="i-lucide-copy"
-          :loading="copying"
-          @click="copyJson"
-        />
       </div>
     </div>
 
-    <div class="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row">
-      <div class="min-h-0 flex-1 overflow-auto">
-        <DriverIdentityForm v-if="section === 'identity'" />
-        <DriverSerialForm v-else-if="section === 'serial'" />
-        <DriverMemoryForm v-else-if="section === 'memory'" />
-        <DriverProtocolEditor v-else />
-      </div>
+    <USplitter
+      v-if="section !== 'read' && section !== 'write'"
+      id="driver-fields"
+      auto-save-id="ham-radio-driver-fields"
+      :items="fieldPanes"
+      class="min-h-0 flex-1"
+      :ui="{ handle: 'w-3' }"
+    >
+      <template #form>
+        <div class="h-full min-h-0 min-w-0 overflow-auto">
+          <DriverIdentityForm v-if="section === 'identity'" />
+          <DriverSerialForm v-else-if="section === 'serial'" />
+          <DriverMemoryForm v-else />
+        </div>
+      </template>
+      <template #guide>
+        <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden pl-1">
+          <DriverInspector />
+        </div>
+      </template>
+      <template #resize-handle>
+        <DriverPaneHandle />
+      </template>
+    </USplitter>
+    <DriverProtocolEditor v-else class="min-h-0 flex-1">
       <DriverInspector />
-    </div>
+    </DriverProtocolEditor>
   </div>
 </template>

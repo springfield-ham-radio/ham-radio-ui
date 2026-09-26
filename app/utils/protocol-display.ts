@@ -373,6 +373,10 @@ function describeRead(step: RadioReadStep, memoryConfig?: RadioMemoryConfig): Pr
   };
 }
 
+function formatProtocolAddress(value: number): string {
+  return `0x${value.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
 function describeWrite(step: RadioWriteStep, memoryConfig?: RadioMemoryConfig): ProtocolDisplayStep {
   const chunkSize = step.write.chunkSize ?? memoryConfig?.chunkSize ?? 0;
   const notes: string[] = [];
@@ -387,7 +391,7 @@ function describeWrite(step: RadioWriteStep, memoryConfig?: RadioMemoryConfig): 
 
   if (step.write.skip && step.write.skip.length > 0) {
     const ranges = step.write.skip
-      .map((segment) => `${segment.startAddress}–${segment.endAddress}`)
+      .map((segment) => `${formatProtocolAddress(segment.startAddress)}–${formatProtocolAddress(segment.endAddress)}`)
       .join(', ');
     notes.push(`Skip ${ranges}`);
   }

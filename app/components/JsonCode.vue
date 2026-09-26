@@ -19,7 +19,7 @@ const tokenClassNames: Record<JsonTokenKind, string> = {
 </script>
 
 <template>
-  <pre class="px-4 py-3 font-mono text-xs leading-6"><span
+  <pre class="w-full min-w-full px-4 py-3 font-mono text-xs leading-6"><span
     v-for="(token, index) in tokens"
     :key="index"
     :class="tokenClassNames[token.kind]"

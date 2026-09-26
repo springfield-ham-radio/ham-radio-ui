@@ -168,7 +168,7 @@ describe('protocol-display', () => {
       expect(loop?.loop?.label).toBe('Each chunk');
       expect(loop?.loop?.detail).toContain('16-byte');
       expect(loop?.notes).toContain('Wait 50 ms after each block');
-      expect(loop?.notes.some((note) => note.includes('3312–3327'))).toBe(true);
+      expect(loop?.notes).toContain('Skip 0x0CF0–0x0CFF, 0x0DF0–0x0DFF');
       expect(loop?.messages[0]?.tokens.map((token) => token.label)).toEqual([
         'X',
         '$address',

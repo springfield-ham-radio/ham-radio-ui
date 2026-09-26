@@ -11,6 +11,8 @@ import {
   DRIVER_PLACEHOLDER_VALUES,
   DRIVER_READ_STEP_KINDS,
   DRIVER_WRITE_STEP_KINDS,
+  formatDriverAddress,
+  parseDriverAddress,
   parseDriverInteger,
   type DriverDraft,
   type DriverExpectDraft,
@@ -453,8 +455,8 @@ function compileStep(
 
   const writeChunk = compilePositive(step.chunkSize, `${path}.chunkSize`, issues, 'Chunk size');
   const skip = step.skip.flatMap((range) => {
-    const start = parseDriverInteger(range.startAddress);
-    const end = parseDriverInteger(range.endAddress);
+    const start = parseDriverAddress(range.startAddress);
+    const end = parseDriverAddress(range.endAddress);
     const rangePath = `${path}.skip.${range.id}`;
 
     if (start === undefined || end === undefined) {
@@ -736,7 +738,9 @@ export function explainProtocolStep(step: RadioProtocolStep, memory?: RadioMemor
     ];
 
     if (step.write.skip && step.write.skip.length > 0) {
-      const ranges = step.write.skip.map((range) => `${range.startAddress}–${range.endAddress}`).join(', ');
+      const ranges = step.write.skip
+        .map((range) => `${formatDriverAddress(range.startAddress)}–${formatDriverAddress(range.endAddress)}`)
+        .join(', ');
       lines.push(`Skips addresses ${ranges}.`);
     }
 

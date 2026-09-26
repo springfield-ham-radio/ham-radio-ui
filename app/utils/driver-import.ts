@@ -7,6 +7,7 @@ import {
   createDriverSegment,
   createDriverStep,
   createDriverToken,
+  formatDriverAddress,
   type DriverDraft,
   type DriverExpectDraft,
   type DriverStepDraft,
@@ -95,6 +96,10 @@ function numberText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
 
+function addressText(value: unknown): string {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? formatDriverAddress(value) : '';
+}
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -145,8 +150,8 @@ function draftStep(value: unknown, warnings: string[]): DriverStepDraft | undefi
         return [
           {
             id: createDriverId(),
-            startAddress: numberText(range.startAddress),
-            endAddress: numberText(range.endAddress),
+            startAddress: addressText(range.startAddress),
+            endAddress: addressText(range.endAddress),
           },
         ];
       });

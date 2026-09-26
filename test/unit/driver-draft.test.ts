@@ -3,6 +3,7 @@ import { parseDeveloperMode } from '../../app/utils/developer-mode.ts';
 import { compileDriverDraft } from '../../app/utils/driver-compile.ts';
 import { importDriverModule } from '../../app/utils/driver-import.ts';
 import {
+  canonicalizeSkipAddress,
   coerceDriverDraft,
   createDriverDraft,
   createDriverStep,
@@ -96,6 +97,41 @@ describe('driver draft', () => {
     const compiled = compileDriverDraft(draft);
 
     expect(compiled.issues.some((issue) => issue.message.includes('cannot be before the start'))).toBe(true);
+  });
+
+  it('keeps skip addresses as numbers and shows them as hex', () => {
+    const draft = exampleDriverDraft();
+    const step = draft.writeSteps.find((item) => item.kind === 'write');
+
+    if (!step) {
+      throw new Error('example draft is missing a write step');
+    }
+
+    step.skip = [
+      { id: 'range-1', startAddress: '3312', endAddress: '3327' },
+      { id: 'range-2', startAddress: '0xDF0', endAddress: '0xDFF' },
+    ];
+
+    const compiled = compileDriverDraft(draft);
+    const write = compiled.document.writeMemory.find((item) => 'write' in item && item.write.skip);
+
+    expect(write && 'write' in write ? write.write.skip : undefined).toEqual([
+      { startAddress: 3312, endAddress: 3327 },
+      { startAddress: 3568, endAddress: 3583 },
+    ]);
+    expect(compiled.issues.filter((issue) => issue.level === 'error')).toEqual([]);
+
+    const imported = importDriverModule(compiled.document);
+    const importedWrite = imported.draft?.writeSteps.find((item) => item.kind === 'write');
+
+    expect(importedWrite?.skip.map((range) => [range.startAddress, range.endAddress])).toEqual([
+      ['0x0CF0', '0x0CFF'],
+      ['0x0DF0', '0x0DFF'],
+    ]);
+    expect(canonicalizeSkipAddress('3312')).toBe('0x0CF0');
+    expect(canonicalizeSkipAddress('cf0')).toBe('0x0CF0');
+    expect(canonicalizeSkipAddress('0x10')).toBe('0x0010');
+    expect(canonicalizeSkipAddress('0x10000')).toBe('0x10000');
   });
 
   it('restores a stored draft and ignores corrupt JSON shapes', () => {

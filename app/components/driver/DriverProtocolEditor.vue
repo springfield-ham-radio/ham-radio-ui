@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { SplitterItem } from '@nuxt/ui';
+import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import {
   DRIVER_READ_STEP_KINDS,
   DRIVER_STEP_KIND_LABELS,
@@ -76,20 +78,47 @@ function removeStep(id: string): void {
   replaceSteps(steps.value.filter((step) => step.id !== id));
 }
 
-function moveStep(index: number, direction: -1 | 1): void {
-  const nextIndex = index + direction;
+function reorderSteps(fromIndex: number, toIndex: number): void {
   const next = steps.value.slice();
-  const item = next[index];
-  const other = next[nextIndex];
+  const [item] = next.splice(fromIndex, 1);
 
-  if (!item || !other) {
+  if (!item) {
     return;
   }
 
-  next[index] = other;
-  next[nextIndex] = item;
+  next.splice(toIndex, 0, item);
   replaceSteps(next);
 }
+
+const stepList = useTemplateRef<HTMLElement>('stepList');
+const sortableSteps = shallowRef(steps.value);
+
+watch(steps, (list) => {
+  sortableSteps.value = [...list];
+});
+
+useSortable(stepList, sortableSteps, {
+  animation: 150,
+  handle: '.step-drag-handle',
+  draggable: '.step-row',
+  ghostClass: 'token-row-ghost',
+  forceFallback: true,
+  onUpdate(event) {
+    const fromIndex = event.oldIndex;
+    const toIndex = event.newIndex;
+
+    if (fromIndex === undefined || toIndex === undefined || fromIndex === toIndex) {
+      return;
+    }
+
+    if (event.item && event.from) {
+      removeNode(event.item);
+      insertNodeAt(event.from, event.item, fromIndex);
+    }
+
+    reorderSteps(fromIndex, toIndex);
+  },
+});
 
 function duplicateStep(id: string): void {
   const step = steps.value.find((item) => item.id === id);
@@ -115,11 +144,24 @@ function onUpdate(step: (typeof steps.value)[number]): void {
 function stepHasError(id: string): boolean {
   return compiledSteps.value.some((step) => step.id === id && step.issues.some((issue) => issue.level === 'error'));
 }
+
+const panes: SplitterItem[] = [
+  { id: 'steps', slot: 'steps', defaultSize: 16, minSize: 12, maxSize: 36, class: 'min-h-0 min-w-0' },
+  { id: 'editor', slot: 'editor', defaultSize: 42, minSize: 22, class: 'min-h-0 min-w-0' },
+  { id: 'guide', slot: 'guide', defaultSize: 42, minSize: 22, class: 'min-h-0 min-w-0' },
+];
 </script>
 
 <template>
-  <div class="grid min-h-0 gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
-    <div class="flex min-h-0 flex-col gap-2">
+  <USplitter
+    id="driver-protocol"
+    auto-save-id="ham-radio-driver-protocol"
+    :items="panes"
+    class="h-full min-h-0"
+    :ui="{ handle: 'w-3' }"
+  >
+    <template #steps>
+    <div class="flex h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden">
       <div class="flex gap-1.5">
         <USelect
           :model-value="addKind"
@@ -132,8 +174,17 @@ function stepHasError(id: string): boolean {
         <UButton label="Add" color="neutral" variant="outline" size="sm" icon="i-lucide-plus" @click="addStep" />
       </div>
       <p v-if="steps.length === 0" class="px-1 text-sm text-muted">No steps yet.</p>
-      <div v-else class="flex flex-col gap-1 overflow-auto">
-        <div v-for="(step, index) in steps" :key="step.id" class="flex items-center gap-1">
+      <div v-else ref="stepList" class="flex flex-col gap-1 overflow-auto">
+        <div v-for="(step, index) in steps" :key="step.id" class="step-row flex items-center gap-1">
+          <span
+            v-if="steps.length > 1"
+            class="step-drag-handle inline-flex cursor-grab text-muted active:cursor-grabbing"
+            role="button"
+            tabindex="0"
+            :aria-label="`Drag step ${index + 1}`"
+          >
+            <UIcon name="i-lucide-grip-vertical" class="pointer-events-none size-4" />
+          </span>
           <UButton
             :label="driverStepTitle(step, index)"
             :color="step.id === selectedId ? 'primary' : 'neutral'"
@@ -142,24 +193,6 @@ function stepHasError(id: string): boolean {
             class="min-w-0 flex-1 justify-start"
             :icon="stepHasError(step.id) ? 'i-lucide-circle-alert' : undefined"
             @click="selectedId = step.id"
-          />
-          <UButton
-            icon="i-lucide-chevron-up"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            :disabled="index === 0"
-            :aria-label="`Move step ${index + 1} earlier`"
-            @click="moveStep(index, -1)"
-          />
-          <UButton
-            icon="i-lucide-chevron-down"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            :disabled="index === steps.length - 1"
-            :aria-label="`Move step ${index + 1} later`"
-            @click="moveStep(index, 1)"
           />
           <UButton
             icon="i-lucide-copy"
@@ -180,7 +213,9 @@ function stepHasError(id: string): boolean {
         </div>
       </div>
     </div>
-    <div class="min-h-0 overflow-auto pr-1">
+    </template>
+    <template #editor>
+    <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
       <DriverStepForm
         v-if="selected"
         :step="selected"
@@ -191,5 +226,14 @@ function stepHasError(id: string): boolean {
       />
       <p v-else class="text-sm text-muted">Add a step to describe what the radio does on the wire.</p>
     </div>
-  </div>
+    </template>
+    <template #guide>
+      <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden pl-1">
+        <slot />
+      </div>
+    </template>
+    <template #resize-handle>
+      <DriverPaneHandle />
+    </template>
+  </USplitter>
 </template>

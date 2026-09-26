@@ -147,6 +147,48 @@ export function parseDriverInteger(raw: string): number | undefined {
   return undefined;
 }
 
+/**
+ * Parse a radio address from a skip-range field.
+ * A 0x prefix or A–F digits are hex. Digits alone are a decimal address from an older draft.
+ */
+export function parseDriverAddress(raw: string): number | undefined {
+  const text = raw.trim();
+
+  if (/^0x[0-9a-fA-F]+$/i.test(text)) {
+    const value = Number.parseInt(text.slice(2), 16);
+    return Number.isSafeInteger(value) ? value : undefined;
+  }
+
+  if (/^[0-9a-fA-F]+$/i.test(text) && /[a-fA-F]/.test(text)) {
+    const value = Number.parseInt(text, 16);
+    return Number.isSafeInteger(value) ? value : undefined;
+  }
+
+  if (/^\d+$/.test(text)) {
+    const value = Number.parseInt(text, 10);
+    return Number.isSafeInteger(value) ? value : undefined;
+  }
+
+  return undefined;
+}
+
+/** Format a radio address as 0x plus at least four uppercase hex digits. */
+export function formatDriverAddress(value: number): string {
+  return `0x${value.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+/** Store a skip address as 0x0000. Incomplete text is left as typed. */
+export function canonicalizeSkipAddress(raw: string): string {
+  const text = raw.trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const value = parseDriverAddress(text);
+  return value === undefined ? text : formatDriverAddress(value);
+}
+
 export function createDriverToken(kind: DriverTokenKind, value = ''): DriverToken {
   const initial = kind === 'placeholder' ? value || '$address' : value;
 
