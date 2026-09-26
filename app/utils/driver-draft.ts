@@ -101,6 +101,77 @@ export interface DriverChannelSchemaDraft {
   dcsPattern: string;
 }
 
+export const DRIVER_MEMORY_FIELD_TYPES = ['u8', 'u16', 'u32', 'bits', 'char'] as const;
+
+export const DRIVER_MEMORY_FIELD_KINDS = [
+  'integer',
+  'boolean',
+  'enum',
+  'ascii',
+  'digits',
+  'dtmf',
+  'bbcd',
+  'lbcd',
+  'tone',
+  'ctcss-index',
+  'dcs-index',
+] as const;
+
+export type DriverMemoryFieldType = (typeof DRIVER_MEMORY_FIELD_TYPES)[number];
+
+export type DriverMemoryFieldKind = (typeof DRIVER_MEMORY_FIELD_KINDS)[number];
+
+/** One field in a memory-map struct. Kind-specific text is ignored when the kind does not use it. */
+export interface DriverMemoryFieldDraft {
+  id: string;
+  fieldId: string;
+  type: DriverMemoryFieldType;
+  width: string;
+  reserved: boolean;
+  kind: DriverMemoryFieldKind;
+  length: string;
+  scale: string;
+  minimum: string;
+  maximum: string;
+  values: string;
+  pad: string;
+  charset: string;
+  ctcssMinimum: string;
+  reverseOffset: string;
+}
+
+/** A repeated or single struct in the channel half of a memory map. */
+export interface DriverMemoryStructDraft {
+  id: string;
+  structId: string;
+  seek: string;
+  count: string;
+  stride: string;
+  groupSize: string;
+  groupPad: string;
+  emptyEquals: string;
+  clearEmpty: boolean;
+  fields: DriverMemoryFieldDraft[];
+}
+
+/**
+ * Channel half of a memory map.
+ * Bindings name the structs and fields. Settings groups stay out of this draft.
+ */
+export interface DriverMemoryMapDraft {
+  version: string;
+  description: string;
+  records: string;
+  names: string;
+  nameField: string;
+  receiveFrequency: string;
+  transmitFrequency: string;
+  receiveTone: string;
+  transmitTone: string;
+  extras: string;
+  structs: DriverMemoryStructDraft[];
+}
+
 export interface DriverDraft {
   manufacturer: string;
   model: string;
@@ -130,9 +201,10 @@ export interface DriverDraft {
   readSteps: DriverStepDraft[];
   writeSteps: DriverStepDraft[];
   channelSchema: DriverChannelSchemaDraft;
+  memoryMap: DriverMemoryMapDraft;
 }
 
-export const DRIVER_EDITOR_SECTIONS = ['setup', 'channel', 'read', 'write'] as const;
+export const DRIVER_EDITOR_SECTIONS = ['setup', 'channel', 'memory', 'read', 'write'] as const;
 
 /** Speeds offered for the programming port. A radio may accept more than one. */
 export const DRIVER_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200] as const;
@@ -308,6 +380,112 @@ export function createChannelSchemaDraft(): DriverChannelSchemaDraft {
   };
 }
 
+/** DCS codes for a UV-5R tone word, in radio order. */
+export const DRIVER_UV5R_DCS_CODES = [
+  23, 25, 26, 31, 32, 36, 43, 47, 51, 53, 54, 65, 71, 72, 73, 74, 114, 115, 116, 122, 125, 131, 132, 134, 143, 145, 152,
+  155, 156, 162, 165, 172, 174, 205, 212, 223, 225, 226, 243, 244, 245, 246, 251, 252, 255, 261, 263, 265, 266, 271, 274,
+  306, 311, 315, 325, 331, 332, 343, 346, 351, 356, 364, 365, 371, 411, 412, 413, 423, 431, 432, 445, 446, 452, 454, 455,
+  462, 464, 465, 466, 503, 506, 516, 523, 526, 532, 546, 565, 606, 612, 624, 627, 631, 632, 645, 654, 662, 664, 703, 712,
+  723, 731, 732, 734, 743, 754,
+].join(', ');
+
+export function createMemoryField(partial: Partial<Omit<DriverMemoryFieldDraft, 'id'>> = {}): DriverMemoryFieldDraft {
+  return {
+    id: createDriverId(),
+    fieldId: '',
+    type: 'u8',
+    width: '',
+    reserved: false,
+    kind: 'integer',
+    length: '',
+    scale: '',
+    minimum: '',
+    maximum: '',
+    values: '',
+    pad: '',
+    charset: '',
+    ctcssMinimum: '',
+    reverseOffset: '',
+    ...partial,
+  };
+}
+
+export function createMemoryStruct(partial: Partial<Omit<DriverMemoryStructDraft, 'id' | 'fields'>> & { fields?: DriverMemoryFieldDraft[] } = {}): DriverMemoryStructDraft {
+  const { fields, ...rest } = partial;
+
+  return {
+    id: createDriverId(),
+    structId: '',
+    seek: '',
+    count: '',
+    stride: '',
+    groupSize: '',
+    groupPad: '',
+    emptyEquals: '',
+    clearEmpty: false,
+    ...rest,
+    fields: fields ?? [createMemoryField()],
+  };
+}
+
+/** Starting map: UV-5R channel records at 0x0000 and names at 0x1000. */
+export function createMemoryMapDraft(): DriverMemoryMapDraft {
+  return {
+    version: '1.0.0',
+    description: 'Channel records and names',
+    records: 'channels',
+    names: 'names',
+    nameField: 'name',
+    receiveFrequency: 'rxfreq',
+    transmitFrequency: 'txfreq',
+    receiveTone: 'rxtone',
+    transmitTone: 'txtone',
+    extras: '',
+    structs: [
+      createMemoryStruct({
+        structId: 'channels',
+        seek: '0x0000',
+        count: '128',
+        stride: '16',
+        emptyEquals: '0xFF',
+        clearEmpty: true,
+        fields: [
+          createMemoryField({ fieldId: 'rxfreq', kind: 'lbcd', length: '4', scale: '10' }),
+          createMemoryField({ fieldId: 'txfreq', kind: 'lbcd', length: '4', scale: '10' }),
+          createMemoryField({
+            fieldId: 'rxtone',
+            type: 'u16',
+            kind: 'tone',
+            values: DRIVER_UV5R_DCS_CODES,
+            ctcssMinimum: '600',
+            reverseOffset: '105',
+          }),
+          createMemoryField({
+            fieldId: 'txtone',
+            type: 'u16',
+            kind: 'tone',
+            values: DRIVER_UV5R_DCS_CODES,
+            ctcssMinimum: '600',
+            reverseOffset: '105',
+          }),
+        ],
+      }),
+      createMemoryStruct({
+        structId: 'names',
+        seek: '0x1000',
+        count: '128',
+        stride: '16',
+        emptyEquals: '0xFF',
+        clearEmpty: true,
+        fields: [
+          createMemoryField({ fieldId: 'name', kind: 'ascii', length: '7' }),
+          createMemoryField({ fieldId: '_pad', kind: 'ascii', length: '9', reserved: true }),
+        ],
+      }),
+    ],
+  };
+}
+
 export function createDriverSegment(name = '', startAddress = '', endAddress = ''): DriverSegmentDraft {
   return {
     id: createDriverId(),
@@ -348,6 +526,7 @@ export function createDriverDraft(): DriverDraft {
     readSteps: [],
     writeSteps: [],
     channelSchema: createChannelSchemaDraft(),
+    memoryMap: createMemoryMapDraft(),
   };
 }
 
@@ -661,6 +840,108 @@ function coerceSegments(value: unknown): DriverSegmentDraft[] {
   });
 }
 
+function asMemoryFieldType(value: unknown): DriverMemoryFieldType {
+  if (typeof value === 'string' && (DRIVER_MEMORY_FIELD_TYPES as readonly string[]).includes(value)) {
+    return value as DriverMemoryFieldType;
+  }
+
+  return 'u8';
+}
+
+function asMemoryFieldKind(value: unknown): DriverMemoryFieldKind {
+  if (typeof value === 'string' && (DRIVER_MEMORY_FIELD_KINDS as readonly string[]).includes(value)) {
+    return value as DriverMemoryFieldKind;
+  }
+
+  return 'integer';
+}
+
+function coerceMemoryFields(value: unknown): DriverMemoryFieldDraft[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+
+    if (!record) {
+      return [];
+    }
+
+    return [
+      {
+        id: asString(record.id) || createDriverId(),
+        fieldId: asString(record.fieldId),
+        type: asMemoryFieldType(record.type),
+        width: asString(record.width),
+        reserved: asBoolean(record.reserved, false),
+        kind: asMemoryFieldKind(record.kind),
+        length: asString(record.length),
+        scale: asString(record.scale),
+        minimum: asString(record.minimum),
+        maximum: asString(record.maximum),
+        values: asString(record.values),
+        pad: asString(record.pad),
+        charset: asString(record.charset),
+        ctcssMinimum: asString(record.ctcssMinimum),
+        reverseOffset: asString(record.reverseOffset),
+      },
+    ];
+  });
+}
+
+function coerceMemoryStructs(value: unknown): DriverMemoryStructDraft[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+
+    if (!record) {
+      return [];
+    }
+
+    return [
+      {
+        id: asString(record.id) || createDriverId(),
+        structId: asString(record.structId),
+        seek: asString(record.seek),
+        count: asString(record.count),
+        stride: asString(record.stride),
+        groupSize: asString(record.groupSize),
+        groupPad: asString(record.groupPad),
+        emptyEquals: asString(record.emptyEquals),
+        clearEmpty: asBoolean(record.clearEmpty, false),
+        fields: coerceMemoryFields(record.fields),
+      },
+    ];
+  });
+}
+
+function coerceMemoryMap(value: unknown): DriverMemoryMapDraft {
+  const fallback = createMemoryMapDraft();
+  const record = asRecord(value);
+
+  if (!record) {
+    return fallback;
+  }
+
+  return {
+    version: asString(record.version, fallback.version),
+    description: asString(record.description, fallback.description),
+    records: asString(record.records, fallback.records),
+    names: asString(record.names, fallback.names),
+    nameField: asString(record.nameField, fallback.nameField),
+    receiveFrequency: asString(record.receiveFrequency, fallback.receiveFrequency),
+    transmitFrequency: asString(record.transmitFrequency, fallback.transmitFrequency),
+    receiveTone: asString(record.receiveTone, fallback.receiveTone),
+    transmitTone: asString(record.transmitTone, fallback.transmitTone),
+    extras: asString(record.extras),
+    structs: record.structs === undefined ? fallback.structs : coerceMemoryStructs(record.structs),
+  };
+}
+
 function coerceChannelSchema(value: unknown): DriverChannelSchemaDraft {
   const fallback = createChannelSchemaDraft();
   const record = asRecord(value);
@@ -715,6 +996,7 @@ function coerceDraftRecord(record: Record<string, unknown>): DriverDraft {
     addressEndianness: asEndianness(record.addressEndianness),
     segments: coerceSegments(record.segments),
     channelSchema: coerceChannelSchema(record.channelSchema),
+    memoryMap: coerceMemoryMap(record.memoryMap),
     readSteps: coerceSteps(record.readSteps),
     writeSteps: coerceSteps(record.writeSteps),
   };

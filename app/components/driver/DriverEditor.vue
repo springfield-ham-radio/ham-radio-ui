@@ -2,7 +2,7 @@
 import type { SplitterItem, TabsItem } from '@nuxt/ui';
 import { openDriverJsonFile, saveDriverJsonFile } from '~/utils/driver-file-io';
 import { importDriverModule } from '~/utils/driver-import';
-import { createDriverDraft, exampleDriverDraft, type DriverEditorSection } from '~/utils/driver-draft';
+import { createDriverDraft, DRIVER_EDITOR_SECTIONS, exampleDriverDraft, type DriverEditorSection } from '~/utils/driver-draft';
 
 const { draft, compiled, section, replaceDraft } = useDriverDraft();
 const { configurations } = useRadio();
@@ -11,6 +11,7 @@ const toast = useToast();
 const sectionItems: TabsItem[] = [
   { label: 'Setup', value: 'setup', icon: 'i-lucide-settings' },
   { label: 'Channel', value: 'channel', icon: 'i-lucide-list' },
+  { label: 'Memory', value: 'memory', icon: 'i-lucide-grid-3x3' },
   { label: 'Read', value: 'read', icon: 'i-lucide-download' },
   { label: 'Write', value: 'write', icon: 'i-lucide-upload' },
 ];
@@ -18,8 +19,8 @@ const sectionItems: TabsItem[] = [
 const activeSection = computed({
   get: () => section.value,
   set: (value: string | number) => {
-    if (value === 'setup' || value === 'channel' || value === 'read' || value === 'write') {
-      section.value = value satisfies DriverEditorSection;
+    if ((DRIVER_EDITOR_SECTIONS as readonly string[]).includes(String(value))) {
+      section.value = value as DriverEditorSection;
     }
   },
 });
@@ -217,6 +218,7 @@ async function exportFile(): Promise<void> {
       <template #form>
         <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
           <DriverChannelSchemaForm v-if="section === 'channel'" />
+          <DriverMemoryMapForm v-else-if="section === 'memory'" />
           <DriverSetupForm v-else />
         </div>
       </template>

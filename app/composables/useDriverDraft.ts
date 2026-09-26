@@ -1,5 +1,6 @@
 import { compileChannelSchema } from '~/utils/channel-schema';
 import { compileDriverDraft } from '~/utils/driver-compile';
+import { compileMemoryMap } from '~/utils/memory-map';
 import {
   readStoredDriverDraft,
   writeStoredDriverDraft,
@@ -16,7 +17,12 @@ export function useDriverDraft() {
   const sectionState = useState<string>('driver-editor-section', () => 'setup');
   const section = computed<DriverEditorSection>({
     get() {
-      if (sectionState.value === 'read' || sectionState.value === 'write' || sectionState.value === 'channel') {
+      if (
+        sectionState.value === 'read' ||
+        sectionState.value === 'write' ||
+        sectionState.value === 'channel' ||
+        sectionState.value === 'memory'
+      ) {
         return sectionState.value;
       }
 
@@ -30,6 +36,7 @@ export function useDriverDraft() {
   const writeStepId = useState<string | undefined>('driver-editor-write-step', () => undefined);
   const compiled = computed(() => compileDriverDraft(draft.value));
   const channelSchema = computed(() => compileChannelSchema(draft.value.channelSchema));
+  const memoryMap = computed(() => compileMemoryMap(draft.value.memoryMap));
 
   function commit(next: DriverDraft): void {
     draft.value = next;
@@ -67,6 +74,7 @@ export function useDriverDraft() {
     writeStepId,
     compiled,
     channelSchema,
+    memoryMap,
     patch,
     replaceDraft,
     updateReadStep,

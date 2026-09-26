@@ -128,7 +128,7 @@ function setFlag(
         <template #hint>
           <span class="inline-flex items-center gap-1.5">
             Optional
-            <HelpTooltip text="Field layout stays in that JSON file. This editor does not build the map." />
+            <HelpTooltip text="Path to the file edited on the Memory tab, for example ../src/shared/memory-maps/uv5r-settings.json" />
           </span>
         </template>
         <UInput v-model="memoryMapPath" class="w-full font-mono" />

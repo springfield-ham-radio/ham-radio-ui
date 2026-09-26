@@ -4,7 +4,7 @@ import { driverIssuesUnder, explainProtocolStep } from '~/utils/driver-compile';
 import { DRIVER_STEP_KIND_LABELS, type DriverEditorSection } from '~/utils/driver-draft';
 import { describeProtocolSteps, type ProtocolDisplayStep } from '~/utils/protocol-display';
 
-const { draft, compiled, channelSchema, section, readStepId, writeStepId } = useDriverDraft();
+const { draft, compiled, channelSchema, memoryMap, section, readStepId, writeStepId } = useDriverDraft();
 const toast = useToast();
 const copying = shallowRef(false);
 
@@ -18,7 +18,9 @@ const sectionGuides: Record<DriverEditorSection, string> = {
   setup:
     'Name the radio, then set the programming port and the memory segments. Schema and memory-map paths are optional while you are still learning the protocol. A speed change in the middle of a clone belongs on an exchange step. Segment end addresses are inclusive, so 0x0000–0x03FF is 1024 bytes.',
   channel:
-    'This is the channel the editor edits: an optional name, receive and transmit frequencies in hertz, and optional CTCSS or DCS tones. The JSON panel is the schema file. Copy it, then point the Channel schema path on Setup at that file. The memory map later places these fields into the radio image.',
+    'This is the channel the editor edits: an optional name, receive and transmit frequencies in hertz, and optional CTCSS or DCS tones. The JSON panel is the schema file. Copy it, then point the Channel schema path on Setup at that file. The Memory tab places these fields into the radio image.',
+  memory:
+    'Bindings name the channel struct and the fields for the name, frequencies, and tones. Each struct starts at a radio address and lays those fields out in order. The JSON panel is the memory-map file. Copy it, then point the Memory map path on Setup at that file. Radio-wide settings groups are not in this file.',
   read: 'The diagram draws the whole read protocol. The highlighted step is the one open in the form. Hex, one ASCII character, and placeholders are the only byte forms, so the JSON cannot contain a malformed token.',
   write: 'The diagram draws the whole write protocol the same way. $data in a chunked write is the slice of the memory image sent to the radio.',
 };
@@ -56,9 +58,39 @@ const explanation = computed(() => {
 });
 
 const showDiagram = computed(() => section.value === 'read' || section.value === 'write');
-const previewJson = computed(() => (section.value === 'channel' ? channelSchema.value.json : compiled.value.json));
-const previewErrors = computed(() => (section.value === 'channel' ? channelSchema.value.errorCount : compiled.value.errorCount));
-const previewWarnings = computed(() => (section.value === 'channel' ? 0 : compiled.value.warningCount));
+const previewJson = computed(() => {
+  if (section.value === 'channel') {
+    return channelSchema.value.json;
+  }
+
+  if (section.value === 'memory') {
+    return memoryMap.value.json;
+  }
+
+  return compiled.value.json;
+});
+const previewErrors = computed(() => {
+  if (section.value === 'channel') {
+    return channelSchema.value.errorCount;
+  }
+
+  if (section.value === 'memory') {
+    return memoryMap.value.errorCount;
+  }
+
+  return compiled.value.errorCount;
+});
+const previewWarnings = computed(() => {
+  if (section.value === 'channel') {
+    return 0;
+  }
+
+  if (section.value === 'memory') {
+    return memoryMap.value.warningCount;
+  }
+
+  return compiled.value.warningCount;
+});
 
 const diagram = computed(() => {
   return steps.value.map((step, index): ProtocolDisplayStep => {
@@ -91,6 +123,10 @@ const sectionIssues = computed(() => {
     return channelSchema.value.issues;
   }
 
+  if (section.value === 'memory') {
+    return memoryMap.value.issues;
+  }
+
   if (section.value === 'setup') {
     const identity = compiled.value.issues.filter((issue) => {
       return issue.path.startsWith('id.') || issue.path === 'version' || issue.path.startsWith('schemas');
@@ -118,13 +154,29 @@ function onDiagramSelect(index: number): void {
   }
 }
 
+function copyTitle(): string {
+  if (previewErrors.value > 0) {
+    return 'Copied JSON that still has errors';
+  }
+
+  if (section.value === 'channel') {
+    return 'Copied channel schema';
+  }
+
+  if (section.value === 'memory') {
+    return 'Copied memory map';
+  }
+
+  return 'Copied driver JSON';
+}
+
 async function copyJson(): Promise<void> {
   copying.value = true;
 
   try {
     await navigator.clipboard.writeText(previewJson.value);
     toast.add({
-      title: previewErrors.value > 0 ? 'Copied JSON that still has errors' : section.value === 'channel' ? 'Copied channel schema' : 'Copied driver JSON',
+      title: copyTitle(),
       color: previewErrors.value > 0 ? 'warning' : 'success',
       icon: 'i-lucide-check',
     });
