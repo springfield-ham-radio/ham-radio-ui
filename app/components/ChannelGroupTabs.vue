@@ -38,11 +38,16 @@ const items = computed<TabsItem[]>(() => [
       v-model="activeId"
       :items="items"
       :content="false"
-      color="neutral"
+      color="primary"
       variant="link"
       size="sm"
       class="min-w-0"
-      :ui="{ list: 'overflow-x-auto', trigger: 'shrink-0' }"
+      :ui="{
+        list: 'overflow-x-auto',
+        trigger: 'shrink-0 data-[state=inactive]:text-muted data-[state=active]:text-primary',
+        leadingIcon: 'text-current',
+        indicator: 'bg-primary bottom-0 h-0.5 rounded-full',
+      }"
     />
     <UTooltip v-if="manage" text="Create an empty group, then import a CSV">
       <UButton
