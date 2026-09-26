@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TabsItem } from '@nuxt/ui';
 import { driverFieldError } from '~/utils/driver-compile';
 import { createMemoryGroup, createMemoryStruct, type DriverMemoryMapDraft } from '~/utils/driver-draft';
 
@@ -9,7 +10,13 @@ function errorAt(path: string): string | undefined {
 }
 
 function patchMap(partial: Partial<DriverMemoryMapDraft>): void {
-  patch({ memoryMap: { ...draft.value.memoryMap, ...partial } });
+  const current = draft.value.memoryMap;
+
+  if (Object.entries(partial).every(([key, value]) => current[key as keyof DriverMemoryMapDraft] === value)) {
+    return;
+  }
+
+  patch({ memoryMap: { ...current, ...partial } });
 }
 
 const version = computed({
@@ -58,8 +65,31 @@ function addStruct(): void {
 }
 
 function addGroup(): void {
-  patchMap({ groups: [...draft.value.memoryMap.groups, createMemoryGroup()] });
+  const group = createMemoryGroup();
+  patchMap({ groups: [...draft.value.memoryMap.groups, group] });
+  openGroupId.value = group.id;
 }
+
+const groupItems = computed<TabsItem[]>(() => {
+  return draft.value.memoryMap.groups.map((group) => ({
+    label: group.label.trim() || group.groupId.trim() || 'Group',
+    value: group.id,
+    icon: group.icon.trim() || undefined,
+  }));
+});
+
+const openGroupId = shallowRef(draft.value.memoryMap.groups[0]?.id);
+
+watch(
+  () => draft.value.memoryMap.groups.map((group) => group.id).join('\0'),
+  () => {
+    const ids = draft.value.memoryMap.groups.map((group) => group.id);
+
+    if (!ids.includes(openGroupId.value ?? '')) {
+      openGroupId.value = ids[0];
+    }
+  },
+);
 </script>
 
 <template>
@@ -125,11 +155,22 @@ function addGroup(): void {
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-1">
         <p class="text-sm font-medium text-highlighted">Settings groups</p>
-        <HelpTooltip text="These are the entries in the Settings list. A field chooses a group to appear there." />
+        <HelpTooltip text="Each tab is one entry in the Settings list. The selected tab edits that group's fields." />
       </div>
       <UButton label="Add group" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addGroup" />
     </div>
-    <DriverMemoryGroupForm v-for="group in draft.memoryMap.groups" :key="group.id" :group-id="group.id" />
+    <UTabs
+      v-if="groupItems.length > 0"
+      v-model="openGroupId"
+      :items="groupItems"
+      :content="false"
+      color="primary"
+      variant="link"
+      size="sm"
+      class="w-full min-w-0"
+      :ui="{ list: 'overflow-x-auto', trigger: 'shrink-0' }"
+    />
+    <DriverMemoryGroupForm v-if="openGroupId" :group-id="openGroupId" />
 
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-1">

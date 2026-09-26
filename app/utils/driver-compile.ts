@@ -829,7 +829,7 @@ export function compileDriverDraft(draft: DriverDraft): CompiledDriver {
     issues.push({
       level: 'warning',
       path: 'schemas.memoryMap',
-      message: 'A published module points memoryMap at a memory-map JSON file. This editor does not draw that map.',
+      message: 'A published module points memoryMap at a memory-map JSON file. Add that path on Setup.',
     });
   }
 

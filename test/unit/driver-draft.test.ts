@@ -37,6 +37,15 @@ describe('driver draft', () => {
     expect(compiled.document.serialConfig.baudRates).toEqual([9600]);
   });
 
+  it('checks the default speed when the module has no baud list', () => {
+    const imported = importDriverModule({
+      serialConfig: { baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' },
+    });
+
+    expect(imported.draft?.baudRate).toBe('9600');
+    expect(imported.draft?.baudRates).toBe('9600');
+  });
+
   it('requires at least one supported baud rate', () => {
     const draft = exampleDriverDraft();
     draft.baudRates = '';

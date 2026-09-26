@@ -1,4 +1,6 @@
 import type { RadioByteToken, RadioExpect } from '@springfield/ham-radio-api';
+import { draftChannelSchema, draftMemoryMap } from './driver-loaded-documents';
+import { listedProgrammingBaudRates } from './radio-baud-rate';
 import {
   DRIVER_PLACEHOLDER_VALUES,
   createDriverDraft,
@@ -8,6 +10,7 @@ import {
   createDriverStep,
   createDriverToken,
   formatDriverAddress,
+  formatDriverBaudRates,
   type DriverDraft,
   type DriverExpectDraft,
   type DriverStepDraft,
@@ -207,7 +210,8 @@ function draftSteps(value: unknown, warnings: string[]): DriverStepDraft[] {
 
 /**
  * Load a radio-module JSON object into the form.
- * Inline memory maps and schemas are not edited here; the form keeps file paths only.
+ * A path is stored as written. An inlined channel schema or memory map fills that tab.
+ * The settings schema stays a path: the Settings screen is the memory map.
  */
 export function importDriverModule(value: unknown): DriverImportResult {
   if (!isRecord(value)) {
@@ -257,8 +261,13 @@ export function importDriverModule(value: unknown): DriverImportResult {
       draft.parity = serial.parity;
     }
 
-    if (Array.isArray(serial.baudRates)) {
-      draft.baudRates = serial.baudRates.filter((item) => typeof item === 'number').join(', ');
+    const listed = listedProgrammingBaudRates({
+      baudRate: typeof serial.baudRate === 'number' ? serial.baudRate : 0,
+      baudRates: serial.baudRates,
+    });
+
+    if (listed.length > 0) {
+      draft.baudRates = formatDriverBaudRates(listed);
     }
 
     draft.rtscts = serial.rtscts === true;
@@ -289,11 +298,20 @@ export function importDriverModule(value: unknown): DriverImportResult {
   const channelRef = settings ? refOf(settings.channelSchema) : undefined;
 
   if (settings && settings.settingsSchema !== undefined && !settingsRef) {
-    warnings.push('The settings schema is inline. This editor keeps a file path, so paste that schema into its own JSON file.');
+    const schema = settings.settingsSchema;
+    const properties = isRecord(schema) && isRecord(schema.properties) ? schema.properties : undefined;
+
+    if (properties && Object.keys(properties).length > 0) {
+      warnings.push('The settings schema lists fields. This editor does not edit that file. The Settings screen comes from the memory map.');
+    }
   }
 
   if (settings && settings.channelSchema !== undefined && !channelRef) {
-    warnings.push('The channel schema is inline. This editor keeps a file path, so paste that schema into its own JSON file.');
+    const channelSchema = draftChannelSchema(settings.channelSchema, warnings);
+
+    if (channelSchema) {
+      draft.channelSchema = channelSchema;
+    }
   }
 
   draft.settingsSchemaPath = settingsRef ?? '';
@@ -302,7 +320,11 @@ export function importDriverModule(value: unknown): DriverImportResult {
   const memoryMapRef = refOf(value.memoryMap);
 
   if (value.memoryMap !== undefined && !memoryMapRef) {
-    warnings.push('The memory map is inline. This editor keeps a file path; field layout stays in the memory-map JSON.');
+    const memoryMap = draftMemoryMap(value.memoryMap, warnings);
+
+    if (memoryMap) {
+      draft.memoryMap = memoryMap;
+    }
   }
 
   draft.memoryMapPath = memoryMapRef ?? '';

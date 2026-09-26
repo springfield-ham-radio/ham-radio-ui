@@ -20,7 +20,7 @@ const sectionGuides: Record<DriverEditorSection, string> = {
   channel:
     'This is the channel the editor edits: an optional name, receive and transmit frequencies in hertz, and optional CTCSS or DCS tones. The JSON panel is the schema file. Copy it, then point the Channel schema path on Setup at that file. The Memory tab places these fields into the radio image.',
   memory:
-    'Bindings name the channel struct and the fields for the name, frequencies, and tones. Settings groups are the list on the Settings screen, and a field can point at a group with a label and a widget. The JSON panel is the memory-map file. Copy it, then point the Memory map path on Setup at that file.',
+    'Bindings name the channel struct and the fields for the name, frequencies, and tones. Settings groups are a tab menu, and the selected tab edits that group. The JSON panel is the memory-map file. Copy it, then point the Memory map path on Setup at that file.',
   read: 'The diagram draws the whole read protocol. The highlighted step is the one open in the form. Hex, one ASCII character, and placeholders are the only byte forms, so the JSON cannot contain a malformed token.',
   write: 'The diagram draws the whole write protocol the same way. $data in a chunked write is the slice of the memory image sent to the radio.',
 };

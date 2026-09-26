@@ -425,6 +425,12 @@ export const DRIVER_UV5R_DCS_CODES = [
   723, 731, 732, 734, 743, 754,
 ].join(', ');
 
+/** True when the field is edited under a declared Settings group. */
+export function memoryFieldInSettingsGroup(field: DriverMemoryFieldDraft, groupIds: ReadonlySet<string>): boolean {
+  const groupId = field.uiGroup.trim();
+  return field.showUi && groupId.length > 0 && groupIds.has(groupId);
+}
+
 export function createMemoryField(partial: Partial<Omit<DriverMemoryFieldDraft, 'id'>> = {}): DriverMemoryFieldDraft {
   return {
     id: createDriverId(),

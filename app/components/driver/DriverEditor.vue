@@ -39,6 +39,23 @@ const fieldPanes: SplitterItem[] = [
 
 const installedModel = shallowRef<string | undefined>();
 const cautionDismissed = useState('driver-caution-dismissed', () => false);
+const channelMounted = shallowRef(section.value === 'channel');
+const memoryMounted = shallowRef(section.value === 'memory');
+const protocolMounted = shallowRef(section.value === 'read' || section.value === 'write');
+
+watch(section, (value) => {
+  if (value === 'channel') {
+    channelMounted.value = true;
+  }
+
+  if (value === 'memory') {
+    memoryMounted.value = true;
+  }
+
+  if (value === 'read' || value === 'write') {
+    protocolMounted.value = true;
+  }
+});
 
 function dismissCaution(): void {
   cautionDismissed.value = true;
@@ -208,7 +225,7 @@ async function exportFile(): Promise<void> {
     </div>
 
     <USplitter
-      v-if="section !== 'read' && section !== 'write'"
+      v-show="section !== 'read' && section !== 'write'"
       id="driver-fields"
       auto-save-id="ham-radio-driver-fields"
       :items="fieldPanes"
@@ -217,9 +234,9 @@ async function exportFile(): Promise<void> {
     >
       <template #form>
         <div class="h-full min-h-0 w-full min-w-0 flex-1 overflow-auto px-1">
-          <DriverChannelSchemaForm v-if="section === 'channel'" />
-          <DriverMemoryMapForm v-else-if="section === 'memory'" />
-          <DriverSetupForm v-else />
+          <DriverSetupForm v-show="section !== 'channel' && section !== 'memory'" />
+          <DriverChannelSchemaForm v-if="channelMounted" v-show="section === 'channel'" />
+          <DriverMemoryMapForm v-if="memoryMounted" v-show="section === 'memory'" />
         </div>
       </template>
       <template #guide>
@@ -231,7 +248,7 @@ async function exportFile(): Promise<void> {
         <DriverPaneHandle />
       </template>
     </USplitter>
-    <DriverProtocolEditor v-else class="min-h-0 flex-1">
+    <DriverProtocolEditor v-if="protocolMounted" v-show="section === 'read' || section === 'write'" class="min-h-0 flex-1">
       <DriverInspector />
     </DriverProtocolEditor>
   </div>

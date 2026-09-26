@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { driverFieldError } from '~/utils/driver-compile';
-import { createMemorySubgroup, type DriverMemoryGroupDraft, type DriverMemorySubgroupDraft } from '~/utils/driver-draft';
+import {
+  createMemoryField,
+  createMemoryStruct,
+  createMemorySubgroup,
+  memoryFieldInSettingsGroup,
+  type DriverMemoryFieldDraft,
+  type DriverMemoryGroupDraft,
+  type DriverMemorySubgroupDraft,
+} from '~/utils/driver-draft';
 
 const props = defineProps<{
   groupId: string;
@@ -9,6 +17,51 @@ const props = defineProps<{
 const { draft, memoryMap, patch } = useDriverDraft();
 
 const group = computed(() => draft.value.memoryMap.groups.find((item) => item.id === props.groupId));
+
+interface PlacedSetting {
+  structId: string;
+  structName: string;
+  field: DriverMemoryFieldDraft;
+}
+
+const placed = computed((): PlacedSetting[] => {
+  const groupId = group.value?.groupId.trim() ?? '';
+
+  if (!groupId) {
+    return [];
+  }
+
+  const groups = new Set([groupId]);
+  const rows: PlacedSetting[] = [];
+
+  for (const struct of draft.value.memoryMap.structs) {
+    for (const field of struct.fields) {
+      if (memoryFieldInSettingsGroup(field, groups)) {
+        rows.push({
+          structId: struct.id,
+          structName: struct.structId.trim() || 'Struct',
+          field,
+        });
+      }
+    }
+  }
+
+  return rows;
+});
+
+const sectionBuckets = computed(() => {
+  const known = new Set((group.value?.subgroups ?? []).map((section) => section.subgroupId.trim()).filter((id) => id.length > 0));
+
+  return {
+    top: placed.value.filter((row) => !known.has(row.field.uiSubgroup.trim())),
+    sections: (group.value?.subgroups ?? []).map((section) => ({
+      id: section.id,
+      label: section.label.trim() || section.subgroupId.trim() || 'Section',
+      subgroupId: section.subgroupId.trim(),
+      fields: placed.value.filter((row) => section.subgroupId.trim().length > 0 && row.field.uiSubgroup.trim() === section.subgroupId.trim()),
+    })),
+  };
+});
 
 function errorAt(suffix: string): string | undefined {
   return driverFieldError(memoryMap.value.issues, `memory.groups.${props.groupId}.${suffix}`);
@@ -57,6 +110,35 @@ function removeGroup(): void {
     },
   });
 }
+
+function addSetting(subgroupId: string): void {
+  const groupId = group.value?.groupId.trim() ?? '';
+  const field = createMemoryField({
+    showUi: true,
+    uiGroup: groupId,
+    uiSubgroup: subgroupId,
+    uiWidget: 'integer',
+  });
+  const structs = draft.value.memoryMap.structs;
+  const target = structs.find((item) => item.structId.trim() === 'settings') ?? structs[structs.length - 1];
+
+  if (!target) {
+    patch({
+      memoryMap: {
+        ...draft.value.memoryMap,
+        structs: [createMemoryStruct({ structId: 'settings', seek: '0x0000', fields: [field] })],
+      },
+    });
+    return;
+  }
+
+  patch({
+    memoryMap: {
+      ...draft.value.memoryMap,
+      structs: structs.map((item) => (item.id === target.id ? { ...item, fields: [...item.fields, field] } : item)),
+    },
+  });
+}
 </script>
 
 <template>
@@ -65,7 +147,10 @@ function removeGroup(): void {
     :title="group.label.trim() || group.groupId.trim() || 'Settings group'"
     help="A group is one entry in the Settings list. Sections are the headings inside that panel."
   >
-    <div class="flex justify-end">
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-sm text-muted">
+        {{ placed.length }} {{ placed.length === 1 ? 'field' : 'fields' }}
+      </p>
       <UButton label="Remove group" color="neutral" variant="ghost" size="xs" icon="i-lucide-x" @click="removeGroup" />
     </div>
     <div class="grid gap-3 sm:grid-cols-2">
@@ -149,5 +234,32 @@ function removeGroup(): void {
       </UFormField>
       <UButton icon="i-lucide-x" color="neutral" variant="ghost" aria-label="Remove section" @click="removeSubgroup(section.id)" />
     </div>
+    <div v-if="sectionBuckets.sections.length === 0" class="flex flex-col gap-3">
+      <div v-for="row in sectionBuckets.top" :key="row.field.id" class="flex flex-col gap-2">
+        <p class="text-xs text-muted">{{ row.structName }}</p>
+        <DriverMemoryFieldForm :struct-id="row.structId" :field-id="row.field.id" />
+      </div>
+      <UButton label="Add field" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" class="self-start" @click="addSetting('')" />
+    </div>
+    <template v-else>
+      <div v-if="sectionBuckets.top.length > 0" class="flex flex-col gap-3">
+        <p class="text-sm font-medium text-highlighted">Top of the panel</p>
+        <div v-for="row in sectionBuckets.top" :key="row.field.id" class="flex flex-col gap-2">
+          <p class="text-xs text-muted">{{ row.structName }}</p>
+          <DriverMemoryFieldForm :struct-id="row.structId" :field-id="row.field.id" />
+        </div>
+      </div>
+      <div v-for="section in sectionBuckets.sections" :key="section.id" class="flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-medium text-highlighted">{{ section.label }}</p>
+          <UButton label="Add field" color="neutral" variant="ghost" size="xs" icon="i-lucide-plus" @click="addSetting(section.subgroupId)" />
+        </div>
+        <p v-if="section.fields.length === 0" class="text-sm text-muted">No fields in this section.</p>
+        <div v-for="row in section.fields" :key="row.field.id" class="flex flex-col gap-2">
+          <p class="text-xs text-muted">{{ row.structName }}</p>
+          <DriverMemoryFieldForm :struct-id="row.structId" :field-id="row.field.id" />
+        </div>
+      </div>
+    </template>
   </DriverFormSection>
 </template>

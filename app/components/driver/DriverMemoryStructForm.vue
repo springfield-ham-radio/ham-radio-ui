@@ -4,6 +4,8 @@ import {
   canonicalizeSkipAddress,
   createMemoryField,
   formatFinishedDriverAddress,
+  memoryFieldInSettingsGroup,
+  type DriverMemoryFieldDraft,
   type DriverMemoryStructDraft,
 } from '~/utils/driver-draft';
 
@@ -15,12 +17,47 @@ const { draft, memoryMap, patch } = useDriverDraft();
 
 const struct = computed(() => draft.value.memoryMap.structs.find((item) => item.id === props.structId));
 const seekOpened = shallowRef(false);
+const declaredGroupIds = computed(() => {
+  return new Set(draft.value.memoryMap.groups.map((group) => group.groupId.trim()).filter((id) => id.length > 0));
+});
+
+function layoutFieldList(): DriverMemoryFieldDraft[] {
+  const groups = declaredGroupIds.value;
+  return (struct.value?.fields ?? []).filter((field) => !memoryFieldInSettingsGroup(field, groups));
+}
+
+const layoutFields = computed(() => layoutFieldList());
+const settingsFieldCount = computed(() => (struct.value?.fields.length ?? 0) - layoutFields.value.length);
+const detailsOpen = shallowRef(layoutFieldList().length > 0 && layoutFieldList().length <= 8);
+const pickedFieldId = shallowRef<string | undefined>();
+const manyFields = computed(() => layoutFields.value.length > 8);
+const fieldItems = computed(() => {
+  return layoutFields.value.map((field) => ({
+    label: field.fieldId.trim() || 'Untitled field',
+    value: field.id,
+  }));
+});
+const shownFieldId = computed(() => {
+  const fields = layoutFields.value;
+
+  if (fields.some((field) => field.id === pickedFieldId.value)) {
+    return pickedFieldId.value;
+  }
+
+  return fields[0]?.id;
+});
 
 function errorAt(suffix: string): string | undefined {
   return driverFieldError(memoryMap.value.issues, `memory.structs.${props.structId}.${suffix}`);
 }
 
 function patchStruct(partial: Partial<DriverMemoryStructDraft>): void {
+  const current = struct.value;
+
+  if (!current || Object.entries(partial).every(([key, value]) => current[key as keyof DriverMemoryStructDraft] === value)) {
+    return;
+  }
+
   patch({
     memoryMap: {
       ...draft.value.memoryMap,
@@ -67,7 +104,16 @@ function addField(): void {
     return;
   }
 
-  patchStruct({ fields: [...struct.value.fields, createMemoryField()] });
+  const field = createMemoryField();
+  patchStruct({ fields: [...struct.value.fields, field] });
+  detailsOpen.value = true;
+  pickedFieldId.value = field.id;
+}
+
+function chooseField(value: unknown): void {
+  if (typeof value === 'string') {
+    pickedFieldId.value = value;
+  }
 }
 
 function removeStruct(): void {
@@ -171,11 +217,50 @@ function removeStruct(): void {
       </UFormField>
     </div>
     <UCheckbox :model-value="struct.clearEmpty" label="Clear empty slots with 0xFF" @update:model-value="setClearEmpty" />
-    <p v-if="errorAt('fields')" class="text-sm text-error">{{ errorAt('fields') }}</p>
+    <p v-if="settingsFieldCount > 0" class="text-sm text-muted">
+      {{ settingsFieldCount }} {{ settingsFieldCount === 1 ? 'field is' : 'fields are' }} edited in settings groups.
+    </p>
+    <p v-if="!detailsOpen && layoutFields.length > 0" class="text-sm text-muted">
+      {{ layoutFields.length }} {{ layoutFields.length === 1 ? 'field' : 'fields' }}
+      <span v-if="struct.seek.trim()">starting at {{ struct.seek.trim() }}</span>
+    </p>
     <div class="flex items-center justify-between gap-2">
       <p class="text-sm font-medium text-highlighted">Fields</p>
-      <UButton label="Add field" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addField" />
+      <div class="flex gap-1.5">
+        <UButton
+          v-if="!detailsOpen && layoutFields.length > 0"
+          label="Edit fields"
+          color="neutral"
+          variant="outline"
+          size="xs"
+          @click="detailsOpen = true"
+        />
+        <UButton
+          v-else-if="manyFields"
+          label="Hide fields"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          @click="detailsOpen = false"
+        />
+        <UButton label="Add field" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addField" />
+      </div>
     </div>
-    <DriverMemoryFieldForm v-for="item in struct.fields" :key="item.id" :struct-id="struct.id" :field-id="item.id" />
+    <p v-if="errorAt('fields')" class="text-sm text-error">{{ errorAt('fields') }}</p>
+    <template v-if="detailsOpen && manyFields">
+      <UFormField label="Field">
+        <USelect
+          :model-value="shownFieldId"
+          :items="fieldItems"
+          value-key="value"
+          class="w-full"
+          @update:model-value="chooseField"
+        />
+      </UFormField>
+      <DriverMemoryFieldForm v-if="shownFieldId" :struct-id="struct.id" :field-id="shownFieldId" />
+    </template>
+    <template v-else-if="detailsOpen">
+      <DriverMemoryFieldForm v-for="item in layoutFields" :key="item.id" :struct-id="struct.id" :field-id="item.id" />
+    </template>
   </DriverFormSection>
 </template>

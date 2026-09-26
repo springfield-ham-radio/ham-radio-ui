@@ -56,6 +56,8 @@ const groupItems = computed(() => {
   return ids.map((id) => ({ label: id, value: id }));
 });
 
+const sectionTop = '__top__';
+
 const subgroupItems = computed(() => {
   const groupId = field.value?.uiGroup.trim();
   const group = draft.value.memoryMap.groups.find((item) => item.groupId.trim() === groupId);
@@ -66,8 +68,10 @@ const subgroupItems = computed(() => {
     ids.push(current);
   }
 
-  return [{ label: 'Top of the panel', value: '' }, ...ids.map((id) => ({ label: id, value: id }))];
+  return [{ label: 'Top of the panel', value: sectionTop }, ...ids.map((id) => ({ label: id, value: id }))];
 });
+
+const sectionValue = computed(() => field.value?.uiSubgroup.trim() || sectionTop);
 
 const showsLength = computed(() => field.value && ['ascii', 'digits', 'dtmf', 'bbcd', 'lbcd'].includes(field.value.kind));
 const showsScale = computed(() => field.value && (field.value.kind === 'digits' || field.value.kind === 'lbcd'));
@@ -78,6 +82,12 @@ function errorAt(suffix: string): string | undefined {
 }
 
 function patchField(partial: Partial<DriverMemoryFieldDraft>): void {
+  const current = field.value;
+
+  if (!current || Object.entries(partial).every(([key, value]) => current[key as keyof DriverMemoryFieldDraft] === value)) {
+    return;
+  }
+
   patch({
     memoryMap: {
       ...draft.value.memoryMap,
@@ -136,7 +146,8 @@ function onUiGroup(value: unknown): void {
 }
 
 function onUiSubgroup(value: unknown): void {
-  patchField({ uiSubgroup: typeof value === 'string' ? value : '' });
+  const section = typeof value === 'string' && value !== sectionTop ? value : '';
+  patchField({ uiSubgroup: section });
 }
 
 function removeField(): void {
@@ -333,7 +344,7 @@ function removeField(): void {
           </template>
           <USelect
             v-if="subgroupItems.length > 1"
-            :model-value="field.uiSubgroup"
+            :model-value="sectionValue"
             :items="subgroupItems"
             value-key="value"
             class="w-full"
