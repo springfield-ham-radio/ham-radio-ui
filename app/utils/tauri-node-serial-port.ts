@@ -1,5 +1,6 @@
 import { EventEmitter } from './event-emitter';
 import {
+  ClearBuffer,
   DataBits,
   FlowControl,
   Parity,
@@ -19,6 +20,20 @@ type PipedDestination = { write: (chunk: Buffer) => unknown };
  * request so replies reach the protocol parser as soon as the hub wakes.
  */
 const SERIAL_LISTENER_FLUSH_MS = 1;
+
+/**
+ * Programming cables power the radio interface from DTR/RTS. The first Windows
+ * open often frames that edge as a 0x00, which a UV-5R handshake will treat as
+ * its ACK. Wait for the edge to finish, then drop anything already received.
+ */
+const SERIAL_OPEN_SETTLE_MS = 300;
+const SERIAL_OPEN_DRAIN_MS = 20;
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
 
 function toDataBits(value: number | undefined): DataBits {
   switch (value) {
@@ -75,6 +90,8 @@ export class TauriNodeSerialPort extends EventEmitter {
   private watchHandle: WatchHandle | undefined;
   private pipedDestination: PipedDestination | undefined;
   private pipedHandler: ((chunk: Buffer) => void) | undefined;
+  private discardRx = false;
+  private openGeneration = 0;
 
   constructor(options: {
     path: string;
@@ -158,13 +175,20 @@ export class TauriNodeSerialPort extends EventEmitter {
   }
 
   private async openPort(): Promise<void> {
+    const generation = ++this.openGeneration;
+
     try {
       await this.tauriPort.open();
       await this.tauriPort.writeDataTerminalReady(this.dtr);
       await this.tauriPort.writeRequestToSend(this.rts);
+      this.discardRx = true;
       this.watchHandle = await this.tauriPort.watch(
         {
           onData: (incoming) => {
+            if (this.discardRx) {
+              return;
+            }
+
             this.emit('data', toBuffer(incoming));
           },
           onError: (message) => {
@@ -180,9 +204,28 @@ export class TauriNodeSerialPort extends EventEmitter {
           serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
         },
       );
+      await delay(SERIAL_OPEN_SETTLE_MS);
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      await this.tauriPort.clearBuffer(ClearBuffer.Input).catch(() => undefined);
+      await delay(SERIAL_OPEN_DRAIN_MS);
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      this.discardRx = false;
       this.isOpen = true;
       this.emit('open');
     } catch (error) {
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      this.discardRx = false;
       this.emit('error', error instanceof Error ? error : new Error(String(error)));
     }
   }
@@ -200,6 +243,8 @@ export class TauriNodeSerialPort extends EventEmitter {
   }
 
   private async closePort(): Promise<void> {
+    this.openGeneration += 1;
+    this.discardRx = false;
     this.unpipe();
     const handle = this.watchHandle;
     this.watchHandle = undefined;
