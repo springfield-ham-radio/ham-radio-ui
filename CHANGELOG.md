@@ -1,3 +1,9 @@
+## [0.42.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.0...v0.42.1) (2026-09-26)
+
+### Bug Fixes
+
+* **driver:** accept channel as a per-channel group ([afbb937](https://github.com/springfield-ham-radio/ham-radio-ui/commit/afbb9379e712da560346b12124c3b36f066740c4))
+
 ## [0.42.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.41.1...v0.42.0) (2026-09-26)
 
 ### Features
