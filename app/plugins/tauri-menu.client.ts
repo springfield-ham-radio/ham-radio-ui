@@ -1,4 +1,5 @@
 import { readDeveloperMode } from '~/utils/developer-mode';
+import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
@@ -52,6 +53,27 @@ export default defineNuxtPlugin(() => {
         void router.push('/');
         openWriteToRadio();
       });
+      window.addEventListener('keydown', (event) => {
+        const command = zoomCommandForKey(event);
+        if (!command) {
+          return;
+        }
+
+        event.preventDefault();
+        void invoke(command);
+      });
+      window.addEventListener(
+        'wheel',
+        (event) => {
+          if (!event.ctrlKey || event.deltaY === 0) {
+            return;
+          }
+
+          event.preventDefault();
+          void invoke(ZOOM_BY_COMMAND, { multiplier: wheelZoomMultiplier(event.deltaY) });
+        },
+        { passive: false },
+      );
     } catch {
       // Running in a browser without the Tauri runtime.
     }

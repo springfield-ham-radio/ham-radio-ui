@@ -1,5 +1,6 @@
 mod radio_modules;
 mod sniffer_ssh;
+mod zoom;
 
 #[cfg(target_os = "macos")]
 use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
@@ -49,13 +50,44 @@ fn emit_developer_mode(app: &tauri::AppHandle) {
 }
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let preferences = MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
-    let check_updates = MenuItem::with_id(app, "check-for-updates", "Check for Updates...", true, None::<&str>)?;
-    let open_memory = MenuItem::with_id(app, "open-memory", "Open Memory...", true, Some("CmdOrCtrl+O"))?;
+    let preferences =
+        MenuItem::with_id(app, "preferences", "Settings...", true, Some("CmdOrCtrl+,"))?;
+    let check_updates = MenuItem::with_id(
+        app,
+        "check-for-updates",
+        "Check for Updates...",
+        true,
+        None::<&str>,
+    )?;
+    let open_memory = MenuItem::with_id(
+        app,
+        "open-memory",
+        "Open Memory...",
+        true,
+        Some("CmdOrCtrl+O"),
+    )?;
     let save_memory = MenuItem::with_id(app, "save-memory", "Save", true, Some("CmdOrCtrl+S"))?;
-    let save_memory_as = MenuItem::with_id(app, "save-memory-as", "Save As...", true, Some("CmdOrCtrl+Shift+S"))?;
-    let import_from_radio = MenuItem::with_id(app, "import-from-radio", "Import from Radio...", true, None::<&str>)?;
-    let write_to_radio = MenuItem::with_id(app, "write-to-radio", "Write to Radio...", true, None::<&str>)?;
+    let save_memory_as = MenuItem::with_id(
+        app,
+        "save-memory-as",
+        "Save As...",
+        true,
+        Some("CmdOrCtrl+Shift+S"),
+    )?;
+    let import_from_radio = MenuItem::with_id(
+        app,
+        "import-from-radio",
+        "Import from Radio...",
+        true,
+        None::<&str>,
+    )?;
+    let write_to_radio = MenuItem::with_id(
+        app,
+        "write-to-radio",
+        "Write to Radio...",
+        true,
+        None::<&str>,
+    )?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -72,6 +104,10 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         ],
     )?;
 
+    let zoom_in = MenuItem::with_id(app, "zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?;
+    let zoom_out = MenuItem::with_id(app, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+    let zoom_reset =
+        MenuItem::with_id(app, "zoom-reset", "Zoom to 100%", true, Some("CmdOrCtrl+0"))?;
     let developer_mode = CheckMenuItem::with_id(
         app,
         "developer-mode",
@@ -80,7 +116,18 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         false,
         None::<&str>,
     )?;
-    let view_menu = Submenu::with_items(app, "View", true, &[&developer_mode])?;
+    let view_menu = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[
+            &zoom_in,
+            &zoom_out,
+            &zoom_reset,
+            &PredefinedMenuItem::separator(app)?,
+            &developer_mode,
+        ],
+    )?;
 
     #[cfg(target_os = "macos")]
     {
@@ -138,7 +185,10 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+        Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+        )
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -209,7 +259,10 @@ async fn fetch_repeaterbook_search(url: String) -> Result<String, String> {
         .map_err(|error| error.to_string())?;
 
     if !response.status().is_success() {
-        return Err(format!("RepeaterBook lookup failed: HTTP {}", response.status()));
+        return Err(format!(
+            "RepeaterBook lookup failed: HTTP {}",
+            response.status()
+        ));
     }
 
     let bytes = response.bytes().await.map_err(|error| error.to_string())?;
@@ -387,8 +440,13 @@ ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
                 .add_migrations("sqlite:ham-radio.db", migrations)
                 .build(),
         )
+        .manage(zoom::ZoomState::default())
         .invoke_handler(tauri::generate_handler![
             set_developer_mode,
+            zoom::zoom_in_command,
+            zoom::zoom_out_command,
+            zoom::zoom_reset_command,
+            zoom::zoom_by_command,
             save_text_file,
             load_text_file,
             fetch_repeaterbook_search,
@@ -403,18 +461,31 @@ ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
             sniffer_ssh::remote_sniffer_status,
         ])
         .menu(build_menu)
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "preferences" => emit_menu_event(app, "open-preferences"),
-                "check-for-updates" => emit_menu_event(app, "check-for-updates"),
-                "open-memory" => emit_menu_event(app, "open-memory"),
-                "save-memory" => emit_menu_event(app, "save-memory"),
-                "save-memory-as" => emit_menu_event(app, "save-memory-as"),
-                "import-from-radio" => emit_menu_event(app, "import-from-radio"),
-                "write-to-radio" => emit_menu_event(app, "write-to-radio"),
-                "developer-mode" => emit_developer_mode(app),
-                _ => {}
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "preferences" => emit_menu_event(app, "open-preferences"),
+            "check-for-updates" => emit_menu_event(app, "check-for-updates"),
+            "open-memory" => emit_menu_event(app, "open-memory"),
+            "save-memory" => emit_menu_event(app, "save-memory"),
+            "save-memory-as" => emit_menu_event(app, "save-memory-as"),
+            "import-from-radio" => emit_menu_event(app, "import-from-radio"),
+            "write-to-radio" => emit_menu_event(app, "write-to-radio"),
+            "developer-mode" => emit_developer_mode(app),
+            "zoom-in" => {
+                if let Err(error) = zoom::zoom_in(app) {
+                    log::error!("Failed to zoom in: {error}");
+                }
             }
+            "zoom-out" => {
+                if let Err(error) = zoom::zoom_out(app) {
+                    log::error!("Failed to zoom out: {error}");
+                }
+            }
+            "zoom-reset" => {
+                if let Err(error) = zoom::zoom_reset(app) {
+                    log::error!("Failed to reset zoom: {error}");
+                }
+            }
+            _ => {}
         })
         .setup(|app| {
             #[cfg(debug_assertions)]
