@@ -1,3 +1,9 @@
+## [0.43.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.6...v0.43.0) (2026-09-26)
+
+### Features
+
+* **release:** build Linux ARM64 installers for Raspberry Pi ([34261cb](https://github.com/springfield-ham-radio/ham-radio-ui/commit/34261cbaf876849c7ed8e74fdd79c24a650d6d3d))
+
 ## [0.42.6](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.5...v0.42.6) (2026-09-26)
 
 ### Bug Fixes
