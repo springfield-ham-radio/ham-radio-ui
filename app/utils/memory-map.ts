@@ -5,8 +5,10 @@ import {
   parseDriverInteger,
   type DriverMemoryFieldDraft,
   type DriverMemoryFieldKind,
+  type DriverMemoryGroupDraft,
   type DriverMemoryMapDraft,
   type DriverMemoryStructDraft,
+  type DriverMemorySubgroupDraft,
 } from './driver-draft';
 
 export interface CompiledMemoryMap {
@@ -22,13 +24,16 @@ const INTEGER_LIST_KINDS = new Set<DriverMemoryFieldKind>(['tone', 'ctcss-index'
 
 /**
  * Turn the Memory tab into a memory-map document.
- * A field or struct that cannot be emitted is left out so the preview still parses.
- * Settings groups are not part of this document.
+ * A field, struct, or group that cannot be emitted is left out so the preview still parses.
  */
 export function compileMemoryMap(map: DriverMemoryMapDraft): CompiledMemoryMap {
   const issues: DriverIssue[] = [];
+  const groups = map.groups.flatMap((group) => {
+    const compiled = compileSettingsGroup(group, issues);
+    return compiled ? [compiled] : [];
+  });
   const structs = map.structs.flatMap((struct) => {
-    const compiled = compileStruct(struct, issues);
+    const compiled = compileStruct(struct, map.groups, issues);
     return compiled ? [compiled] : [];
   });
 
@@ -46,6 +51,10 @@ export function compileMemoryMap(map: DriverMemoryMapDraft): CompiledMemoryMap {
 
   if (description) {
     document.description = description;
+  }
+
+  if (groups.length > 0) {
+    document.groups = groups;
   }
 
   document.structs = structs;
@@ -166,7 +175,89 @@ function requiredBinding(raw: string, path: string, label: string, issues: Drive
   return text;
 }
 
-function compileStruct(struct: DriverMemoryStructDraft, issues: DriverIssue[]): Record<string, unknown> | undefined {
+function compileSettingsGroup(group: DriverMemoryGroupDraft, issues: DriverIssue[]): Record<string, unknown> | undefined {
+  const path = `memory.groups.${group.id}`;
+  const id = group.groupId.trim();
+  const label = group.label.trim();
+  let valid = true;
+
+  if (!id) {
+    issues.push({ level: 'error', path: `${path}.groupId`, message: 'Enter a group id.' });
+    valid = false;
+  }
+
+  if (!label) {
+    issues.push({ level: 'error', path: `${path}.label`, message: 'Enter a group label.' });
+    valid = false;
+  }
+
+  const subgroups = group.subgroups.flatMap((subgroup) => {
+    const compiled = compileSubgroup(group.id, subgroup, issues);
+    return compiled ? [compiled] : [];
+  });
+
+  if (!valid) {
+    return undefined;
+  }
+
+  const compiled: Record<string, unknown> = { id, label };
+  const description = group.description.trim();
+  const icon = group.icon.trim();
+
+  if (description) {
+    compiled.description = description;
+  }
+
+  if (icon) {
+    compiled.icon = icon;
+  }
+
+  const warningTitle = group.warningTitle.trim();
+  const warningDescription = group.warningDescription.trim();
+
+  if (warningTitle || warningDescription) {
+    if (!warningTitle) {
+      issues.push({ level: 'error', path: `${path}.warningTitle`, message: 'Enter a warning title.' });
+    } else if (!warningDescription) {
+      issues.push({ level: 'error', path: `${path}.warningDescription`, message: 'Enter a warning description.' });
+    } else {
+      compiled.warning = { title: warningTitle, description: warningDescription };
+    }
+  }
+
+  if (subgroups.length > 0) {
+    compiled.groups = subgroups;
+  }
+
+  return compiled;
+}
+
+function compileSubgroup(groupId: string, subgroup: DriverMemorySubgroupDraft, issues: DriverIssue[]): Record<string, unknown> | undefined {
+  const path = `memory.groups.${groupId}.subgroups.${subgroup.id}`;
+  const id = subgroup.subgroupId.trim();
+  const label = subgroup.label.trim();
+
+  if (!id) {
+    issues.push({ level: 'error', path: `${path}.subgroupId`, message: 'Enter a section id.' });
+    return undefined;
+  }
+
+  if (!label) {
+    issues.push({ level: 'error', path: `${path}.label`, message: 'Enter a section label.' });
+    return undefined;
+  }
+
+  const compiled: Record<string, unknown> = { id, label };
+  const description = subgroup.description.trim();
+
+  if (description) {
+    compiled.description = description;
+  }
+
+  return compiled;
+}
+
+function compileStruct(struct: DriverMemoryStructDraft, groups: DriverMemoryGroupDraft[], issues: DriverIssue[]): Record<string, unknown> | undefined {
   const path = `memory.structs.${struct.id}`;
   const id = struct.structId.trim();
   let valid = true;
@@ -184,7 +275,7 @@ function compileStruct(struct: DriverMemoryStructDraft, issues: DriverIssue[]): 
   }
 
   const fields = struct.fields.flatMap((field) => {
-    const compiled = compileField(struct.id, field, issues);
+    const compiled = compileField(struct.id, field, groups, issues);
     return compiled ? [compiled] : [];
   });
 
@@ -306,7 +397,12 @@ function compileGroup(
   return { ok: true, size, pad };
 }
 
-function compileField(structId: string, field: DriverMemoryFieldDraft, issues: DriverIssue[]): Record<string, unknown> | undefined {
+function compileField(
+  structId: string,
+  field: DriverMemoryFieldDraft,
+  groups: DriverMemoryGroupDraft[],
+  issues: DriverIssue[],
+): Record<string, unknown> | undefined {
   const path = `memory.structs.${structId}.fields.${field.id}`;
   const id = field.fieldId.trim();
 
@@ -338,7 +434,116 @@ function compileField(structId: string, field: DriverMemoryFieldDraft, issues: D
     compiled.value = value;
   }
 
+  const ui = compileFieldUi(field, path, groups, issues);
+
+  if (ui) {
+    compiled.ui = ui;
+  }
+
   return compiled;
+}
+
+function compileFieldUi(
+  field: DriverMemoryFieldDraft,
+  path: string,
+  groups: DriverMemoryGroupDraft[],
+  issues: DriverIssue[],
+): Record<string, unknown> | undefined {
+  if (!field.showUi || field.reserved) {
+    return undefined;
+  }
+
+  const group = field.uiGroup.trim();
+  const label = field.uiLabel.trim();
+  let valid = true;
+
+  if (!group) {
+    issues.push({ level: 'error', path: `${path}.uiGroup`, message: 'Choose a settings group.' });
+    valid = false;
+  }
+
+  if (!label) {
+    issues.push({ level: 'error', path: `${path}.uiLabel`, message: 'Enter the label shown on the Settings screen.' });
+    valid = false;
+  }
+
+  if (!valid) {
+    return undefined;
+  }
+
+  const ui: Record<string, unknown> = {
+    group,
+    label,
+    widget: field.uiWidget,
+  };
+  const subgroup = field.uiSubgroup.trim();
+  const description = field.uiDescription.trim();
+
+  if (subgroup) {
+    ui.subgroup = subgroup;
+  }
+
+  if (description) {
+    ui.description = description;
+  }
+
+  const menuNumber = field.uiMenuNumber.trim();
+  const menuCode = field.uiMenuCode.trim();
+
+  if (menuNumber || menuCode) {
+    const number = parseDriverInteger(menuNumber);
+
+    if (!menuNumber || number === undefined || number < 0) {
+      issues.push({ level: 'error', path: `${path}.uiMenuNumber`, message: 'Enter a menu number of 0 or more.' });
+    } else {
+      const menu: Record<string, unknown> = { number };
+
+      if (menuCode) {
+        menu.code = menuCode;
+      }
+
+      ui.menu = menu;
+    }
+  }
+
+  if (!field.uiWritable) {
+    ui.writable = false;
+  }
+
+  const orderText = field.uiOrder.trim();
+
+  if (orderText) {
+    const order = parseDriverInteger(orderText);
+
+    if (order === undefined) {
+      issues.push({ level: 'error', path: `${path}.uiOrder`, message: 'Display order must be a whole number.' });
+    } else {
+      ui.order = order;
+    }
+  }
+
+  const declared = groups.map((item) => item.groupId.trim()).filter((id) => id.length > 0);
+
+  if (declared.length > 0 && !declared.includes(group)) {
+    issues.push({
+      level: 'warning',
+      path: `${path}.uiGroup`,
+      message: `No settings group is named ${group}.`,
+    });
+  }
+
+  const matched = groups.find((item) => item.groupId.trim() === group);
+  const sectionIds = matched?.subgroups.map((item) => item.subgroupId.trim()).filter((id) => id.length > 0) ?? [];
+
+  if (matched && subgroup && sectionIds.length > 0 && !sectionIds.includes(subgroup)) {
+    issues.push({
+      level: 'warning',
+      path: `${path}.uiSubgroup`,
+      message: `No section named ${subgroup} is in the ${group} group.`,
+    });
+  }
+
+  return ui;
 }
 
 function compileValue(field: DriverMemoryFieldDraft, path: string, issues: DriverIssue[]): Record<string, unknown> | undefined {

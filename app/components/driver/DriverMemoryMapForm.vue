@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { driverFieldError } from '~/utils/driver-compile';
-import { createMemoryStruct, type DriverMemoryMapDraft } from '~/utils/driver-draft';
+import { createMemoryGroup, createMemoryStruct, type DriverMemoryMapDraft } from '~/utils/driver-draft';
 
 const { draft, memoryMap, patch } = useDriverDraft();
 
@@ -56,11 +56,15 @@ const extras = computed({
 function addStruct(): void {
   patchMap({ structs: [...draft.value.memoryMap.structs, createMemoryStruct()] });
 }
+
+function addGroup(): void {
+  patchMap({ groups: [...draft.value.memoryMap.groups, createMemoryGroup()] });
+}
 </script>
 
 <template>
   <div class="flex w-full flex-col gap-4">
-    <DriverFormSection title="Map" help="This file is the channel layout. Radio-wide settings groups are not edited here.">
+    <DriverFormSection title="Map" help="This file places channel fields and radio-wide settings into the image.">
       <div class="grid gap-3 sm:grid-cols-2">
         <UFormField label="Version">
           <UInput v-model="version" class="w-full font-mono" />
@@ -117,6 +121,15 @@ function addStruct(): void {
         </UFormField>
       </div>
     </DriverFormSection>
+
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-1">
+        <p class="text-sm font-medium text-highlighted">Settings groups</p>
+        <HelpTooltip text="These are the entries in the Settings list. A field chooses a group to appear there." />
+      </div>
+      <UButton label="Add group" color="neutral" variant="outline" size="xs" icon="i-lucide-plus" @click="addGroup" />
+    </div>
+    <DriverMemoryGroupForm v-for="group in draft.memoryMap.groups" :key="group.id" :group-id="group.id" />
 
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-1">

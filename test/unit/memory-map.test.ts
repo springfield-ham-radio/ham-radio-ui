@@ -14,8 +14,15 @@ describe('memory map', () => {
         stride: number;
         emptyWhen?: { equals: number };
         clearEmpty?: boolean;
-        fields: Array<{ id: string; type: string; reserved?: boolean; value: { kind: string; length?: number; scale?: number; ctcssMin?: number; reverseOffset?: number; values?: number[] } }>;
+        fields: Array<{
+          id: string;
+          type: string;
+          reserved?: boolean;
+          value: { kind: string; length?: number; scale?: number; min?: number; max?: number; ctcssMin?: number; reverseOffset?: number; values?: number[] };
+          ui?: { group: string; subgroup?: string; label: string; widget: string; menu?: { number: number; code?: string } };
+        }>;
       }>;
+      groups: Array<{ id: string; label: string; icon?: string; groups?: Array<{ id: string; label: string }> }>;
       channelBindings: { records: string; names: string; nameField: string; receiveFrequency: string };
     };
 
@@ -36,6 +43,26 @@ describe('memory map', () => {
     expect(document.structs[1]).toMatchObject({ id: 'names', seek: '0x1000' });
     expect(document.structs[1]?.fields[0]?.value).toMatchObject({ kind: 'ascii', length: 7 });
     expect(document.structs[1]?.fields[1]?.reserved).toBe(true);
+    expect(document.groups).toEqual([
+      {
+        id: 'basic',
+        label: 'Basic',
+        icon: 'i-lucide-sliders-horizontal',
+        groups: [{ id: 'receive', label: 'Receive' }],
+      },
+    ]);
+    expect(document.structs[2]).toMatchObject({ id: 'settings', seek: '0x0E20' });
+    expect(document.structs[2]?.fields[0]).toMatchObject({
+      id: 'squelch',
+      value: { kind: 'integer', min: 0, max: 9 },
+      ui: {
+        group: 'basic',
+        subgroup: 'receive',
+        label: 'Carrier Squelch Level',
+        widget: 'integer',
+        menu: { number: 0, code: 'SQL' },
+      },
+    });
     expect(document.channelBindings).toMatchObject({
       records: 'channels',
       names: 'names',
@@ -51,7 +78,17 @@ describe('memory map', () => {
     const document = JSON.parse(compiled.json) as { structs: Array<{ id: string }> };
 
     expect(compiled.errorCount).toBeGreaterThan(0);
-    expect(document.structs.map((struct) => struct.id)).toEqual(['names']);
+    expect(document.structs.map((struct) => struct.id)).toEqual(['names', 'settings']);
+  });
+
+  it('leaves a settings group with no label out of the map', () => {
+    const map = createMemoryMapDraft();
+    map.groups[0]!.label = '';
+    const compiled = compileMemoryMap(map);
+    const document = JSON.parse(compiled.json) as { groups?: unknown[] };
+
+    expect(compiled.errorCount).toBeGreaterThan(0);
+    expect(document.groups).toBeUndefined();
   });
 
   it('restores a stored map and fills one that is missing', () => {
@@ -69,6 +106,8 @@ describe('memory map', () => {
     expect(stored.memoryMap.structs[0]?.structId).toBe('memories');
     expect(stored.memoryMap.structs[0]?.seek).toBe('0x1700');
     expect(stored.memoryMap.receiveFrequency).toBe('rxfreq');
-    expect(coerceDriverDraft({ version: 1, draft: { model: 'kept' } }).memoryMap.structs[0]?.structId).toBe('channels');
+    expect(stored.memoryMap.groups).toEqual([]);
+    expect(stored.memoryMap.structs[0]?.fields[0]?.showUi).toBe(false);
+    expect(coerceDriverDraft({ version: 1, draft: { model: 'kept' } }).memoryMap.groups[0]?.groupId).toBe('basic');
   });
 });

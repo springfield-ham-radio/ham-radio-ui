@@ -3,9 +3,11 @@ import { driverFieldError } from '~/utils/driver-compile';
 import {
   DRIVER_MEMORY_FIELD_KINDS,
   DRIVER_MEMORY_FIELD_TYPES,
+  DRIVER_MEMORY_WIDGETS,
   type DriverMemoryFieldDraft,
   type DriverMemoryFieldKind,
   type DriverMemoryFieldType,
+  type DriverMemoryWidget,
 } from '~/utils/driver-draft';
 
 const props = defineProps<{
@@ -33,6 +35,38 @@ const kindItems = [
 const field = computed(() => {
   const struct = draft.value.memoryMap.structs.find((item) => item.id === props.structId);
   return struct?.fields.find((item) => item.id === props.fieldId);
+});
+
+const widgetItems = [
+  { label: 'Integer', value: 'integer' },
+  { label: 'Select', value: 'select' },
+  { label: 'Switch', value: 'switch' },
+  { label: 'Text', value: 'text' },
+  { label: 'Number', value: 'number' },
+] as const;
+
+const groupItems = computed(() => {
+  const ids = draft.value.memoryMap.groups.map((group) => group.groupId.trim()).filter((id) => id.length > 0);
+  const current = field.value?.uiGroup.trim();
+
+  if (current && !ids.includes(current)) {
+    ids.push(current);
+  }
+
+  return ids.map((id) => ({ label: id, value: id }));
+});
+
+const subgroupItems = computed(() => {
+  const groupId = field.value?.uiGroup.trim();
+  const group = draft.value.memoryMap.groups.find((item) => item.groupId.trim() === groupId);
+  const ids = group?.subgroups.map((section) => section.subgroupId.trim()).filter((id) => id.length > 0) ?? [];
+  const current = field.value?.uiSubgroup.trim();
+
+  if (current && !ids.includes(current)) {
+    ids.push(current);
+  }
+
+  return [{ label: 'Top of the panel', value: '' }, ...ids.map((id) => ({ label: id, value: id }))];
 });
 
 const showsLength = computed(() => field.value && ['ascii', 'digits', 'dtmf', 'bbcd', 'lbcd'].includes(field.value.kind));
@@ -77,6 +111,32 @@ function setReserved(value: boolean | 'indeterminate'): void {
   if (value !== 'indeterminate') {
     patchField({ reserved: value });
   }
+}
+
+function setShowUi(value: boolean | 'indeterminate'): void {
+  if (value !== 'indeterminate') {
+    patchField({ showUi: value });
+  }
+}
+
+function setWritable(value: boolean | 'indeterminate'): void {
+  if (value !== 'indeterminate') {
+    patchField({ uiWritable: value });
+  }
+}
+
+function onWidget(value: unknown): void {
+  if (typeof value === 'string' && (DRIVER_MEMORY_WIDGETS as readonly string[]).includes(value)) {
+    patchField({ uiWidget: value as DriverMemoryWidget });
+  }
+}
+
+function onUiGroup(value: unknown): void {
+  patchField({ uiGroup: typeof value === 'string' ? value : '' });
+}
+
+function onUiSubgroup(value: unknown): void {
+  patchField({ uiSubgroup: typeof value === 'string' ? value : '' });
 }
 
 function removeField(): void {
@@ -239,6 +299,105 @@ function removeField(): void {
           @update:model-value="patchField({ reverseOffset: String($event ?? '') })"
         />
       </UFormField>
+    </div>
+
+    <div v-if="!field.reserved" class="flex flex-col gap-3 border-t border-default pt-3">
+      <UCheckbox :model-value="field.showUi" label="Show on the Settings tab" @update:model-value="setShowUi" />
+      <div v-if="field.showUi" class="grid gap-3 sm:grid-cols-2">
+        <UFormField label="Settings group" required :error="errorAt('uiGroup')">
+          <template #hint>
+            <HelpTooltip text="Which entry in the Settings list holds this field." />
+          </template>
+          <USelect
+            v-if="groupItems.length > 0"
+            :model-value="field.uiGroup"
+            :items="groupItems"
+            value-key="value"
+            class="w-full"
+            @update:model-value="onUiGroup"
+          />
+          <UInput
+            v-else
+            :model-value="field.uiGroup"
+            class="w-full font-mono"
+            spellcheck="false"
+            @update:model-value="patchField({ uiGroup: String($event ?? '') })"
+          />
+        </UFormField>
+        <UFormField label="Section" :error="errorAt('uiSubgroup')">
+          <template #hint>
+            <span class="inline-flex items-center gap-1.5">
+              Optional
+              <HelpTooltip text="Headed section inside the group. Leave blank to keep the field at the top of the panel." />
+            </span>
+          </template>
+          <USelect
+            v-if="subgroupItems.length > 1"
+            :model-value="field.uiSubgroup"
+            :items="subgroupItems"
+            value-key="value"
+            class="w-full"
+            @update:model-value="onUiSubgroup"
+          />
+          <UInput
+            v-else
+            :model-value="field.uiSubgroup"
+            class="w-full font-mono"
+            spellcheck="false"
+            @update:model-value="patchField({ uiSubgroup: String($event ?? '') })"
+          />
+        </UFormField>
+        <UFormField label="Label" required :error="errorAt('uiLabel')">
+          <UInput :model-value="field.uiLabel" class="w-full" @update:model-value="patchField({ uiLabel: String($event ?? '') })" />
+        </UFormField>
+        <UFormField label="Widget">
+          <USelect :model-value="field.uiWidget" :items="widgetItems" value-key="value" class="w-full" @update:model-value="onWidget" />
+        </UFormField>
+        <UFormField class="sm:col-span-2" label="Description">
+          <template #hint>
+            <HelpTooltip text="Shown in the help icon after the label." />
+          </template>
+          <UInput
+            :model-value="field.uiDescription"
+            class="w-full"
+            @update:model-value="patchField({ uiDescription: String($event ?? '') })"
+          />
+        </UFormField>
+        <UFormField label="Menu number" :error="errorAt('uiMenuNumber')">
+          <template #hint>
+            <HelpTooltip text="Front-panel menu index, starting at 0. Leave blank when this is not a numbered menu item." />
+          </template>
+          <UInput
+            :model-value="field.uiMenuNumber"
+            class="w-full font-mono"
+            inputmode="numeric"
+            @update:model-value="patchField({ uiMenuNumber: String($event ?? '') })"
+          />
+        </UFormField>
+        <UFormField label="Menu code" :error="errorAt('uiMenuCode')">
+          <UInput
+            :model-value="field.uiMenuCode"
+            class="w-full font-mono"
+            placeholder="SQL"
+            spellcheck="false"
+            @update:model-value="patchField({ uiMenuCode: String($event ?? '') })"
+          />
+        </UFormField>
+        <UFormField label="Display order" :error="errorAt('uiOrder')">
+          <template #hint>
+            <HelpTooltip text="Lower numbers appear first. Leave blank to keep the field in byte order." />
+          </template>
+          <UInput
+            :model-value="field.uiOrder"
+            class="w-full font-mono"
+            inputmode="numeric"
+            @update:model-value="patchField({ uiOrder: String($event ?? '') })"
+          />
+        </UFormField>
+        <div class="flex items-end">
+          <UCheckbox :model-value="field.uiWritable" label="Writable" @update:model-value="setWritable" />
+        </div>
+      </div>
     </div>
   </div>
 </template>

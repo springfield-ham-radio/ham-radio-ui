@@ -117,9 +117,13 @@ export const DRIVER_MEMORY_FIELD_KINDS = [
   'dcs-index',
 ] as const;
 
+export const DRIVER_MEMORY_WIDGETS = ['integer', 'select', 'switch', 'text', 'number'] as const;
+
 export type DriverMemoryFieldType = (typeof DRIVER_MEMORY_FIELD_TYPES)[number];
 
 export type DriverMemoryFieldKind = (typeof DRIVER_MEMORY_FIELD_KINDS)[number];
+
+export type DriverMemoryWidget = (typeof DRIVER_MEMORY_WIDGETS)[number];
 
 /** One field in a memory-map struct. Kind-specific text is ignored when the kind does not use it. */
 export interface DriverMemoryFieldDraft {
@@ -138,6 +142,37 @@ export interface DriverMemoryFieldDraft {
   charset: string;
   ctcssMinimum: string;
   reverseOffset: string;
+  /** When true, the Settings screen shows this field. */
+  showUi: boolean;
+  uiGroup: string;
+  uiSubgroup: string;
+  uiLabel: string;
+  uiWidget: DriverMemoryWidget;
+  uiDescription: string;
+  uiMenuNumber: string;
+  uiMenuCode: string;
+  uiWritable: boolean;
+  uiOrder: string;
+}
+
+/** A headed section inside a settings group. */
+export interface DriverMemorySubgroupDraft {
+  id: string;
+  subgroupId: string;
+  label: string;
+  description: string;
+}
+
+/** A left-nav group on the Settings screen. */
+export interface DriverMemoryGroupDraft {
+  id: string;
+  groupId: string;
+  label: string;
+  description: string;
+  icon: string;
+  warningTitle: string;
+  warningDescription: string;
+  subgroups: DriverMemorySubgroupDraft[];
 }
 
 /** A repeated or single struct in the channel half of a memory map. */
@@ -155,8 +190,8 @@ export interface DriverMemoryStructDraft {
 }
 
 /**
- * Channel half of a memory map.
- * Bindings name the structs and fields. Settings groups stay out of this draft.
+ * Memory map edited on the Memory tab.
+ * Bindings and structs place channel fields. Groups are the Settings screen.
  */
 export interface DriverMemoryMapDraft {
   version: string;
@@ -169,6 +204,7 @@ export interface DriverMemoryMapDraft {
   receiveTone: string;
   transmitTone: string;
   extras: string;
+  groups: DriverMemoryGroupDraft[];
   structs: DriverMemoryStructDraft[];
 }
 
@@ -406,7 +442,45 @@ export function createMemoryField(partial: Partial<Omit<DriverMemoryFieldDraft, 
     charset: '',
     ctcssMinimum: '',
     reverseOffset: '',
+    showUi: false,
+    uiGroup: '',
+    uiSubgroup: '',
+    uiLabel: '',
+    uiWidget: 'integer',
+    uiDescription: '',
+    uiMenuNumber: '',
+    uiMenuCode: '',
+    uiWritable: true,
+    uiOrder: '',
     ...partial,
+  };
+}
+
+export function createMemorySubgroup(partial: Partial<Omit<DriverMemorySubgroupDraft, 'id'>> = {}): DriverMemorySubgroupDraft {
+  return {
+    id: createDriverId(),
+    subgroupId: '',
+    label: '',
+    description: '',
+    ...partial,
+  };
+}
+
+export function createMemoryGroup(
+  partial: Partial<Omit<DriverMemoryGroupDraft, 'id' | 'subgroups'>> & { subgroups?: DriverMemorySubgroupDraft[] } = {},
+): DriverMemoryGroupDraft {
+  const { subgroups, ...rest } = partial;
+
+  return {
+    id: createDriverId(),
+    groupId: '',
+    label: '',
+    description: '',
+    icon: '',
+    warningTitle: '',
+    warningDescription: '',
+    ...rest,
+    subgroups: subgroups ?? [],
   };
 }
 
@@ -428,11 +502,11 @@ export function createMemoryStruct(partial: Partial<Omit<DriverMemoryStructDraft
   };
 }
 
-/** Starting map: UV-5R channel records at 0x0000 and names at 0x1000. */
+/** Starting map: UV-5R channel records at 0x0000, names at 0x1000, and a squelch setting. */
 export function createMemoryMapDraft(): DriverMemoryMapDraft {
   return {
     version: '1.0.0',
-    description: 'Channel records and names',
+    description: 'Channel records, names, and settings',
     records: 'channels',
     names: 'names',
     nameField: 'name',
@@ -441,6 +515,14 @@ export function createMemoryMapDraft(): DriverMemoryMapDraft {
     receiveTone: 'rxtone',
     transmitTone: 'txtone',
     extras: '',
+    groups: [
+      createMemoryGroup({
+        groupId: 'basic',
+        label: 'Basic',
+        icon: 'i-lucide-sliders-horizontal',
+        subgroups: [createMemorySubgroup({ subgroupId: 'receive', label: 'Receive' })],
+      }),
+    ],
     structs: [
       createMemoryStruct({
         structId: 'channels',
@@ -480,6 +562,26 @@ export function createMemoryMapDraft(): DriverMemoryMapDraft {
         fields: [
           createMemoryField({ fieldId: 'name', kind: 'ascii', length: '7' }),
           createMemoryField({ fieldId: '_pad', kind: 'ascii', length: '9', reserved: true }),
+        ],
+      }),
+      createMemoryStruct({
+        structId: 'settings',
+        seek: '0x0E20',
+        fields: [
+          createMemoryField({
+            fieldId: 'squelch',
+            kind: 'integer',
+            minimum: '0',
+            maximum: '9',
+            showUi: true,
+            uiGroup: 'basic',
+            uiSubgroup: 'receive',
+            uiLabel: 'Carrier Squelch Level',
+            uiWidget: 'integer',
+            uiDescription: 'How strong a received signal must be before the speaker opens.',
+            uiMenuNumber: '0',
+            uiMenuCode: 'SQL',
+          }),
         ],
       }),
     ],
@@ -856,6 +958,14 @@ function asMemoryFieldKind(value: unknown): DriverMemoryFieldKind {
   return 'integer';
 }
 
+function asMemoryWidget(value: unknown): DriverMemoryWidget {
+  if (typeof value === 'string' && (DRIVER_MEMORY_WIDGETS as readonly string[]).includes(value)) {
+    return value as DriverMemoryWidget;
+  }
+
+  return 'integer';
+}
+
 function coerceMemoryFields(value: unknown): DriverMemoryFieldDraft[] {
   if (!Array.isArray(value)) {
     return [];
@@ -885,6 +995,66 @@ function coerceMemoryFields(value: unknown): DriverMemoryFieldDraft[] {
         charset: asString(record.charset),
         ctcssMinimum: asString(record.ctcssMinimum),
         reverseOffset: asString(record.reverseOffset),
+        showUi: asBoolean(record.showUi, false),
+        uiGroup: asString(record.uiGroup),
+        uiSubgroup: asString(record.uiSubgroup),
+        uiLabel: asString(record.uiLabel),
+        uiWidget: asMemoryWidget(record.uiWidget),
+        uiDescription: asString(record.uiDescription),
+        uiMenuNumber: asString(record.uiMenuNumber),
+        uiMenuCode: asString(record.uiMenuCode),
+        uiWritable: asBoolean(record.uiWritable, true),
+        uiOrder: asString(record.uiOrder),
+      },
+    ];
+  });
+}
+
+function coerceMemorySubgroups(value: unknown): DriverMemorySubgroupDraft[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+
+    if (!record) {
+      return [];
+    }
+
+    return [
+      {
+        id: asString(record.id) || createDriverId(),
+        subgroupId: asString(record.subgroupId),
+        label: asString(record.label),
+        description: asString(record.description),
+      },
+    ];
+  });
+}
+
+function coerceMemoryGroups(value: unknown): DriverMemoryGroupDraft[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+
+    if (!record) {
+      return [];
+    }
+
+    return [
+      {
+        id: asString(record.id) || createDriverId(),
+        groupId: asString(record.groupId),
+        label: asString(record.label),
+        description: asString(record.description),
+        icon: asString(record.icon),
+        warningTitle: asString(record.warningTitle),
+        warningDescription: asString(record.warningDescription),
+        subgroups: coerceMemorySubgroups(record.subgroups),
       },
     ];
   });
@@ -938,6 +1108,7 @@ function coerceMemoryMap(value: unknown): DriverMemoryMapDraft {
     receiveTone: asString(record.receiveTone, fallback.receiveTone),
     transmitTone: asString(record.transmitTone, fallback.transmitTone),
     extras: asString(record.extras),
+    groups: record.groups === undefined ? [] : coerceMemoryGroups(record.groups),
     structs: record.structs === undefined ? fallback.structs : coerceMemoryStructs(record.structs),
   };
 }
