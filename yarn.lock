@@ -1101,6 +1101,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@iconify/vue@npm:^5.0.2":
+  version: 5.0.3
+  resolution: "@iconify/vue@npm:5.0.3"
+  dependencies:
+    "@iconify/types": "npm:^2.0.0"
+  peerDependencies:
+    vue: ">=3.0.0"
+  checksum: 10c0/d8012e8c617abe15eb3002636c2faf266e3e669e7becc550899ff68e3cd666be854673b2a365a81ac017782f695d758e333cb5530a80a18a7d1b06400918962f
+  languageName: node
+  linkType: hard
+
 "@internationalized/date@npm:^3.12.4":
   version: 3.12.4
   resolution: "@internationalized/date@npm:3.12.4"
@@ -1878,12 +1889,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nuxt/ui@npm:4.11.1":
-  version: 4.11.1
-  resolution: "@nuxt/ui@npm:4.11.1"
+"@nuxt/ui@npm:4.11.2":
+  version: 4.11.2
+  resolution: "@nuxt/ui@npm:4.11.2"
   dependencies:
     "@floating-ui/dom": "npm:^1.8.0"
-    "@iconify/vue": "npm:^5.0.1"
+    "@iconify/vue": "npm:^5.0.2"
     "@internationalized/date": "npm:^3.12.4"
     "@internationalized/number": "npm:^3.6.8"
     "@nuxt/fonts": "npm:^0.14.0"
@@ -1895,7 +1906,7 @@ __metadata:
     "@tailwindcss/postcss": "npm:^4.3.3"
     "@tailwindcss/vite": "npm:^4.3.3"
     "@tanstack/vue-table": "npm:^8.21.3"
-    "@tanstack/vue-virtual": "npm:^3.13.36"
+    "@tanstack/vue-virtual": "npm:^3.13.39"
     "@tiptap/core": "npm:^3.31.3"
     "@tiptap/extension-bubble-menu": "npm:^3.31.3"
     "@tiptap/extension-code": "npm:^3.31.3"
@@ -1913,7 +1924,7 @@ __metadata:
     "@tiptap/starter-kit": "npm:^3.31.3"
     "@tiptap/suggestion": "npm:^3.31.3"
     "@tiptap/vue-3": "npm:^3.31.3"
-    "@unhead/vue": "npm:^3.4.0"
+    "@unhead/vue": "npm:^3.4.1"
     "@vueuse/core": "npm:^14.4.0"
     "@vueuse/integrations": "npm:^14.4.0"
     "@vueuse/shared": "npm:^14.4.0"
@@ -1928,30 +1939,30 @@ __metadata:
     embla-carousel-vue: "npm:^8.6.0"
     embla-carousel-wheel-gestures: "npm:^8.1.0"
     fuse.js: "npm:^7.5.0"
-    hookable: "npm:^6.1.1"
+    hookable: "npm:^6.1.2"
     knitwork: "npm:^1.3.0"
-    magic-string: "npm:^1.2.3"
+    magic-string: "npm:^1.4.1"
     mlly: "npm:^1.8.2"
-    motion-v: "npm:^2.4.2"
+    motion-v: "npm:^2.4.4"
     ohash: "npm:^2.0.12"
     pathe: "npm:^2.0.3"
     reka-ui: "npm:2.10.4"
     scule: "npm:^1.3.0"
-    tailwind-merge: "npm:^3.6.0"
+    tailwind-merge: "npm:^3.7.0"
     tailwind-variants: "npm:^3.2.2"
     tailwindcss: "npm:^4.3.3"
     tinyglobby: "npm:^0.2.17"
     ufo: "npm:^1.6.4"
-    unplugin: "npm:^3.3.0"
+    unplugin: "npm:^3.4.0"
     unplugin-auto-import: "npm:^21.1.0"
     unplugin-vue-components: "npm:^32.1.0"
     vaul-vue: "npm:0.4.1"
     vue-component-type-helpers: "npm:^3.3.11"
   peerDependencies:
-    "@inertiajs/vue3": ^2.0.7 || ^3.0.0
-    "@internationalized/date": ^3.0.0
-    "@internationalized/number": ^3.0.0
-    "@nuxt/content": ^3.0.0
+    "@inertiajs/vue3": ^2.0.7 || ^3
+    "@internationalized/date": ^3
+    "@internationalized/number": ^3
+    "@nuxt/content": ^3
     "@tiptap/core": ^3
     "@tiptap/extension-bubble-menu": ^3
     "@tiptap/extension-code": ^3
@@ -1970,14 +1981,14 @@ __metadata:
     "@tiptap/suggestion": ^3
     "@tiptap/vue-3": ^3
     ai: ^6 || ^7
-    joi: ^18.0.0
-    superstruct: ^2.0.0
-    tailwindcss: ^4.0.0
-    typescript: ^5.6.3 || ^6.0.0 || ^7.0.0
-    valibot: ^1.0.0
-    vue-router: ^4.5.0 || ^5.0.0
+    joi: ^18
+    superstruct: ^2
+    tailwindcss: ^4
+    typescript: ^5.6.3 || ^6 || ^7
+    valibot: ^1
+    vue-router: ^4.5.0 || ^5
     yup: ^1.7.0
-    zod: ^3.24.0 || ^4.0.0
+    zod: ^3.24.0 || ^4
   peerDependenciesMeta:
     "@inertiajs/vue3":
       optional: true
@@ -2001,9 +2012,7 @@ __metadata:
       optional: true
     zod:
       optional: true
-  bin:
-    nuxt-ui: cli/index.mjs
-  checksum: 10c0/35fc5afa294c718742880d44fb879f1df117e2c5a7660f52a9b84c485b1293ca9b84d1fe3b1a35ae889f03035626f7d987d7cd50fc5813920ddde1fa4d52190a
+  checksum: 10c0/aa8054f3c47d7841349d579ebd89ac7b1b92120e03ad3a459d7f543ad28eef9f07e6971fb9c486f38fc69b393a3d09a6a9dbe0a94f60e3381d4feb2c429736f2
   languageName: node
   linkType: hard
 
@@ -3338,7 +3347,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@springfield/ham-radio-ui@workspace:."
   dependencies:
-    "@nuxt/ui": "npm:4.11.1"
+    "@nuxt/ui": "npm:4.11.2"
     "@semantic-release/changelog": "npm:7.0.0"
     "@semantic-release/exec": "npm:7.1.0"
     "@semantic-release/git": "npm:11.0.1"
@@ -3361,7 +3370,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     conventional-changelog-conventionalcommits: "npm:9.3.1"
     eventemitter3: "npm:^5.0.4"
-    katex: "npm:^0.18.7"
+    katex: "npm:^0.18.9"
     loglayer: "npm:^9.4.0"
     nuxt: "npm:^4.5.2"
     oxlint: "npm:1.85.0"
@@ -3647,7 +3656,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tanstack/vue-virtual@npm:^3.13.36":
+"@tanstack/vue-virtual@npm:^3.13.39":
   version: 3.13.39
   resolution: "@tanstack/vue-virtual@npm:3.13.39"
   dependencies:
@@ -4529,7 +4538,45 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@unhead/vue@npm:^3.3.1, @unhead/vue@npm:^3.4.0":
+"@unhead/bundler@npm:3.4.1":
+  version: 3.4.1
+  resolution: "@unhead/bundler@npm:3.4.1"
+  dependencies:
+    magic-string: "npm:^1.3.1"
+    oxc-walker: "npm:^1.1.1"
+    unplugin: "npm:^3.3.0"
+  peerDependencies:
+    "@unhead/cli": ^3.4.1
+    "@vitejs/devtools-kit": ^0.4.1
+    esbuild: ">=0.17.0"
+    lightningcss: ">=1.20.0"
+    oxc-parser: ">=0.98.0"
+    rolldown: ">=1.0.0"
+    unhead: ^3.4.1
+    vite: ">=6.4.2"
+    webpack: ">=5.0.0"
+  peerDependenciesMeta:
+    "@unhead/cli":
+      optional: true
+    "@vitejs/devtools-kit":
+      optional: true
+    esbuild:
+      optional: true
+    lightningcss:
+      optional: true
+    oxc-parser:
+      optional: true
+    rolldown:
+      optional: true
+    vite:
+      optional: true
+    webpack:
+      optional: true
+  checksum: 10c0/aa9d078f870307b6e4861dc8027dfda96e8bea1a492be5e5f8d7b09e58f894285161156ddd1546c2986a47fbed39f2f253464f9639b24789f11026e2c98ad759
+  languageName: node
+  linkType: hard
+
+"@unhead/vue@npm:^3.3.1":
   version: 3.4.0
   resolution: "@unhead/vue@npm:3.4.0"
   dependencies:
@@ -4547,6 +4594,27 @@ __metadata:
     webpack:
       optional: true
   checksum: 10c0/bf9bb63b429ce509f870fd38fded70407fc726a3e00c0a80d762205696ea34c7328e6dc2860d019305673f6e877eede9ba0df422da80b6ae0dc95bcae26c1815
+  languageName: node
+  linkType: hard
+
+"@unhead/vue@npm:^3.4.1":
+  version: 3.4.1
+  resolution: "@unhead/vue@npm:3.4.1"
+  dependencies:
+    "@unhead/bundler": "npm:3.4.1"
+    hookable: "npm:^6.1.1"
+    unhead: "npm:3.4.1"
+    unplugin: "npm:^3.3.0"
+  peerDependencies:
+    vite: ">=6.4.2"
+    vue: ">=3.5.18"
+    webpack: ">=5.0.0"
+  peerDependenciesMeta:
+    vite:
+      optional: true
+    webpack:
+      optional: true
+  checksum: 10c0/e5f76075bdeb64ed80f4f7589b0993923d300c2be32f4b1f427ce36e36169a88da5f841ff12419a761e8dbc0714030bfe8c25fa851ca7802a41bfd7bde57b388
   languageName: node
   linkType: hard
 
@@ -7421,12 +7489,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"framer-motion@npm:^13.1.0":
-  version: 13.2.0
-  resolution: "framer-motion@npm:13.2.0"
+"framer-motion@npm:^13.3.0":
+  version: 13.4.2
+  resolution: "framer-motion@npm:13.4.2"
   dependencies:
-    motion-dom: "npm:^13.2.0"
-    motion-utils: "npm:^13.0.0"
+    motion-dom: "npm:^13.4.2"
+    motion-utils: "npm:^13.3.0"
     tslib: "npm:^2.4.0"
   peerDependencies:
     react: ^18.0.0 || ^19.0.0
@@ -7436,7 +7504,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/b381cf2c6f9def6ae169c096f9f873b0dafc8343fbdc78cc3d27e3ede2e8f682b22e1160a1f8cde07f263993aecab2c94239a43702fe4f06eccaeba109fcff13
+  checksum: 10c0/23a31c6d98906526711234e9a9cd111d3990f8973cc25bbc03b0ce0f99bda0a720f170d465457f2e96f2d8c3d1812b9e3818a948dc436e3df0fb2a210b4eda0d
   languageName: node
   linkType: hard
 
@@ -7771,6 +7839,13 @@ __metadata:
   version: 6.1.1
   resolution: "hookable@npm:6.1.1"
   checksum: 10c0/bb46cd9ffc0a997af21febd97835da4e59a6989adec73dc3c215fcc44c7ac01de4781f251c3d420bf45862d2592a695f5f0de095b6f5df52db8afb5166938212
+  languageName: node
+  linkType: hard
+
+"hookable@npm:^6.1.2":
+  version: 6.1.2
+  resolution: "hookable@npm:6.1.2"
+  checksum: 10c0/ea5cdb1b1a1919b48cfbbfb55c8009f6843473ff50f67d6e959fd291cb2fd0a4934e85124bfd6531b1d2edf1e0675bc5954f85a12318a59b15c7a3e5667f0d4e
   languageName: node
   linkType: hard
 
@@ -8433,14 +8508,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"katex@npm:^0.18.7":
-  version: 0.18.7
-  resolution: "katex@npm:0.18.7"
+"katex@npm:^0.18.9":
+  version: 0.18.9
+  resolution: "katex@npm:0.18.9"
   dependencies:
     commander: "npm:^15.0.0"
   bin:
     katex: cli.js
-  checksum: 10c0/191b690af9099fb25b595270b9da191cd37c9b45d7773188112ad7831e74a4a3e07f10e1e1bdd656daa8794e744cefd03d079eb05be49983ac578bcb2ce857df
+  checksum: 10c0/0ba4f02d1a6217a31020b5a5fe2e4b867fb3cc27469901c631718a2dc4ed0e34455540aff3d87e444d5b6228d4d825e3cd0b524be8b8b2883d4193be99d76011
   languageName: node
   linkType: hard
 
@@ -9085,6 +9160,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"magic-string@npm:^1.3.1, magic-string@npm:^1.4.1":
+  version: 1.4.2
+  resolution: "magic-string@npm:1.4.2"
+  dependencies:
+    "@jridgewell/sourcemap-codec": "npm:^1.6.0"
+  checksum: 10c0/d3e222c202f99ec4861e7316f473f9b1cfe335ebdf38d4f67335f842f3fe248f01ee00fd3e1a8206bcbe9855e0c41515d7c210300d8fcf6eefbb982d79e423c6
+  languageName: node
+  linkType: hard
+
 "magicast@npm:^0.5.2, magicast@npm:^0.5.4":
   version: 0.5.4
   resolution: "magicast@npm:0.5.4"
@@ -9427,34 +9511,34 @@ __metadata:
   languageName: node
   linkType: hard
 
-"motion-dom@npm:^13.0.0, motion-dom@npm:^13.2.0":
-  version: 13.2.0
-  resolution: "motion-dom@npm:13.2.0"
+"motion-dom@npm:^13.3.0, motion-dom@npm:^13.4.2":
+  version: 13.4.2
+  resolution: "motion-dom@npm:13.4.2"
   dependencies:
-    motion-utils: "npm:^13.0.0"
-  checksum: 10c0/009725cf822940fcd10e20492cfd0be50f11db9b5f1b374dd2fddbe2bc53db80c7f44d02c8bf68e2b9baaa8335aba45bd2a860176b3c23685ca8b59ca69db6b7
+    motion-utils: "npm:^13.3.0"
+  checksum: 10c0/7ce3928cfe930b30ba684467eead32af06e14cb480ccb3105038fa3791a44edf94182391e9b02c4ac76d85b524fc2668240c571f5528c140901320aba8d85de8
   languageName: node
   linkType: hard
 
-"motion-utils@npm:^13.0.0":
-  version: 13.0.0
-  resolution: "motion-utils@npm:13.0.0"
-  checksum: 10c0/4b279ce85f71926d668ff5966feb898b174541d16952a61c7150982388553266602ecd2a76e057530076ff8f38d06672e585639ddc73c41dd1a67d04aaa3662d
+"motion-utils@npm:^13.3.0":
+  version: 13.3.0
+  resolution: "motion-utils@npm:13.3.0"
+  checksum: 10c0/9efb8388cc43501d1d6d1f2997fdd3a9e4c2bd42c57c3979586fdbcc83969a3b9aae7e3108cfb53312db0a46d945ad1b4d54ad388a6585f2eb5f5e742a58d927
   languageName: node
   linkType: hard
 
-"motion-v@npm:^2.4.2":
-  version: 2.4.2
-  resolution: "motion-v@npm:2.4.2"
+"motion-v@npm:^2.4.4":
+  version: 2.4.4
+  resolution: "motion-v@npm:2.4.4"
   dependencies:
-    framer-motion: "npm:^13.1.0"
+    framer-motion: "npm:^13.3.0"
     hey-listen: "npm:^1.0.8"
-    motion-dom: "npm:^13.0.0"
-    motion-utils: "npm:^13.0.0"
+    motion-dom: "npm:^13.3.0"
+    motion-utils: "npm:^13.3.0"
   peerDependencies:
     "@vueuse/core": ">=10.0.0"
     vue: ">=3.0.0"
-  checksum: 10c0/de43ebca48080c541e67625e68906a5c336831743d3d13bab7e258ee646f679d2aaf99beee4e28bbf930774056d02a54bf5a3f17232111e537854f81c45d3d4e
+  checksum: 10c0/2b8119bde9b39b43d1f35003f0a019a3556b6e3f5735588ce80a05449ba23a05dd8156c59e419d0196adeaf5f30895848199ac1f41489ab42788bdc797d16364
   languageName: node
   linkType: hard
 
@@ -12571,7 +12655,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tailwind-merge@npm:^3.6.0":
+"tailwind-merge@npm:^3.7.0":
   version: 3.7.0
   resolution: "tailwind-merge@npm:3.7.0"
   checksum: 10c0/1b1439fe30b6ee63fc3abc1c985bf9beb8529eb2db21cc321bd8c7cf73f36cd4ec80846ea10af8ae09175810f385336c22a6ce355a0b5cce69432d49672f90c1
@@ -13175,6 +13259,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"unhead@npm:3.4.1":
+  version: 3.4.1
+  resolution: "unhead@npm:3.4.1"
+  dependencies:
+    hookable: "npm:^6.1.1"
+    unplugin: "npm:^3.3.0"
+  peerDependencies:
+    vite: ">=6.4.2"
+  peerDependenciesMeta:
+    vite:
+      optional: true
+  checksum: 10c0/5385a540109943e508d9e92bdf54b8aca7f48af9e714c301fcf670db02dc92a1320f3f715a453f8f85298c5e105a47653f414835c135d4acaa95fc75e681acc7
+  languageName: node
+  linkType: hard
+
 "unicode-emoji-modifier-base@npm:^1.0.0":
   version: 1.0.0
   resolution: "unicode-emoji-modifier-base@npm:1.0.0"
@@ -13399,6 +13498,49 @@ __metadata:
     webpack:
       optional: true
   checksum: 10c0/86ee7c7fde40ffa8260ddeba5da51800e35c6cdd41ee8a556ec3827357b5d2ee13dcbe4ea6820451bc6c2b05b35165f96c7bf20662114af5ed52183a74886404
+  languageName: node
+  linkType: hard
+
+"unplugin@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "unplugin@npm:3.4.0"
+  dependencies:
+    "@jridgewell/remapping": "npm:^2.3.5"
+    picomatch: "npm:^4.0.7"
+    webpack-virtual-modules: "npm:^0.6.2"
+  peerDependencies:
+    "@farmfe/core": "*"
+    "@rsbuild/core": "*"
+    "@rspack/core": "*"
+    bun-types-no-globals: "*"
+    esbuild: "*"
+    rolldown: "*"
+    rollup: "*"
+    unloader: "*"
+    vite: "*"
+    webpack: "*"
+  peerDependenciesMeta:
+    "@farmfe/core":
+      optional: true
+    "@rsbuild/core":
+      optional: true
+    "@rspack/core":
+      optional: true
+    bun-types-no-globals:
+      optional: true
+    esbuild:
+      optional: true
+    rolldown:
+      optional: true
+    rollup:
+      optional: true
+    unloader:
+      optional: true
+    vite:
+      optional: true
+    webpack:
+      optional: true
+  checksum: 10c0/d4674eec8c4093f42aa62736d68e85b4a366fcc45b8e910179f6f39f890d7b69c84179a769d3a6c23d41e658f89a2300f66474c126fee3f212330afedf48079a
   languageName: node
   linkType: hard
 
