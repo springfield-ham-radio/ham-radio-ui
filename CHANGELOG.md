@@ -1,3 +1,9 @@
+## [0.43.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.43.0...v0.43.1) (2026-09-26)
+
+### Bug Fixes
+
+* **release:** install xdg-utils so the ARM AppImage can bundle ([aee046d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/aee046d386e0dac3558726e99c76b8bfe1ec89d1))
+
 ## [0.43.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.42.6...v0.43.0) (2026-09-26)
 
 ### Features
