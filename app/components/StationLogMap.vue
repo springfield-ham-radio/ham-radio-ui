@@ -5,9 +5,11 @@ import {
   Map as MapLibreMap,
   NavigationControl,
   Popup,
+  setWorkerUrl,
   type GeoJSONSource,
   type LngLatLike,
 } from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StationLogQso } from '~/utils/station-log-db';
 import {
@@ -21,6 +23,9 @@ import {
   stationLogUnmappedCount,
   type QslMarkerStatus,
 } from '~/utils/station-log-map';
+
+// The desktop build bundles this module, so MapLibre cannot find the worker that ships beside the package.
+setWorkerUrl(maplibreWorkerUrl);
 
 const SOURCE_ID = 'station-log-contacts';
 const LAYER_ID = 'station-log-contacts';
