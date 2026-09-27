@@ -221,7 +221,7 @@
                 variant="subtle"
                 icon="i-lucide-monitor"
                 title="Desktop app required"
-                description="Install, start, and stop run only in the packaged Tauri app, where the bundled sniffer tree is available."
+                description="Install, start, and stop run only in the packaged Tauri app, where the bundled sniffer binary is available."
               />
 
               <UFormField label="Install directory" class="w-full">
@@ -235,7 +235,7 @@
               <UFormField label="Run command" class="w-full">
                 <UInput
                   v-model="snifferStartCommandInput"
-                  placeholder="yarn start"
+                  placeholder="./ham-radio-sniffer"
                   class="w-full"
                 />
               </UFormField>
@@ -459,10 +459,10 @@ const canRunSnifferActions = computed(() => {
 
 const snifferProcessHint = computed(() => {
   if (snifferSshEnabledInput.value) {
-    return 'Install, start, and stop run over SSH on Host. The app never installs Node for you.';
+    return 'Install copies the sniffer binary, then start and stop run over SSH on Host.';
   }
 
-  return 'Install, start, and stop run on this computer. The app never installs Node for you.';
+  return 'Install copies the sniffer binary, then start and stop run on this computer.';
 });
 
 const remoteHostLabel = computed(() => {
@@ -519,7 +519,7 @@ const remoteStatusSummary = computed(() => {
   }
 
   if (snifferSshBusy.value === 'install') {
-    return 'Copying sources and running yarn install/build. This can take several minutes.';
+    return 'Copying the sniffer binary.';
   }
 
   if (snifferSshBusy.value === 'start') {
@@ -548,16 +548,16 @@ const remoteStatusSummary = computed(() => {
 
   if (remoteHostCheck.value.sourcesPresent && remoteHostCheck.value.buildPresent) {
     return remoteHostCheck.value.installedVersion
-      ? `Sniffer ${remoteHostCheck.value.installedVersion} is installed and built. Turn on Running when you are ready.`
-      : 'Sniffer is installed and built. Turn on Running when you are ready.';
+      ? `Sniffer ${remoteHostCheck.value.installedVersion} is installed. Turn on Running when you are ready.`
+      : 'Sniffer is installed. Turn on Running when you are ready.';
   }
 
   if (remoteHostCheck.value.sourcesPresent) {
-    return 'Sources are present, but the build is missing. Run Install to finish setup.';
+    return 'The sniffer binary is present but could not be run. Run Install to replace it.';
   }
 
   if (remoteHostCheck.value.ok) {
-    return 'Prerequisites look good. Run Install to copy and build the sniffer.';
+    return 'The install directory is ready. Run Install to copy the sniffer binary.';
   }
 
   return 'Fix the issues listed below before installing.';

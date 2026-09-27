@@ -44,7 +44,7 @@ describe('sniffer settings', () => {
           host: '192.168.1.10',
           port: 3010,
           installDirectory: '/opt/sniffer',
-          startCommand: 'node .output/server/index.mjs',
+          startCommand: 'SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer',
           sshEnabled: true,
         }),
       ),
@@ -52,7 +52,7 @@ describe('sniffer settings', () => {
       host: '192.168.1.10',
       port: 3010,
       installDirectory: '/opt/sniffer',
-      startCommand: 'node .output/server/index.mjs',
+      startCommand: 'SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer',
       sshEnabled: true,
     });
   });
@@ -79,10 +79,10 @@ describe('sniffer settings', () => {
       parseSnifferSettings(
         JSON.stringify({
           host: '127.0.0.1',
-          remoteStartCommand: 'node .output/server/index.mjs',
+          remoteStartCommand: 'SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer',
         }),
       ).startCommand,
-    ).toBe('node .output/server/index.mjs');
+    ).toBe('SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer');
   });
 
   it('should enable SSH from a legacy sshHost and move it into host when needed', () => {
@@ -145,7 +145,7 @@ describe('sniffer settings', () => {
         host: '127.0.0.1',
         port: 3010,
         installDirectory: '~/ham-radio-sniffer',
-        startCommand: 'yarn start',
+        startCommand: DEFAULT_SNIFFER_START_COMMAND,
         sshEnabled: false,
       }),
     ).toEqual({
@@ -165,7 +165,7 @@ describe('sniffer settings', () => {
         host: 'pi@192.168.1.10',
         port: 4010,
         installDirectory: '/opt/sniffer',
-        startCommand: 'node .output/server/index.mjs',
+        startCommand: 'SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer',
         sshEnabled: true,
       }),
     ).toEqual({
@@ -173,7 +173,7 @@ describe('sniffer settings', () => {
       sshHost: 'pi@192.168.1.10',
       sshPort: DEFAULT_SNIFFER_SSH_PORT,
       remoteDirectory: '/opt/sniffer',
-      remoteStartCommand: 'node .output/server/index.mjs',
+      remoteStartCommand: 'SNIFFER_LOG_LEVEL=debug ./ham-radio-sniffer',
       port: 4010,
       bindHost: '0.0.0.0',
     });
@@ -194,7 +194,7 @@ describe('sniffer settings', () => {
       host: 'pi@192.168.1.10',
       port: 3010,
       installDirectory: '~/ham-radio-sniffer',
-      startCommand: 'yarn start',
+      startCommand: DEFAULT_SNIFFER_START_COMMAND,
       sshEnabled: true,
     };
 

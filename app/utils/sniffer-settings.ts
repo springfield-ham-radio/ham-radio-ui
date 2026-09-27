@@ -4,18 +4,17 @@ export const DEFAULT_SNIFFER_SSH_PORT = 22;
 export const DEFAULT_SNIFFER_INSTALL_DIRECTORY = '~/ham-radio-sniffer';
 /** @deprecated Use DEFAULT_SNIFFER_INSTALL_DIRECTORY. */
 export const DEFAULT_SNIFFER_REMOTE_DIRECTORY = DEFAULT_SNIFFER_INSTALL_DIRECTORY;
-export const DEFAULT_SNIFFER_START_COMMAND = 'yarn start';
+export const DEFAULT_SNIFFER_START_COMMAND = './ham-radio-sniffer';
 /** @deprecated Use DEFAULT_SNIFFER_START_COMMAND. */
 export const DEFAULT_SNIFFER_REMOTE_START_COMMAND = DEFAULT_SNIFFER_START_COMMAND;
 export const DEFAULT_SNIFFER_PORT = 3010;
 export const DEFAULT_SNIFFER_BASE_URL = `http://${DEFAULT_SNIFFER_HOST}:${DEFAULT_SNIFFER_PORT}`;
-export const MINIMUM_SNIFFER_NODE_MAJOR = 24;
 
 export interface SnifferSettings {
   /** Hostname or IP. Optional `user@host` when SSH needs a username. */
   host: string;
   port: number;
-  /** Directory for sniffer sources/build, on this computer or the SSH host. */
+  /** Directory for the sniffer binary, on this computer or the SSH host. */
   installDirectory: string;
   /** Command used to start the sniffer process after install. */
   startCommand: string;

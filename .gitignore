@@ -97,6 +97,9 @@ out/
 .output
 dist
 src-tauri/target
+src-tauri/resources/ham-radio-sniffer/ham-radio-sniffer
+src-tauri/resources/ham-radio-sniffer/ham-radio-sniffer.exe
+src-tauri/resources/ham-radio-sniffer/ham-radio-sniffer-linux-*
 
 # Tauri updater signing keys — never commit the private key
 *.key

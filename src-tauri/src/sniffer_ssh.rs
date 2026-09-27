@@ -1,16 +1,15 @@
 //! Optional assist for installing and running ham-radio-sniffer locally or over SSH.
 //!
 //! SSH auth is key/agent only (`BatchMode=yes`). Password prompts are not supported.
-//! The app copies bundled sniffer sources and builds on the target so native
-//! bindings match that machine’s architecture.
+//! The app copies a bundled binary. The sniffer does not need Node.js.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tauri::{AppHandle, Manager};
 
-const MINIMUM_NODE_MAJOR: u32 = 26;
 const SNIFFER_RESOURCE_RELATIVE: &str = "resources/ham-radio-sniffer";
+const BUNDLED_VERSION_FILE: &str = "version";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,9 +37,12 @@ pub struct RemoteSnifferCheckResult {
     pub node_version: Option<String>,
     pub yarn_available: bool,
     pub directory_writable: bool,
-    /// `package.json` is present in the remote directory.
+    /// The installed `ham-radio-sniffer` binary is present.
+    ///
+    /// Kept alongside `build_present` so the existing install badge treats a
+    /// copied binary as a finished install.
     pub sources_present: bool,
-    /// Built Nitro output is present (`.output/server/index.mjs`).
+    /// The installed binary is present and executable.
     pub build_present: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installed_version: Option<String>,
@@ -190,12 +192,6 @@ fn require_success(label: &str, output: Output) -> Result<String, String> {
     }
 }
 
-fn parse_node_major(version: &str) -> Option<u32> {
-    let trimmed = version.trim().trim_start_matches('v');
-    let major = trimmed.split('.').next()?;
-    major.parse().ok()
-}
-
 fn suggested_sniffer_url(config: &RemoteSnifferConfig) -> String {
     if config.ssh_enabled {
         let host = config.ssh_host.trim();
@@ -213,20 +209,28 @@ fn suggested_sniffer_url(config: &RemoteSnifferConfig) -> String {
     format!("http://{host}:{}", config.port)
 }
 
-fn remote_launch_command(start_command: &str) -> &str {
-    // `yarn start` historically hardcoded HOST=127.0.0.1, which would hide the
-    // process from the LAN even after we export HOST=0.0.0.0. Launch Nitro
-    // directly so listen address/port always come from the environment.
-    if start_command == "yarn start" {
-        "\"$NODE_BIN\" .output/server/index.mjs"
+fn installed_binary_name(ssh_enabled: bool) -> &'static str {
+    if ssh_enabled || !cfg!(windows) {
+        "ham-radio-sniffer"
     } else {
-        start_command
+        "ham-radio-sniffer.exe"
+    }
+}
+
+fn remote_launch_command(start_command: &str, binary_name: &str) -> String {
+    // Saved preferences may still say `yarn start` from the Node sniffer.
+    // HOST and PORT are exported by the start script, and the binary reads them.
+    match start_command {
+        "yarn start" | "./ham-radio-sniffer" | "ham-radio-sniffer" | "./ham-radio-sniffer.exe"
+        | "ham-radio-sniffer.exe" => format!("\"$DIR/{binary_name}\""),
+        other => other.to_string(),
     }
 }
 
 fn remote_start_script(config: &RemoteSnifferConfig) -> String {
     let directory_rhs = remote_directory_assignment_rhs(config.remote_directory.trim());
-    let start_command = remote_launch_command(config.remote_start_command.trim());
+    let binary_name = installed_binary_name(config.ssh_enabled);
+    let start_command = remote_launch_command(config.remote_start_command.trim(), binary_name);
     let port = config.port;
     let host = bind_host(config);
     format!(
@@ -236,12 +240,7 @@ fn remote_start_script(config: &RemoteSnifferConfig) -> String {
 DIR={directory_rhs}
 echo "Starting sniffer in $DIR on {host}:{port}"
 cd "$DIR"
-NODE_BIN=$(command -v node || true)
-if [ -z "$NODE_BIN" ]; then
-  echo "node was not found on PATH."
-  exit 1
-fi
-export HOST={host} PORT={port} NITRO_HOST={host} NITRO_PORT={port}
+export HOST={host} PORT={port}
 export SNIFFER_HEALTH_URL=http://127.0.0.1:{port}/api/health
 if test -f "$DIR/sniffer.pid"; then
   OLD_PID=$(cat "$DIR/sniffer.pid" || true)
@@ -258,13 +257,27 @@ SNIFFER_PID=$!
 disown "$SNIFFER_PID" >/dev/null 2>&1 || true
 echo "$SNIFFER_PID" > "$DIR/sniffer.pid"
 echo "Spawned pid $SNIFFER_PID"
+health_ok() {{
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 1 "$SNIFFER_HEALTH_URL" >/dev/null 2>&1 || return 1
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os,sys,urllib.request
+try:
+    urllib.request.urlopen(os.environ["SNIFFER_HEALTH_URL"], timeout=1)
+except Exception:
+    sys.exit(1)' || return 1
+    return 0
+  fi
+  echo "Neither curl nor python3 is available to check $SNIFFER_HEALTH_URL"
+  return 1
+}}
 i=0
 while [ "$i" -lt 60 ]; do
-  if "$NODE_BIN" -e "fetch(process.env.SNIFFER_HEALTH_URL).then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
-            echo "Sniffer is ready on $SNIFFER_HEALTH_URL"
-            set +e
-            trap - EXIT ERR
-            exit 0
+  if health_ok; then
+    echo "Sniffer is ready on $SNIFFER_HEALTH_URL"
+    exit 0
   fi
   if ! kill -0 "$SNIFFER_PID" 2>/dev/null; then
     echo "Sniffer process $SNIFFER_PID exited before $SNIFFER_HEALTH_URL responded."
@@ -378,15 +391,22 @@ fn bundled_sniffer_path(app: &AppHandle) -> Result<PathBuf, String> {
     ];
 
     for candidate in candidates {
-        if candidate.join("package.json").is_file() {
+        if is_sniffer_bundle(&candidate) {
             return Ok(candidate);
         }
     }
 
     Err(
-        "Bundled sniffer sources were not found. Rebuild the desktop app so resources/ham-radio-sniffer is included."
+        "Bundled sniffer binary was not found. Rebuild the desktop app so resources/ham-radio-sniffer is included."
             .into(),
     )
+}
+
+fn is_sniffer_bundle(path: &Path) -> bool {
+    path.join(BUNDLED_VERSION_FILE).is_file()
+        || path.join("ham-radio-sniffer").is_file()
+        || path.join("ham-radio-sniffer.exe").is_file()
+        || path.join("ham-radio-sniffer-linux-aarch64").is_file()
 }
 
 fn empty_check_result(messages: Vec<String>) -> RemoteSnifferCheckResult {
@@ -421,10 +441,9 @@ fn sniffer_version_matches(
     }
 }
 
-fn read_package_json_version(path: &Path) -> Option<String> {
+fn read_version_file(path: &Path) -> Option<String> {
     let text = std::fs::read_to_string(path).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let version = value.get("version")?.as_str()?.trim();
+    let version = text.trim();
 
     if version.is_empty() {
         None
@@ -435,7 +454,7 @@ fn read_package_json_version(path: &Path) -> Option<String> {
 
 fn bundled_sniffer_version(app: &AppHandle) -> Option<String> {
     let root = bundled_sniffer_path(app).ok()?;
-    read_package_json_version(&root.join("package.json"))
+    read_version_file(&root.join(BUNDLED_VERSION_FILE))
 }
 
 fn build_check_result(
@@ -443,8 +462,8 @@ fn build_check_result(
     expected_version: Option<String>,
 ) -> RemoteSnifferCheckResult {
     let mut messages = Vec::new();
-    let mut node_version = None;
-    let mut yarn_available = false;
+    let node_version = None;
+    let yarn_available = false;
     let mut directory_writable = false;
     let mut sources_present = false;
     let mut build_present = false;
@@ -457,38 +476,25 @@ fn build_check_result(
     let remote_directory = config.remote_directory.trim();
     let directory_rhs = remote_directory_assignment_rhs(remote_directory);
 
+    let binary_name = installed_binary_name(config.ssh_enabled);
     let check_script = format!(
         "bash -lc {}",
         quote_remote_shell_arg(&format!(
             r#"set +e
-NODE_VERSION=$(node -v 2>/dev/null || true)
-YARN_OK=0
-if command -v yarn >/dev/null 2>&1; then
-  YARN_OK=1
-elif command -v corepack >/dev/null 2>&1; then
-  YARN_OK=1
-fi
 DIR={directory_rhs}
 PARENT=$(dirname "$DIR")
 DIR_OK=0
 if mkdir -p "$PARENT" 2>/dev/null && mkdir -p "$DIR" 2>/dev/null && test -w "$DIR"; then
   DIR_OK=1
 fi
-SOURCES_OK=0
-BUILD_OK=0
+BIN_OK=0
 VERSION=
-if test -f "$DIR/package.json"; then
-  SOURCES_OK=1
-  VERSION=$(node -p "require(process.argv[1]).version" "$DIR/package.json" 2>/dev/null || true)
+if test -x "$DIR/{binary_name}"; then
+  BIN_OK=1
+  VERSION=$("$DIR/{binary_name}" --version 2>/dev/null || true)
 fi
-if test -f "$DIR/.output/server/index.mjs"; then
-  BUILD_OK=1
-fi
-printf 'NODE=%s\n' "$NODE_VERSION"
-printf 'YARN=%s\n' "$YARN_OK"
 printf 'DIR=%s\n' "$DIR_OK"
-printf 'SOURCES=%s\n' "$SOURCES_OK"
-printf 'BUILD=%s\n' "$BUILD_OK"
+printf 'BIN=%s\n' "$BIN_OK"
 printf 'VERSION=%s\n' "$VERSION"
 "#
         ))
@@ -504,19 +510,12 @@ printf 'VERSION=%s\n' "$VERSION"
             } else {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.lines() {
-                    if let Some(value) = line.strip_prefix("NODE=") {
-                        let trimmed = value.trim();
-                        if !trimmed.is_empty() {
-                            node_version = Some(trimmed.to_string());
-                        }
-                    } else if let Some(value) = line.strip_prefix("YARN=") {
-                        yarn_available = value.trim() == "1";
-                    } else if let Some(value) = line.strip_prefix("DIR=") {
+                    if let Some(value) = line.strip_prefix("DIR=") {
                         directory_writable = value.trim() == "1";
-                    } else if let Some(value) = line.strip_prefix("SOURCES=") {
-                        sources_present = value.trim() == "1";
-                    } else if let Some(value) = line.strip_prefix("BUILD=") {
-                        build_present = value.trim() == "1";
+                    } else if let Some(value) = line.strip_prefix("BIN=") {
+                        let present = value.trim() == "1";
+                        sources_present = present;
+                        build_present = present;
                     } else if let Some(value) = line.strip_prefix("VERSION=") {
                         let trimmed = value.trim();
                         if !trimmed.is_empty() {
@@ -551,36 +550,6 @@ printf 'VERSION=%s\n' "$VERSION"
         };
     }
 
-    match &node_version {
-        None => messages.push(format!(
-            "Node.js was not found on the host. Install Node.js {MINIMUM_NODE_MAJOR} or newer (matching the sniffer .nvmrc), then try again. The app does not install Node automatically."
-        )),
-        Some(version) => match parse_node_major(version) {
-            Some(major) if major >= MINIMUM_NODE_MAJOR => {
-                messages.push(format!("Node.js {version} is OK."));
-            }
-            Some(major) => {
-                messages.push(format!(
-                    "Node.js {version} is too old (major {major}). Install Node.js {MINIMUM_NODE_MAJOR} or newer. The app does not upgrade Node automatically."
-                ));
-            }
-            None => {
-                messages.push(format!(
-                    "Could not parse Node.js version ({version}). Install Node.js {MINIMUM_NODE_MAJOR} or newer."
-                ));
-            }
-        },
-    }
-
-    if yarn_available {
-        messages.push("Yarn or Corepack is available.".into());
-    } else {
-        messages.push(
-            "Neither yarn nor corepack was found. Install Yarn (or enable Corepack with a recent Node), then try again."
-                .into(),
-        );
-    }
-
     if directory_writable {
         messages.push(format!("Install directory {remote_directory} is writable."));
     } else {
@@ -599,7 +568,7 @@ printf 'VERSION=%s\n' "$VERSION"
     if sources_present && build_present {
         match (&installed_version, &expected_version) {
             (Some(installed), Some(expected)) if installed == expected => {
-                messages.push(format!("Sniffer {installed} is installed and built."));
+                messages.push(format!("Sniffer {installed} is installed."));
             }
             (Some(installed), Some(expected)) => {
                 messages.push(format!(
@@ -612,28 +581,20 @@ printf 'VERSION=%s\n' "$VERSION"
                 ));
             }
             (Some(installed), None) => {
-                messages.push(format!("Sniffer {installed} is installed and built."));
+                messages.push(format!("Sniffer {installed} is installed."));
             }
             _ => {
-                messages.push("Sniffer is installed and built.".into());
+                messages.push("Sniffer is installed.".into());
             }
         }
     } else if sources_present {
-        messages.push(
-            "Sniffer sources are present, but the build output is missing. Run Install / update."
-                .into(),
-        );
+        messages.push("Sniffer binary is present but could not be run. Run Install to replace it.".into());
     } else {
         messages.push("Sniffer is not installed in that directory yet.".into());
     }
 
-    let node_ok = node_version
-        .as_deref()
-        .and_then(parse_node_major)
-        .is_some_and(|major| major >= MINIMUM_NODE_MAJOR);
-
     RemoteSnifferCheckResult {
-        ok: node_ok && yarn_available && directory_writable && messages.iter().all(|m| !m.contains("Host check failed")),
+        ok: directory_writable && messages.iter().all(|message| !message.contains("Host check failed")),
         node_version,
         yarn_available,
         directory_writable,
@@ -661,48 +622,66 @@ fn expand_install_path(directory: &str) -> PathBuf {
     PathBuf::from(trimmed)
 }
 
-fn should_skip_install_entry(name: &str) -> bool {
-    matches!(
-        name,
-        "node_modules" | ".output" | ".git" | ".DS_Store" | "sniffer.pid" | "sniffer.log"
+fn linux_binary_name(machine: &str) -> Result<&'static str, String> {
+    match machine.trim() {
+        "aarch64" | "arm64" => Ok("ham-radio-sniffer-linux-aarch64"),
+        "x86_64" | "amd64" => Ok("ham-radio-sniffer-linux-x64"),
+        other => Err(format!("Unsupported sniffer host architecture: {other}")),
+    }
+}
+
+fn remote_machine(config: &RemoteSnifferConfig) -> Result<String, String> {
+    let output = run_host_command(config, "uname -m")?;
+    require_success("Read host architecture", output)
+}
+
+fn bundled_binary_for(root: &Path, config: &RemoteSnifferConfig) -> Result<PathBuf, String> {
+    if config.ssh_enabled {
+        let machine = remote_machine(config)?;
+        let name = linux_binary_name(&machine)?;
+        let path = root.join(name);
+        if path.is_file() {
+            return Ok(path);
+        }
+
+        return Err(format!(
+            "This app does not include a Linux {machine} sniffer binary ({name}). Rebuild HamBench so that binary is bundled."
+        ));
+    }
+
+    let name = installed_binary_name(false);
+    let path = root.join(name);
+    if path.is_file() {
+        return Ok(path);
+    }
+
+    Err(
+        "Bundled sniffer binary was not found. Rebuild the desktop app so resources/ham-radio-sniffer includes ham-radio-sniffer."
+            .into(),
     )
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|error| format!("Unable to create {}: {error}", dst.display()))?;
-
-    let entries = std::fs::read_dir(src).map_err(|error| format!("Unable to read {}: {error}", src.display()))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        if should_skip_install_entry(&name_str) {
-            continue;
-        }
-
-        let from = entry.path();
-        let to = dst.join(&name);
-        let file_type = entry
-            .file_type()
-            .map_err(|error| format!("Unable to stat {}: {error}", from.display()))?;
-
-        if file_type.is_dir() {
-            copy_dir_all(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to)
-                .map_err(|error| format!("Unable to copy {} to {}: {error}", from.display(), to.display()))?;
-        }
+fn mark_executable(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(path)
+            .map_err(|error| format!("Unable to read {}: {error}", path.display()))?
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions)
+            .map_err(|error| format!("Unable to mark {} executable: {error}", path.display()))?;
     }
-
+    let _ = path;
     Ok(())
 }
 
-fn upload_bundled_sniffer(app: &AppHandle, config: &RemoteSnifferConfig) -> Result<(), String> {
-    let local_path = bundled_sniffer_path(app)?;
+fn install_sniffer_binary(app: &AppHandle, config: &RemoteSnifferConfig) -> Result<(), String> {
+    let root = bundled_sniffer_path(app)?;
+    let source = bundled_binary_for(&root, config)?;
     let install_directory = config.remote_directory.trim();
     let directory_rhs = remote_directory_assignment_rhs(install_directory);
+    let binary_name = installed_binary_name(config.ssh_enabled);
 
     require_success(
         "Create install directory",
@@ -716,79 +695,49 @@ fn upload_bundled_sniffer(app: &AppHandle, config: &RemoteSnifferConfig) -> Resu
     )?;
 
     if !config.ssh_enabled {
-        return copy_dir_all(&local_path, &expand_install_path(install_directory));
+        let destination_dir = expand_install_path(install_directory);
+        std::fs::create_dir_all(&destination_dir)
+            .map_err(|error| format!("Unable to create {}: {error}", destination_dir.display()))?;
+        let destination = destination_dir.join(binary_name);
+        std::fs::copy(&source, &destination).map_err(|error| {
+            format!(
+                "Unable to copy {} to {}: {error}",
+                source.display(),
+                destination.display()
+            )
+        })?;
+        mark_executable(&destination)?;
+        return Ok(());
     }
 
-    // Prefer rsync when available; fall back to scp -r.
-    // OpenSSH expands a leading ~ in scp/rsync destinations; keep that form.
-    let remote_target = format!("{}:{}", config.ssh_host.trim(), install_directory);
-    let rsync_args = vec![
-        "-az".into(),
-        "-e".into(),
-        format!("ssh -p {} -o BatchMode=yes -o StrictHostKeyChecking=accept-new", config.ssh_port),
-        format!("{}/", local_path.display()),
-        remote_target.clone(),
-    ];
-
-    let rsync_result = run_command("rsync", &rsync_args);
-    if let Ok(output) = &rsync_result {
-        if output.status.success() {
-            return Ok(());
-        }
-    }
-
-    let rsync_detail = match &rsync_result {
-        Ok(output) => output_stderr_or_stdout(output),
-        Err(error) => error.clone(),
-    };
-
-    let mut scp_args = vec![
-        "-r".into(),
+    let remote_target = format!(
+        "{}:{}/{}",
+        config.ssh_host.trim(),
+        install_directory,
+        binary_name
+    );
+    let scp_args = vec![
         "-P".into(),
         config.ssh_port.to_string(),
         "-o".into(),
         "BatchMode=yes".into(),
         "-o".into(),
         "StrictHostKeyChecking=accept-new".into(),
+        source.display().to_string(),
+        remote_target,
     ];
-
-    let entries = std::fs::read_dir(&local_path)
-        .map_err(|error| format!("Unable to read bundled sniffer: {error}"))?;
-
-    let mut sources = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|error| error.to_string())?;
-        sources.push(entry.path().display().to_string());
-    }
-
-    if sources.is_empty() {
-        return Err("Bundled sniffer directory is empty".into());
-    }
-
-    scp_args.extend(sources);
-    scp_args.push(format!("{}:{}/", config.ssh_host.trim(), install_directory));
-
     let scp_output = run_command("scp", &scp_args)?;
-    if scp_output.status.success() {
-        return Ok(());
+    if !scp_output.status.success() {
+        return Err(format!("Upload failed: {}", output_stderr_or_stdout(&scp_output)));
     }
 
-    let scp_detail = output_stderr_or_stdout(&scp_output);
-    Err(format!(
-        "Upload failed. rsync: {rsync_detail}; scp: {scp_detail}"
-    ))
-}
-
-fn remote_install_and_build(config: &RemoteSnifferConfig) -> Result<(), String> {
-    let directory_rhs = remote_directory_assignment_rhs(config.remote_directory.trim());
-    let script = format!(
+    let chmod = format!(
         "bash -lc {}",
         quote_remote_shell_arg(&format!(
-            "set -euo pipefail; DIR={directory_rhs}; cd \"$DIR\"; if command -v corepack >/dev/null 2>&1; then corepack enable; fi; HUSKY=0 yarn install; yarn build"
+            "DIR={directory_rhs}; chmod +x \"$DIR/{binary_name}\""
         ))
     );
-
-    require_success("yarn install/build", run_host_command(config, &script)?)?;
+    require_success("Mark sniffer executable", run_host_command(config, &chmod)?)?;
     Ok(())
 }
 
@@ -813,13 +762,12 @@ fn install_remote_sniffer_inner(
         });
     }
 
-    upload_bundled_sniffer(app, config)?;
-    remote_install_and_build(config)?;
+    install_sniffer_binary(app, config)?;
 
     Ok(RemoteSnifferCommandResult {
         ok: true,
         message: format!(
-            "Copied bundled sniffer to {} and finished yarn install/build.",
+            "Copied the sniffer binary to {}.",
             config.remote_directory.trim()
         ),
     })
@@ -952,9 +900,9 @@ pub async fn remote_sniffer_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_node_major, quote_remote_shell_arg, read_package_json_version, remote_directory_assignment_rhs,
-        remote_launch_command, remote_start_script, remote_status_script, remote_stop_script, sniffer_version_matches,
-        suggested_sniffer_url, RemoteSnifferConfig,
+        quote_remote_shell_arg, read_version_file, remote_directory_assignment_rhs, remote_launch_command,
+        remote_start_script, remote_status_script, remote_stop_script, sniffer_version_matches, suggested_sniffer_url,
+        RemoteSnifferConfig,
     };
     use std::path::PathBuf;
 
@@ -964,7 +912,7 @@ mod tests {
             ssh_host: "pi@raspberrypi.local".into(),
             ssh_port: 22,
             remote_directory: "~/ham-radio-sniffer".into(),
-            remote_start_command: "yarn start".into(),
+            remote_start_command: "./ham-radio-sniffer".into(),
             port: 3010,
             bind_host: "0.0.0.0".into(),
         }
@@ -974,16 +922,19 @@ mod tests {
     fn start_script_binds_all_interfaces_and_detaches() {
         let script = remote_start_script(&sample_config());
         assert!(script.contains("HOST=0.0.0.0"));
-        assert!(script.contains("NITRO_HOST=0.0.0.0"));
         assert!(script.contains("PORT=3010"));
-        assert!(script.contains("nohup \"$NODE_BIN\" .output/server/index.mjs"));
+        assert!(script.contains("nohup \"$DIR/ham-radio-sniffer\""));
+        assert!(script.contains("sniffer.log"));
+        assert!(script.contains("sniffer.pid"));
         assert!(script.contains("SNIFFER_HEALTH_URL=http://127.0.0.1:3010/api/health"));
+        assert!(script.contains("curl -fsS"));
         assert!(script.contains("disown"));
         assert!(script.contains("Last lines of sniffer.log"));
         assert!(!script.contains("pkill"));
         assert!(!script.contains("-L"));
         assert!(!script.contains("HOST=127.0.0.1"));
-        assert!(!script.contains("NITRO_HOST=127.0.0.1"));
+        assert!(!script.contains("NITRO_HOST"));
+        assert!(!script.contains("node"));
     }
 
     #[test]
@@ -993,17 +944,24 @@ mod tests {
         config.bind_host = "127.0.0.1".into();
         let script = remote_start_script(&config);
         assert!(script.contains("HOST=127.0.0.1"));
-        assert!(script.contains("NITRO_HOST=127.0.0.1"));
         assert!(!script.contains("HOST=0.0.0.0"));
+        assert!(!script.contains("NITRO_HOST"));
     }
 
     #[test]
-    fn default_yarn_start_launches_nitro_directly() {
+    fn default_and_legacy_start_commands_launch_the_binary() {
         assert_eq!(
-            remote_launch_command("yarn start"),
-            "\"$NODE_BIN\" .output/server/index.mjs"
+            remote_launch_command("./ham-radio-sniffer", "ham-radio-sniffer"),
+            "\"$DIR/ham-radio-sniffer\""
         );
-        assert_eq!(remote_launch_command("yarn dev"), "yarn dev");
+        assert_eq!(
+            remote_launch_command("yarn start", "ham-radio-sniffer"),
+            "\"$DIR/ham-radio-sniffer\""
+        );
+        assert_eq!(
+            remote_launch_command("SNIFFER_LOG_LEVEL=debug ./custom-sniffer", "ham-radio-sniffer"),
+            "SNIFFER_LOG_LEVEL=debug ./custom-sniffer"
+        );
     }
 
     #[test]
@@ -1054,14 +1012,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_node_major_versions() {
-        assert_eq!(parse_node_major("v26.10.0"), Some(26));
-        assert_eq!(parse_node_major("v24.12.0"), Some(24));
-        assert_eq!(parse_node_major("20.11.1"), Some(20));
-        assert_eq!(parse_node_major("missing"), None);
-    }
-
-    #[test]
     fn version_match_is_skipped_until_the_sniffer_is_installed() {
         assert!(sniffer_version_matches(None, Some("0.2.0"), false, false));
         assert!(sniffer_version_matches(Some("0.1.0"), Some("0.2.0"), true, false));
@@ -1071,9 +1021,9 @@ mod tests {
     }
 
     #[test]
-    fn reads_version_from_package_json() {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/ham-radio-sniffer/package.json");
-        let version = read_package_json_version(&path).expect("bundled sniffer package.json");
+    fn reads_version_from_the_bundled_version_file() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/ham-radio-sniffer/version");
+        let version = read_version_file(&path).expect("bundled sniffer version");
         assert!(version.split('.').count() >= 3, "{version}");
     }
 }

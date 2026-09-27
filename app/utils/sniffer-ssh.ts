@@ -26,9 +26,9 @@ export interface RemoteSnifferCheckResult {
   nodeVersion?: string;
   yarnAvailable: boolean;
   directoryWritable: boolean;
-  /** `package.json` exists in the remote directory. */
+  /** The installed sniffer binary is present. */
   sourcesPresent: boolean;
-  /** `.output/server/index.mjs` exists (yarn build completed). */
+  /** The installed sniffer binary is present and executable. */
   buildPresent: boolean;
   installedVersion?: string;
   expectedVersion?: string;
