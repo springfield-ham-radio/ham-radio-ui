@@ -462,7 +462,7 @@ onMounted(() => {
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Channel library</h2>
         <p class="text-xs text-muted">
-          Portable channels and imported repeaters. Weather, FRS, and GMRS are built-in groups. Hide them in Preferences.
+          Portable channels and imported repeaters. Weather, FRS, and GMRS are built-in groups. Turn them off in Preferences.
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">

@@ -18,26 +18,26 @@ const GROUP_DEFINITIONS: readonly {
   id: PredefinedChannelGroupId;
   name: string;
   icon: string;
-  hideKey: keyof PredefinedChannelGroupSettings;
+  showKey: keyof PredefinedChannelGroupSettings;
 }[] = [
   {
     id: PREDEFINED_CHANNEL_GROUP_IDS.weather,
     name: 'Weather',
     icon: 'i-lucide-cloud-sun',
-    hideKey: 'hideWeather',
+    showKey: 'showWeather',
   },
   {
     id: PREDEFINED_CHANNEL_GROUP_IDS.frs,
     name: 'FRS',
     // Iconify's Lucide set has no walkie-talkie glyph, so the tab would render blank.
     icon: 'i-lucide-radio-receiver',
-    hideKey: 'hideFrs',
+    showKey: 'showFrs',
   },
   {
     id: PREDEFINED_CHANNEL_GROUP_IDS.gmrs,
     name: 'GMRS',
     icon: 'i-lucide-radio',
-    hideKey: 'hideGmrs',
+    showKey: 'showGmrs',
   },
 ];
 
@@ -189,7 +189,7 @@ export function visiblePredefinedChannelGroups(settings: PredefinedChannelGroupS
   return predefinedChannelGroups().filter((group) => {
     const definition = GROUP_DEFINITIONS.find((entry) => entry.id === group.id);
 
-    return definition ? settings[definition.hideKey] !== true : false;
+    return definition ? settings[definition.showKey] === true : false;
   });
 }
 

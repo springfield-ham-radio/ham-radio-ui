@@ -5,14 +5,14 @@ import {
 } from '~/utils/predefined-channel-groups';
 import {
   readPredefinedChannelGroupSettings,
-  settingsWithGroupHidden,
+  settingsWithGroupShown,
   writePredefinedChannelGroupSettings,
   type PredefinedChannelGroupSettings,
 } from '~/utils/predefined-channel-settings';
 import type { ChannelGroup } from '~/utils/channel-groups';
 
 /**
- * Built-in Weather, FRS, and GMRS groups, and which of them the operator has hidden.
+ * Built-in Weather, FRS, and GMRS groups, and which of them the operator has turned on.
  */
 export function usePredefinedChannelGroups() {
   const settings = useState<PredefinedChannelGroupSettings>(
@@ -22,8 +22,8 @@ export function usePredefinedChannelGroups() {
 
   const visibleGroups = computed<ChannelGroup[]>(() => visiblePredefinedChannelGroups(settings.value));
 
-  function setHidden(groupId: PredefinedChannelGroupId, hidden: boolean): void {
-    const next = settingsWithGroupHidden(settings.value, groupId, hidden);
+  function setShown(groupId: PredefinedChannelGroupId, shown: boolean): void {
+    const next = settingsWithGroupShown(settings.value, groupId, shown);
     settings.value = next;
     writePredefinedChannelGroupSettings(next);
   }
@@ -31,7 +31,7 @@ export function usePredefinedChannelGroups() {
   return {
     settings,
     visibleGroups,
-    setHidden,
+    setShown,
     groupIds: PREDEFINED_CHANNEL_GROUP_IDS,
   };
 }

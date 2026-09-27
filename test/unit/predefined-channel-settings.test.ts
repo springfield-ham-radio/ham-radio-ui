@@ -4,15 +4,15 @@ import {
   defaultPredefinedChannelGroupSettings,
   parsePredefinedChannelGroupSettings,
   serializePredefinedChannelGroupSettings,
-  settingsWithGroupHidden,
+  settingsWithGroupShown,
 } from '../../app/utils/predefined-channel-settings.ts';
 
 describe('predefined channel group settings', () => {
   it('should show every built-in group by default', () => {
     expect(defaultPredefinedChannelGroupSettings()).toEqual({
-      hideWeather: false,
-      hideFrs: false,
-      hideGmrs: false,
+      showWeather: true,
+      showFrs: true,
+      showGmrs: true,
     });
   });
 
@@ -23,21 +23,48 @@ describe('predefined channel group settings', () => {
     expect(parsePredefinedChannelGroupSettings('[]')).toEqual(defaultPredefinedChannelGroupSettings());
   });
 
-  it('should hide a group only when that flag is true', () => {
+  it('should turn a group off only when that show flag is false', () => {
+    expect(
+      parsePredefinedChannelGroupSettings(
+        JSON.stringify({
+          showWeather: false,
+          showFrs: true,
+          showGmrs: 'yes',
+          extra: true,
+        }),
+      ),
+    ).toEqual({
+      showWeather: false,
+      showFrs: true,
+      showGmrs: true,
+    });
+  });
+
+  it('should treat a saved hide flag as off', () => {
     expect(
       parsePredefinedChannelGroupSettings(
         JSON.stringify({
           hideWeather: true,
           hideFrs: false,
           hideGmrs: 'yes',
-          extra: true,
         }),
       ),
     ).toEqual({
-      hideWeather: true,
-      hideFrs: false,
-      hideGmrs: false,
+      showWeather: false,
+      showFrs: true,
+      showGmrs: true,
     });
+  });
+
+  it('should prefer a show flag over an older hide flag', () => {
+    expect(
+      parsePredefinedChannelGroupSettings(
+        JSON.stringify({
+          showWeather: true,
+          hideWeather: true,
+        }),
+      ).showWeather,
+    ).toBe(true);
   });
 
   it('should treat missing flags as shown', () => {
@@ -46,25 +73,25 @@ describe('predefined channel group settings', () => {
 
   it('should round-trip settings through serialize and parse', () => {
     const settings = {
-      hideWeather: true,
-      hideFrs: false,
-      hideGmrs: true,
+      showWeather: false,
+      showFrs: true,
+      showGmrs: false,
     };
 
     expect(parsePredefinedChannelGroupSettings(serializePredefinedChannelGroupSettings(settings))).toEqual(settings);
   });
 
-  it('should set the hide flag for one group and leave the others', () => {
-    const next = settingsWithGroupHidden(
+  it('should set the show flag for one group and leave the others', () => {
+    const next = settingsWithGroupShown(
       defaultPredefinedChannelGroupSettings(),
       PREDEFINED_CHANNEL_GROUP_IDS.frs,
-      true,
+      false,
     );
 
     expect(next).toEqual({
-      hideWeather: false,
-      hideFrs: true,
-      hideGmrs: false,
+      showWeather: true,
+      showFrs: false,
+      showGmrs: true,
     });
   });
 });

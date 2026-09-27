@@ -6,34 +6,50 @@ import {
 export const PREDEFINED_CHANNEL_GROUP_SETTINGS_KEY = 'ham-radio-predefined-channel-groups';
 
 export interface PredefinedChannelGroupSettings {
-  hideWeather: boolean;
-  hideFrs: boolean;
-  hideGmrs: boolean;
+  showWeather: boolean;
+  showFrs: boolean;
+  showGmrs: boolean;
 }
 
-const HIDE_KEY: Record<PredefinedChannelGroupId, keyof PredefinedChannelGroupSettings> = {
-  [PREDEFINED_CHANNEL_GROUP_IDS.weather]: 'hideWeather',
-  [PREDEFINED_CHANNEL_GROUP_IDS.frs]: 'hideFrs',
-  [PREDEFINED_CHANNEL_GROUP_IDS.gmrs]: 'hideGmrs',
+const SHOW_KEY: Record<PredefinedChannelGroupId, keyof PredefinedChannelGroupSettings> = {
+  [PREDEFINED_CHANNEL_GROUP_IDS.weather]: 'showWeather',
+  [PREDEFINED_CHANNEL_GROUP_IDS.frs]: 'showFrs',
+  [PREDEFINED_CHANNEL_GROUP_IDS.gmrs]: 'showGmrs',
 };
 
-/** Default: every built-in group is visible. */
+const LEGACY_HIDE_KEY: Record<keyof PredefinedChannelGroupSettings, string> = {
+  showWeather: 'hideWeather',
+  showFrs: 'hideFrs',
+  showGmrs: 'hideGmrs',
+};
+
+/** Default: every built-in group is on. */
 export function defaultPredefinedChannelGroupSettings(): PredefinedChannelGroupSettings {
   return {
-    hideWeather: false,
-    hideFrs: false,
-    hideGmrs: false,
+    showWeather: true,
+    showFrs: true,
+    showGmrs: true,
   };
 }
 
-function hideFlag(value: unknown): boolean {
-  return value === true;
+/**
+ * A boolean show flag wins. Older storage used hide flags, where true meant off.
+ * Anything else leaves the group on.
+ */
+function showFlag(record: Record<string, unknown>, key: keyof PredefinedChannelGroupSettings): boolean {
+  const shown = record[key];
+
+  if (typeof shown === 'boolean') {
+    return shown;
+  }
+
+  return record[LEGACY_HIDE_KEY[key]] !== true;
 }
 
 /**
  * Parse built-in channel group visibility from localStorage.
  *
- * A missing or invalid flag leaves that group visible.
+ * A missing or invalid flag leaves that group on.
  */
 export function parsePredefinedChannelGroupSettings(raw: string | null): PredefinedChannelGroupSettings {
   const defaults = defaultPredefinedChannelGroupSettings();
@@ -52,9 +68,9 @@ export function parsePredefinedChannelGroupSettings(raw: string | null): Predefi
     const record = parsed as Record<string, unknown>;
 
     return {
-      hideWeather: hideFlag(record.hideWeather),
-      hideFrs: hideFlag(record.hideFrs),
-      hideGmrs: hideFlag(record.hideGmrs),
+      showWeather: showFlag(record, 'showWeather'),
+      showFrs: showFlag(record, 'showFrs'),
+      showGmrs: showFlag(record, 'showGmrs'),
     };
   } catch {
     return defaults;
@@ -63,20 +79,20 @@ export function parsePredefinedChannelGroupSettings(raw: string | null): Predefi
 
 export function serializePredefinedChannelGroupSettings(settings: PredefinedChannelGroupSettings): string {
   return JSON.stringify({
-    hideWeather: settings.hideWeather === true,
-    hideFrs: settings.hideFrs === true,
-    hideGmrs: settings.hideGmrs === true,
+    showWeather: settings.showWeather === true,
+    showFrs: settings.showFrs === true,
+    showGmrs: settings.showGmrs === true,
   });
 }
 
-export function settingsWithGroupHidden(
+export function settingsWithGroupShown(
   settings: PredefinedChannelGroupSettings,
   groupId: PredefinedChannelGroupId,
-  hidden: boolean,
+  shown: boolean,
 ): PredefinedChannelGroupSettings {
   return {
     ...settings,
-    [HIDE_KEY[groupId]]: hidden,
+    [SHOW_KEY[groupId]]: shown,
   };
 }
 
@@ -92,7 +108,7 @@ export function readPredefinedChannelGroupSettings(): PredefinedChannelGroupSett
   }
 }
 
-/** Persist which built-in channel groups are hidden. */
+/** Persist which built-in channel groups are shown. */
 export function writePredefinedChannelGroupSettings(settings: PredefinedChannelGroupSettings): void {
   if (!import.meta.client) {
     return;

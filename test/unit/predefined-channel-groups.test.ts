@@ -118,11 +118,11 @@ describe('predefined channel groups', () => {
     expect(predefinedChannelsForGroup('all')).toBeUndefined();
   });
 
-  it('should omit a group when its hide preference is on', () => {
+  it('should omit a group when its show preference is off', () => {
     const settings = {
       ...defaultPredefinedChannelGroupSettings(),
-      hideWeather: true,
-      hideGmrs: true,
+      showWeather: false,
+      showGmrs: false,
     };
 
     expect(visiblePredefinedChannelGroups(settings).map((group) => group.id)).toEqual([
