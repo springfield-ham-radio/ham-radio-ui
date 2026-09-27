@@ -1,3 +1,9 @@
+## [0.46.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.46.0...v0.46.1) (2026-09-27)
+
+### Bug Fixes
+
+* **log:** load the map worker in the desktop build ([d041188](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d04118892caffe3b8a00ab6de9ad213dd6a0d952))
+
 ## [0.46.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.45.0...v0.46.0) (2026-09-27)
 
 ### Features
