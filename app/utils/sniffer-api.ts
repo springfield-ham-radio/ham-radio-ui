@@ -79,6 +79,35 @@ export function snifferPacketToHex(data: number[]): string {
   return data.map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 }
 
+/**
+ * The status poll can report frames the live stream never delivered.
+ * A cleared list stays empty until a newer frame id arrives.
+ */
+export function snifferPacketsNeedReload(localCount: number, serverCount: number, clearedThroughPacketId: number): boolean {
+  if (serverCount <= localCount) {
+    return false;
+  }
+
+  if (localCount === 0 && serverCount <= clearedThroughPacketId) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Keep the newest copy of each frame and hide ones cleared from the list. */
+export function mergeSnifferPackets(current: SnifferPacket[], incoming: SnifferPacket[], clearedThroughPacketId: number): SnifferPacket[] {
+  const byId = new Map<number, SnifferPacket>();
+
+  for (const packet of [...current, ...incoming]) {
+    if (packet.id > clearedThroughPacketId) {
+      byId.set(packet.id, packet);
+    }
+  }
+
+  return [...byId.values()].sort((left, right) => left.id - right.id);
+}
+
 /** Browser EventSource.CONNECTING — auto-reconnect in progress. */
 export const EVENT_SOURCE_CONNECTING = 0;
 

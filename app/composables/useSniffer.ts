@@ -1,5 +1,5 @@
 import type { SnifferEvent, SnifferHealth, SnifferLogResponse, SnifferPacket, SnifferPortsResponse, SnifferStatus } from '~/utils/sniffer-api';
-import { snifferEventSourceErrorAction, snifferFetchErrorMessage } from '~/utils/sniffer-api';
+import { mergeSnifferPackets, snifferEventSourceErrorAction, snifferFetchErrorMessage, snifferPacketsNeedReload } from '~/utils/sniffer-api';
 import {
   defaultSnifferCaptureFileName,
   serializeSnifferCaptureFile,
@@ -29,6 +29,7 @@ export function useSniffer() {
   const ports = useState<SerialPortOption[]>('sniffer-ports', () => []);
   const portsPending = useState('sniffer-ports-pending', () => false);
   const packets = useState<SnifferPacket[]>('sniffer-packets', () => []);
+  const clearedThroughPacketId = useState('sniffer-cleared-through-packet-id', () => 0);
   const errorMessage = useState('sniffer-error', () => '');
   const starting = useState('sniffer-starting', () => false);
   const stopping = useState('sniffer-stopping', () => false);
@@ -36,6 +37,7 @@ export function useSniffer() {
 
   let eventSource: EventSource | undefined;
   let healthTimer: ReturnType<typeof setInterval> | undefined;
+  let packetSync: Promise<void> | undefined;
 
   async function request<T>(path: string, options: Parameters<typeof $fetch<T>>[1] = {}): Promise<T> {
     return await $fetch<T>(snifferApiUrl(baseUrl.value, path), options);
@@ -43,6 +45,41 @@ export function useSniffer() {
 
   function applyStatus(nextStatus: SnifferStatus): void {
     status.value = nextStatus;
+  }
+
+  function replacePackets(incoming: SnifferPacket[]): void {
+    const merged = mergeSnifferPackets(packets.value, incoming, clearedThroughPacketId.value);
+    packets.value = merged.length > MAX_LIVE_PACKETS ? merged.slice(-MAX_LIVE_PACKETS) : merged;
+  }
+
+  function noteStatus(nextStatus: SnifferStatus): void {
+    applyStatus(nextStatus);
+
+    if (nextStatus.packetCount === 0) {
+      clearedThroughPacketId.value = 0;
+    }
+
+    if (snifferPacketsNeedReload(packets.value.length, nextStatus.packetCount, clearedThroughPacketId.value)) {
+      void syncPacketsFromServer();
+    }
+  }
+
+  function syncPacketsFromServer(): Promise<void> {
+    if (packetSync) {
+      return packetSync;
+    }
+
+    packetSync = request<SnifferLogResponse>('/api/sniffer/log')
+      .then((response) => {
+        applyStatus(response.status);
+        replacePackets(response.packets);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        packetSync = undefined;
+      });
+
+    return packetSync;
   }
 
   function disconnectEvents(): void {
@@ -106,13 +143,12 @@ export function useSniffer() {
 
   function handleEvent(event: SnifferEvent): void {
     if (event.type === 'status') {
-      applyStatus(event.status);
+      noteStatus(event.status);
       return;
     }
 
     if (event.type === 'packet') {
-      const nextPackets = [...packets.value, event.packet];
-      packets.value = nextPackets.length > MAX_LIVE_PACKETS ? nextPackets.slice(-MAX_LIVE_PACKETS) : nextPackets;
+      replacePackets([event.packet]);
       return;
     }
 
@@ -160,7 +196,8 @@ export function useSniffer() {
       });
 
       packets.value = [];
-      applyStatus(nextStatus);
+      clearedThroughPacketId.value = 0;
+      noteStatus(nextStatus);
 
       if (!eventSource) {
         connectEvents();
@@ -186,6 +223,8 @@ export function useSniffer() {
   }
 
   function clearPackets(): void {
+    const maxId = packets.value.reduce((max, packet) => Math.max(max, packet.id), clearedThroughPacketId.value);
+    clearedThroughPacketId.value = maxId;
     packets.value = [];
   }
 
@@ -269,7 +308,7 @@ export function useSniffer() {
     await refreshPorts();
 
     try {
-      applyStatus(await request<SnifferStatus>('/api/sniffer'));
+      noteStatus(await request<SnifferStatus>('/api/sniffer'));
     } catch {
       // Health succeeded; status sync is best-effort until SSE connects.
     }
@@ -296,7 +335,7 @@ export function useSniffer() {
           }
 
           void request<SnifferStatus>('/api/sniffer')
-            .then(applyStatus)
+            .then(noteStatus)
             .catch(() => undefined);
         });
       }

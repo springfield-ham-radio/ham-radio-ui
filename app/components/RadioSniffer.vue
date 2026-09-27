@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { snifferPacketToHex } from '~/utils/sniffer-api';
+import { serialPortLabel, type SerialPortOption } from '~/utils/serial-port-list';
 import { readSnifferSettings, snifferHttpUrl } from '~/utils/sniffer-settings';
 
 const baudRateItems = [
@@ -69,6 +70,18 @@ const bridgeDiagnostics = computed(() => {
   return parts.join(' · ');
 });
 
+const portItems = computed((): SerialPortOption[] => {
+  const items = [...ports.value];
+
+  for (const path of [status.value.computerPort, status.value.radioPort]) {
+    if (path && !items.some((item) => item.value === path)) {
+      items.push({ label: serialPortLabel(path), value: path });
+    }
+  }
+
+  return items;
+});
+
 const canToggleBridge = computed(() => {
   if (!reachable.value || starting.value || stopping.value) {
     return false;
@@ -92,8 +105,34 @@ const emptyTrafficHint = computed(() => {
     return 'Bridge is up but the UART has delivered 0 bytes. The selected port is not receiving, even if a scope sees TX.';
   }
 
+  if (status.value.packetCount > 0) {
+    return 'Loading captured frames.';
+  }
+
   return 'Bytes arrived; waiting for a coalesced traffic frame.';
 });
+
+watch(
+  () => [status.value.running, status.value.computerPort, status.value.radioPort, status.value.baudRate] as const,
+  () => {
+    if (!status.value.running) {
+      return;
+    }
+
+    if (!computerPort.value && status.value.computerPort) {
+      computerPort.value = status.value.computerPort;
+    }
+
+    if (!radioPort.value && status.value.radioPort) {
+      radioPort.value = status.value.radioPort;
+    }
+
+    if (status.value.baudRate) {
+      baudRate.value = status.value.baudRate;
+    }
+  },
+  { immediate: true },
+);
 
 const offlineDescription = computed(() => {
   return `Start the sniffer under Preferences → Sniffer (${snifferHttpUrl(snifferSettings.value)}).`;
@@ -187,7 +226,7 @@ onBeforeUnmount(() => {
           >
             <USelect
               v-model="computerPort"
-              :items="ports"
+              :items="portItems"
               value-key="value"
               placeholder="Select port"
               class="w-full"
@@ -203,7 +242,7 @@ onBeforeUnmount(() => {
           >
             <USelect
               v-model="radioPort"
-              :items="ports"
+              :items="portItems"
               value-key="value"
               placeholder="Select port"
               class="w-full"
