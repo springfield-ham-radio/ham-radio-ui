@@ -1,3 +1,9 @@
+## [0.45.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.44.0...v0.45.0) (2026-09-27)
+
+### Features
+
+* **channels:** show built-in groups with switches on by default ([44de9e6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/44de9e6cfcabc13fac86f6ea20fa35fc783b600c))
+
 ## [0.44.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.43.1...v0.44.0) (2026-09-27)
 
 ### Features
