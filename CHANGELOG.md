@@ -1,3 +1,9 @@
+## [0.46.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.45.0...v0.46.0) (2026-09-27)
+
+### Features
+
+* **log:** show contacts on a resizable world map ([07de790](https://github.com/springfield-ham-radio/ham-radio-ui/commit/07de7903392b6b5fcf61cbd5e1cb7db7f79ddd58))
+
 ## [0.45.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.44.0...v0.45.0) (2026-09-27)
 
 ### Features
