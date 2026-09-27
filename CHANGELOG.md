@@ -1,3 +1,13 @@
+## [0.44.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.43.1...v0.44.0) (2026-09-27)
+
+### Features
+
+* **sniffer:** install and run the Rust sniffer binary ([e7c23bf](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e7c23bfdc8ffd9773c8a3edab6cc212188d5cd15))
+
+### Bug Fixes
+
+* **sniffer:** reload frames the live stream missed ([9adcedc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9adcedc56b9853fe7e8e97fcc053ab7ebca951d2))
+
 ## [0.43.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.43.0...v0.43.1) (2026-09-26)
 
 ### Bug Fixes
