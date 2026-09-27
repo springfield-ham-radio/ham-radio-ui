@@ -427,6 +427,15 @@ ALTER TABLE saved_channels ADD COLUMN on_air INTEGER;
             sql: "ALTER TABLE saved_channels ADD COLUMN callsign TEXT;",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "add_station_log_qsl",
+            sql: r#"
+ALTER TABLE station_log_qsos ADD COLUMN qsl_sent INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE station_log_qsos ADD COLUMN qsl_rcvd INTEGER NOT NULL DEFAULT 0;
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

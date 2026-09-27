@@ -29,6 +29,8 @@ const sample: StationLogQso = {
   operatorCallsign: 'K1ABC',
   stationCallsign: 'K1ABC',
   myGridsquare: 'FN42',
+  qslSent: false,
+  qslReceived: false,
   adifExtra: { DXCC: '291' },
   createdAt: 1_000,
   updatedAt: 2_000,
@@ -66,6 +68,8 @@ describe('station-log-adif', () => {
     expect(qso.operatorCallsign).toBe('K1ABC');
     expect(qso.stationCallsign).toBe('K1ABC');
     expect(qso.myGridsquare).toBe('FN42');
+    expect(qso.qslSent).toBe(false);
+    expect(qso.qslReceived).toBe(false);
     expect(qso.adifExtra).toEqual({ DXCC: '291' });
   });
 
@@ -83,6 +87,37 @@ describe('station-log-adif', () => {
     expect(parsed.qsos).toHaveLength(1);
     expect(parsed.qsos[0]?.theirCallsign).toBe('K1ABC');
     expect(parsed.qsos[0]?.mode).toBe('CW');
+  });
+
+  it('maps QSL_SENT and QSL_RCVD Y to confirmed cards', () => {
+    const sent = { ...sample, qslSent: true, qslReceived: true };
+    const adi = serializeStationLogAdif([sent]);
+    const parsed = parseStationLogAdif(adi);
+
+    expect(adi).toMatch(/<QSL_SENT:1>Y/);
+    expect(adi).toMatch(/<QSL_RCVD:1>Y/);
+    expect(parsed.qsos[0]?.qslSent).toBe(true);
+    expect(parsed.qsos[0]?.qslReceived).toBe(true);
+    expect(parsed.qsos[0]?.adifExtra).toEqual({ DXCC: '291' });
+  });
+
+  it('keeps requested QSL status in extra fields instead of marking a card sent', () => {
+    const adi = '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<QSL_SENT:1>R<QSL_RCVD:1>N<EOR>';
+    const parsed = parseStationLogAdif(adi);
+
+    expect(parsed.qsos[0]?.qslSent).toBe(false);
+    expect(parsed.qsos[0]?.qslReceived).toBe(false);
+    expect(parsed.qsos[0]?.adifExtra).toEqual({ QSL_SENT: 'R' });
+
+    const stored = {
+      ...sample,
+      adifExtra: { QSL_SENT: 'R' },
+    };
+    const exported = serializeStationLogAdif([stored]);
+
+    expect(exported).toMatch(/<QSL_SENT:1>R/);
+    expect(exported).not.toMatch(/<QSL_SENT:1>Y/);
+    expect(exported).not.toMatch(/QSL_RCVD/);
   });
 
   it('includes a HamBench PROGRAMID header on export', () => {

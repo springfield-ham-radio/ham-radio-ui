@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-full flex-col gap-3 px-4 py-3">
+  <div class="flex h-full min-h-0 flex-col gap-3 px-4 py-3">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Station log</h2>
@@ -29,6 +29,15 @@
           />
         </UTooltip>
         <UButton
+          icon="i-lucide-map"
+          color="neutral"
+          :variant="showMap ? 'soft' : 'outline'"
+          size="sm"
+          label="Map"
+          :aria-pressed="showMap"
+          @click="showMap = !showMap"
+        />
+        <UButton
           icon="i-lucide-plus"
           color="primary"
           size="sm"
@@ -55,54 +64,75 @@
       :description="error"
     />
 
-    <div class="min-h-0 flex-1 overflow-auto">
-      <UTable
-        :data="displayQsos"
-        :columns="columns"
-        :loading="isLoading"
-        sticky
-        class="max-h-full"
-        :ui="{
-          thead: 'bg-default',
-          th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
-          td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
-          empty: 'py-8 text-center text-sm text-muted',
-          tr: 'cursor-pointer',
-        }"
-        empty="No contacts yet. Add one here, or import an ADIF file."
-        @select="(row) => openEdit(row.original)"
-      >
-        <template #actions-cell="{ row }">
-          <div class="flex items-center justify-end gap-0.5" @click.stop>
-            <UButton
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Edit contact"
-              @click="openEdit(row.original)"
-            />
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="xs"
-              aria-label="Delete contact"
-              @click="removeQso(row.original.id)"
-            />
-          </div>
-        </template>
-      </UTable>
-    </div>
+    <USplitter
+      :key="showMap ? 'map' : 'table'"
+      orientation="vertical"
+      :items="splitterItems"
+      :auto-save-id="showMap ? 'ham-radio-station-log' : undefined"
+      class="min-h-0 w-full flex-1"
+      :ui="{ handle: 'h-3' }"
+    >
+      <template #map>
+        <StationLogMap class="h-full min-h-0" :qsos="filteredQsos" @select="openEdit" />
+      </template>
+      <template #contacts>
+        <div class="h-full min-h-0 w-full overflow-auto">
+          <UTable
+            :data="displayQsos"
+            :columns="columns"
+            :loading="isLoading"
+            sticky
+            class="max-h-full"
+            :ui="{
+              thead: 'bg-default',
+              th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
+              td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
+              empty: 'py-8 text-center text-sm text-muted',
+              tr: 'cursor-pointer',
+            }"
+            empty="No contacts yet. Add one here, or import an ADIF file."
+            @select="(row) => openEdit(row.original)"
+          >
+            <template #actions-cell="{ row }">
+              <div class="flex items-center justify-end gap-0.5" @click.stop>
+                <UButton
+                  icon="i-lucide-pencil"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Edit contact"
+                  @click="openEdit(row.original)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Delete contact"
+                  @click="removeQso(row.original.id)"
+                />
+              </div>
+            </template>
+          </UTable>
+        </div>
+      </template>
+      <template #resize-handle>
+        <div
+          class="pointer-events-none absolute inset-x-4 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-accented group-hover:bg-primary group-data-[state=drag]:bg-primary"
+        />
+        <span class="sr-only">Resize map</span>
+      </template>
+    </USplitter>
 
     <StationLogEditor v-model:open="editorOpen" :qso="editingQso" @save="onSave" />
   </div>
 </template>
 
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui';
+import type { SplitterItem, TableColumn } from '@nuxt/ui';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
+import { qslTableLabel } from '~/utils/station-log-map';
 
 useHead({ title: 'Log' });
 
@@ -121,6 +151,18 @@ const {
 
 const isExporting = ref(false);
 const isImporting = ref(false);
+const showMap = ref(true);
+
+const mapPanes: SplitterItem[] = [
+  { id: 'map', slot: 'map', defaultSize: 42, minSize: 18, maxSize: 85, class: 'h-full min-h-0 w-full flex-col overflow-hidden' },
+  { id: 'contacts', slot: 'contacts', defaultSize: 58, minSize: 15, class: 'h-full min-h-0 w-full flex-col' },
+];
+
+const tablePanes: SplitterItem[] = [
+  { id: 'contacts', slot: 'contacts', defaultSize: 100, class: 'h-full min-h-0 w-full flex-col' },
+];
+
+const splitterItems = computed(() => (showMap.value ? mapPanes : tablePanes));
 
 const editorOpen = ref(false);
 const editingQso = ref<StationLogQso | undefined>();
@@ -185,6 +227,11 @@ const columns: TableColumn<DisplayQso>[] = [
     cell: ({ row }) => row.original.theirName || '—',
   },
   {
+    id: 'qsl',
+    header: 'Card',
+    cell: ({ row }) => qslTableLabel(row.original),
+  },
+  {
     id: 'actions',
     header: '',
   },
@@ -222,6 +269,8 @@ async function onSave(payload: StationLogQsoInput & { id?: string }): Promise<vo
         operatorCallsign: payload.operatorCallsign,
         stationCallsign: payload.stationCallsign,
         myGridsquare: payload.myGridsquare,
+        qslSent: payload.qslSent === true,
+        qslReceived: payload.qslReceived === true,
         adifExtra: payload.adifExtra,
         createdAt: payload.createdAt ?? editingQso.value?.createdAt ?? Date.now(),
         updatedAt: Date.now(),

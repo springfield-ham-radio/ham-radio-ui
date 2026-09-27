@@ -97,6 +97,13 @@
           <UInput v-model="txPowerWatts" inputmode="decimal" class="w-full tabular-nums" />
         </UFormField>
 
+        <UFormField label="QSL cards" description="Marker color on the log map.">
+          <div class="flex flex-wrap gap-4 pt-1">
+            <UCheckbox v-model="qslSent" label="Card sent" />
+            <UCheckbox v-model="qslReceived" label="Card received" />
+          </div>
+        </UFormField>
+
         <UFormField label="Comment">
           <UTextarea v-model="comment" :rows="3" class="w-full" autoresize />
         </UFormField>
@@ -168,6 +175,8 @@ const rstReceived = ref('');
 const theirName = ref('');
 const theirQth = ref('');
 const theirGridsquare = ref('');
+const qslSent = ref(false);
+const qslReceived = ref(false);
 const txPowerWatts = ref('');
 const comment = ref('');
 const operatorCallsign = ref<string | undefined>();
@@ -279,6 +288,8 @@ watch(
     theirName.value = source.theirName ?? '';
     theirQth.value = source.theirQth ?? '';
     theirGridsquare.value = source.theirGridsquare ?? '';
+    qslSent.value = source.qslSent === true;
+    qslReceived.value = source.qslReceived === true;
     txPowerWatts.value = source.txPowerWatts !== undefined ? String(source.txPowerWatts) : '';
     comment.value = source.comment ?? '';
     operatorCallsign.value = source.operatorCallsign ?? identity.callSign;
@@ -328,6 +339,24 @@ async function onCallsignBlur(): Promise<void> {
   } finally {
     isLookingUp.value = false;
   }
+}
+
+function adifExtraForSave(): Record<string, string> | undefined {
+  const extra = { ...(adifExtra.value ?? {}) };
+
+  if (qslSent.value) {
+    delete extra.QSL_SENT;
+  }
+
+  if (qslReceived.value) {
+    delete extra.QSL_RCVD;
+  }
+
+  if (Object.keys(extra).length === 0) {
+    return undefined;
+  }
+
+  return extra;
 }
 
 function save(): void {
@@ -414,12 +443,14 @@ function save(): void {
       theirName: theirName.value.trim() || undefined,
       theirQth: theirQth.value.trim() || undefined,
       theirGridsquare: theirGridsquare.value.trim() || undefined,
+      qslSent: qslSent.value,
+      qslReceived: qslReceived.value,
       txPowerWatts: power,
       comment: comment.value.trim() || undefined,
       operatorCallsign: operatorCallsign.value,
       stationCallsign: stationCallsign.value,
       myGridsquare: myGridsquare.value,
-      adifExtra: adifExtra.value,
+      adifExtra: adifExtraForSave(),
       createdAt: props.qso?.createdAt,
     });
   } finally {

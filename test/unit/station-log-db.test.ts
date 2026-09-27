@@ -42,6 +42,8 @@ describe('station-log-db', () => {
         operator_callsign: 'K1ABC',
         station_callsign: null,
         my_gridsquare: 'FN42',
+        qsl_sent: 1,
+        qsl_rcvd: 0,
         adif_extra: '{"DXCC":"291"}',
         created_at: 1_000,
         updated_at: 2_000,
@@ -53,6 +55,8 @@ describe('station-log-db', () => {
       expect(model.frequencyHz).toBe(146_520_000);
       expect(model.adifExtra).toEqual({ DXCC: '291' });
       expect(model.theirQth).toBe(undefined);
+      expect(model.qslSent).toBe(true);
+      expect(model.qslReceived).toBe(false);
     });
   });
 
@@ -68,6 +72,8 @@ describe('station-log-db', () => {
       expect(qso.theirCallsign).toBe('W1AW');
       expect(qso.mode).toBe('FM');
       expect(qso.band).toBe('2m');
+      expect(qso.qslSent).toBe(false);
+      expect(qso.qslReceived).toBe(false);
       expect(qso.id).toBeTypeOf('string');
     });
   });

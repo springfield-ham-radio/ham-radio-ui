@@ -23,6 +23,8 @@ export interface StationLogQsoRow {
   operator_callsign: string | null;
   station_callsign: string | null;
   my_gridsquare: string | null;
+  qsl_sent: number;
+  qsl_rcvd: number;
   adif_extra: string | null;
   created_at: number;
   updated_at: number;
@@ -47,15 +49,19 @@ export interface StationLogQso {
   operatorCallsign?: string;
   stationCallsign?: string;
   myGridsquare?: string;
+  qslSent: boolean;
+  qslReceived: boolean;
   adifExtra?: Record<string, string>;
   createdAt: number;
   updatedAt: number;
 }
 
-export type StationLogQsoInput = Omit<StationLogQso, 'id' | 'createdAt' | 'updatedAt'> & {
+export type StationLogQsoInput = Omit<StationLogQso, 'id' | 'createdAt' | 'updatedAt' | 'qslSent' | 'qslReceived'> & {
   id?: string;
   createdAt?: number;
   updatedAt?: number;
+  qslSent?: boolean;
+  qslReceived?: boolean;
 };
 
 /**
@@ -173,6 +179,8 @@ export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
     operatorCallsign: optionalText(row.operator_callsign),
     stationCallsign: optionalText(row.station_callsign),
     myGridsquare: optionalText(row.my_gridsquare),
+    qslSent: row.qsl_sent === 1,
+    qslReceived: row.qsl_rcvd === 1,
     adifExtra: parseAdifExtra(row.adif_extra),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -206,6 +214,8 @@ export function createStationLogQso(input: StationLogQsoInput): StationLogQso {
     operatorCallsign: optionalText(input.operatorCallsign)?.toUpperCase(),
     stationCallsign: optionalText(input.stationCallsign)?.toUpperCase(),
     myGridsquare: optionalText(input.myGridsquare)?.toUpperCase(),
+    qslSent: input.qslSent === true,
+    qslReceived: input.qslReceived === true,
     adifExtra: input.adifExtra,
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
@@ -233,7 +243,7 @@ export async function listStationLogQsos(): Promise<StationLogQso[]> {
     `SELECT id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
             rst_sent, rst_received, their_name, their_qth, their_gridsquare,
             tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-            adif_extra, created_at, updated_at
+            qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
      FROM station_log_qsos
      ORDER BY started_at DESC`,
   );
@@ -254,8 +264,8 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
          id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
          rst_sent, rst_received, their_name, their_qth, their_gridsquare,
          tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-         adif_extra, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+         qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
       [
         qso.id,
         qso.startedAt,
@@ -275,6 +285,8 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
         qso.operatorCallsign ?? null,
         qso.stationCallsign ?? null,
         qso.myGridsquare ?? null,
+        qso.qslSent ? 1 : 0,
+        qso.qslReceived ? 1 : 0,
         qso.adifExtra ? JSON.stringify(qso.adifExtra) : null,
         qso.createdAt,
         qso.updatedAt,
@@ -314,9 +326,11 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
        operator_callsign = $15,
        station_callsign = $16,
        my_gridsquare = $17,
-       adif_extra = $18,
-       updated_at = $19
-     WHERE id = $20`,
+       qsl_sent = $18,
+       qsl_rcvd = $19,
+       adif_extra = $20,
+       updated_at = $21
+     WHERE id = $22`,
     [
       updated.startedAt,
       updated.endedAt ?? null,
@@ -335,6 +349,8 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
       updated.operatorCallsign ?? null,
       updated.stationCallsign ?? null,
       updated.myGridsquare ?? null,
+      updated.qslSent ? 1 : 0,
+      updated.qslReceived ? 1 : 0,
       updated.adifExtra ? JSON.stringify(updated.adifExtra) : null,
       updated.updatedAt,
       updated.id,

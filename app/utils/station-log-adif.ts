@@ -25,6 +25,8 @@ const MAPPED_TAGS = new Set([
   'OPERATOR',
   'STATION_CALLSIGN',
   'MY_GRIDSQUARE',
+  'QSL_SENT',
+  'QSL_RCVD',
 ]);
 
 const FIELD_PATTERN = /<([A-Za-z0-9_]+)(?::(\d+))(?::([A-Za-z]))?>([^<]*)/g;
@@ -125,6 +127,20 @@ function emitField(tag: string, value: string): string {
   return `<${tag}:${value.length}>${value}`;
 }
 
+/**
+ * ADIF QSL_SENT / QSL_RCVD use Y for a confirmed card. Other codes (N, R, Q, I)
+ * are not a sent or received card. R, Q, and I are kept in adifExtra.
+ */
+function isConfirmedQsl(value: string | undefined): boolean {
+  return value?.trim().toUpperCase() === 'Y';
+}
+
+function shouldPreserveQslStatus(value: string): boolean {
+  const normalized = value.trim().toUpperCase();
+
+  return normalized !== '' && normalized !== 'Y' && normalized !== 'N';
+}
+
 function parseRecordFields(recordText: string): Map<string, string> {
   const fields = new Map<string, string>();
   FIELD_PATTERN.lastIndex = 0;
@@ -176,6 +192,14 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
   const adifExtra: Record<string, string> = {};
 
   for (const [tag, value] of fields) {
+    if (tag === 'QSL_SENT' || tag === 'QSL_RCVD') {
+      if (shouldPreserveQslStatus(value)) {
+        adifExtra[tag] = value;
+      }
+
+      continue;
+    }
+
     if (!MAPPED_TAGS.has(tag) && tag !== 'APP_HAMBENCH_ID') {
       adifExtra[tag] = value;
     }
@@ -199,6 +223,8 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
     operatorCallsign: fields.get('OPERATOR')?.trim(),
     stationCallsign: fields.get('STATION_CALLSIGN')?.trim(),
     myGridsquare: fields.get('MY_GRIDSQUARE')?.trim(),
+    qslSent: isConfirmedQsl(fields.get('QSL_SENT')),
+    qslReceived: isConfirmedQsl(fields.get('QSL_RCVD')),
     adifExtra: Object.keys(adifExtra).length > 0 ? adifExtra : undefined,
   };
 }
@@ -312,9 +338,23 @@ export function serializeStationLogAdif(qsos: StationLogQso[]): string {
       fields.push(emitField('MY_GRIDSQUARE', qso.myGridsquare));
     }
 
+    if (qso.qslSent) {
+      fields.push(emitField('QSL_SENT', 'Y'));
+    }
+
+    if (qso.qslReceived) {
+      fields.push(emitField('QSL_RCVD', 'Y'));
+    }
+
     if (qso.adifExtra) {
       for (const [tag, value] of Object.entries(qso.adifExtra)) {
-        fields.push(emitField(tag.toUpperCase(), value));
+        const normalized = tag.toUpperCase();
+
+        if ((normalized === 'QSL_SENT' && qso.qslSent) || (normalized === 'QSL_RCVD' && qso.qslReceived)) {
+          continue;
+        }
+
+        fields.push(emitField(normalized, value));
       }
     }
 
