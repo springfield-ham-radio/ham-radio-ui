@@ -46,7 +46,7 @@ jobs:
           mkdir -p dist
           cp ham-radio-sniffer/target/release/ham-radio-sniffer dist/ham-radio-sniffer-linux-aarch64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ham-radio-sniffer-linux-aarch64
           path: dist/ham-radio-sniffer-linux-aarch64
@@ -78,7 +78,7 @@ jobs:
           repository: springfield-ham-radio/ham-radio-sniffer
           path: vendor/ham-radio-sniffer
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ham-radio-sniffer-linux-aarch64
           path: vendor/ham-radio-sniffer/dist
