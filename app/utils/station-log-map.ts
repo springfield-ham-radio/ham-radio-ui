@@ -1,4 +1,4 @@
-import { maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
+import { isValidLatitude, isValidLongitude, maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
 import type { StationLogQso } from '~/utils/station-log-db';
 
 /** Public OpenFreeMap styles. No API key. MapLibre draws the required attribution. */
@@ -6,6 +6,9 @@ export const OPENFREEMAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/lib
 export const OPENFREEMAP_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 
 export type QslMarkerStatus = 'none' | 'sent' | 'received' | 'both' | 'mixed';
+
+/** Distinct from the QSL marker colors. */
+export const STATION_PIN_COLOR = '#e11d48';
 
 export const QSL_MARKER_COLOR: Record<QslMarkerStatus, string> = {
   none: '#64748b',
@@ -26,6 +29,39 @@ export interface StationLogMapPoint {
 export interface StationLogMapFeatureCollection {
   type: 'FeatureCollection';
   features: StationLogMapFeature[];
+}
+
+export interface StationMapPinInput {
+  id: string;
+  nickname: string;
+  gridsquare?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface StationMapPin {
+  id: string;
+  nickname: string;
+  gridsquare?: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface StationMapFeatureCollection {
+  type: 'FeatureCollection';
+  features: StationMapFeature[];
+}
+
+export interface StationMapFeature {
+  type: 'Feature';
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
+  properties: {
+    id: string;
+    nickname: string;
+  };
 }
 
 export interface StationLogMapFeature {
@@ -187,6 +223,72 @@ export function stationLogMapFeatureCollection(points: readonly StationLogMapPoi
         grid: point.grid,
         status: point.status,
         count: point.qsos.length,
+      },
+    })),
+  };
+}
+
+/**
+ * One pin per configured station that has coordinates or a valid Maidenhead grid.
+ * Stored coordinates win over the grid center.
+ */
+export function stationMapPins(stations: readonly StationMapPinInput[]): StationMapPin[] {
+  const pins: StationMapPin[] = [];
+
+  for (const station of stations) {
+    const grid = normalizeMaidenhead(station.gridsquare);
+    const hasCoordinates = isValidLatitude(station.latitude) && isValidLongitude(station.longitude);
+
+    if (hasCoordinates && station.latitude !== undefined && station.longitude !== undefined) {
+      pins.push({
+        id: station.id,
+        nickname: station.nickname,
+        gridsquare: grid,
+        latitude: station.latitude,
+        longitude: station.longitude,
+      });
+      continue;
+    }
+
+    if (!grid) {
+      continue;
+    }
+
+    const location = maidenheadToLatLon(grid);
+
+    if (!location) {
+      continue;
+    }
+
+    pins.push({
+      id: station.id,
+      nickname: station.nickname,
+      gridsquare: grid,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    });
+  }
+
+  pins.sort((left, right) => left.nickname.localeCompare(right.nickname) || left.id.localeCompare(right.id));
+
+  return pins;
+}
+
+/**
+ * GeoJSON for station pins. Coordinates are longitude, then latitude.
+ */
+export function stationMapFeatureCollection(pins: readonly StationMapPin[]): StationMapFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: pins.map((pin) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [pin.longitude, pin.latitude],
+      },
+      properties: {
+        id: pin.id,
+        nickname: pin.nickname,
       },
     })),
   };

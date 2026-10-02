@@ -11,17 +11,21 @@ import {
 } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { formatStationLocation } from '~/utils/antenna-station';
 import type { StationLogQso } from '~/utils/station-log-db';
 import {
   OPENFREEMAP_STYLE_DARK,
   OPENFREEMAP_STYLE_LIGHT,
   QSL_MARKER_COLOR,
+  STATION_PIN_COLOR,
   qslMarkerStatus,
   qslStatusLabel,
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
-  type QslMarkerStatus,
+  stationMapFeatureCollection,
+  stationMapPins,
+  type StationMapPinInput,
 } from '~/utils/station-log-map';
 
 // The desktop build bundles this module, so MapLibre cannot find the worker that ships beside the package.
@@ -29,9 +33,13 @@ setWorkerUrl(maplibreWorkerUrl);
 
 const SOURCE_ID = 'station-log-contacts';
 const LAYER_ID = 'station-log-contacts';
+const STATION_SOURCE_ID = 'station-log-stations';
+const STATION_LAYER_ID = 'station-log-stations';
+const STATION_PIN_IMAGE_ID = 'station-log-pin';
 
 const props = defineProps<{
   qsos: StationLogQso[];
+  stations: StationMapPinInput[];
 }>();
 
 const emit = defineEmits<{
@@ -48,6 +56,7 @@ const styleUrl = computed(() =>
 );
 
 const points = computed(() => stationLogMapPoints(props.qsos));
+const pins = computed(() => stationMapPins(props.stations));
 
 const unmappedCount = computed(() => stationLogUnmappedCount(props.qsos));
 
@@ -60,15 +69,19 @@ const unmappedMessage = computed(() => {
 });
 
 const legend = computed(() => {
-  const items: { status: QslMarkerStatus; label: string }[] = [
-    { status: 'none', label: 'No card' },
-    { status: 'sent', label: 'Card sent' },
-    { status: 'received', label: 'Card received' },
-    { status: 'both', label: 'Both' },
+  const items: { key: string; label: string; color: string; pin: boolean }[] = [
+    { key: 'none', label: 'No card', color: QSL_MARKER_COLOR.none, pin: false },
+    { key: 'sent', label: 'Card sent', color: QSL_MARKER_COLOR.sent, pin: false },
+    { key: 'received', label: 'Card received', color: QSL_MARKER_COLOR.received, pin: false },
+    { key: 'both', label: 'Both', color: QSL_MARKER_COLOR.both, pin: false },
   ];
 
   if (points.value.some((point) => point.status === 'mixed')) {
-    items.push({ status: 'mixed', label: 'Mixed' });
+    items.push({ key: 'mixed', label: 'Mixed', color: QSL_MARKER_COLOR.mixed, pin: false });
+  }
+
+  if (pins.value.length > 0) {
+    items.push({ key: 'station', label: 'Station', color: STATION_PIN_COLOR, pin: true });
   }
 
   return items;
@@ -78,8 +91,8 @@ let popup: Popup | undefined;
 let listenersBound = false;
 let mapReady = false;
 
-function contactSource(instance: MapLibreMap): GeoJSONSource | undefined {
-  const source = instance.getSource(SOURCE_ID);
+function geoJsonSource(instance: MapLibreMap, sourceId: string): GeoJSONSource | undefined {
+  const source = instance.getSource(sourceId);
 
   if (!source || source.type !== 'geojson') {
     return undefined;
@@ -88,57 +101,141 @@ function contactSource(instance: MapLibreMap): GeoJSONSource | undefined {
   return source;
 }
 
-function ensureLayers(instance: MapLibreMap): void {
-  if (instance.getSource(SOURCE_ID)) {
+function stationPinImage(): ImageData | undefined {
+  const displayWidth = 18;
+  const displayHeight = 24;
+  const pixelRatio = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = displayWidth * pixelRatio;
+  canvas.height = displayHeight * pixelRatio;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return undefined;
+  }
+
+  context.scale(pixelRatio, pixelRatio);
+  context.beginPath();
+  context.moveTo(9, 22);
+  context.bezierCurveTo(9, 22, 2, 13, 2, 8);
+  context.arc(9, 8, 7, Math.PI, 0);
+  context.bezierCurveTo(16, 13, 9, 22, 9, 22);
+  context.closePath();
+  context.fillStyle = STATION_PIN_COLOR;
+  context.fill();
+  context.lineWidth = 1.25;
+  context.strokeStyle = '#ffffff';
+  context.stroke();
+  context.beginPath();
+  context.arc(9, 8, 2.4, 0, Math.PI * 2);
+  context.fillStyle = '#ffffff';
+  context.fill();
+
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function ensureStationPin(instance: MapLibreMap): void {
+  if (instance.hasImage(STATION_PIN_IMAGE_ID)) {
     return;
   }
 
-  instance.addSource(SOURCE_ID, {
-    type: 'geojson',
-    data: stationLogMapFeatureCollection(points.value),
-  });
+  const image = stationPinImage();
+
+  if (!image) {
+    return;
+  }
+
+  instance.addImage(STATION_PIN_IMAGE_ID, image, { pixelRatio: 2 });
+}
+
+function ensureLayers(instance: MapLibreMap): void {
+  ensureStationPin(instance);
+  ensureStationSource(instance);
+
+  if (!instance.getSource(SOURCE_ID)) {
+    instance.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: stationLogMapFeatureCollection(points.value),
+    });
+
+    instance.addLayer({
+      id: LAYER_ID,
+      type: 'circle',
+      source: SOURCE_ID,
+      paint: {
+        'circle-color': [
+          'match',
+          ['get', 'status'],
+          'sent',
+          QSL_MARKER_COLOR.sent,
+          'received',
+          QSL_MARKER_COLOR.received,
+          'both',
+          QSL_MARKER_COLOR.both,
+          'mixed',
+          QSL_MARKER_COLOR.mixed,
+          QSL_MARKER_COLOR.none,
+        ],
+        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.95,
+      },
+    });
+  }
+
+  if (!instance.hasImage(STATION_PIN_IMAGE_ID) || instance.getLayer(STATION_LAYER_ID)) {
+    return;
+  }
 
   instance.addLayer({
-    id: LAYER_ID,
-    type: 'circle',
-    source: SOURCE_ID,
+    id: STATION_LAYER_ID,
+    type: 'symbol',
+    source: STATION_SOURCE_ID,
+    layout: {
+      'icon-image': STATION_PIN_IMAGE_ID,
+      'icon-anchor': 'bottom',
+      'icon-allow-overlap': true,
+      'text-field': ['get', 'nickname'],
+      'text-font': ['Noto Sans Regular'],
+      'text-size': 12,
+      'text-anchor': 'top',
+      'text-offset': [0, 0.15],
+      'text-optional': true,
+    },
     paint: {
-      'circle-color': [
-        'match',
-        ['get', 'status'],
-        'sent',
-        QSL_MARKER_COLOR.sent,
-        'received',
-        QSL_MARKER_COLOR.received,
-        'both',
-        QSL_MARKER_COLOR.both,
-        'mixed',
-        QSL_MARKER_COLOR.mixed,
-        QSL_MARKER_COLOR.none,
-      ],
-      'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#ffffff',
-      'circle-opacity': 0.95,
+      'text-color': '#f8fafc',
+      'text-halo-color': '#0f172a',
+      'text-halo-width': 1.25,
     },
   });
 }
 
-function syncContacts(instance: MapLibreMap, fit: boolean): void {
-  const source = contactSource(instance);
-
-  if (!source) {
+function ensureStationSource(instance: MapLibreMap): void {
+  if (instance.getSource(STATION_SOURCE_ID)) {
     return;
   }
 
-  const current = points.value;
-  source.setData(stationLogMapFeatureCollection(current));
+  instance.addSource(STATION_SOURCE_ID, {
+    type: 'geojson',
+    data: stationMapFeatureCollection(pins.value),
+  });
+}
+
+function syncMap(instance: MapLibreMap, fit: boolean): void {
+  ensureLayers(instance);
+
+  geoJsonSource(instance, SOURCE_ID)?.setData(stationLogMapFeatureCollection(points.value));
+  geoJsonSource(instance, STATION_SOURCE_ID)?.setData(stationMapFeatureCollection(pins.value));
 
   if (!fit) {
     return;
   }
 
-  if (current.length === 0) {
+  const current = points.value;
+  const stationPins = pins.value;
+
+  if (current.length === 0 && stationPins.length === 0) {
     instance.easeTo({ center: [0, 15], zoom: 1.2, duration: 300 });
     return;
   }
@@ -149,7 +246,54 @@ function syncContacts(instance: MapLibreMap, fit: boolean): void {
     bounds.extend([point.longitude, point.latitude]);
   }
 
+  for (const pin of stationPins) {
+    bounds.extend([pin.longitude, pin.latitude]);
+  }
+
   instance.fitBounds(bounds, { padding: 48, maxZoom: 5, duration: 300 });
+}
+
+function openStations(ids: string[], lngLat: LngLatLike): void {
+  const selected = pins.value.filter((pin) => ids.includes(pin.id));
+  const instance = map.value;
+
+  if (selected.length === 0 || !instance) {
+    return;
+  }
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  for (const pin of selected) {
+    const block = document.createElement('div');
+    const name = document.createElement('div');
+    name.textContent = pin.nickname;
+    name.style.fontWeight = '600';
+    const place = document.createElement('div');
+    place.textContent = formatStationLocation(pin);
+    block.append(name, place);
+    root.append(block);
+  }
+
+  popup?.remove();
+  popup = new Popup({ closeButton: true, maxWidth: '260px' })
+    .setLngLat(lngLat)
+    .setDOMContent(root)
+    .addTo(instance);
+}
+
+function stationIdsAt(event: { features?: { properties?: { id?: unknown } | null }[] }): string[] {
+  const ids: string[] = [];
+
+  for (const feature of event.features ?? []) {
+    const id = feature.properties?.id;
+
+    if (typeof id === 'string' && !ids.includes(id)) {
+      ids.push(id);
+    }
+  }
+
+  return ids;
 }
 
 function openPoint(grid: string, lngLat: LngLatLike): void {
@@ -169,6 +313,7 @@ function openPoint(grid: string, lngLat: LngLatLike): void {
   }
 
   const root = document.createElement('div');
+  root.style.color = '#0f172a';
 
   for (const qso of point.qsos) {
     const button = document.createElement('button');
@@ -203,7 +348,25 @@ function bindPointer(instance: MapLibreMap): void {
 
   listenersBound = true;
 
+  instance.on('click', STATION_LAYER_ID, (event) => {
+    const ids = stationIdsAt(event);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    openStations(ids, event.lngLat);
+  });
+
   instance.on('click', LAYER_ID, (event) => {
+    if (instance.getLayer(STATION_LAYER_ID)) {
+      const stationsHere = instance.queryRenderedFeatures(event.point, { layers: [STATION_LAYER_ID] });
+
+      if (stationsHere.length > 0) {
+        return;
+      }
+    }
+
     const grid = event.features?.[0]?.properties?.grid;
 
     if (typeof grid !== 'string') {
@@ -213,13 +376,15 @@ function bindPointer(instance: MapLibreMap): void {
     openPoint(grid, event.lngLat);
   });
 
-  instance.on('mouseenter', LAYER_ID, () => {
-    instance.getCanvas().style.cursor = 'pointer';
-  });
+  for (const layerId of [LAYER_ID, STATION_LAYER_ID]) {
+    instance.on('mouseenter', layerId, () => {
+      instance.getCanvas().style.cursor = 'pointer';
+    });
 
-  instance.on('mouseleave', LAYER_ID, () => {
-    instance.getCanvas().style.cursor = '';
-  });
+    instance.on('mouseleave', layerId, () => {
+      instance.getCanvas().style.cursor = '';
+    });
+  }
 }
 
 watch(styleUrl, (url) => {
@@ -231,19 +396,18 @@ watch(styleUrl, (url) => {
 
   instance.setStyle(url);
   instance.once('style.load', () => {
-    ensureLayers(instance);
-    syncContacts(instance, false);
+    syncMap(instance, false);
   });
 });
 
-watch(points, () => {
+watch([points, pins], () => {
   const instance = map.value;
 
-  if (!instance?.isStyleLoaded() || !contactSource(instance)) {
+  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, SOURCE_ID)) {
     return;
   }
 
-  syncContacts(instance, true);
+  syncMap(instance, true);
 });
 
 onMounted(() => {
@@ -273,9 +437,8 @@ onMounted(() => {
     didLoad = true;
     mapReady = true;
     loadError.value = undefined;
-    ensureLayers(instance);
+    syncMap(instance, true);
     bindPointer(instance);
-    syncContacts(instance, true);
   });
 
   instance.on('error', () => {
@@ -310,12 +473,13 @@ onMounted(() => {
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span
         v-for="item in legend"
-        :key="item.status"
+        :key="item.key"
         class="inline-flex items-center gap-1.5 text-xs text-muted"
       >
         <span
           class="station-log-map__swatch"
-          :style="{ backgroundColor: QSL_MARKER_COLOR[item.status] }"
+          :class="{ 'station-log-map__swatch--pin': item.pin }"
+          :style="{ backgroundColor: item.color }"
         />
         {{ item.label }}
       </span>
@@ -345,5 +509,12 @@ onMounted(() => {
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 9999px;
+}
+
+.station-log-map__swatch--pin {
+  width: 0.45rem;
+  height: 0.55rem;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
 }
 </style>

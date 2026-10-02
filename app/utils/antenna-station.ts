@@ -806,7 +806,11 @@ export function applyLicenseGridToHomeIfEmpty(
 /**
  * Grid plus DMS coordinates, or a short empty-state label.
  */
-export function formatStationLocation(station: RadioStation | ResolvedAntenna): string {
+export function formatStationLocation(station: {
+  gridsquare?: string;
+  latitude?: number;
+  longitude?: number;
+}): string {
   const grid = station.gridsquare;
   const latitude = station.latitude;
   const longitude = station.longitude;

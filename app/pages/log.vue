@@ -73,7 +73,7 @@
       :ui="{ handle: 'h-3' }"
     >
       <template #map>
-        <StationLogMap class="h-full min-h-0" :qsos="filteredQsos" @select="openEdit" />
+        <StationLogMap class="h-full min-h-0" :qsos="filteredQsos" :stations="stations" @select="openEdit" />
       </template>
       <template #contacts>
         <div class="h-full min-h-0 w-full overflow-auto">
@@ -148,6 +148,8 @@ const {
   exportAdif,
   importAdif,
 } = useStationLog();
+
+const { stations } = useStationAntennas();
 
 const isExporting = ref(false);
 const isImporting = ref(false);

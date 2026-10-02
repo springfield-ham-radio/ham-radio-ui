@@ -7,6 +7,8 @@ import {
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
+  stationMapFeatureCollection,
+  stationMapPins,
 } from '../../app/utils/station-log-map.ts';
 
 function contact(overrides: Partial<StationLogQso> = {}): StationLogQso {
@@ -108,5 +110,48 @@ describe('stationLogMapFeatureCollection', () => {
       status: 'sent',
       count: 1,
     });
+  });
+});
+
+describe('stationMapPins', () => {
+  it('uses stored coordinates instead of the grid center', () => {
+    const pins = stationMapPins([
+      { id: 'home', nickname: 'Home', gridsquare: 'FN31', latitude: 41.7, longitude: -72.5 },
+    ]);
+
+    expect(pins).toEqual([
+      { id: 'home', nickname: 'Home', gridsquare: 'FN31', latitude: 41.7, longitude: -72.5 },
+    ]);
+  });
+
+  it('falls back to the grid center when coordinates are missing', () => {
+    const pins = stationMapPins([
+      { id: 'cabin', nickname: 'Cabin', gridsquare: 'fn31' },
+    ]);
+
+    expect(pins).toEqual([
+      { id: 'cabin', nickname: 'Cabin', gridsquare: 'FN31', latitude: 41.5, longitude: -73 },
+    ]);
+  });
+
+  it('skips a station with no location and sorts the rest by nickname', () => {
+    const pins = stationMapPins([
+      { id: 'home', nickname: 'Home' },
+      { id: 'portable', nickname: 'Portable', gridsquare: 'EM48' },
+      { id: 'cabin', nickname: 'Cabin', gridsquare: 'FN42' },
+    ]);
+
+    expect(pins.map((pin) => pin.nickname)).toEqual(['Cabin', 'Portable']);
+  });
+});
+
+describe('stationMapFeatureCollection', () => {
+  it('emits longitude then latitude and the station id', () => {
+    const collection = stationMapFeatureCollection(stationMapPins([
+      { id: 'home', nickname: 'Home', latitude: 41.7, longitude: -72.5 },
+    ]));
+
+    expect(collection.features[0]?.geometry.coordinates).toEqual([-72.5, 41.7]);
+    expect(collection.features[0]?.properties).toEqual({ id: 'home', nickname: 'Home' });
   });
 });
