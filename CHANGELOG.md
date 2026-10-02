@@ -1,3 +1,9 @@
+## [0.47.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.46.1...v0.47.0) (2026-10-02)
+
+### Features
+
+* **log:** show configured stations on the map ([93a3cfa](https://github.com/springfield-ham-radio/ham-radio-ui/commit/93a3cfac287a200b905cf65e45dbefef25bbbadb))
+
 ## [0.46.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.46.0...v0.46.1) (2026-09-27)
 
 ### Bug Fixes
