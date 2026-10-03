@@ -43,11 +43,21 @@ import {
 } from '~/utils/radio-memory-file';
 import {
   clearBrowserFileHandle,
+  isTauriRuntime,
   readTextFileWithPicker,
   saveJsonFileWithPicker,
   writeTextFile,
   writeTextFileWithPicker,
 } from '~/utils/radio-memory-file-io';
+import {
+  captureRadioImageBackup,
+  matchBackupConfiguration,
+  parseBackupFileName,
+  readRadioImageBackupSettings,
+  shouldCaptureRadioImageBackup,
+  writeWithoutBackupWarning,
+} from '~/utils/radio-image-backup';
+import { createTauriRadioImageBackupStore, loadRadioImageBackup } from '~/utils/radio-image-backup-io';
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
@@ -81,6 +91,12 @@ interface SerialLoggedDriver {
 
 interface RadioCardSession {
   memory?: Uint8Array;
+  /**
+   * Last raw image known to be stored in the radio.
+   * Set from a successful read, and replaced after a successful write.
+   * Edits in the app change `memory` and leave this copy alone.
+   */
+  radioBaseline?: Uint8Array;
   channels: ChannelRow[];
   program?: RadioProgram;
   settingsMemoryMap?: RadioMemoryMap;
@@ -130,7 +146,7 @@ export function useRadio() {
   const importOpen = useState('radio-import-open', () => false);
   const writeOpen = useState('radio-write-open', () => false);
   const progressOpen = useState('radio-progress-open', () => false);
-  const progressKind = useState<'import' | 'write'>('radio-progress-kind', () => 'import');
+  const progressKind = useState<'import' | 'write' | 'backup'>('radio-progress-kind', () => 'import');
   const progress = useState('radio-progress', () => 0);
   const progressError = useState<string | null>('radio-progress-error', () => null);
   const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
@@ -380,7 +396,7 @@ export function useRadio() {
     });
   }
 
-  function startProgress(kind: 'import' | 'write'): RadioProgressIndicator {
+  function startProgress(kind: 'import' | 'write' | 'backup'): RadioProgressIndicator {
     canceled.value = false;
     progress.value = 0;
     progressError.value = null;
@@ -480,6 +496,7 @@ export function useRadio() {
     const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     let importedBytes = 0;
+    let importedImage: Uint8Array | undefined;
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
@@ -488,8 +505,9 @@ export function useRadio() {
         outcome = 'canceled';
       } else {
         importedBytes = memoryData.length;
+        importedImage = memoryData.slice();
         await applyLoadedMemory(memoryData, radioId, sessionId);
-        patchSession(sessionId, { memoryFilePath: undefined });
+        patchSession(sessionId, { memoryFilePath: undefined, radioBaseline: importedImage });
         clearBrowserFileHandle();
       }
     } catch (cause) {
@@ -514,6 +532,11 @@ export function useRadio() {
         color: 'success',
         icon: 'i-lucide-download',
       });
+
+      if (importedImage) {
+        await saveRadioImageBackup(radioId, importedImage, 'read');
+      }
+
       return;
     }
 
@@ -590,14 +613,21 @@ export function useRadio() {
       return;
     }
 
+    const backupReady = await preparePrewriteBackup(sessionId, latest, radioId, serialPortPath, config, baudRate);
+
+    if (!backupReady) {
+      return;
+    }
+
+    const imageToWrite = readSession(sessionId)?.memory ?? latest.memory;
     const progressIndicator = startProgress('write');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
-    const writtenBytes = latest.memory.length;
+    const writtenBytes = imageToWrite.length;
 
     try {
-      await driver.writeRadio(serialPortPath, latest.memory, progressIndicator);
+      await driver.writeRadio(serialPortPath, imageToWrite, progressIndicator);
     } catch (cause) {
       if (isCancelledTransfer(cause)) {
         outcome = 'canceled';
@@ -613,6 +643,8 @@ export function useRadio() {
     }
 
     if (outcome === 'success') {
+      const written = readSession(sessionId)?.memory ?? imageToWrite;
+      patchSession(sessionId, { radioBaseline: written.slice() });
       progressOpen.value = false;
       toast.add({
         title: 'Wrote to radio',
@@ -623,6 +655,9 @@ export function useRadio() {
       return;
     }
 
+    // The radio may no longer match the last download. The next backup reads it again.
+    patchSession(sessionId, { radioBaseline: undefined });
+
     if (outcome === 'canceled') {
       progressOpen.value = false;
       toast.add({
@@ -631,6 +666,181 @@ export function useRadio() {
         icon: 'i-lucide-ban',
       });
     }
+  }
+
+  /**
+   * Save the image currently on the radio before replacing it.
+   *
+   * Uses the last successful download or write when that still describes the
+   * radio. Otherwise reads the radio first. Returns false when the operator
+   * stops the write because that backup could not be made.
+   */
+  async function preparePrewriteBackup(
+    sessionId: string,
+    session: RadioCardSession,
+    radioId: RadioId,
+    serialPortPath: string,
+    config: LoadedRadioConfig,
+    baudRate?: number,
+  ): Promise<boolean> {
+    const settings = readRadioImageBackupSettings();
+
+    if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
+      return true;
+    }
+
+    const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
+
+    if (image === 'abort') {
+      return false;
+    }
+
+    if (image === 'skip') {
+      return true;
+    }
+
+    const captured = await captureRadioImageBackup({
+      settings,
+      identity: { manufacturer: radioId.manufacturer, model: String(radioId.model) },
+      kind: 'prewrite',
+      image,
+      store: createTauriRadioImageBackupStore(),
+    });
+
+    if (captured.status !== 'failed') {
+      return true;
+    }
+
+    logger.error(`Failed to back up radio image before write: ${captured.message}`);
+    await nextTick();
+    return confirmWriteWithoutBackup(captured.message);
+  }
+
+  /**
+   * Bytes already known to be on the radio, or a fresh read when they are not.
+   */
+  async function prewriteBackupImage(
+    sessionId: string,
+    session: RadioCardSession,
+    radioId: RadioId,
+    serialPortPath: string,
+    config: LoadedRadioConfig,
+    baudRate?: number,
+  ): Promise<Uint8Array | 'skip' | 'abort'> {
+    const baseline = session.radioBaseline;
+
+    if (baseline && baseline.length > 0) {
+      return baseline.slice();
+    }
+
+    return readRadioImageForBackup(sessionId, radioId, serialPortPath, config, baudRate);
+  }
+
+  /**
+   * Read the radio without replacing the image loaded in the editor.
+   *
+   * Returns image bytes to save, `skip` when the write may continue without a
+   * backup, or `abort` when the write should stop.
+   */
+  async function readRadioImageForBackup(
+    sessionId: string,
+    radioId: RadioId,
+    serialPortPath: string,
+    config: LoadedRadioConfig,
+    baudRate?: number,
+  ): Promise<Uint8Array | 'skip' | 'abort'> {
+    const progressIndicator = startProgress('backup');
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+
+    try {
+      const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
+      progressOpen.value = false;
+
+      if (memoryData == undefined) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        toast.add({
+          title: 'Backup canceled',
+          description: 'The radio was not written.',
+          color: 'neutral',
+          icon: 'i-lucide-ban',
+        });
+        return 'abort';
+      }
+
+      if (memoryData.length === 0) {
+        await nextTick();
+        return confirmWriteWithoutBackup('The radio returned an empty memory image.') ? 'skip' : 'abort';
+      }
+
+      return memoryData.slice();
+    } catch (cause) {
+      progressOpen.value = false;
+
+      if (isCancelledTransfer(cause)) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        toast.add({
+          title: 'Backup canceled',
+          description: 'The radio was not written.',
+          color: 'neutral',
+          icon: 'i-lucide-ban',
+        });
+        return 'abort';
+      }
+
+      const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
+      logger.withError(cause).error('Failed to read radio for backup');
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      await nextTick();
+      return confirmWriteWithoutBackup(message) ? 'skip' : 'abort';
+    }
+  }
+
+  function confirmWriteWithoutBackup(reason: string): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const proceed = window.confirm(writeWithoutBackupWarning(reason));
+
+    if (!proceed) {
+      toast.add({
+        title: 'Write canceled',
+        description: 'The radio was not changed because a backup could not be saved.',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
+    }
+
+    return proceed;
+  }
+
+  async function saveRadioImageBackup(radioId: RadioId, image: Uint8Array, kind: 'read' | 'prewrite'): Promise<void> {
+    const settings = readRadioImageBackupSettings();
+
+    if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
+      return;
+    }
+
+    const captured = await captureRadioImageBackup({
+      settings,
+      identity: { manufacturer: radioId.manufacturer, model: String(radioId.model) },
+      kind,
+      image,
+      store: createTauriRadioImageBackupStore(),
+    });
+
+    if (captured.status !== 'failed') {
+      return;
+    }
+
+    logger.error(`Failed to back up radio image: ${captured.message}`);
+    toast.add({
+      title: kind === 'read' ? 'Imported without a backup' : 'Backup was not saved',
+      description: captured.message,
+      color: 'warning',
+      icon: 'i-lucide-triangle-alert',
+    });
   }
 
   async function updateSettings(nextSettings: RadioSettings): Promise<void> {
@@ -926,6 +1136,62 @@ export function useRadio() {
     }
   }
 
+  /**
+   * Load a saved backup image into the open radio card so it can be written back.
+   */
+  async function restoreRadioImageBackup(fileName: string): Promise<boolean> {
+    const sessionId = cardId.value;
+
+    if (!sessionId) {
+      toast.add({
+        title: 'No radio open',
+        description: 'Add a radio on the Radio page, then restore a backup into that card.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return false;
+    }
+
+    const parsed = parseBackupFileName(fileName);
+    const config = parsed ? matchBackupConfiguration(configurations.value, parsed) : undefined;
+
+    if (!parsed || !config) {
+      toast.add({
+        title: 'Cannot restore backup',
+        description: parsed
+          ? `Install the ${parsed.manufacturer} ${parsed.model} driver, then try again.`
+          : 'That file is not a HamBench radio image backup.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    try {
+      const image = await loadRadioImageBackup(fileName);
+      await applyLoadedMemory(image, config.id, sessionId);
+      patchSession(sessionId, { memoryFilePath: undefined });
+      clearBrowserFileHandle();
+      toast.add({
+        title: 'Backup restored',
+        description: `${config.id.name} (${image.length} bytes). Write it to the radio to put this image back.`,
+        color: 'success',
+        icon: 'i-lucide-archive-restore',
+      });
+      return true;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to restore the radio image backup';
+      logger.withError(cause).error('Failed to restore radio image backup');
+      toast.add({
+        title: 'Could not restore backup',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+  }
+
   async function openMemoryFile(): Promise<void> {
     const sessionId = cardId.value;
 
@@ -1116,6 +1382,7 @@ export function useRadio() {
     cancelTransfer,
     saveSerialLog,
     openMemoryFile,
+    restoreRadioImageBackup,
     saveMemoryFile,
     saveMemoryFileAs,
     clearCardSession,

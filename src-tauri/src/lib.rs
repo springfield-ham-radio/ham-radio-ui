@@ -1,3 +1,4 @@
+mod radio_image_backup;
 mod radio_modules;
 mod sniffer_ssh;
 mod zoom;
@@ -88,6 +89,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         true,
         None::<&str>,
     )?;
+    let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -168,6 +170,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &import_from_radio,
                 &write_to_radio,
                 &PredefinedMenuItem::separator(app)?,
+                &show_backups,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::close_window(app, None)?,
             ],
         )?;
@@ -204,6 +208,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &PredefinedMenuItem::separator(app)?,
                 &import_from_radio,
                 &write_to_radio,
+                &PredefinedMenuItem::separator(app)?,
+                &show_backups,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
                 &check_updates,
@@ -467,6 +473,12 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
             zoom::zoom_by_command,
             save_text_file,
             load_text_file,
+            radio_image_backup::radio_image_backups_directory,
+            radio_image_backup::open_radio_image_backups_directory,
+            radio_image_backup::list_radio_image_backups,
+            radio_image_backup::save_radio_image_backup,
+            radio_image_backup::load_radio_image_backup,
+            radio_image_backup::delete_radio_image_backups,
             fetch_repeaterbook_search,
             radio_modules::download_and_install_radio_module,
             radio_modules::install_radio_module_from_zip,
@@ -487,6 +499,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
             "save-memory-as" => emit_menu_event(app, "save-memory-as"),
             "import-from-radio" => emit_menu_event(app, "import-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
+            "show-backups" => emit_menu_event(app, "show-backups"),
             "developer-mode" => emit_developer_mode(app),
             "zoom-in" => {
                 if let Err(error) = zoom::zoom_in(app) {

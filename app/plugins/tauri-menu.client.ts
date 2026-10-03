@@ -1,8 +1,10 @@
+import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { readDeveloperMode } from '~/utils/developer-mode';
 import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
+  const toast = useToast();
   const { openImportFromRadio, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
   const { checkForUpdate } = useAppUpdater();
   const { setEnabled: setDeveloperMode } = useDeveloperMode();
@@ -52,6 +54,17 @@ export default defineNuxtPlugin(() => {
       await listen('write-to-radio', () => {
         void router.push('/');
         openWriteToRadio();
+      });
+      await listen('show-backups', () => {
+        void showRadioImageBackups().catch((cause: unknown) => {
+          const message = cause instanceof Error ? cause.message : 'Failed to open the backup folder';
+          toast.add({
+            title: 'Could not open backups',
+            description: message,
+            color: 'error',
+            icon: 'i-lucide-circle-alert',
+          });
+        });
       });
       window.addEventListener('keydown', (event) => {
         const command = zoomCommandForKey(event);

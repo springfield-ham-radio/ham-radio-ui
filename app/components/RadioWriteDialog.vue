@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
+import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const { configurations, writeOpen, writeToRadio } = useRadio();
@@ -25,7 +27,23 @@ const description = computed(() => {
   return `Write the loaded memory to ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
 });
 
+const backupsEnabled = ref(false);
+
+const warningDescription = computed(() => {
+  const base = "The loaded memory image will overwrite what is currently stored in the radio.";
+
+  if (!backupsEnabled.value) {
+    return base;
+  }
+
+  return `${base} HamBench saves a backup of the radio's current image first.`;
+});
+
 watch(writeOpen, (open) => {
+  if (open) {
+    backupsEnabled.value = readRadioImageBackupSettings().enabled && isTauriRuntime();
+  }
+
   if (!open) {
     clearTransfer();
   }
@@ -58,7 +76,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     :description="description"
     confirm-label="Write"
     warning-title="This replaces the radio's memory"
-    warning-description="The loaded memory image will overwrite what is currently stored in the radio."
+    :warning-description="warningDescription"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="writeRadio"
