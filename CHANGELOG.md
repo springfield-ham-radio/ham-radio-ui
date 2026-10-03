@@ -1,3 +1,9 @@
+## [0.53.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.52.0...v0.53.0) (2026-10-03)
+
+### Features
+
+* **ui:** custom radio read/write icons, warning write confirm, bundled icons ([#51](https://github.com/springfield-ham-radio/ham-radio-ui/issues/51)) ([795d954](https://github.com/springfield-ham-radio/ham-radio-ui/commit/795d95455fe3bba72bc868a0c6c3fdba1d9cafae))
+
 ## [0.52.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.51.1...v0.52.0) (2026-10-03)
 
 ### Features
