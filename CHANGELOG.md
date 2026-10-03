@@ -1,3 +1,9 @@
+## [0.52.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.51.1...v0.52.0) (2026-10-03)
+
+### Features
+
+* **menu:** add Radio menu and rename Import from Radio to Read from Radio ([#50](https://github.com/springfield-ham-radio/ham-radio-ui/issues/50)) ([5f8b0de](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5f8b0de52a0c873568e2d11a51e31738ca6afe95))
+
 ## [0.51.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.51.0...v0.51.1) (2026-10-03)
 
 ### Bug Fixes
