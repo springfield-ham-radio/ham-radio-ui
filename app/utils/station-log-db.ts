@@ -23,6 +23,8 @@ export interface StationLogQsoRow {
   operator_callsign: string | null;
   station_callsign: string | null;
   my_gridsquare: string | null;
+  my_rig: string | null;
+  my_antenna: string | null;
   qsl_sent: number;
   qsl_rcvd: number;
   adif_extra: string | null;
@@ -49,6 +51,10 @@ export interface StationLogQso {
   operatorCallsign?: string;
   stationCallsign?: string;
   myGridsquare?: string;
+  /** ADIF MY_RIG. The saved radio name, or free text from an import. */
+  myRig?: string;
+  /** ADIF MY_ANTENNA. Station and antenna label, or free text from an import. */
+  myAntenna?: string;
   qslSent: boolean;
   qslReceived: boolean;
   adifExtra?: Record<string, string>;
@@ -179,6 +185,8 @@ export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
     operatorCallsign: optionalText(row.operator_callsign),
     stationCallsign: optionalText(row.station_callsign),
     myGridsquare: optionalText(row.my_gridsquare),
+    myRig: optionalText(row.my_rig),
+    myAntenna: optionalText(row.my_antenna),
     qslSent: row.qsl_sent === 1,
     qslReceived: row.qsl_rcvd === 1,
     adifExtra: parseAdifExtra(row.adif_extra),
@@ -214,6 +222,8 @@ export function createStationLogQso(input: StationLogQsoInput): StationLogQso {
     operatorCallsign: optionalText(input.operatorCallsign)?.toUpperCase(),
     stationCallsign: optionalText(input.stationCallsign)?.toUpperCase(),
     myGridsquare: optionalText(input.myGridsquare)?.toUpperCase(),
+    myRig: optionalText(input.myRig),
+    myAntenna: optionalText(input.myAntenna),
     qslSent: input.qslSent === true,
     qslReceived: input.qslReceived === true,
     adifExtra: input.adifExtra,
@@ -243,7 +253,7 @@ export async function listStationLogQsos(): Promise<StationLogQso[]> {
     `SELECT id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
             rst_sent, rst_received, their_name, their_qth, their_gridsquare,
             tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-            qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
+            my_rig, my_antenna, qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
      FROM station_log_qsos
      ORDER BY started_at DESC`,
   );
@@ -264,8 +274,8 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
          id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
          rst_sent, rst_received, their_name, their_qth, their_gridsquare,
          tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-         qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+         my_rig, my_antenna, qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
       [
         qso.id,
         qso.startedAt,
@@ -285,6 +295,8 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
         qso.operatorCallsign ?? null,
         qso.stationCallsign ?? null,
         qso.myGridsquare ?? null,
+        qso.myRig ?? null,
+        qso.myAntenna ?? null,
         qso.qslSent ? 1 : 0,
         qso.qslReceived ? 1 : 0,
         qso.adifExtra ? JSON.stringify(qso.adifExtra) : null,
@@ -304,6 +316,8 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
     theirCallsign: qso.theirCallsign.trim().toUpperCase(),
     mode: qso.mode.trim().toUpperCase(),
     band: optionalText(qso.band) ?? adifBandFromFrequencyHz(qso.frequencyHz),
+    myRig: optionalText(qso.myRig),
+    myAntenna: optionalText(qso.myAntenna),
     updatedAt: Date.now(),
   };
 
@@ -326,11 +340,13 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
        operator_callsign = $15,
        station_callsign = $16,
        my_gridsquare = $17,
-       qsl_sent = $18,
-       qsl_rcvd = $19,
-       adif_extra = $20,
-       updated_at = $21
-     WHERE id = $22`,
+       my_rig = $18,
+       my_antenna = $19,
+       qsl_sent = $20,
+       qsl_rcvd = $21,
+       adif_extra = $22,
+       updated_at = $23
+     WHERE id = $24`,
     [
       updated.startedAt,
       updated.endedAt ?? null,
@@ -349,6 +365,8 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
       updated.operatorCallsign ?? null,
       updated.stationCallsign ?? null,
       updated.myGridsquare ?? null,
+      updated.myRig ?? null,
+      updated.myAntenna ?? null,
       updated.qslSent ? 1 : 0,
       updated.qslReceived ? 1 : 0,
       updated.adifExtra ? JSON.stringify(updated.adifExtra) : null,
@@ -380,6 +398,8 @@ export function matchesStationLogSearch(qso: StationLogQso, query: string): bool
   const frequencyMhz = qso.frequencyHz !== undefined ? (qso.frequencyHz / 1_000_000).toFixed(4) : '';
   const band = (qso.band ?? adifBandFromFrequencyHz(qso.frequencyHz) ?? '').toLowerCase();
   const comment = qso.comment?.toLowerCase() ?? '';
+  const rig = qso.myRig?.toLowerCase() ?? '';
+  const antenna = qso.myAntenna?.toLowerCase() ?? '';
   const extra = Object.values(qso.adifExtra ?? {})
     .join(' ')
     .toLowerCase();
@@ -393,6 +413,8 @@ export function matchesStationLogSearch(qso: StationLogQso, query: string): bool
     frequencyMhz.includes(trimmed) ||
     band.includes(trimmed) ||
     comment.includes(trimmed) ||
+    rig.includes(trimmed) ||
+    antenna.includes(trimmed) ||
     extra.includes(trimmed)
   );
 }

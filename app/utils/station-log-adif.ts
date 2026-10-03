@@ -25,6 +25,10 @@ const MAPPED_TAGS = new Set([
   'OPERATOR',
   'STATION_CALLSIGN',
   'MY_GRIDSQUARE',
+  'MY_RIG',
+  'MY_RIG_INTL',
+  'MY_ANTENNA',
+  'MY_ANTENNA_INTL',
   'QSL_SENT',
   'QSL_RCVD',
 ]);
@@ -223,6 +227,8 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
     operatorCallsign: fields.get('OPERATOR')?.trim(),
     stationCallsign: fields.get('STATION_CALLSIGN')?.trim(),
     myGridsquare: fields.get('MY_GRIDSQUARE')?.trim(),
+    myRig: fields.get('MY_RIG')?.trim() || fields.get('MY_RIG_INTL')?.trim(),
+    myAntenna: fields.get('MY_ANTENNA')?.trim() || fields.get('MY_ANTENNA_INTL')?.trim(),
     qslSent: isConfirmedQsl(fields.get('QSL_SENT')),
     qslReceived: isConfirmedQsl(fields.get('QSL_RCVD')),
     adifExtra: Object.keys(adifExtra).length > 0 ? adifExtra : undefined,
@@ -336,6 +342,14 @@ export function serializeStationLogAdif(qsos: StationLogQso[]): string {
 
     if (qso.myGridsquare) {
       fields.push(emitField('MY_GRIDSQUARE', qso.myGridsquare));
+    }
+
+    if (qso.myRig) {
+      fields.push(emitField('MY_RIG', qso.myRig));
+    }
+
+    if (qso.myAntenna) {
+      fields.push(emitField('MY_ANTENNA', qso.myAntenna));
     }
 
     if (qso.qslSent) {

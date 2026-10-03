@@ -13,6 +13,7 @@ import {
   defaultStationAntennaStore,
   formatAntennaGeometry,
   formatAntennaSummary,
+  formatStationAntennaLogLabel,
   formatAntennaBands,
   formatHeadingDeg,
   formatStationLocation,
@@ -344,6 +345,7 @@ describe('station antennas', () => {
       'Backyard Yagi · 3-element Yagi · 15 m AGL · 045°',
     );
     expect(formatHeadingDeg(undefined, false)).toBe(undefined);
+    expect(formatStationAntennaLogLabel(antenna, 'Home')).toBe('Home · 3-element Yagi · 15 m AGL · 045°');
   });
 });
 

@@ -436,6 +436,15 @@ ALTER TABLE station_log_qsos ADD COLUMN qsl_rcvd INTEGER NOT NULL DEFAULT 0;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "add_station_log_rig_antenna",
+            sql: r#"
+ALTER TABLE station_log_qsos ADD COLUMN my_rig TEXT;
+ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

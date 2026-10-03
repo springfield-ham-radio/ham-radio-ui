@@ -32,5 +32,17 @@ const totals: { key: keyof Pick<StationLogSummary, 'qsoCount' | 'uniqueCalls' | 
 
     <StationLogSummaryTable title="Bands" label="Band" :rows="summary.bands" />
     <StationLogSummaryTable title="Modes" label="Mode" :rows="summary.modes" />
+    <StationLogSummaryTable
+      title="Radios"
+      label="Radio"
+      :rows="summary.radios"
+      :empty="summary.qsoCount === 0 ? 'No contacts' : 'None recorded'"
+    />
+    <StationLogSummaryTable
+      title="Antennas"
+      label="Antenna"
+      :rows="summary.antennas"
+      :empty="summary.qsoCount === 0 ? 'No contacts' : 'None recorded'"
+    />
   </aside>
 </template>

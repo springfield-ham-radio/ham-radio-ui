@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { formatEquipmentBands, radioBandsFromConfig } from '~/utils/radio-bands';
 import { savedRadioModelLabel, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
 
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
@@ -83,6 +84,17 @@ function radioDetail(radio: SavedRadio): string {
 
   return parts.join(' · ');
 }
+
+function radioBandsLabel(radio: SavedRadio): string | undefined {
+  const config = configurations.value.find((entry) => String(entry.id.model) === radio.model);
+  const bands = radioBandsFromConfig(config);
+
+  if (bands.length === 0) {
+    return undefined;
+  }
+
+  return formatEquipmentBands(bands);
+}
 </script>
 
 <template>
@@ -117,6 +129,7 @@ function radioDetail(radio: SavedRadio): string {
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-highlighted">{{ radio.name }}</p>
             <p class="truncate text-xs text-muted">{{ radioDetail(radio) }}</p>
+            <p v-if="radioBandsLabel(radio)" class="truncate text-xs text-muted">{{ radioBandsLabel(radio) }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-1">
             <UButton

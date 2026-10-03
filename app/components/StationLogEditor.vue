@@ -37,7 +37,7 @@
           </UFormField>
         </div>
 
-        <UFormField label="Their callsign" :error="callsignError" required>
+        <UFormField label="Callsign" :error="callsignError" required>
           <UInput
             v-model="theirCallsign"
             class="w-full uppercase"
@@ -78,24 +78,46 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Their name">
+          <UFormField label="Name">
             <div class="flex gap-1.5">
               <UInput v-model="theirName" class="w-full" :loading="isLookingUp" />
             </div>
           </UFormField>
 
-          <UFormField label="Their grid">
-            <UInput v-model="theirGridsquare" class="w-full uppercase" placeholder="FN31" />
+          <UFormField label="Grid">
+            <UInput v-model="theirGridsquare" class="w-full uppercase" placeholder="FN31" :loading="isLookingUp" />
           </UFormField>
         </div>
 
-        <UFormField label="Their QTH">
-          <UInput v-model="theirQth" class="w-full" />
+        <UFormField label="QTH">
+          <UInput v-model="theirQth" class="w-full" :loading="isLookingUp" />
         </UFormField>
 
         <UFormField label="TX power (W)" :error="txPowerError">
           <UInput v-model="txPowerWatts" inputmode="decimal" class="w-full tabular-nums" />
         </UFormField>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <UFormField label="Radio" description="Saved radios configured for this band.">
+            <USelectMenu
+              v-model="myRig"
+              :items="radioItems"
+              value-key="value"
+              placeholder="None"
+              class="w-full"
+            />
+          </UFormField>
+
+          <UFormField label="Antenna" description="Station antennas configured for this band.">
+            <USelectMenu
+              v-model="myAntenna"
+              :items="antennaItems"
+              value-key="value"
+              placeholder="None"
+              class="w-full"
+            />
+          </UFormField>
+        </div>
 
         <UFormField label="QSL cards" description="Marker color on the log map.">
           <div class="flex flex-wrap gap-4 pt-1">
@@ -125,8 +147,15 @@
 </template>
 
 <script setup lang="ts">
+import { formatAntennaBands, formatStationAntennaLogLabel } from '~/utils/antenna-station';
 import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
-import { fetchCallookLicense } from '~/utils/callook';
+import { fetchCallookLicense, qthFromCallook, resolveCallookGrid } from '~/utils/callook';
+import {
+  equipmentCoversAdifBand,
+  equipmentListedForBand,
+  formatEquipmentBands,
+  radioBandsFromConfig,
+} from '~/utils/radio-bands';
 import {
   adifBandFromFrequencyHz,
   createBlankStationLogQso,
@@ -161,6 +190,9 @@ const emit = defineEmits<{
 }>();
 
 const { solePrivilege, amateurIdentity, getTransmitPrivilegeWarning } = useOperatorLicense();
+const { radios } = useSavedRadios();
+const { configurations } = useRadio();
+const { antennas, stations } = useStationAntennas();
 
 const startDate = ref('');
 const startTime = ref('');
@@ -178,6 +210,8 @@ const theirGridsquare = ref('');
 const qslSent = ref(false);
 const qslReceived = ref(false);
 const txPowerWatts = ref('');
+const myRig = ref('');
+const myAntenna = ref('');
 const comment = ref('');
 const operatorCallsign = ref<string | undefined>();
 const stationCallsign = ref<string | undefined>();
@@ -204,6 +238,115 @@ const description = computed(() =>
 const privilegeWarning = computed(() => {
   const hz = parseFrequencyMHz(frequencyMHz.value);
   return getTransmitPrivilegeWarning(hz, solePrivilege.value);
+});
+
+const contactBand = computed(() => adifBandFromFrequencyHz(parseFrequencyMHz(frequencyMHz.value)));
+
+interface EquipmentChoice {
+  label: string;
+  value: string;
+  description?: string;
+  bands: string[];
+}
+
+function withStoredChoice(
+  listed: EquipmentChoice[],
+  configured: EquipmentChoice[],
+  current: string,
+  missingDescription: string,
+): EquipmentChoice[] {
+  const trimmed = current.trim();
+
+  if (!trimmed || configured.some((item) => item.value === trimmed) || listed.some((item) => item.value === trimmed)) {
+    return listed;
+  }
+
+  return [{ label: trimmed, value: trimmed, description: missingDescription, bands: [] }, ...listed];
+}
+
+function byCoverage(left: EquipmentChoice, right: EquipmentChoice): number {
+  const rank = (bands: string[]): number => {
+    const covers = equipmentCoversAdifBand(bands, contactBand.value);
+
+    if (covers === true) {
+      return 0;
+    }
+
+    if (covers === undefined) {
+      return 1;
+    }
+
+    return 2;
+  };
+
+  return rank(left.bands) - rank(right.bands) || left.label.localeCompare(right.label);
+}
+
+const configuredRadios = computed(() =>
+  radios.value.map((radio) => {
+    const config = configurations.value.find((entry) => String(entry.id.model) === radio.model);
+    const bands = radioBandsFromConfig(config);
+
+    return {
+      label: radio.name,
+      value: radio.name,
+      description: bands.length > 0 ? formatEquipmentBands(bands) : 'Bands not declared by the installed driver',
+      bands,
+    };
+  }),
+);
+
+const configuredAntennas = computed(() =>
+  antennas.value.map((antenna) => {
+    const station = stations.value.find((entry) => entry.id === antenna.stationId);
+    const label = formatStationAntennaLogLabel(antenna, station?.nickname);
+
+    return {
+      label,
+      value: label,
+      description: formatAntennaBands(antenna.bands, antenna.trapped === true),
+      bands: [...antenna.bands],
+    };
+  }),
+);
+
+const radioItems = computed(() => {
+  const listed = equipmentListedForBand(configuredRadios.value, contactBand.value);
+  listed.sort(byCoverage);
+
+  return [
+    { label: 'None', value: '', bands: [] },
+    ...withStoredChoice(listed, configuredRadios.value, myRig.value, 'Not in your radios'),
+  ];
+});
+
+const antennaItems = computed(() => {
+  const listed = equipmentListedForBand(configuredAntennas.value, contactBand.value);
+  listed.sort(byCoverage);
+
+  return [
+    { label: 'None', value: '', bands: [] },
+    ...withStoredChoice(listed, configuredAntennas.value, myAntenna.value, 'Not at a station'),
+  ];
+});
+
+watch(contactBand, () => {
+  const band = contactBand.value;
+
+  if (!band) {
+    return;
+  }
+
+  const radio = configuredRadios.value.find((item) => item.value === myRig.value);
+  const antenna = configuredAntennas.value.find((item) => item.value === myAntenna.value);
+
+  if (radio && equipmentCoversAdifBand(radio.bands, band) === false) {
+    myRig.value = '';
+  }
+
+  if (antenna && equipmentCoversAdifBand(antenna.bands, band) === false) {
+    myAntenna.value = '';
+  }
 });
 
 function pad2(value: number): string {
@@ -291,6 +434,8 @@ watch(
     qslSent.value = source.qslSent === true;
     qslReceived.value = source.qslReceived === true;
     txPowerWatts.value = source.txPowerWatts !== undefined ? String(source.txPowerWatts) : '';
+    myRig.value = source.myRig ?? '';
+    myAntenna.value = source.myAntenna ?? '';
     comment.value = source.comment ?? '';
     operatorCallsign.value = source.operatorCallsign ?? identity.callSign;
     stationCallsign.value = source.stationCallsign ?? identity.callSign;
@@ -331,8 +476,20 @@ async function onCallsignBlur(): Promise<void> {
       theirName.value = response.name;
     }
 
-    if (!theirGridsquare.value.trim() && response.location?.gridsquare) {
-      theirGridsquare.value = response.location.gridsquare.toUpperCase();
+    if (!theirQth.value.trim()) {
+      const qth = qthFromCallook(response);
+
+      if (qth) {
+        theirQth.value = qth;
+      }
+    }
+
+    if (!theirGridsquare.value.trim()) {
+      const grid = await resolveCallookGrid(response);
+
+      if (grid) {
+        theirGridsquare.value = grid;
+      }
     }
   } catch {
     // Lookup is best-effort; leave fields as entered.
@@ -446,6 +603,8 @@ function save(): void {
       qslSent: qslSent.value,
       qslReceived: qslReceived.value,
       txPowerWatts: power,
+      myRig: myRig.value.trim() || undefined,
+      myAntenna: myAntenna.value.trim() || undefined,
       comment: comment.value.trim() || undefined,
       operatorCallsign: operatorCallsign.value,
       stationCallsign: stationCallsign.value,

@@ -88,6 +88,22 @@ describe('station-log-summary', () => {
       qrzCount: 0,
       bands: [],
       modes: [],
+      radios: [],
+      antennas: [],
     });
+  });
+
+  it('groups radios and antennas and skips contacts that have none', () => {
+    const summary = summarizeStationLog([
+      contact({ myRig: 'Handheld', myAntenna: 'Home · Whip' }),
+      contact({ theirCallsign: 'K1ABC', myRig: 'Handheld' }),
+      contact({ theirCallsign: 'N0CALL', myRig: '  ', myAntenna: 'Cabin · Dipole' }),
+    ]);
+
+    expect(summary.radios).toEqual([{ label: 'Handheld', count: 2 }]);
+    expect(summary.antennas).toEqual([
+      { label: 'Cabin · Dipole', count: 1 },
+      { label: 'Home · Whip', count: 1 },
+    ]);
   });
 });

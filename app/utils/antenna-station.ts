@@ -553,6 +553,20 @@ export function formatAntennaSummary(antenna: StationAntenna | ResolvedAntenna):
 }
 
 /**
+ * Station nickname plus the antenna summary, for the station log and ADIF MY_ANTENNA.
+ */
+export function formatStationAntennaLogLabel(antenna: StationAntenna, stationNickname?: string): string {
+  const summary = formatAntennaSummary(antenna);
+  const station = stationNickname?.trim();
+
+  if (!station) {
+    return summary;
+  }
+
+  return `${station} · ${summary}`;
+}
+
+/**
  * Formats height for display, dropping trailing zeros.
  */
 export function formatHeightAglM(heightAglM: number): string {

@@ -13,6 +13,8 @@ import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 export const RADIO_CATALOG_DATABASE = 'sqlite:ham-radio.db';
 
 export interface LoadedRadioConfig extends Radio {
+  /** Transmit bands from the radio module, as ADIF tokens (`2m`, `70cm`). */
+  bands?: string[];
   codec?: {
     type: string;
     reference?: string;

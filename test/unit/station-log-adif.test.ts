@@ -29,6 +29,8 @@ const sample: StationLogQso = {
   operatorCallsign: 'K1ABC',
   stationCallsign: 'K1ABC',
   myGridsquare: 'FN42',
+  myRig: 'Handheld',
+  myAntenna: 'Home · Whip',
   qslSent: false,
   qslReceived: false,
   adifExtra: { DXCC: '291' },
@@ -68,6 +70,8 @@ describe('station-log-adif', () => {
     expect(qso.operatorCallsign).toBe('K1ABC');
     expect(qso.stationCallsign).toBe('K1ABC');
     expect(qso.myGridsquare).toBe('FN42');
+    expect(qso.myRig).toBe('Handheld');
+    expect(qso.myAntenna).toBe('Home · Whip');
     expect(qso.qslSent).toBe(false);
     expect(qso.qslReceived).toBe(false);
     expect(qso.adifExtra).toEqual({ DXCC: '291' });
@@ -118,6 +122,15 @@ describe('station-log-adif', () => {
     expect(exported).toMatch(/<QSL_SENT:1>R/);
     expect(exported).not.toMatch(/<QSL_SENT:1>Y/);
     expect(exported).not.toMatch(/QSL_RCVD/);
+  });
+
+  it('reads MY_RIG_INTL when MY_RIG is absent', () => {
+    const adi = '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<MY_RIG_INTL:8>Handheld<MY_ANTENNA:4>Whip<EOR>';
+    const parsed = parseStationLogAdif(adi);
+
+    expect(parsed.qsos[0]?.myRig).toBe('Handheld');
+    expect(parsed.qsos[0]?.myAntenna).toBe('Whip');
+    expect(parsed.qsos[0]?.adifExtra).toBeUndefined();
   });
 
   it('includes a HamBench PROGRAMID header on export', () => {

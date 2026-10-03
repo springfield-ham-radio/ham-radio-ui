@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type { StationLogBreakdownRow } from '~/utils/station-log-summary';
 
-defineProps<{
-  title: string;
-  label: string;
-  rows: StationLogBreakdownRow[];
-}>();
+withDefaults(
+  defineProps<{
+    title: string;
+    label: string;
+    rows: StationLogBreakdownRow[];
+    empty?: string;
+  }>(),
+  { empty: 'No contacts' },
+);
 </script>
 
 <template>
@@ -24,7 +28,7 @@ defineProps<{
           <td class="py-0.5 text-right font-medium tabular-nums text-highlighted">{{ row.count }}</td>
         </tr>
         <tr v-if="rows.length === 0">
-          <td colspan="2" class="py-1 text-muted">No contacts</td>
+          <td colspan="2" class="py-1 text-muted">{{ empty }}</td>
         </tr>
       </tbody>
     </table>

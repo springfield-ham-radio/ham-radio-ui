@@ -52,7 +52,7 @@
     <UInput
       v-model="search"
       icon="i-lucide-search"
-      placeholder="Search by callsign, name, band, mode, notes, or park"
+      placeholder="Search by callsign, name, band, radio, antenna, notes, or park"
       size="sm"
       class="w-full max-w-sm"
     />
@@ -156,13 +156,14 @@
       </template>
     </USplitter>
 
-    <StationLogEditor v-model:open="editorOpen" :qso="editingQso" @save="onSave" />
+    <StationLogEditor v-model:open="editorOpen" :qso="editingQso" :defaults="logDefaults" @save="onSave" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { SplitterItem, TableColumn } from '@nuxt/ui';
+import { formatStationAntennaLogLabel } from '~/utils/antenna-station';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
 import { qslTableLabel } from '~/utils/station-log-map';
@@ -189,7 +190,8 @@ const {
   importAdif,
 } = useStationLog();
 
-const { stations } = useStationAntennas();
+const { stations, selected: selectedAntenna } = useStationAntennas();
+const { radios } = useSavedRadios();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
@@ -220,6 +222,8 @@ interface DisplayQso extends StationLogQso {
   potaLabel: string;
   qrzStatus?: 'Y' | 'M';
   notesLabel: string;
+  radioLabel: string;
+  antennaLabel: string;
 }
 
 const summary = computed(() => summarizeStationLog(filteredQsos.value));
@@ -236,7 +240,19 @@ const displayQsos = computed<DisplayQso[]>(() => {
     potaLabel: stationLogPotaRef(qso) || '—',
     qrzStatus: stationLogQrzStatus(qso),
     notesLabel: qso.comment || '—',
+    radioLabel: qso.myRig || '—',
+    antennaLabel: qso.myAntenna || '—',
   }));
+});
+
+const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
+  const antenna = selectedAntenna.value;
+  const station = antenna ? stations.value.find((entry) => entry.id === antenna.stationId) : undefined;
+
+  return {
+    myRig: radios.value.length === 1 ? radios.value[0]?.name : undefined,
+    myAntenna: antenna ? formatStationAntennaLogLabel(antenna, station?.nickname) : undefined,
+  };
 });
 
 const columns: TableColumn<DisplayQso>[] = [
@@ -291,6 +307,16 @@ const columns: TableColumn<DisplayQso>[] = [
     enableSorting: false,
   },
   {
+    accessorKey: 'radioLabel',
+    header: 'Radio',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'antennaLabel',
+    header: 'Antenna',
+    enableSorting: false,
+  },
+  {
     id: 'qsl',
     header: 'Card',
     enableSorting: false,
@@ -335,6 +361,8 @@ async function onSave(payload: StationLogQsoInput & { id?: string }): Promise<vo
         operatorCallsign: payload.operatorCallsign,
         stationCallsign: payload.stationCallsign,
         myGridsquare: payload.myGridsquare,
+        myRig: payload.myRig,
+        myAntenna: payload.myAntenna,
         qslSent: payload.qslSent === true,
         qslReceived: payload.qslReceived === true,
         adifExtra: payload.adifExtra,

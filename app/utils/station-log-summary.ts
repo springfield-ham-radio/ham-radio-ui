@@ -12,6 +12,8 @@ export interface StationLogSummary {
   qrzCount: number;
   bands: StationLogBreakdownRow[];
   modes: StationLogBreakdownRow[];
+  radios: StationLogBreakdownRow[];
+  antennas: StationLogBreakdownRow[];
 }
 
 const EMPTY_LABEL = '—';
@@ -139,6 +141,8 @@ export function summarizeStationLog(qsos: readonly StationLogQso[]): StationLogS
   const calls = new Set<string>();
   const bands = new Map<string, number>();
   const modes = new Map<string, number>();
+  const radios = new Map<string, number>();
+  const antennas = new Map<string, number>();
   let potaCount = 0;
   let qrzCount = 0;
 
@@ -158,6 +162,18 @@ export function summarizeStationLog(qsos: readonly StationLogQso[]): StationLogS
 
     const mode = stationLogModeLabel(qso);
     modes.set(mode, (modes.get(mode) ?? 0) + 1);
+
+    const radio = qso.myRig?.trim();
+
+    if (radio) {
+      radios.set(radio, (radios.get(radio) ?? 0) + 1);
+    }
+
+    const antenna = qso.myAntenna?.trim();
+
+    if (antenna) {
+      antennas.set(antenna, (antennas.get(antenna) ?? 0) + 1);
+    }
   }
 
   return {
@@ -167,5 +183,7 @@ export function summarizeStationLog(qsos: readonly StationLogQso[]): StationLogS
     qrzCount,
     bands: breakdown(bands),
     modes: breakdown(modes),
+    radios: breakdown(radios),
+    antennas: breakdown(antennas),
   };
 }

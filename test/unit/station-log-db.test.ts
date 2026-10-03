@@ -42,6 +42,8 @@ describe('station-log-db', () => {
         operator_callsign: 'K1ABC',
         station_callsign: null,
         my_gridsquare: 'FN42',
+        my_rig: 'Handheld',
+        my_antenna: 'Home · Whip',
         qsl_sent: 1,
         qsl_rcvd: 0,
         adif_extra: '{"DXCC":"291"}',
@@ -55,6 +57,8 @@ describe('station-log-db', () => {
       expect(model.frequencyHz).toBe(146_520_000);
       expect(model.adifExtra).toEqual({ DXCC: '291' });
       expect(model.theirQth).toBe(undefined);
+      expect(model.myRig).toBe('Handheld');
+      expect(model.myAntenna).toBe('Home · Whip');
       expect(model.qslSent).toBe(true);
       expect(model.qslReceived).toBe(false);
     });
@@ -96,6 +100,8 @@ describe('station-log-db', () => {
       expect(matchesStationLogSearch(qso, '146.52')).toBe(true);
       expect(matchesStationLogSearch(qso, '2m')).toBe(true);
       expect(matchesStationLogSearch(qso, 'zz9')).toBe(false);
+      expect(matchesStationLogSearch({ ...qso, myRig: 'Handheld' }, 'hand')).toBe(true);
+      expect(matchesStationLogSearch({ ...qso, myAntenna: 'Home · Whip' }, 'whip')).toBe(true);
       expect(matchesStationLogSearch({ ...qso, comment: 'Picnic table' }, 'picnic')).toBe(true);
       expect(
         matchesStationLogSearch({ ...qso, adifExtra: { SIG: 'POTA', SIG_INFO: 'K-1234' } }, 'k-1234'),
