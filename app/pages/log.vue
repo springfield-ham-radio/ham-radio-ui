@@ -1,5 +1,7 @@
 <template>
-  <div class="flex h-full min-h-0 flex-col gap-3 px-4 py-3">
+  <div class="flex h-full min-h-0">
+    <StationLogSummary :summary="summary" :scoped-to-search="search.trim().length > 0" />
+    <div class="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-3 px-4 py-3">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h2 class="text-sm font-semibold text-highlighted">Station log</h2>
@@ -50,7 +52,7 @@
     <UInput
       v-model="search"
       icon="i-lucide-search"
-      placeholder="Search by callsign, name, frequency, or mode"
+      placeholder="Search by callsign, name, band, mode, notes, or park"
       size="sm"
       class="w-full max-w-sm"
     />
@@ -78,8 +80,10 @@
       <template #contacts>
         <div class="h-full min-h-0 w-full overflow-auto">
           <UTable
+            v-model:sorting="sorting"
             :data="displayQsos"
             :columns="columns"
+            :sorting-options="{ enableSortingRemoval: false }"
             :loading="isLoading"
             sticky
             class="max-h-full"
@@ -93,6 +97,34 @@
             empty="No contacts yet. Add one here, or import an ADIF file."
             @select="(row) => openEdit(row.original)"
           >
+            <template #startedAt-header="{ column }">
+              <button
+                type="button"
+                class="inline-flex items-center gap-0.5 font-medium"
+                @click="column.toggleSorting()"
+              >
+                Local Time
+                <UIcon
+                  :name="column.getIsSorted() === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                  class="size-3.5 text-muted"
+                />
+              </button>
+            </template>
+            <template #qrzStatus-cell="{ row }">
+              <UIcon
+                v-if="row.original.qrzStatus === 'Y'"
+                name="i-lucide-check"
+                class="size-3.5 text-success"
+                aria-label="Uploaded to QRZ"
+              />
+              <span v-else-if="row.original.qrzStatus === 'M'" title="Modified since QRZ upload">M</span>
+              <span v-else>—</span>
+            </template>
+            <template #notesLabel-cell="{ row }">
+              <span class="block max-w-48 truncate" :title="row.original.comment">
+                {{ row.original.notesLabel }}
+              </span>
+            </template>
             <template #actions-cell="{ row }">
               <div class="flex items-center justify-end gap-0.5" @click.stop>
                 <UButton
@@ -125,6 +157,7 @@
     </USplitter>
 
     <StationLogEditor v-model:open="editorOpen" :qso="editingQso" @save="onSave" />
+    </div>
   </div>
 </template>
 
@@ -133,6 +166,13 @@ import type { SplitterItem, TableColumn } from '@nuxt/ui';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
 import { qslTableLabel } from '~/utils/station-log-map';
+import {
+  formatStationLogLocalTime,
+  stationLogBandLabel,
+  stationLogPotaRef,
+  stationLogQrzStatus,
+  summarizeStationLog,
+} from '~/utils/station-log-summary';
 
 useHead({ title: 'Log' });
 
@@ -168,74 +208,98 @@ const splitterItems = computed(() => (showMap.value ? mapPanes : tablePanes));
 
 const editorOpen = ref(false);
 const editingQso = ref<StationLogQso | undefined>();
+const sorting = ref([{ id: 'startedAt', desc: true }]);
 
 interface DisplayQso extends StationLogQso {
   startedLabel: string;
+  bandLabel: string;
+  modeLabel: string;
   frequencyLabel: string;
   rstLabel: string;
+  nameLabel: string;
+  potaLabel: string;
+  qrzStatus?: 'Y' | 'M';
+  notesLabel: string;
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-function formatUtcDateTime(ms: number): string {
-  const date = new Date(ms);
-  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())} ${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}`;
-}
+const summary = computed(() => summarizeStationLog(filteredQsos.value));
 
 const displayQsos = computed<DisplayQso[]>(() => {
   return filteredQsos.value.map((qso) => ({
     ...qso,
-    startedLabel: formatUtcDateTime(qso.startedAt),
+    startedLabel: formatStationLogLocalTime(qso.startedAt),
+    bandLabel: stationLogBandLabel(qso),
+    modeLabel: qso.submode ? `${qso.mode}/${qso.submode}` : qso.mode,
     frequencyLabel: qso.frequencyHz !== undefined ? formatFrequencyMHz(qso.frequencyHz) : '—',
     rstLabel: [qso.rstSent, qso.rstReceived].filter(Boolean).join(' / ') || '—',
+    nameLabel: qso.theirName || '—',
+    potaLabel: stationLogPotaRef(qso) || '—',
+    qrzStatus: stationLogQrzStatus(qso),
+    notesLabel: qso.comment || '—',
   }));
 });
 
 const columns: TableColumn<DisplayQso>[] = [
   {
-    accessorKey: 'startedLabel',
-    header: 'Date (UTC)',
+    accessorKey: 'startedAt',
+    header: 'Local Time',
+    cell: ({ row }) => row.original.startedLabel,
   },
   {
     accessorKey: 'theirCallsign',
     header: 'Call',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'bandLabel',
+    header: 'Band',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'modeLabel',
+    header: 'Mode',
+    enableSorting: false,
   },
   {
     accessorKey: 'frequencyLabel',
     header: 'Freq',
-  },
-  {
-    accessorKey: 'mode',
-    header: 'Mode',
-    cell: ({ row }) => {
-      const sub = row.original.submode;
-
-      if (sub) {
-        return `${row.original.mode}/${sub}`;
-      }
-
-      return row.original.mode;
-    },
+    enableSorting: false,
   },
   {
     accessorKey: 'rstLabel',
     header: 'RST',
+    enableSorting: false,
   },
   {
-    accessorKey: 'theirName',
+    accessorKey: 'nameLabel',
     header: 'Name',
-    cell: ({ row }) => row.original.theirName || '—',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'potaLabel',
+    header: 'POTA',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'qrzStatus',
+    header: 'QRZ',
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'notesLabel',
+    header: 'Notes',
+    enableSorting: false,
   },
   {
     id: 'qsl',
     header: 'Card',
+    enableSorting: false,
     cell: ({ row }) => qslTableLabel(row.original),
   },
   {
     id: 'actions',
     header: '',
+    enableSorting: false,
   },
 ];
 

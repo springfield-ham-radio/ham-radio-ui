@@ -96,6 +96,10 @@ describe('station-log-db', () => {
       expect(matchesStationLogSearch(qso, '146.52')).toBe(true);
       expect(matchesStationLogSearch(qso, '2m')).toBe(true);
       expect(matchesStationLogSearch(qso, 'zz9')).toBe(false);
+      expect(matchesStationLogSearch({ ...qso, comment: 'Picnic table' }, 'picnic')).toBe(true);
+      expect(
+        matchesStationLogSearch({ ...qso, adifExtra: { SIG: 'POTA', SIG_INFO: 'K-1234' } }, 'k-1234'),
+      ).toBe(true);
     });
   });
 });

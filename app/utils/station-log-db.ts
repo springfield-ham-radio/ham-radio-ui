@@ -378,7 +378,11 @@ export function matchesStationLogSearch(qso: StationLogQso, query: string): bool
   const submode = qso.submode?.toLowerCase() ?? '';
   const frequency = qso.frequencyHz !== undefined ? String(qso.frequencyHz) : '';
   const frequencyMhz = qso.frequencyHz !== undefined ? (qso.frequencyHz / 1_000_000).toFixed(4) : '';
-  const band = qso.band?.toLowerCase() ?? '';
+  const band = (qso.band ?? adifBandFromFrequencyHz(qso.frequencyHz) ?? '').toLowerCase();
+  const comment = qso.comment?.toLowerCase() ?? '';
+  const extra = Object.values(qso.adifExtra ?? {})
+    .join(' ')
+    .toLowerCase();
 
   return (
     callsign.includes(trimmed) ||
@@ -387,6 +391,8 @@ export function matchesStationLogSearch(qso: StationLogQso, query: string): bool
     submode.includes(trimmed) ||
     frequency.includes(trimmed) ||
     frequencyMhz.includes(trimmed) ||
-    band.includes(trimmed)
+    band.includes(trimmed) ||
+    comment.includes(trimmed) ||
+    extra.includes(trimmed)
   );
 }
