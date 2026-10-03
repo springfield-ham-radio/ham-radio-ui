@@ -30,22 +30,38 @@ onBeforeUnmount(() => {
   }
 });
 
-const isWrite = computed(() => progressKind.value === 'write');
-const title = computed(() => {
-  if (progressError.value) {
-    return isWrite.value ? 'Write failed' : 'Import failed';
+const progressCopy = computed(() => {
+  if (progressKind.value === 'write') {
+    return {
+      title: progressError.value ? 'Write failed' : 'Writing to radio',
+      description: progressError.value
+        ? 'The radio could not be written. Check the cable connection and try again.'
+        : 'Keep the programming cable connected until this finishes.',
+      errorTitle: 'Could not write radio',
+    };
   }
 
-  return isWrite.value ? 'Writing to radio' : 'Importing from radio';
+  if (progressKind.value === 'backup') {
+    return {
+      title: progressError.value ? 'Backup failed' : 'Backing up radio',
+      description: progressError.value
+        ? 'The radio could not be read for a backup. Check the cable connection and try again.'
+        : 'Reading the image currently stored in the radio before writing.',
+      errorTitle: 'Could not back up radio',
+    };
+  }
+
+  return {
+    title: progressError.value ? 'Import failed' : 'Importing from radio',
+    description: progressError.value
+      ? 'The radio could not be read. Check the cable connection and try again.'
+      : 'Keep the programming cable connected until this finishes.',
+    errorTitle: 'Could not read radio',
+  };
 });
-const description = computed(() =>
-  progressError.value
-    ? isWrite.value
-      ? 'The radio could not be written. Check the cable connection and try again.'
-      : 'The radio could not be read. Check the cable connection and try again.'
-    : 'Keep the programming cable connected until this finishes.',
-);
-const errorTitle = computed(() => (isWrite.value ? 'Could not write radio' : 'Could not read radio'));
+const title = computed(() => progressCopy.value.title);
+const description = computed(() => progressCopy.value.description);
+const errorTitle = computed(() => progressCopy.value.errorTitle);
 
 const percentValue = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
 

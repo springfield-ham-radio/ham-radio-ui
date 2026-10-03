@@ -32,7 +32,7 @@
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div
           class="mx-auto flex w-full flex-col px-6 pt-2 pb-10"
-          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' || currentSection === 'serial' ? 'max-w-2xl' : 'max-w-xl'"
+          :class="currentSection === 'radios' || currentSection === 'drivers' || currentSection === 'stations' || currentSection === 'serial' || currentSection === 'backups' ? 'max-w-2xl' : 'max-w-xl'"
         >
 
         <section v-if="currentSection === 'appearance'" class="flex flex-col gap-4">
@@ -136,6 +136,10 @@
 
         <section v-else-if="currentSection === 'radios'">
           <SavedRadiosPreference />
+        </section>
+
+        <section v-else-if="currentSection === 'backups'">
+          <RadioImageBackupsPreference />
         </section>
 
         <section v-else-if="currentSection === 'channels'">
@@ -354,7 +358,7 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'channels' | 'drivers' | 'stations' | 'serial' | 'sniffer';
+type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'backups' | 'channels' | 'drivers' | 'stations' | 'serial' | 'sniffer';
 
 const sections = [
   {
@@ -380,6 +384,12 @@ const sections = [
     label: 'Radios',
     icon: 'i-lucide-radio',
     tileClass: 'bg-emerald-500',
+  },
+  {
+    id: 'backups' as const,
+    label: 'Backups',
+    icon: 'i-lucide-archive',
+    tileClass: 'bg-rose-500',
   },
   {
     id: 'channels' as const,
@@ -876,6 +886,7 @@ const currentSection = computed<PreferenceSection>(() => {
   if (
     section === 'licenses' ||
     section === 'radios' ||
+    section === 'backups' ||
     section === 'channels' ||
     section === 'drivers' ||
     section === 'serial' ||
