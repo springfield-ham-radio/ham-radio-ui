@@ -1,3 +1,9 @@
+## [0.51.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.50.0...v0.51.0) (2026-10-03)
+
+### Features
+
+* **antennas:** mount whips on a radio and record maker and model ([6c2d873](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6c2d873eef3db675d207ac2ba99a21c8955078db))
+
 ## [0.50.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.49.0...v0.50.0) (2026-10-03)
 
 ### Features
