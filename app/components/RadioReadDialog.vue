@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportEntry } from '~/importExport/registry';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
+
+const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
 
 const { readFromRadio, readOpen, configurations } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
@@ -57,7 +61,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
     title="Read from Radio"
     :description="description"
     confirm-label="Read"
-    confirm-icon="i-hambench-radio-read"
+    :confirm-icon="readEntry.icon"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"

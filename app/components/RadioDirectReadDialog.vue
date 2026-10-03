@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { DirectReadRequest } from '~/composables/useRadio';
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportEntry } from '~/importExport/registry';
 import {
   defaultProgrammingBaudRate,
   listedProgrammingBaudRates,
@@ -11,6 +13,8 @@ import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-id
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
+
+const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
 
 const open = defineModel<boolean>('open', { required: true });
 
@@ -253,7 +257,7 @@ async function confirm(): Promise<void> {
     <template #footer>
       <div class="flex w-full justify-end gap-2">
         <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-        <UButton color="primary" label="Read" icon="i-hambench-radio-read" @click="confirm" />
+        <UButton color="primary" label="Read" :icon="readEntry.icon" @click="confirm" />
       </div>
     </template>
   </UModal>

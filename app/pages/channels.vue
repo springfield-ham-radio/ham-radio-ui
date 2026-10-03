@@ -2,6 +2,8 @@
 import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { useImportExportRunner } from '~/importExport/runner';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
@@ -24,13 +26,15 @@ const {
   groups,
   activeGroupId,
   activeGroup,
-  exportLibraryCsv,
-  importLibraryCsv,
   createGroup,
   renameGroup,
   removeGroup,
 } = useSavedChannels();
-const { addChannels, addTargets } = useRadio();
+const { addTargets } = useRadio();
+const { entry, run } = useImportExportRunner();
+const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
+const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
+const addToRadio = entry(IMPORT_EXPORT_IDS.addToRadio);
 const { focusedCardId } = useRadioBoard();
 
 const isExporting = ref(false);
@@ -374,9 +378,12 @@ async function confirmAddToRadio(sessionId: string): Promise<void> {
   isAddingToRadio.value = true;
 
   try {
-    const added = await addChannels(assignment.programmed, target.id);
+    const added = await run(addToRadio.id, {
+      programmedChannels: assignment.programmed,
+      sessionId: target.id,
+    });
 
-    if (added > 0) {
+    if ((added.count ?? 0) > 0) {
       rowSelection.value = {};
       addToRadioOpen.value = false;
     }
@@ -431,7 +438,7 @@ async function onExportCsv(): Promise<void> {
   isExporting.value = true;
 
   try {
-    await exportLibraryCsv();
+    await run(exportChannels.id);
   } catch {
     // Toast is shown by the composable.
   } finally {
@@ -443,7 +450,7 @@ async function onImportCsv(): Promise<void> {
   isImporting.value = true;
 
   try {
-    await importLibraryCsv();
+    await run(importChannels.id);
   } catch {
     // Toast is shown by the composable.
   } finally {
@@ -466,9 +473,9 @@ onMounted(() => {
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
-        <UTooltip text="Export CSV">
+        <UTooltip :text="exportChannels.label">
           <UButton
-            icon="i-lucide-file-down"
+            :icon="exportChannels.icon"
             color="neutral"
             variant="outline"
             size="sm"
@@ -505,7 +512,7 @@ onMounted(() => {
         </UTooltip>
         <UTooltip :text="importTooltip">
           <UButton
-            icon="i-lucide-file-up"
+            :icon="importChannels.icon"
             color="neutral"
             variant="outline"
             size="sm"
@@ -518,11 +525,11 @@ onMounted(() => {
         <UTooltip :text="addToRadioTooltip">
           <span class="inline-flex">
             <UButton
-              icon="i-lucide-radio"
+              :icon="addToRadio.icon"
               color="primary"
               variant="soft"
               size="sm"
-              label="Add to radio"
+              :label="addToRadio.label"
               :disabled="!canAddToRadio || isAddingToRadio"
               :loading="isAddingToRadio"
               @click="requestAddToRadio"

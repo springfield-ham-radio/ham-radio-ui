@@ -1,3 +1,5 @@
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { runImportExport } from '~/importExport/registry';
 import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { readDeveloperMode } from '~/utils/developer-mode';
 import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
@@ -5,7 +7,6 @@ import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils
 export default defineNuxtPlugin(() => {
   const router = useRouter();
   const toast = useToast();
-  const { openReadFromRadio, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
   const { checkForUpdate } = useAppUpdater();
   const { setEnabled: setDeveloperMode } = useDeveloperMode();
 
@@ -39,21 +40,21 @@ export default defineNuxtPlugin(() => {
       });
       await listen('open-memory', () => {
         void router.push('/');
-        void openMemoryFile();
+        void runImportExport(IMPORT_EXPORT_IDS.openMemory);
       });
       await listen('save-memory', () => {
-        void saveMemoryFile();
+        void runImportExport(IMPORT_EXPORT_IDS.saveMemory);
       });
       await listen('save-memory-as', () => {
-        void saveMemoryFileAs();
+        void runImportExport(IMPORT_EXPORT_IDS.saveMemoryAs);
       });
       await listen('read-from-radio', () => {
         void router.push('/');
-        openReadFromRadio();
+        void runImportExport(IMPORT_EXPORT_IDS.readFromRadio);
       });
       await listen('write-to-radio', () => {
         void router.push('/');
-        openWriteToRadio();
+        void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
       });
       await listen('show-backups', () => {
         void showRadioImageBackups().catch((cause: unknown) => {

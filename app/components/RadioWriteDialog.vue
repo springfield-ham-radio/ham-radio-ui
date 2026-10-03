@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { RadioMemoryMap, RadioProgram } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportEntry } from '~/importExport/registry';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { memoryMapFromConfig } from '~/utils/radio-catalog-db';
 import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { diffRadioPrograms, type WriteReviewDiff } from '~/utils/radio-write-review';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
+
+const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
 
 const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
@@ -183,7 +187,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     :description="description"
     confirm-label="Write"
     confirm-color="warning"
-    confirm-icon="i-hambench-radio-write"
+    :confirm-icon="writeEntry.icon"
     :confirm-loading="reading"
     warning-title="This replaces the radio's memory"
     :warning-description="warningDescription"
