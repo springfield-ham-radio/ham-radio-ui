@@ -567,7 +567,7 @@ export function useRadio() {
         title: 'Read from radio',
         description: `${radioId.name} (${importedBytes} bytes)`,
         color: 'success',
-        icon: 'i-lucide-download',
+        icon: 'i-hambench-radio-read',
       });
 
       if (importedImage) {
@@ -687,7 +687,7 @@ export function useRadio() {
         title: 'Wrote to radio',
         description: `${radioId.name} (${writtenBytes} bytes)`,
         color: 'success',
-        icon: 'i-lucide-upload',
+        icon: 'i-hambench-radio-write',
       });
       return;
     }

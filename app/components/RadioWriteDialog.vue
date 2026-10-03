@@ -75,6 +75,8 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     title="Write to Radio"
     :description="description"
     confirm-label="Write"
+    confirm-color="warning"
+    confirm-icon="i-hambench-radio-write"
     warning-title="This replaces the radio's memory"
     :warning-description="warningDescription"
     :default-port="saved?.serialPort"

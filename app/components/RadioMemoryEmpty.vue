@@ -7,7 +7,7 @@ const { openReadFromRadio, openMemoryFile } = useRadio();
     <p class="text-sm text-muted">Open a memory file or read from a radio to get started.</p>
     <div class="flex flex-wrap items-center justify-center gap-2">
       <UButton
-        icon="i-lucide-download"
+        icon="i-hambench-radio-read"
         color="primary"
         label="Read from Radio"
         @click="openReadFromRadio"

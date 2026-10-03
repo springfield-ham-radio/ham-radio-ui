@@ -13,8 +13,8 @@ const sectionItems: TabsItem[] = [
   { label: 'Setup', value: 'setup', icon: 'i-lucide-settings' },
   { label: 'Channel', value: 'channel', icon: 'i-lucide-list' },
   { label: 'Memory', value: 'memory', icon: 'i-lucide-grid-3x3' },
-  { label: 'Read', value: 'read', icon: 'i-lucide-download' },
-  { label: 'Write', value: 'write', icon: 'i-lucide-upload' },
+  { label: 'Read', value: 'read', icon: 'i-hambench-radio-read' },
+  { label: 'Write', value: 'write', icon: 'i-hambench-radio-write' },
   { label: 'Debug', value: 'debug', icon: 'i-lucide-bug' },
 ];
 

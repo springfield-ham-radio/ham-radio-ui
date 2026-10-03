@@ -29,6 +29,27 @@ export default defineNuxtConfig({
 
   telemetry: false,
 
+  // Tauri serves the generated SPA with no Nuxt server and may be offline.
+  // Bundle every statically known icon and never call api.iconify.design.
+  icon: {
+    provider: 'none',
+    fallbackToApi: false,
+    customCollections: [
+      {
+        prefix: 'hambench',
+        dir: './app/assets/icons',
+      },
+    ],
+    clientBundle: {
+      scan: {
+        // The default scan skips .ts, which is where toast and tab icons live.
+        globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml,js,ts}'],
+        globExclude: ['node_modules', 'dist', 'build', '.output', 'coverage', 'test', 'tests', 'src-tauri', '.*'],
+      },
+      includeCustomCollections: true,
+    },
+  },
+
   devServer: {
     host: '0.0.0.0',
   },
