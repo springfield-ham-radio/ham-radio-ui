@@ -6,12 +6,14 @@ import {
   applyAntennaTypeToDraft,
   applyLicenseGridToHomeIfEmpty,
   createRadioStation,
+  contactAntennaLabel,
   createStationAntenna,
   defaultAntennaDraft,
   defaultAntennaWhatIf,
   defaultHomeStation,
   defaultStationAntennaStore,
   formatAntennaGeometry,
+  formatAntennaProduct,
   formatAntennaSummary,
   formatStationAntennaLogLabel,
   formatAntennaBands,
@@ -19,7 +21,9 @@ import {
   formatStationLocation,
   HOME_STATION_ID,
   parseStationAntennaStore,
+  antennasOnRadio,
   removeAntennaFromStore,
+  removeAntennasForRadio,
   removeStationFromStore,
   replaceAntennaInStore,
   resolveAntennaView,
@@ -346,6 +350,130 @@ describe('station antennas', () => {
     );
     expect(formatHeadingDeg(undefined, false)).toBe(undefined);
     expect(formatStationAntennaLogLabel(antenna, 'Home')).toBe('Home · 3-element Yagi · 15 m AGL · 045°');
+  });
+
+  it('should store manufacturer and model and drop blank text', () => {
+    const antenna = createStationAntenna(
+      { ...sampleDraft(), manufacturer: ' Diamond ', model: 'X50A' },
+      { id: 'ant-1', now: 1 },
+    );
+
+    expect(antenna.manufacturer).toBe('Diamond');
+    expect(antenna.model).toBe('X50A');
+    expect(formatAntennaProduct(antenna)).toBe('Diamond X50A');
+    expect(formatAntennaSummary(antenna)).toBe('Backyard Yagi · Diamond X50A · 3-element Yagi · 15 m AGL · 045°');
+
+    const parsed = parseStationAntennaStore(serializeStationAntennaStore(addAntennaToStore(defaultStationAntennaStore(), antenna)));
+
+    expect(parsed.antennas[0]?.manufacturer).toBe('Diamond');
+    expect(parsed.antennas[0]?.model).toBe('X50A');
+
+    const cleared = createStationAntenna({ ...sampleDraft(), manufacturer: '  ', model: '' }, { id: 'ant-2', now: 2 });
+
+    expect(cleared.manufacturer).toBeUndefined();
+    expect(cleared.model).toBeUndefined();
+    expect(formatAntennaProduct(cleared)).toBeUndefined();
+  });
+
+  it('should keep a radio-mounted antenna off the station and drop it with the radio', () => {
+    const whip = createStationAntenna(
+      {
+        nickname: 'Signal Stick',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-ht',
+      },
+      { id: 'ant-ht', now: 3 },
+    );
+    const stationAntenna = createStationAntenna(sampleDraft(), { id: 'ant-home', now: 1 });
+    let store = addAntennaToStore(defaultStationAntennaStore(), stationAntenna);
+    store = addAntennaToStore(store, whip);
+
+    expect(whip.stationId).toBeUndefined();
+    expect(whip.radioId).toBe('radio-ht');
+    expect(store.selectedId).toBe('ant-home');
+    expect(antennasOnRadio(store, 'radio-ht').map((antenna) => antenna.id)).toEqual(['ant-ht']);
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-home')?.stationId).toBe(HOME_STATION_ID);
+
+    const parsed = parseStationAntennaStore(serializeStationAntennaStore(store));
+
+    expect(parsed.antennas.find((antenna) => antenna.id === 'ant-ht')).toMatchObject({
+      radioId: 'radio-ht',
+      nickname: 'Signal Stick',
+    });
+    expect(parsed.antennas.find((antenna) => antenna.id === 'ant-ht')?.stationId).toBeUndefined();
+    expect(parsed.selectedId).toBe('ant-home');
+
+    store = removeAntennasForRadio(store, 'radio-ht');
+    expect(store.antennas.map((antenna) => antenna.id)).toEqual(['ant-home']);
+    expect(formatStationAntennaLogLabel(whip, 'UV-5R')).toBe('UV-5R · Signal Stick · Dual-band vertical · 1.5 m AGL');
+  });
+
+  it('should fill a contact with the radio antenna when it is the only one that covers the band', () => {
+    const whip = createStationAntenna(
+      {
+        nickname: 'Signal Stick',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-ht',
+      },
+      { id: 'ant-ht', now: 3 },
+    );
+    const spare = createStationAntenna(
+      {
+        nickname: 'Rubber duck',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-ht',
+      },
+      { id: 'ant-duck', now: 4 },
+    );
+    const yagi = createStationAntenna(sampleDraft(), { id: 'ant-home', now: 1 });
+    const roof = createStationAntenna(
+      {
+        nickname: 'Roof vertical',
+        typeId: 'dual-band-vertical',
+        heightAglM: 8,
+        bands: ['2m', '70cm'],
+        stationId: HOME_STATION_ID,
+      },
+      { id: 'ant-roof', now: 2 },
+    );
+    const stations = [{ id: HOME_STATION_ID, nickname: 'Home' }];
+    const radio = { id: 'radio-ht', name: 'UV-5R' };
+
+    expect(
+      contactAntennaLabel({
+        antennas: [yagi, whip],
+        stations,
+        radio,
+        adifBand: '2m',
+        selectedStationAntenna: yagi,
+      }),
+    ).toBe('UV-5R · Signal Stick · Dual-band vertical · 1.5 m AGL');
+
+    expect(
+      contactAntennaLabel({
+        antennas: [roof, whip, spare],
+        stations,
+        radio,
+        adifBand: '2m',
+        selectedStationAntenna: roof,
+      }),
+    ).toBe('Home · Roof vertical · Dual-band vertical · 8 m AGL');
+
+    expect(
+      contactAntennaLabel({
+        antennas: [yagi, whip],
+        stations,
+        radio,
+        adifBand: '20m',
+        selectedStationAntenna: yagi,
+      }),
+    ).toBe('Home · Backyard Yagi · 3-element Yagi · 15 m AGL · 045°');
   });
 });
 

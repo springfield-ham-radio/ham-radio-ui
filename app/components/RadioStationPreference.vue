@@ -65,7 +65,7 @@ function confirmRemove(): void {
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Stations</p>
           <p class="text-xs text-muted">
-            Sites you operate from, with the antennas installed at each one. Grid and coordinates are editable; a license grid only fills Home when it is empty.
+            Sites you operate from, with the antennas installed at each one. A whip that travels with a handheld is listed on that radio under Radios. Grid and coordinates are editable; a license grid only fills Home when it is empty.
           </p>
         </div>
         <UButton

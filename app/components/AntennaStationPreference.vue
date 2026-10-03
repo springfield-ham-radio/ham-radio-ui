@@ -2,11 +2,13 @@
 import {
   formatAntennaBands,
   formatAntennaGeometry,
+  formatAntennaProduct,
   type StationAntenna,
 } from '~/utils/antenna-station';
 
 const props = defineProps<{
-  stationId: string;
+  stationId?: string;
+  radioId?: string;
 }>();
 
 const { antennas, addAntenna, saveAntenna, removeAntenna } = useStationAntennas();
@@ -16,8 +18,10 @@ const editing = ref<StationAntenna | undefined>();
 const removeConfirmOpen = ref(false);
 const pendingRemove = ref<StationAntenna | undefined>();
 
-const stationAntennas = computed(() =>
-  antennas.value.filter((antenna) => antenna.stationId === props.stationId),
+const mountedAntennas = computed(() =>
+  props.radioId
+    ? antennas.value.filter((antenna) => antenna.radioId === props.radioId)
+    : antennas.value.filter((antenna) => !antenna.radioId && antenna.stationId === props.stationId),
 );
 
 function openCreate(): void {
@@ -64,9 +68,9 @@ function confirmRemove(): void {
 
 <template>
   <div class="ml-12 flex flex-col gap-2">
-    <ul v-if="stationAntennas.length > 0" class="divide-y divide-default overflow-hidden rounded-lg bg-default ring-1 ring-default">
+    <ul v-if="mountedAntennas.length > 0" class="divide-y divide-default overflow-hidden rounded-lg bg-default ring-1 ring-default">
       <li
-        v-for="antenna in stationAntennas"
+        v-for="antenna in mountedAntennas"
         :key="antenna.id"
         class="flex items-center gap-3 px-3 py-2"
       >
@@ -75,6 +79,7 @@ function confirmRemove(): void {
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-highlighted">{{ antenna.nickname }}</p>
+          <p v-if="formatAntennaProduct(antenna)" class="truncate text-xs text-muted">{{ formatAntennaProduct(antenna) }}</p>
           <p class="truncate text-xs text-muted">{{ formatAntennaGeometry(antenna) }}</p>
           <p class="truncate text-xs text-muted">{{ formatAntennaBands(antenna.bands, antenna.trapped === true) }}</p>
         </div>
@@ -98,7 +103,9 @@ function confirmRemove(): void {
         </div>
       </li>
     </ul>
-    <p v-else class="text-xs text-muted">No antennas at this site yet.</p>
+    <p v-else class="text-xs text-muted">
+      {{ radioId ? 'No antennas on this radio yet.' : 'No antennas at this site yet.' }}
+    </p>
     <div>
       <UButton
         icon="i-lucide-plus"
@@ -115,6 +122,7 @@ function confirmRemove(): void {
     v-model:open="editorOpen"
     :antenna="editing"
     :station-id="stationId"
+    :radio-id="radioId"
     @save="onSave"
   />
 
@@ -124,7 +132,11 @@ function confirmRemove(): void {
         <div>
           <h2 class="text-lg font-semibold text-highlighted">Remove antenna?</h2>
           <p class="mt-2 text-sm text-muted">
-            {{ pendingRemove ? `Remove ${pendingRemove.nickname} from this station?` : '' }}
+            {{
+              pendingRemove
+                ? `Remove ${pendingRemove.nickname} from this ${radioId ? 'radio' : 'station'}?`
+                : ''
+            }}
           </p>
         </div>
         <div class="flex justify-end gap-2">

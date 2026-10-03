@@ -4,6 +4,7 @@ import {
   applyAntennaTypeToDraft,
   defaultAntennaDraft,
   draftFromStationAntenna,
+  RADIO_MOUNTED_HEIGHT_AGL_M,
   type AntennaDraft,
   type StationAntenna,
 } from '~/utils/antenna-station';
@@ -24,6 +25,7 @@ const props = defineProps<{
   open: boolean;
   antenna?: StationAntenna;
   stationId?: string;
+  radioId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -34,6 +36,8 @@ const emit = defineEmits<{
 const { stations } = useStationAntennas();
 
 const nickname = ref('');
+const manufacturer = ref('');
+const model = ref('');
 const assignedStationId = ref('');
 const typeId = ref<AntennaTypeId>('dipole');
 const heightText = ref('10');
@@ -52,6 +56,7 @@ const stationItems = computed(() =>
   })),
 );
 const isCreate = computed(() => props.antenna === undefined);
+const mountedOnRadio = computed(() => Boolean(props.radioId));
 const selectedType = computed(() => antennaTypeById(typeId.value));
 const usesHeading = computed(() => {
   const type = selectedType.value;
@@ -63,14 +68,20 @@ const trapCaption = computed(() =>
 );
 
 const title = computed(() => (isCreate.value ? 'Add antenna' : 'Edit antenna'));
-const description = computed(() =>
-  isCreate.value
-    ? 'Assigned to a station, with a generic type plus height and heading. Commercial catalogs can come later.'
-    : props.antenna?.nickname || selectedType.value?.label || 'Station antenna',
-);
+const description = computed(() => {
+  if (!isCreate.value) {
+    return props.antenna?.nickname || selectedType.value?.label || 'Antenna';
+  }
+
+  if (mountedOnRadio.value) {
+    return 'Mounted on this radio, so it travels with a handheld. Height starts near head height.';
+  }
+
+  return 'Assigned to a station, with a generic type plus height and heading. Manufacturer and model are optional.';
+});
 
 watch(
-  () => [props.open, props.antenna?.id, props.stationId] as const,
+  () => [props.open, props.antenna?.id, props.stationId, props.radioId] as const,
   () => {
     if (!props.open) {
       return;
@@ -78,7 +89,13 @@ watch(
 
     const draft = props.antenna
       ? draftFromStationAntenna(props.antenna)
-      : { ...defaultAntennaDraft(), stationId: props.stationId };
+      : props.radioId
+        ? {
+            ...defaultAntennaDraft('dual-band-vertical'),
+            radioId: props.radioId,
+            heightAglM: RADIO_MOUNTED_HEIGHT_AGL_M,
+          }
+        : { ...defaultAntennaDraft(), stationId: props.stationId };
     applyDraft(draft);
   },
   { immediate: true },
@@ -92,6 +109,8 @@ watch(bands, (next) => {
 
 function applyDraft(draft: AntennaDraft): void {
   nickname.value = draft.nickname;
+  manufacturer.value = draft.manufacturer ?? '';
+  model.value = draft.model ?? '';
   assignedStationId.value = draft.stationId ?? props.stationId ?? stations.value[0]?.id ?? '';
   typeId.value = draft.typeId;
   heightText.value = formatNumber(draft.heightAglM);
@@ -121,7 +140,10 @@ function formatNumber(value: number): string {
 function currentDraft(): AntennaDraft {
   return {
     nickname: nickname.value,
-    stationId: assignedStationId.value || undefined,
+    manufacturer: manufacturer.value,
+    model: model.value,
+    stationId: props.radioId ? undefined : assignedStationId.value || undefined,
+    radioId: props.radioId,
     typeId: typeId.value,
     heightAglM: Number(heightText.value),
     headingDeg: usesHeading.value ? Number(headingText.value) : undefined,
@@ -169,6 +191,7 @@ function save(): void {
     <template #body>
       <div class="space-y-4">
         <UFormField
+          v-if="!mountedOnRadio"
           label="Station"
           required
           description="The site where this antenna is installed. Change it to move the antenna."
@@ -185,6 +208,16 @@ function save(): void {
           <UInput v-model="nickname" class="w-full" placeholder="Backyard Yagi" />
         </UFormField>
 
+        <div class="grid gap-3 sm:grid-cols-2">
+          <UFormField label="Manufacturer" hint="Optional">
+            <UInput v-model="manufacturer" class="w-full" placeholder="Nagoya" />
+          </UFormField>
+
+          <UFormField label="Model" hint="Optional">
+            <UInput v-model="model" class="w-full" placeholder="NA-771" />
+          </UFormField>
+        </div>
+
         <UFormField label="Type" required>
           <USelect
             :model-value="typeId"
@@ -198,7 +231,12 @@ function save(): void {
         <p v-if="selectedType" class="text-xs text-muted">{{ selectedType.description }}</p>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Height AGL (m)" :error="heightError" required>
+          <UFormField
+            label="Height AGL (m)"
+            :error="heightError"
+            :description="mountedOnRadio ? 'About head height while you carry the radio. 1.5 m is a typical start.' : undefined"
+            required
+          >
             <UInput v-model="heightText" inputmode="decimal" class="w-full tabular-nums" placeholder="10" />
           </UFormField>
 

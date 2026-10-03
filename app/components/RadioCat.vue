@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
-import { formatStationAntennaLogLabel } from '~/utils/antenna-station';
+import { contactAntennaLabel } from '~/utils/antenna-station';
 import { stationLogDraftFromCatVfo } from '~/utils/cat-log-draft';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
 import type { RadioConnectionSelection } from '~/composables/useRadioConnectionForm';
@@ -24,7 +24,7 @@ const { configurations, openModulesInstall } = useRadio();
 const { radioById } = useSavedRadios();
 const { cardById, setCatPort } = useRadioBoard();
 const { choiceForRadio, identityFor } = useOperatorLicense();
-const { selected: selectedAntenna, stations } = useStationAntennas();
+const { antennas, selected: selectedAntenna, stations } = useStationAntennas();
 const {
   liveRadios,
   connecting,
@@ -247,8 +247,7 @@ function onTransmit(port: string, transmit: boolean): void {
 
 function openLog(vfo: CatVfo): void {
   const identity = identityFor(choiceForRadio(savedRadio.value));
-  const antenna = selectedAntenna.value;
-  const station = antenna ? stations.value.find((entry) => entry.id === antenna.stationId) : undefined;
+  const draft = stationLogDraftFromCatVfo(vfo);
   const rig = savedRadio.value?.name.trim();
   logDefaults.value = {
     ...createBlankStationLogQso({
@@ -256,9 +255,15 @@ function openLog(vfo: CatVfo): void {
       stationCallsign: identity.callSign,
       myGridsquare: identity.gridsquare,
     }),
-    ...stationLogDraftFromCatVfo(vfo),
+    ...draft,
     myRig: rig || undefined,
-    myAntenna: antenna ? formatStationAntennaLogLabel(antenna, station?.nickname) : undefined,
+    myAntenna: contactAntennaLabel({
+      antennas: antennas.value,
+      stations: stations.value,
+      radio: savedRadio.value,
+      adifBand: draft.band,
+      selectedStationAntenna: selectedAntenna.value,
+    }),
   };
   editorOpen.value = true;
 }

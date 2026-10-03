@@ -105,7 +105,7 @@
             />
           </UFormField>
 
-          <UFormField label="Antenna" description="Station antennas configured for this band.">
+          <UFormField label="Antenna" description="Antennas on this radio, then station antennas configured for this band.">
             <USelectMenu
               v-model="antennaMenu"
               :items="antennaItems"
@@ -149,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatAntennaBands, formatStationAntennaLogLabel } from '~/utils/antenna-station';
+import { contactAntennaLabel, formatAntennaBands, formatStationAntennaLogLabel } from '~/utils/antenna-station';
 import { formatFrequencyMHz, frequencyMHzFieldError, parseFrequencyMHz } from '~/utils/channel-edit';
 import { fetchCallookLicense, qthFromCallook, resolveCallookGrid } from '~/utils/callook';
 import {
@@ -198,7 +198,7 @@ const emit = defineEmits<{
 const { solePrivilege, amateurIdentity, getTransmitPrivilegeWarning } = useOperatorLicense();
 const { radios } = useSavedRadios();
 const { configurations } = useRadio();
-const { antennas, stations } = useStationAntennas();
+const { antennas, stations, selected: selectedStationAntenna } = useStationAntennas();
 
 const startDate = ref('');
 const startTime = ref('');
@@ -250,9 +250,12 @@ const contactBand = computed(() => adifBandFromFrequencyHz(parseFrequencyMHz(fre
 
 interface EquipmentChoice {
   label: string;
-  value: string;
+  value?: string;
   description?: string;
   bands: string[];
+  type?: 'label' | 'separator' | 'item';
+  owner?: 'radio' | 'station';
+  radioId?: string;
 }
 
 function withStoredChoice(
@@ -304,14 +307,17 @@ const configuredRadios = computed(() =>
 
 const configuredAntennas = computed(() =>
   antennas.value.map((antenna) => {
-    const station = stations.value.find((entry) => entry.id === antenna.stationId);
-    const label = formatStationAntennaLogLabel(antenna, station?.nickname);
+    const radio = antenna.radioId ? radios.value.find((entry) => entry.id === antenna.radioId) : undefined;
+    const station = antenna.radioId ? undefined : stations.value.find((entry) => entry.id === antenna.stationId);
+    const label = formatStationAntennaLogLabel(antenna, radio?.name ?? station?.nickname);
 
     return {
       label,
       value: label,
       description: formatAntennaBands(antenna.bands, antenna.trapped === true),
       bands: [...antenna.bands],
+      owner: antenna.radioId ? ('radio' as const) : ('station' as const),
+      radioId: antenna.radioId,
     };
   }),
 );
@@ -327,17 +333,57 @@ const radioItems = computed(() => {
 });
 
 const antennaItems = computed(() => {
-  const listed = equipmentListedForBand(configuredAntennas.value, contactBand.value);
-  listed.sort(byCoverage);
+  const radio = radios.value.find((entry) => entry.name === myRig.value.trim());
+  const onRadio = equipmentListedForBand(
+    configuredAntennas.value.filter((item) => item.owner === 'radio' && item.radioId === radio?.id),
+    contactBand.value,
+  );
+  const atStation = equipmentListedForBand(
+    configuredAntennas.value.filter((item) => item.owner === 'station'),
+    contactBand.value,
+  );
+  onRadio.sort(byCoverage);
+  atStation.sort(byCoverage);
 
-  return [
+  const listed = [...onRadio, ...atStation];
+  const stored = myAntenna.value.trim();
+  const missing: EquipmentChoice[] =
+    stored && !listed.some((entry) => entry.value === stored)
+      ? [{ label: stored, value: stored, description: 'Not on this radio or at a station', bands: [] }]
+      : [];
+  const items: EquipmentChoice[] = [
     { label: 'None', value: NO_EQUIPMENT_VALUE, bands: [] },
-    ...withStoredChoice(listed, configuredAntennas.value, myAntenna.value, 'Not at a station'),
+    ...missing,
   ];
+
+  if (onRadio.length > 0) {
+    items.push({ label: 'On this radio', type: 'label', bands: [] });
+    items.push(...onRadio);
+  }
+
+  if (atStation.length > 0) {
+    items.push({ label: 'At a station', type: 'label', bands: [] });
+    items.push(...atStation);
+  }
+
+  return items;
 });
 
 function applyRadioTxPower(name: string): void {
   txPowerWatts.value = txPowerTextForSavedRadio(name, radios.value);
+}
+
+function applyDefaultAntenna(radioName: string): void {
+  const radio = radios.value.find((entry) => entry.name === radioName.trim());
+
+  myAntenna.value =
+    contactAntennaLabel({
+      antennas: antennas.value,
+      stations: stations.value,
+      radio,
+      adifBand: contactBand.value,
+      selectedStationAntenna: selectedStationAntenna.value,
+    }) ?? '';
 }
 
 const radioMenu = computed({
@@ -346,6 +392,7 @@ const radioMenu = computed({
     const name = storedEquipmentValue(value);
     myRig.value = name;
     applyRadioTxPower(name);
+    applyDefaultAntenna(name);
   },
 });
 
@@ -372,7 +419,7 @@ watch(contactBand, () => {
   }
 
   if (antenna && equipmentCoversAdifBand(antenna.bands, band) === false) {
-    myAntenna.value = '';
+    applyDefaultAntenna(myRig.value);
   }
 });
 

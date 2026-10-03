@@ -163,7 +163,7 @@
 
 <script setup lang="ts">
 import type { SplitterItem, TableColumn } from '@nuxt/ui';
-import { formatStationAntennaLogLabel } from '~/utils/antenna-station';
+import { contactAntennaLabel } from '~/utils/antenna-station';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
 import { qslTableLabel } from '~/utils/station-log-map';
@@ -190,7 +190,7 @@ const {
   importAdif,
 } = useStationLog();
 
-const { stations, selected: selectedAntenna } = useStationAntennas();
+const { antennas, stations, selected: selectedAntenna } = useStationAntennas();
 const { radios } = useSavedRadios();
 
 const isExporting = ref(false);
@@ -246,12 +246,16 @@ const displayQsos = computed<DisplayQso[]>(() => {
 });
 
 const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
-  const antenna = selectedAntenna.value;
-  const station = antenna ? stations.value.find((entry) => entry.id === antenna.stationId) : undefined;
+  const radio = radios.value.length === 1 ? radios.value[0] : undefined;
 
   return {
-    myRig: radios.value.length === 1 ? radios.value[0]?.name : undefined,
-    myAntenna: antenna ? formatStationAntennaLogLabel(antenna, station?.nickname) : undefined,
+    myRig: radio?.name,
+    myAntenna: contactAntennaLabel({
+      antennas: antennas.value,
+      stations: stations.value,
+      radio,
+      selectedStationAntenna: selectedAntenna.value,
+    }),
   };
 });
 

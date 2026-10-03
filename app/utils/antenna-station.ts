@@ -14,6 +14,7 @@ import {
   type AntennaType,
   type AntennaTypeId,
 } from '~/utils/antenna-types';
+import { equipmentCoversAdifBand } from '~/utils/radio-bands';
 import {
   formatLatitude,
   formatLongitude,
@@ -33,6 +34,9 @@ export const HOME_STATION_ID = 'station-home';
 
 export const MIN_ANTENNA_HEIGHT_AGL_M = 0.5;
 export const MAX_ANTENNA_HEIGHT_AGL_M = 120;
+
+/** Nominal height for an antenna carried with a radio, about head height. */
+export const RADIO_MOUNTED_HEIGHT_AGL_M = 1.5;
 
 export type StationLocationSource = 'grid' | 'coordinates';
 
@@ -57,8 +61,15 @@ export interface StationDraft {
 
 export interface StationAntenna {
   id: string;
-  stationId: string;
+  /** Set when the antenna is installed at a site. Absent when `radioId` is set. */
+  stationId?: string;
+  /** Set when the antenna is mounted on a saved radio. Absent when `stationId` is set. */
+  radioId?: string;
   nickname: string;
+  /** Free-text maker. Omitted when blank. */
+  manufacturer?: string;
+  /** Free-text model. Omitted when blank. */
+  model?: string;
   typeId: AntennaTypeId;
   heightAglM: number;
   /** True heading of maximum radiation, 0–359. Omitted for omni types. */
@@ -79,12 +90,15 @@ export interface StationAntennaStore {
 
 export interface AntennaDraft {
   nickname: string;
+  manufacturer?: string;
+  model?: string;
   typeId: AntennaTypeId;
   heightAglM: number;
   headingDeg?: number;
   bands: AntennaBandId[];
   trapped?: boolean;
   stationId?: string;
+  radioId?: string;
 }
 
 export interface AntennaWhatIf {
@@ -281,8 +295,10 @@ export function createStationAntenna(
 
   return {
     id: options.id ?? createAntennaId(now),
-    stationId: normalized.stationId ?? HOME_STATION_ID,
+    ...antennaOwner(normalized.radioId, normalized.stationId ?? HOME_STATION_ID),
     nickname: normalized.nickname,
+    manufacturer: normalized.manufacturer,
+    model: normalized.model,
     typeId: normalized.typeId,
     heightAglM: normalized.heightAglM,
     headingDeg: normalized.headingDeg,
@@ -304,15 +320,18 @@ export function updateStationAntenna(
   const normalized = requireNormalizedDraft(draft);
 
   return {
-    ...antenna,
-    stationId: normalized.stationId ?? antenna.stationId,
+    id: antenna.id,
+    createdAt: antenna.createdAt,
+    updatedAt: now,
+    ...antennaOwner(normalized.radioId, normalized.stationId ?? antenna.stationId ?? HOME_STATION_ID),
     nickname: normalized.nickname,
+    manufacturer: normalized.manufacturer,
+    model: normalized.model,
     typeId: normalized.typeId,
     heightAglM: normalized.heightAglM,
     headingDeg: normalized.headingDeg,
     bands: normalized.bands,
     trapped: normalized.trapped,
-    updatedAt: now,
   };
 }
 
@@ -346,10 +365,18 @@ export function antennaDraftErrors(draft: AntennaDraft): Partial<Record<keyof An
  * Inserts an antenna and selects it.
  */
 export function addAntennaToStore(store: StationAntennaStore, antenna: StationAntenna): StationAntennaStore {
+  if (antenna.radioId) {
+    return {
+      ...store,
+      antennas: [...store.antennas, radioMountedAntenna(antenna)],
+    };
+  }
+
   const stationId = resolveAntennaStationId(store, antenna.stationId);
   const next = {
     ...antenna,
     stationId,
+    radioId: undefined,
   };
 
   return {
@@ -364,10 +391,21 @@ export function addAntennaToStore(store: StationAntennaStore, antenna: StationAn
  * Replaces one antenna in the store. Moving the selected antenna also selects its station.
  */
 export function replaceAntennaInStore(store: StationAntennaStore, antenna: StationAntenna): StationAntennaStore {
+  if (antenna.radioId) {
+    const next = radioMountedAntenna(antenna);
+
+    return {
+      ...store,
+      antennas: store.antennas.map((entry) => (entry.id === antenna.id ? next : entry)),
+      selectedId: store.selectedId === antenna.id ? undefined : store.selectedId,
+    };
+  }
+
   const stationId = resolveAntennaStationId(store, antenna.stationId);
   const next = {
     ...antenna,
     stationId,
+    radioId: undefined,
   };
 
   return {
@@ -397,7 +435,7 @@ export function removeAntennaFromStore(store: StationAntennaStore, id: string): 
 export function selectAntennaInStore(store: StationAntennaStore, id: string): StationAntennaStore {
   const antenna = store.antennas.find((entry) => entry.id === id);
 
-  if (!antenna) {
+  if (!antenna || antenna.radioId) {
     return store;
   }
 
@@ -418,7 +456,28 @@ export function antennasAtStation(store: StationAntennaStore, stationId?: string
     return [];
   }
 
-  return store.antennas.filter((antenna) => antenna.stationId === id);
+  return store.antennas.filter((antenna) => !antenna.radioId && antenna.stationId === id);
+}
+
+/**
+ * Antennas mounted on one saved radio.
+ */
+export function antennasOnRadio(store: StationAntennaStore, radioId: string): StationAntenna[] {
+  return store.antennas.filter((antenna) => antenna.radioId === radioId);
+}
+
+/**
+ * Drops every antenna mounted on a radio. Station antennas stay.
+ */
+export function removeAntennasForRadio(store: StationAntennaStore, radioId: string): StationAntennaStore {
+  const antennas = store.antennas.filter((antenna) => antenna.radioId !== radioId);
+  const atStation = antennasAtStation({ ...store, antennas });
+
+  return {
+    ...store,
+    antennas,
+    selectedId: resolveSelectedId(atStation, store.selectedId),
+  };
 }
 
 /**
@@ -538,32 +597,89 @@ export function formatAntennaGeometry(antenna: StationAntenna | ResolvedAntenna)
 }
 
 /**
- * Nickname plus geometry. Omits a nickname that duplicates the type label.
+ * Manufacturer and model, when either is set. Blank text is omitted.
+ */
+export function formatAntennaProduct(antenna: { manufacturer?: string; model?: string }): string | undefined {
+  const parts = [antenna.manufacturer?.trim(), antenna.model?.trim()].filter((part) => part);
+
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
+
+/**
+ * Nickname, product, and geometry. Omits a nickname that duplicates the type label.
  */
 export function formatAntennaSummary(antenna: StationAntenna | ResolvedAntenna): string {
   const type = 'type' in antenna ? antenna.type : antennaTypeById(antenna.typeId);
-  const nickname = 'nickname' in antenna ? antenna.nickname : undefined;
+  const nickname = 'nickname' in antenna && antenna.nickname !== type?.label ? antenna.nickname : undefined;
+  const product = formatAntennaProduct(antenna);
   const geometry = formatAntennaGeometry(antenna);
+  const head = [nickname, product].filter((part) => part);
 
-  if (nickname && nickname !== type?.label) {
-    return `${nickname} · ${geometry}`;
+  if (head.length > 0) {
+    return `${head.join(' · ')} · ${geometry}`;
   }
 
   return geometry;
 }
 
 /**
- * Station nickname plus the antenna summary, for the station log and ADIF MY_ANTENNA.
+ * Owner name plus the antenna summary, for the station log and ADIF MY_ANTENNA.
+ *
+ * The owner is the station nickname or the radio name.
  */
-export function formatStationAntennaLogLabel(antenna: StationAntenna, stationNickname?: string): string {
+export function formatStationAntennaLogLabel(antenna: StationAntenna, ownerName?: string): string {
   const summary = formatAntennaSummary(antenna);
-  const station = stationNickname?.trim();
+  const owner = ownerName?.trim();
 
-  if (!station) {
+  if (!owner) {
     return summary;
   }
 
-  return `${station} · ${summary}`;
+  return `${owner} · ${summary}`;
+}
+
+/**
+ * Antenna to fill on a new contact.
+ *
+ * A radio with exactly one mounted antenna that covers the band wins. That is
+ * the handheld path. Otherwise the selected station antenna is used when it
+ * covers the band. With no band yet, a radio that has exactly one mounted
+ * antenna still wins.
+ */
+export function contactAntennaLabel(input: {
+  antennas: readonly StationAntenna[];
+  stations: readonly Pick<RadioStation, 'id' | 'nickname'>[];
+  radio?: { id: string; name: string };
+  adifBand?: string;
+  selectedStationAntenna?: StationAntenna;
+}): string | undefined {
+  const radio = input.radio;
+  const radioName = radio?.name.trim();
+
+  if (radio && radioName) {
+    const mounted = input.antennas.filter((antenna) => antenna.radioId === radio.id);
+    const covering = input.adifBand
+      ? mounted.filter((antenna) => equipmentCoversAdifBand(antenna.bands, input.adifBand) === true)
+      : mounted;
+
+    if (covering.length === 1) {
+      return formatStationAntennaLogLabel(covering[0], radioName);
+    }
+  }
+
+  const stationAntenna = input.selectedStationAntenna;
+
+  if (!stationAntenna || stationAntenna.radioId) {
+    return undefined;
+  }
+
+  if (input.adifBand && equipmentCoversAdifBand(stationAntenna.bands, input.adifBand) === false) {
+    return undefined;
+  }
+
+  const station = input.stations.find((entry) => entry.id === stationAntenna.stationId);
+
+  return formatStationAntennaLogLabel(stationAntenna, station?.nickname);
 }
 
 /**
@@ -604,12 +720,15 @@ export function formatAntennaBands(bands: AntennaBandId[], trapped = false): str
 export function draftFromStationAntenna(antenna: StationAntenna): AntennaDraft {
   return {
     nickname: antenna.nickname,
+    manufacturer: antenna.manufacturer,
+    model: antenna.model,
     typeId: antenna.typeId,
     heightAglM: antenna.heightAglM,
     headingDeg: antenna.headingDeg,
     bands: [...antenna.bands],
     trapped: antenna.trapped,
-    stationId: antenna.stationId,
+    stationId: antenna.radioId ? undefined : antenna.stationId,
+    radioId: antenna.radioId,
   };
 }
 
@@ -622,7 +741,11 @@ export function applyAntennaTypeToDraft(draft: AntennaDraft, typeId: AntennaType
   return {
     ...next,
     nickname: draft.nickname,
-    stationId: draft.stationId,
+    manufacturer: draft.manufacturer,
+    model: draft.model,
+    stationId: draft.radioId ? undefined : draft.stationId,
+    radioId: draft.radioId,
+    heightAglM: draft.radioId ? RADIO_MOUNTED_HEIGHT_AGL_M : next.heightAglM,
   };
 }
 
@@ -968,11 +1091,17 @@ function normalizeStationAntenna(
     ? normalizeHeadingDeg(record.headingDeg) ?? type.defaultHeadingDeg
     : undefined;
   const trapped = resolveTrapped(record.trapped, type, bands);
+  const radioId = optionalText(record.radioId);
+  const owner = radioId
+    ? antennaOwner(radioId, fallbackStationId)
+    : antennaOwner(undefined, resolveStoredStationId(record.stationId, fallbackStationId, stations));
 
   return {
     id,
-    stationId: resolveStoredStationId(record.stationId, fallbackStationId, stations),
+    ...owner,
     nickname,
+    manufacturer: optionalText(record.manufacturer),
+    model: optionalText(record.model),
     typeId: type.id,
     heightAglM,
     headingDeg,
@@ -995,6 +1124,8 @@ function requireNormalizedDraft(draft: AntennaDraft): AntennaDraft {
 
   return {
     nickname: optionalText(draft.nickname) ?? type.label,
+    manufacturer: optionalText(draft.manufacturer),
+    model: optionalText(draft.model),
     typeId: type.id,
     heightAglM: clampHeight(draft.heightAglM) ?? type.defaultHeightAglM,
     headingDeg: antennaTypeUsesHeading(type)
@@ -1003,6 +1134,7 @@ function requireNormalizedDraft(draft: AntennaDraft): AntennaDraft {
     bands,
     trapped: resolveTrapped(draft.trapped, type, bands),
     stationId: optionalText(draft.stationId),
+    radioId: optionalText(draft.radioId),
   };
 }
 
@@ -1191,6 +1323,26 @@ function resolveSelectedStationId(stations: RadioStation[], selectedStationId: u
   }
 
   return stations[0]?.id;
+}
+
+/**
+ * Exactly one owner. A radio id wins, so a handheld whip is not also filed under Home.
+ */
+function antennaOwner(radioId: string | undefined, stationId: string): Pick<StationAntenna, 'radioId' | 'stationId'> {
+  if (radioId) {
+    return { radioId };
+  }
+
+  return { stationId };
+}
+
+function radioMountedAntenna(antenna: StationAntenna): StationAntenna {
+  const { stationId: _stationId, ...rest } = antenna;
+
+  return {
+    ...rest,
+    radioId: antenna.radioId,
+  };
 }
 
 function resolveAntennaStationId(store: StationAntennaStore, stationId: string | undefined): string {

@@ -5,6 +5,7 @@ import { formatEquipmentBands, radioBandsFromConfig } from '~/utils/radio-bands'
 import { savedRadioModelLabel, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
 
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
+const { removeRadioAntennas } = useStationAntennas();
 const { clearCardSession, configurations } = useRadio();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
@@ -66,6 +67,7 @@ async function confirmRemove(): Promise<void> {
 
     clearCardSession(radio.id);
     closeCard(radio.id);
+    removeRadioAntennas(radio.id);
     deleteRadio(radio.id);
   }
 
@@ -109,7 +111,8 @@ function radioBandsLabel(radio: SavedRadio): string | undefined {
           <p class="text-sm font-medium text-highlighted">Your radios</p>
           <p class="text-xs text-muted">
             Name each radio, then choose its manufacturer, model, baud rate when the driver lists more than one,
-            the serial port you usually use, and its usual transmit power. The Radio page opens these as cards.
+            the serial port you usually use, and its usual transmit power. Antennas mounted on a radio, such as a
+            handheld whip, are listed under that radio. The Radio page opens these as cards.
           </p>
         </div>
         <UButton
@@ -125,34 +128,37 @@ function radioBandsLabel(radio: SavedRadio): string | undefined {
         <li
           v-for="radio in radios"
           :key="radio.id"
-          class="flex items-center gap-3 px-3 py-2.5"
+          class="flex flex-col gap-2 px-3 py-2.5"
         >
-          <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
-            <UIcon name="i-lucide-radio" class="size-4 text-highlighted" />
+          <div class="flex items-center gap-3">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
+              <UIcon name="i-lucide-radio" class="size-4 text-highlighted" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-highlighted">{{ radio.name }}</p>
+              <p class="truncate text-xs text-muted">{{ radioDetail(radio) }}</p>
+              <p v-if="radioBandsLabel(radio)" class="truncate text-xs text-muted">{{ radioBandsLabel(radio) }}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-1">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-pencil"
+                size="xs"
+                aria-label="Edit radio"
+                @click="openEdit(radio)"
+              />
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-trash-2"
+                size="xs"
+                aria-label="Remove radio"
+                @click="requestRemove(radio)"
+              />
+            </div>
           </div>
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-highlighted">{{ radio.name }}</p>
-            <p class="truncate text-xs text-muted">{{ radioDetail(radio) }}</p>
-            <p v-if="radioBandsLabel(radio)" class="truncate text-xs text-muted">{{ radioBandsLabel(radio) }}</p>
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              size="xs"
-              aria-label="Edit radio"
-              @click="openEdit(radio)"
-            />
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              size="xs"
-              aria-label="Remove radio"
-              @click="requestRemove(radio)"
-            />
-          </div>
+          <AntennaStationPreference :radio-id="radio.id" />
         </li>
       </ul>
       <p v-else class="text-sm text-muted">No radios yet. Add one for each radio you keep plugged in.</p>
@@ -164,7 +170,7 @@ function radioBandsLabel(radio: SavedRadio): string | undefined {
   <UModal
     v-model:open="removeConfirmOpen"
     title="Remove radio?"
-    :description="pendingRemove ? `Remove ${pendingRemove.name} from your radios? An open card for it will close. The driver stays installed.` : ''"
+    :description="pendingRemove ? `Remove ${pendingRemove.name} and the antennas mounted on it? An open card for it will close. The driver stays installed.` : ''"
     :ui="{ footer: 'justify-end' }"
   >
     <template #footer>

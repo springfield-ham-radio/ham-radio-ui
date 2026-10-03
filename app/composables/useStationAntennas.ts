@@ -13,6 +13,7 @@ import {
   parseStationAntennaStore,
   readStationAntennaStore,
   removeAntennaFromStore,
+  removeAntennasForRadio,
   removeStationFromStore,
   replaceAntennaInStore,
   replaceStationInStore,
@@ -95,12 +96,21 @@ export function useStationAntennas() {
   }
 
   function addAntenna(draft: AntennaDraft): StationAntenna {
-    const antenna = createStationAntenna({
-      ...draft,
-      stationId: draft.stationId ?? store.value.selectedStationId ?? HOME_STATION_ID,
-    });
+    const antenna = createStationAntenna(
+      draft.radioId
+        ? { ...draft, stationId: undefined, radioId: draft.radioId }
+        : {
+            ...draft,
+            radioId: undefined,
+            stationId: draft.stationId ?? store.value.selectedStationId ?? HOME_STATION_ID,
+          },
+    );
     persist(addAntennaToStore(store.value, antenna));
-    source.value = 'station';
+
+    if (!antenna.radioId) {
+      source.value = 'station';
+    }
+
     return antenna;
   }
 
@@ -118,6 +128,10 @@ export function useStationAntennas() {
 
   function removeAntenna(id: string): void {
     persist(removeAntennaFromStore(store.value, id));
+  }
+
+  function removeRadioAntennas(radioId: string): void {
+    persist(removeAntennasForRadio(store.value, radioId));
   }
 
   function selectAntenna(id: string): void {
@@ -256,6 +270,7 @@ export function useStationAntennas() {
     addAntenna,
     saveAntenna,
     removeAntenna,
+    removeRadioAntennas,
     selectAntenna,
     addStation,
     saveStation,

@@ -1,12 +1,12 @@
 # Antennas
 
-HamBench keeps **stations** (operating sites) and the **antennas** at each site in Preferences. Propagation can use that owned list or a scratch **what-if** that is not saved until you add it to the selected station.
+HamBench keeps **stations** (operating sites) and the antennas installed at each site in Preferences. An antenna screwed onto a radio, such as a handheld whip, is stored on that radio instead. Propagation can use the station list or a scratch **what-if** that is not saved until you add it to the selected station.
 
 This is not a commercial catalog and not a globe forecast. Types are dipole, inverted-V, quarter-wave vertical, 3-element Yagi, magnetic loop, end-fed, dual-band VHF/UHF vertical, 2 m Yagi, and 70 cm Yagi. Gain, beamwidth, and takeoff are catalog estimates from type plus height.
 
 ## Preferences
 
-**Preferences → Stations**. Existing `?section=antennas` links still open this page.
+**Preferences → Stations** for antennas installed at a site. **Preferences → Radios** for antennas mounted on a radio. Existing `?section=antennas` links still open Stations.
 
 ### Stations
 
@@ -18,14 +18,17 @@ A station is a site (Home, Cabin, Portable), not a log `STATION_CALLSIGN`. Each 
 
 Location can stay empty until you need it (later map work). HamBench does not treat the FCC mailing-address grid as the shack. If Home has no grid and no coordinates, a Callook **license** gridsquare is copied in as a starting point and remains editable.
 
-You cannot delete the last station. Removing a station also removes the antennas assigned to it. The same physical antenna at two sites is two records.
+You cannot delete the last station. Removing a station also removes the antennas assigned to it. The same physical antenna at two sites is two records. Removing a radio removes the antennas mounted on it.
 
 ### Antennas
 
-Antennas sit under the station they belong to. **Add antenna** on a site opens a slideover already assigned to that site. **Station** in the editor can move it.
+Station antennas sit under the station they belong to. **Add antenna** on a site opens a slideover already assigned to that site. **Station** in the editor can move it.
 
-- **Station** — the site where it is installed
+Radio-mounted antennas sit under **Preferences → Radios**, on that saved radio. **Add antenna** there opens the same slideover without a station. A new one starts as a dual-band vertical at 1.5 m. The record stores `radioId` and no `stationId`. The same whip on two radios is two records.
+
+- **Station** — the site where a station antenna is installed. Hidden for an antenna mounted on a radio
 - **Nickname** — optional; empty uses the type label
+- **Manufacturer** and **Model** — optional free text, such as Nagoya NA-771. Blank values are omitted. There is no manufacturer catalog. The log label includes them when set.
 - **Type** — one of the built-in families
 - **Height AGL** — meters, 0.5–120
 - **Heading** — true degrees of maximum radiation, 0–359. Hidden for omni types (HF vertical, magloop, dual-band vertical). For a Yagi this is the boom; for a dipole it is the broadside
