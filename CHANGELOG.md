@@ -1,3 +1,10 @@
+## [0.49.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.48.0...v0.49.0) (2026-10-03)
+
+### Features
+
+* **appearance:** let the operator choose the log map style ([86c49ea](https://github.com/springfield-ham-radio/ham-radio-ui/commit/86c49ead5f8c9c459567eadb935fe73c98bb7470))
+* **log:** record the radio and antenna and fill the license place ([4dc693c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4dc693cff9756f11dea0f744f18d2cc623b61bec))
+
 ## [0.48.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.47.0...v0.48.0) (2026-10-03)
 
 ### Features
