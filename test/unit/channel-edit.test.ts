@@ -30,6 +30,7 @@ import {
   keyToTone,
   nextAvailableChannelNumber,
   parseChannelFieldValue,
+  frequencyMHzFieldError,
   parseFrequencyMHz,
   patchFromDuplex,
   reorderProgrammedChannels,
@@ -109,6 +110,12 @@ describe('parseFrequencyMHz', () => {
     expect(parseFrequencyMHz('')).toBe(undefined);
     expect(parseFrequencyMHz('abc')).toBe(undefined);
     expect(parseFrequencyMHz('0')).toBe(undefined);
+  });
+
+  it('requires a frequency in megahertz', () => {
+    expect(frequencyMHzFieldError('')).toBe('Enter a frequency in MHz');
+    expect(frequencyMHzFieldError('abc')).toBe('Enter a frequency in MHz');
+    expect(frequencyMHzFieldError('146')).toBeUndefined();
   });
 });
 

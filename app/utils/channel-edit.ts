@@ -61,6 +61,15 @@ export function formatFrequencyMHz(frequencyHz: number | undefined): string {
   return (frequencyHz / 1_000_000).toFixed(4);
 }
 
+/** Blank and unparsable frequencies are both invalid on a contact. */
+export function frequencyMHzFieldError(text: string): string | undefined {
+  if (parseFrequencyMHz(text) === undefined) {
+    return 'Enter a frequency in MHz';
+  }
+
+  return undefined;
+}
+
 export function parseFrequencyMHz(text: string): number | undefined {
   const trimmed = text.trim();
 

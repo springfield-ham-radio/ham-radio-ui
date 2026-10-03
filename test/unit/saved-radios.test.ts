@@ -3,12 +3,16 @@ import {
   applyRadioPrivilege,
   createSavedRadio,
   draftFromSavedRadio,
+  parseSavedRadio,
   parseSavedRadioStore,
   savedRadioModelLabel,
   removeSavedRadio,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
   serializeSavedRadioStore,
+  txPowerTextForSavedRadio,
+  txPowerWattsFieldError,
+  txPowerWattsFromText,
   updateSavedRadio,
   upsertSavedRadio,
   type SavedRadio,
@@ -142,6 +146,30 @@ describe('saved radios', () => {
       withLicense,
       frsOnly,
     ]);
+  });
+
+  it('should store transmit power and fill a contact from the selected radio', () => {
+    const withPower = { ...mobile, txPowerWatts: 5 };
+    const created = createSavedRadio(
+      { name: 'Mobile', manufacturer: 'Baofeng', model: 'baofeng-uv5r', serialPort: '/dev/cu.usbserial-1', txPowerWatts: 5 },
+      10,
+      'radio-mobile',
+    );
+
+    expect(created.txPowerWatts).toBe(5);
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withPower] })).radios[0]?.txPowerWatts).toBe(5);
+    expect(parseSavedRadio({ ...withPower, txPowerWatts: 0 })?.txPowerWatts).toBeUndefined();
+    expect(draftFromSavedRadio(created).txPowerWatts).toBe(5);
+    expect(updateSavedRadio(created, { ...draftFromSavedRadio(created), txPowerWatts: undefined }).txPowerWatts).toBeUndefined();
+    expect(txPowerWattsFromText('5')).toBe(5);
+    expect(txPowerWattsFromText('')).toBeUndefined();
+    expect(txPowerWattsFieldError('nope')).toBe('Enter a TX power in watts');
+    expect(txPowerWattsFieldError('')).toBeUndefined();
+    expect(savedRadioDraftIssues({ ...draftFromSavedRadio(created), txPowerWatts: -1 }, { radios: [] }).txPowerWatts).toBe(
+      'Enter a TX power in watts',
+    );
+    expect(txPowerTextForSavedRadio('Mobile', [withPower])).toBe('5');
+    expect(txPowerTextForSavedRadio('Base', [withPower])).toBe('');
   });
 
   it('should prefer an installed driver name over the stored model id', () => {

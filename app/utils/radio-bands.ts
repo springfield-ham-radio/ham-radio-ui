@@ -1,5 +1,11 @@
 import { ANTENNA_BANDS } from '~/utils/antenna-types';
 
+/**
+ * Menu value for “no radio” or “no antenna”.
+ * An empty string clears a select and must not be an item value.
+ */
+export const NO_EQUIPMENT_VALUE = '\u0000';
+
 const EXTRA_BAND_LABELS: Record<string, string> = {
   '1.25m': '1.25 m',
   '33cm': '33 cm',
@@ -76,4 +82,22 @@ export function equipmentListedForBand<T extends { bands: readonly string[] }>(
   }
 
   return items.filter((item) => equipmentCoversAdifBand(item.bands, adifBand) !== false);
+}
+
+/** Select value for a stored radio or antenna name. Blank storage is the None item. */
+export function equipmentMenuValue(stored: string): string {
+  const trimmed = stored.trim();
+
+  return trimmed || NO_EQUIPMENT_VALUE;
+}
+
+/** Stored radio or antenna name for a select value. None stores as blank. */
+export function storedEquipmentValue(menuValue: string): string {
+  const trimmed = menuValue.trim();
+
+  if (!trimmed || trimmed === NO_EQUIPMENT_VALUE) {
+    return '';
+  }
+
+  return trimmed;
 }

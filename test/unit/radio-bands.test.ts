@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   equipmentCoversAdifBand,
   equipmentListedForBand,
+  equipmentMenuValue,
   formatEquipmentBands,
+  NO_EQUIPMENT_VALUE,
   radioBandsFromConfig,
+  storedEquipmentValue,
 } from '../../app/utils/radio-bands.ts';
 
 describe('radio-bands', () => {
@@ -37,5 +40,22 @@ describe('radio-bands', () => {
       'Dipole',
       'Handheld',
     ]);
+  });
+
+  it('keeps a 2 m radio selectable when the contact is on 146 MHz', () => {
+    const radios = [
+      { name: "Bryan's HT", bands: ['2m', '70cm'] },
+      { name: "Margo's HT", bands: ['2m', '70cm'] },
+    ];
+
+    expect(equipmentListedForBand(radios, '2m').map((item) => item.name)).toEqual(["Bryan's HT", "Margo's HT"]);
+  });
+
+  it('uses a non-empty value for the None choice', () => {
+    expect(NO_EQUIPMENT_VALUE).not.toBe('');
+    expect(equipmentMenuValue('')).toBe(NO_EQUIPMENT_VALUE);
+    expect(equipmentMenuValue("Bryan's HT")).toBe("Bryan's HT");
+    expect(storedEquipmentValue(NO_EQUIPMENT_VALUE)).toBe('');
+    expect(storedEquipmentValue("Bryan's HT")).toBe("Bryan's HT");
   });
 });

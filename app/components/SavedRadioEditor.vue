@@ -12,6 +12,8 @@ import {
   draftFromSavedRadio,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
+  txPowerWattsFieldError,
+  txPowerWattsFromText,
   type SavedRadio,
   type SavedRadioDraft,
 } from '~/utils/saved-radios';
@@ -34,6 +36,7 @@ const manufacturer = shallowRef<string | undefined>();
 const model = shallowRef<string | undefined>();
 const baudRate = shallowRef<number | undefined>();
 const serialPort = shallowRef<string | undefined>();
+const txPower = shallowRef('');
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = shallowRef(false);
 const nameError = shallowRef<string | undefined>();
@@ -41,12 +44,13 @@ const manufacturerError = shallowRef<string | undefined>();
 const modelError = shallowRef<string | undefined>();
 const baudError = shallowRef<string | undefined>();
 const portError = shallowRef<string | undefined>();
+const txPowerError = shallowRef<string | undefined>();
 
 const isCreate = computed(() => props.radio === undefined);
 const title = computed(() => (isCreate.value ? 'Add radio' : 'Edit radio'));
 const description = computed(() =>
   isCreate.value
-    ? 'Name this radio, then choose its driver, speed, and the serial port you usually use.'
+    ? 'Name this radio, then choose its driver, speed, serial port, and usual transmit power.'
     : props.radio?.name || 'Radio',
 );
 
@@ -137,11 +141,13 @@ watch(
     model.value = draft?.model;
     baudRate.value = draft?.baudRate;
     serialPort.value = draft?.serialPort;
+    txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
     nameError.value = undefined;
     manufacturerError.value = undefined;
     modelError.value = undefined;
     baudError.value = undefined;
     portError.value = undefined;
+    txPowerError.value = undefined;
     void loadPorts();
   },
 );
@@ -165,12 +171,14 @@ function close(): void {
 }
 
 function save(): void {
+  const txPowerWatts = txPowerWattsFromText(txPower.value);
   const draft: SavedRadioDraft = {
     name: name.value,
     manufacturer: manufacturer.value ?? '',
     model: model.value ?? '',
     baudRate: showBaudRate.value ? baudRate.value : undefined,
     serialPort: serialPort.value ?? '',
+    txPowerWatts,
   };
   const listed = selectedConfig.value ? listedProgrammingBaudRates(selectedConfig.value.serialConfig) : [];
   const issues = savedRadioDraftIssues(draft, {
@@ -184,8 +192,9 @@ function save(): void {
   modelError.value = issues.model;
   baudError.value = issues.baudRate;
   portError.value = issues.serialPort;
+  txPowerError.value = txPowerWattsFieldError(txPower.value);
 
-  if (savedRadioDraftHasIssues(issues)) {
+  if (savedRadioDraftHasIssues(issues) || txPowerError.value) {
     return;
   }
 
@@ -270,6 +279,14 @@ function save(): void {
               />
             </UTooltip>
           </div>
+        </UFormField>
+
+        <UFormField
+          label="TX power (W)"
+          description="Fills the station log when this radio is selected."
+          :error="txPowerError"
+        >
+          <UInput v-model="txPower" inputmode="decimal" class="w-full tabular-nums" placeholder="5" />
         </UFormField>
       </div>
     </template>

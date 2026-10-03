@@ -82,6 +82,10 @@ function radioDetail(radio: SavedRadio): string {
     parts.splice(1, 0, `${radio.baudRate} baud`);
   }
 
+  if (radio.txPowerWatts !== undefined) {
+    parts.push(`${radio.txPowerWatts} W`);
+  }
+
   return parts.join(' · ');
 }
 
@@ -104,8 +108,8 @@ function radioBandsLabel(radio: SavedRadio): string | undefined {
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Your radios</p>
           <p class="text-xs text-muted">
-            Name each radio, then choose its manufacturer, model, baud rate when the driver lists more than one, and
-            the serial port you usually use. The Radio page opens these as cards.
+            Name each radio, then choose its manufacturer, model, baud rate when the driver lists more than one,
+            the serial port you usually use, and its usual transmit power. The Radio page opens these as cards.
           </p>
         </div>
         <UButton

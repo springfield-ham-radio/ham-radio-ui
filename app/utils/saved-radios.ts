@@ -15,6 +15,8 @@ export interface SavedRadio {
   serialPort: string;
   createdAt: number;
   updatedAt: number;
+  /** Usual transmit power in watts. Fills the station log when this radio is selected. */
+  txPowerWatts?: number;
   /** Person whose license is used for channel privilege warnings. */
   privilegePersonId?: string;
   /** Grant to check. Absent when that person holds no license (FRS only). */
@@ -27,6 +29,7 @@ export interface SavedRadioDraft {
   model: string;
   baudRate?: number;
   serialPort: string;
+  txPowerWatts?: number;
 }
 
 export interface SavedRadioStore {
@@ -39,6 +42,7 @@ export interface SavedRadioDraftIssues {
   model?: string;
   baudRate?: string;
   serialPort?: string;
+  txPowerWatts?: string;
 }
 
 export function emptySavedRadioStore(): SavedRadioStore {
@@ -55,6 +59,53 @@ function nonEmpty(value: unknown): value is string {
 
 function isStoredBaudRate(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1200 && value <= 115200;
+}
+
+/** A stored transmit power: a finite number of watts above zero. */
+export function parseTxPowerWatts(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+
+  return value;
+}
+
+/**
+ * Watts text for a contact. Blank text is unset. Invalid text is undefined so the form can report it.
+ */
+export function txPowerWattsFromText(text: string): number | undefined {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return parseTxPowerWatts(Number(trimmed));
+}
+
+export function txPowerWattsFieldError(text: string): string | undefined {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (txPowerWattsFromText(trimmed) === undefined) {
+    return 'Enter a TX power in watts';
+  }
+
+  return undefined;
+}
+
+/** Contact field text for the watts stored on the named radio. */
+export function txPowerTextForSavedRadio(name: string, radios: readonly Pick<SavedRadio, 'name' | 'txPowerWatts'>[]): string {
+  const radio = radios.find((entry) => entry.name === name.trim());
+
+  if (radio?.txPowerWatts === undefined) {
+    return '';
+  }
+
+  return String(radio.txPowerWatts);
 }
 
 /**
@@ -89,6 +140,12 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
 
   if (isStoredBaudRate(value.baudRate)) {
     radio.baudRate = value.baudRate;
+  }
+
+  const txPowerWatts = parseTxPowerWatts(value.txPowerWatts);
+
+  if (txPowerWatts !== undefined) {
+    radio.txPowerWatts = txPowerWatts;
   }
 
   if (nonEmpty(value.privilegePersonId)) {
@@ -152,6 +209,10 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.baudRate !== undefined) {
         stored.baudRate = radio.baudRate;
+      }
+
+      if (radio.txPowerWatts !== undefined) {
+        stored.txPowerWatts = radio.txPowerWatts;
       }
 
       if (radio.privilegePersonId) {
@@ -236,6 +297,10 @@ export function savedRadioDraftIssues(
     issues.serialPort = 'Choose a default serial port';
   }
 
+  if (draft.txPowerWatts !== undefined && parseTxPowerWatts(draft.txPowerWatts) === undefined) {
+    issues.txPowerWatts = 'Enter a TX power in watts';
+  }
+
   return issues;
 }
 
@@ -258,6 +323,10 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
     radio.baudRate = draft.baudRate;
   }
 
+  if (draft.txPowerWatts !== undefined) {
+    radio.txPowerWatts = draft.txPowerWatts;
+  }
+
   return radio;
 }
 
@@ -277,6 +346,12 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
     next.baudRate = draft.baudRate;
   }
 
+  if (draft.txPowerWatts === undefined) {
+    delete next.txPowerWatts;
+  } else {
+    next.txPowerWatts = draft.txPowerWatts;
+  }
+
   return next;
 }
 
@@ -287,6 +362,7 @@ export function draftFromSavedRadio(radio: SavedRadio): SavedRadioDraft {
     model: radio.model,
     baudRate: radio.baudRate,
     serialPort: radio.serialPort,
+    txPowerWatts: radio.txPowerWatts,
   };
 }
 

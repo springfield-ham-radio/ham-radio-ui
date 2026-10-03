@@ -47,7 +47,7 @@
         </UFormField>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Frequency (MHz)" :error="frequencyError">
+          <UFormField label="Frequency (MHz)" :error="frequencyError" required>
             <UInput v-model="frequencyMHz" inputmode="decimal" class="w-full tabular-nums" placeholder="146.5200" />
           </UFormField>
 
@@ -93,31 +93,33 @@
           <UInput v-model="theirQth" class="w-full" :loading="isLookingUp" />
         </UFormField>
 
-        <UFormField label="TX power (W)" :error="txPowerError">
-          <UInput v-model="txPowerWatts" inputmode="decimal" class="w-full tabular-nums" />
-        </UFormField>
-
         <div class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Radio" description="Saved radios configured for this band.">
             <USelectMenu
-              v-model="myRig"
+              v-model="radioMenu"
               :items="radioItems"
               value-key="value"
-              placeholder="None"
+              :search-input="false"
+              :content="{ side: 'top' }"
               class="w-full"
             />
           </UFormField>
 
           <UFormField label="Antenna" description="Station antennas configured for this band.">
             <USelectMenu
-              v-model="myAntenna"
+              v-model="antennaMenu"
               :items="antennaItems"
               value-key="value"
-              placeholder="None"
+              :search-input="false"
+              :content="{ side: 'top' }"
               class="w-full"
             />
           </UFormField>
         </div>
+
+        <UFormField label="TX power (W)" :error="txPowerError">
+          <UInput v-model="txPowerWatts" inputmode="decimal" class="w-full tabular-nums" />
+        </UFormField>
 
         <UFormField label="QSL cards" description="Marker color on the log map.">
           <div class="flex flex-wrap gap-4 pt-1">
@@ -148,14 +150,18 @@
 
 <script setup lang="ts">
 import { formatAntennaBands, formatStationAntennaLogLabel } from '~/utils/antenna-station';
-import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
+import { formatFrequencyMHz, frequencyMHzFieldError, parseFrequencyMHz } from '~/utils/channel-edit';
 import { fetchCallookLicense, qthFromCallook, resolveCallookGrid } from '~/utils/callook';
 import {
   equipmentCoversAdifBand,
   equipmentListedForBand,
+  equipmentMenuValue,
   formatEquipmentBands,
+  NO_EQUIPMENT_VALUE,
   radioBandsFromConfig,
+  storedEquipmentValue,
 } from '~/utils/radio-bands';
+import { txPowerTextForSavedRadio } from '~/utils/saved-radios';
 import {
   adifBandFromFrequencyHz,
   createBlankStationLogQso,
@@ -315,7 +321,7 @@ const radioItems = computed(() => {
   listed.sort(byCoverage);
 
   return [
-    { label: 'None', value: '', bands: [] },
+    { label: 'None', value: NO_EQUIPMENT_VALUE, bands: [] },
     ...withStoredChoice(listed, configuredRadios.value, myRig.value, 'Not in your radios'),
   ];
 });
@@ -325,9 +331,29 @@ const antennaItems = computed(() => {
   listed.sort(byCoverage);
 
   return [
-    { label: 'None', value: '', bands: [] },
+    { label: 'None', value: NO_EQUIPMENT_VALUE, bands: [] },
     ...withStoredChoice(listed, configuredAntennas.value, myAntenna.value, 'Not at a station'),
   ];
+});
+
+function applyRadioTxPower(name: string): void {
+  txPowerWatts.value = txPowerTextForSavedRadio(name, radios.value);
+}
+
+const radioMenu = computed({
+  get: () => equipmentMenuValue(myRig.value),
+  set: (value: string) => {
+    const name = storedEquipmentValue(value);
+    myRig.value = name;
+    applyRadioTxPower(name);
+  },
+});
+
+const antennaMenu = computed({
+  get: () => equipmentMenuValue(myAntenna.value),
+  set: (value: string) => {
+    myAntenna.value = storedEquipmentValue(value);
+  },
 });
 
 watch(contactBand, () => {
@@ -342,6 +368,7 @@ watch(contactBand, () => {
 
   if (radio && equipmentCoversAdifBand(radio.bands, band) === false) {
     myRig.value = '';
+    applyRadioTxPower('');
   }
 
   if (antenna && equipmentCoversAdifBand(antenna.bands, band) === false) {
@@ -433,8 +460,13 @@ watch(
     theirGridsquare.value = source.theirGridsquare ?? '';
     qslSent.value = source.qslSent === true;
     qslReceived.value = source.qslReceived === true;
-    txPowerWatts.value = source.txPowerWatts !== undefined ? String(source.txPowerWatts) : '';
     myRig.value = source.myRig ?? '';
+    txPowerWatts.value =
+      source.txPowerWatts !== undefined
+        ? String(source.txPowerWatts)
+        : props.qso
+          ? ''
+          : txPowerTextForSavedRadio(myRig.value, radios.value);
     myAntenna.value = source.myAntenna ?? '';
     comment.value = source.comment ?? '';
     operatorCallsign.value = source.operatorCallsign ?? identity.callSign;
@@ -541,15 +573,8 @@ function save(): void {
     modeError.value = 'Enter a mode';
   }
 
-  let frequencyHz: number | undefined;
-
-  if (frequencyMHz.value.trim()) {
-    frequencyHz = parseFrequencyMHz(frequencyMHz.value);
-
-    if (frequencyHz === undefined) {
-      frequencyError.value = 'Enter a frequency in MHz';
-    }
-  }
+  const frequencyHz = parseFrequencyMHz(frequencyMHz.value);
+  frequencyError.value = frequencyMHzFieldError(frequencyMHz.value);
 
   let endedAt: number | undefined;
 
