@@ -1063,6 +1063,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@iconify-json/lucide@npm:^1.2.139":
+  version: 1.2.139
+  resolution: "@iconify-json/lucide@npm:1.2.139"
+  dependencies:
+    "@iconify/types": "npm:*"
+  checksum: 10c0/08013df7cc1e82b1233759c7beada9c9df86d3a1a5c6e58f8029b6c8631031d306996203577f8fd21d66524068857d4676da85909e3faa2ebc62800a36800b7a
+  languageName: node
+  linkType: hard
+
 "@iconify/collections@npm:^1.0.727":
   version: 1.0.736
   resolution: "@iconify/collections@npm:1.0.736"
@@ -3433,6 +3442,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@springfield/ham-radio-ui@workspace:."
   dependencies:
+    "@iconify-json/lucide": "npm:^1.2.139"
     "@nuxt/ui": "npm:4.11.2"
     "@semantic-release/changelog": "npm:7.0.0"
     "@semantic-release/exec": "npm:7.1.0"

@@ -30,8 +30,8 @@ const selectedConfig = computed(() => {
 });
 
 const driverItems = computed<TabsItem[]>(() => [
-  { label: 'Read', icon: 'i-lucide-download', slot: 'read' as const, value: 'read' },
-  { label: 'Write', icon: 'i-lucide-upload', slot: 'write' as const, value: 'write' },
+  { label: 'Read', icon: 'i-hambench-radio-read', slot: 'read' as const, value: 'read' },
+  { label: 'Write', icon: 'i-hambench-radio-write', slot: 'write' as const, value: 'write' },
   { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
   { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
 ]);

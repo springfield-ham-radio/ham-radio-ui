@@ -714,7 +714,7 @@ async function onSaveSerialLog(): Promise<void> {
           <USeparator orientation="vertical" class="h-5" />
           <UTooltip text="Read from Radio">
             <UButton
-              icon="i-lucide-download"
+              icon="i-hambench-radio-read"
               color="neutral"
               variant="outline"
               size="sm"
@@ -725,7 +725,7 @@ async function onSaveSerialLog(): Promise<void> {
           <UTooltip :text="writeMemoryTooltip">
             <span class="inline-flex">
               <UButton
-                icon="i-lucide-upload"
+                icon="i-hambench-radio-write"
                 color="neutral"
                 variant="outline"
                 size="sm"

@@ -57,6 +57,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
     title="Read from Radio"
     :description="description"
     confirm-label="Read"
+    confirm-icon="i-hambench-radio-read"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"

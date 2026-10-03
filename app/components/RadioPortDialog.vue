@@ -10,6 +10,8 @@ const props = defineProps<{
   title: string;
   description: string;
   confirmLabel: string;
+  confirmColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral';
+  confirmIcon?: string;
   confirmLoading?: boolean;
   defaultPort?: string;
   unavailablePorts?: string[];
@@ -174,6 +176,8 @@ watch(
       <div class="flex w-full justify-end gap-2">
         <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
         <UButton
+          :color="confirmColor"
+          :icon="confirmIcon"
           :label="confirmLabel"
           :disabled="!canSubmit"
           :loading="confirmLoading"

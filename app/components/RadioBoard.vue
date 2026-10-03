@@ -175,7 +175,7 @@ async function closeRadio(id: string): Promise<void> {
         <UButton
           label="Read from Radio"
           color="primary"
-          icon="i-lucide-download"
+          icon="i-hambench-radio-read"
           @click="openReadFromRadio"
         />
         <UButton
@@ -199,7 +199,7 @@ async function closeRadio(id: string): Promise<void> {
         <UButton
           label="Read from Radio"
           color="primary"
-          icon="i-lucide-download"
+          icon="i-hambench-radio-read"
           @click="openReadFromRadio"
         />
         <UButton

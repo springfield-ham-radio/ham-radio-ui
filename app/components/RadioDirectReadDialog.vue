@@ -253,7 +253,7 @@ async function confirm(): Promise<void> {
     <template #footer>
       <div class="flex w-full justify-end gap-2">
         <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-        <UButton color="primary" label="Read" icon="i-lucide-download" @click="confirm" />
+        <UButton color="primary" label="Read" icon="i-hambench-radio-read" @click="confirm" />
       </div>
     </template>
   </UModal>
