@@ -85,7 +85,7 @@ const addToRadioTooltip = computed(() => {
   }
 
   if (!addTargets.value.some((target) => target.ready)) {
-    return 'Open a memory file or import from a radio first';
+    return 'Open a memory file or read from a radio first';
   }
 
   if (radiosWithRoom.value.length === 0) {

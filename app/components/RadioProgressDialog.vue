@@ -52,7 +52,7 @@ const progressCopy = computed(() => {
   }
 
   return {
-    title: progressError.value ? 'Import failed' : 'Importing from radio',
+    title: progressError.value ? 'Read failed' : 'Reading from radio',
     description: progressError.value
       ? 'The radio could not be read. Check the cable connection and try again.'
       : 'Keep the programming cable connected until this finishes.',

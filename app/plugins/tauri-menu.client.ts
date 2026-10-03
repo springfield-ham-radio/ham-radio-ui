@@ -5,7 +5,7 @@ import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils
 export default defineNuxtPlugin(() => {
   const router = useRouter();
   const toast = useToast();
-  const { openImportFromRadio, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
+  const { openReadFromRadio, openWriteToRadio, openMemoryFile, saveMemoryFile, saveMemoryFileAs } = useRadio();
   const { checkForUpdate } = useAppUpdater();
   const { setEnabled: setDeveloperMode } = useDeveloperMode();
 
@@ -47,9 +47,9 @@ export default defineNuxtPlugin(() => {
       await listen('save-memory-as', () => {
         void saveMemoryFileAs();
       });
-      await listen('import-from-radio', () => {
+      await listen('read-from-radio', () => {
         void router.push('/');
-        openImportFromRadio();
+        openReadFromRadio();
       });
       await listen('write-to-radio', () => {
         void router.push('/');

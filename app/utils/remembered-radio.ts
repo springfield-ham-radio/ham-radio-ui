@@ -58,7 +58,7 @@ export function readRememberedRadio(): RadioId | undefined {
 }
 
 /**
- * Persist the last radio the user chose in Import or by opening a memory file.
+ * Persist the last radio the user chose in Read from Radio or by opening a memory file.
  */
 export function writeRememberedRadio(radioId: RadioId): void {
   if (!import.meta.client || radioId.model.length === 0 || radioId.name.length === 0 || radioId.manufacturer.length === 0) {

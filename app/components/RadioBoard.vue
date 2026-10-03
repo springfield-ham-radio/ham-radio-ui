@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TabsItem } from '@nuxt/ui';
-import type { DirectImportRequest } from '~/components/RadioDirectImportDialog.vue';
 import type { RadioBoardLayout } from '~/utils/radio-board';
 import { savedRadioModelLabel, type SavedRadio } from '~/utils/saved-radios';
 
 const { radios } = useSavedRadios();
-const { configurations, clearCardSession, importFromRadio, openModulesInstall } = useRadio();
+const { configurations, clearCardSession, openReadFromRadio } = useRadio();
 const {
   cards,
   layout,
@@ -13,12 +12,9 @@ const {
   hydrate,
   focusCard,
   openCard,
-  openGuestCard,
   closeCard,
   setLayout,
   cardById,
-  beginTransfer,
-  clearTransfer,
 } = useRadioBoard();
 const { disconnect } = useCat();
 
@@ -29,8 +25,6 @@ watch(
   },
   { immediate: true },
 );
-
-const directImportOpen = shallowRef(false);
 
 const openRadios = computed(() => {
   return cards.value.flatMap((card) => {
@@ -118,32 +112,6 @@ function selectLayout(next: RadioBoardLayout): void {
   setLayout(next);
 }
 
-function openDirectImport(): void {
-  if (configurations.value.length === 0) {
-    openModulesInstall();
-    return;
-  }
-
-  directImportOpen.value = true;
-}
-
-async function onDirectImport(request: DirectImportRequest): Promise<void> {
-  const id = openGuestCard({
-    name: request.radioId.name,
-    manufacturer: String(request.radioId.manufacturer),
-    model: String(request.radioId.model),
-    baudRate: request.baudRate,
-    serialPort: request.serialPort,
-  });
-  beginTransfer(id);
-
-  try {
-    await importFromRadio(request.serialPort, request.radioId, request.baudRate);
-  } finally {
-    clearTransfer();
-  }
-}
-
 async function closeRadio(id: string): Promise<void> {
   const port = cardById(id)?.catPort;
 
@@ -160,7 +128,7 @@ async function closeRadio(id: string): Promise<void> {
   <div class="flex h-full min-h-0 flex-col overflow-hidden">
     <div class="flex shrink-0 items-center justify-between gap-2 px-4 pt-2">
       <p class="min-w-0 text-xs text-muted">
-        Open a saved radio to import, write, or control it. Each card keeps its own memory.
+        Open a saved radio to read, write, or control it. Each card keeps its own memory.
       </p>
       <div class="flex shrink-0 items-center gap-1.5">
         <UFieldGroup size="sm">
@@ -201,14 +169,14 @@ async function closeRadio(id: string): Promise<void> {
       class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4"
     >
       <p class="max-w-md text-center text-sm text-muted">
-        Import from a connected radio, or add the radios you use under Preferences. Each saved radio keeps a name, model, baud rate, and default serial port.
+        Read from a connected radio, or add the radios you use under Preferences. Each saved radio keeps a name, model, baud rate, and default serial port.
       </p>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <UButton
-          label="Import from Radio"
+          label="Read from Radio"
           color="primary"
           icon="i-lucide-download"
-          @click="openDirectImport"
+          @click="openReadFromRadio"
         />
         <UButton
           label="Open radio preferences"
@@ -225,14 +193,14 @@ async function closeRadio(id: string): Promise<void> {
       class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4"
     >
       <p class="max-w-md text-center text-sm text-muted">
-        Import from a connected radio, or open one you already saved. Tabs shows one radio at a time. Tile places them side by side.
+        Read from a connected radio, or open one you already saved. Tabs shows one radio at a time. Tile places them side by side.
       </p>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <UButton
-          label="Import from Radio"
+          label="Read from Radio"
           color="primary"
           icon="i-lucide-download"
-          @click="openDirectImport"
+          @click="openReadFromRadio"
         />
         <UButton
           v-for="radio in radios"
@@ -278,6 +246,5 @@ async function closeRadio(id: string): Promise<void> {
       </div>
     </div>
 
-    <RadioDirectImportDialog v-model:open="directImportOpen" @confirm="onDirectImport" />
   </div>
 </template>

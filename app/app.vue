@@ -6,7 +6,8 @@
         <NuxtPage />
       </main>
     </div>
-    <RadioImportDialog />
+    <RadioReadDialog />
+    <RadioDirectReadDialog v-model:open="directReadOpen" @confirm="readIntoGuestCard" />
     <RadioWriteDialog />
     <RadioProgressDialog />
     <RadioModulesInstallDialog
@@ -21,8 +22,16 @@
 import { APP_NAME } from '~/utils/app-name';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
-const { initialize, activeRadioId, memoryFilePath, modulesInstallOpen, modulesInstallRequired, refreshCatalogState } =
-  useRadio();
+const {
+  initialize,
+  activeRadioId,
+  memoryFilePath,
+  modulesInstallOpen,
+  modulesInstallRequired,
+  refreshCatalogState,
+  directReadOpen,
+  readIntoGuestCard,
+} = useRadio();
 const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
 const route = useRoute();

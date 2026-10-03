@@ -2,7 +2,7 @@ export const RADIO_BOARD_STORAGE_KEY = 'ham-radio-board';
 
 export type RadioBoardLayout = 'tabs' | 'tile';
 
-/** A clone opened from Import, not stored under Preferences → Radios. */
+/** A clone opened from Read from Radio, not stored under Preferences → Radios. */
 export interface GuestRadio {
   name: string;
   manufacturer: string;

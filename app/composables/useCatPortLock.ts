@@ -1,5 +1,5 @@
 /**
- * Serial ports held by live CAT sessions. Import / Write may use any other port.
+ * Serial ports held by live CAT sessions. Read / Write may use any other port.
  */
 export function useCatPortLock() {
   const lockedPorts = useState<string[]>('cat-locked-serial-ports', () => []);

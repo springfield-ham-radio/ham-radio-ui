@@ -2,7 +2,7 @@
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
-const { importFromRadio, importOpen, configurations } = useRadio();
+const { readFromRadio, readOpen, configurations } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
@@ -15,10 +15,10 @@ const description = computed(() => {
     return 'Choose the serial port for this radio.';
   }
 
-  return `Import memory from ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
+  return `Read memory from ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
 });
 
-watch(importOpen, (open) => {
+watch(readOpen, (open) => {
   if (!open) {
     clearTransfer();
   }
@@ -43,7 +43,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
     return;
   }
 
-  await importFromRadio(
+  await readFromRadio(
     serialPortPath,
     config.id,
     resolveProgrammingBaudRate(config.serialConfig, radio.baudRate),
@@ -53,10 +53,10 @@ async function importRadio(serialPortPath: string): Promise<void> {
 
 <template>
   <RadioPortDialog
-    v-model:open="importOpen"
-    title="Import from Radio"
+    v-model:open="readOpen"
+    title="Read from Radio"
     :description="description"
-    confirm-label="Import"
+    confirm-label="Read"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"

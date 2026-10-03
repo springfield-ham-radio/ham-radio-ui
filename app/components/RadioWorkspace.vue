@@ -39,7 +39,7 @@ const {
   reorderChannels,
   removeChannels,
   saveSerialLog,
-  openImportFromRadio,
+  openReadFromRadio,
   openWriteToRadio,
   openMemoryFile,
   saveMemoryFile,
@@ -382,11 +382,11 @@ const writeMemoryTooltip = computed(() => {
   });
 });
 const saveMemoryTooltip = computed(() => {
-  return hasLoadedMemory.value ? 'Save' : 'Open a memory file or import from a radio first';
+  return hasLoadedMemory.value ? 'Save' : 'Open a memory file or read from a radio first';
 });
 const addChannelTooltip = computed(() => {
   if (!program.value || !memory.value) {
-    return 'Open a memory file or import from a radio first';
+    return 'Open a memory file or read from a radio first';
   }
 
   if (nextFreeChannelNumber.value === undefined) {
@@ -401,7 +401,7 @@ const freeSlotNumbers = computed(() =>
 const libraryRadioName = computed(() => cardRadio.value?.name ?? activeRadioId.value?.name ?? 'this radio');
 const addFromLibraryTooltip = computed(() => {
   if (!program.value || !memory.value) {
-    return 'Open a memory file or import from a radio first';
+    return 'Open a memory file or read from a radio first';
   }
 
   if (freeSlotNumbers.value.length === 0) {
@@ -634,7 +634,7 @@ const debugSummary = computed(() => {
     return 'Serial traffic from the last import or write appears here.';
   }
 
-  const label = serialLog.value.operation === 'write' ? 'Wrote to radio' : 'Imported from radio';
+  const label = serialLog.value.operation === 'write' ? 'Wrote to radio' : 'Read from radio';
   const frames = serialLog.value.entryCount;
   return `${label} · ${frames} frame${frames === 1 ? '' : 's'}`;
 });
@@ -712,14 +712,14 @@ async function onSaveSerialLog(): Promise<void> {
             </span>
           </UTooltip>
           <USeparator orientation="vertical" class="h-5" />
-          <UTooltip text="Import from Radio">
+          <UTooltip text="Read from Radio">
             <UButton
               icon="i-lucide-download"
               color="neutral"
               variant="outline"
               size="sm"
-              aria-label="Import from Radio"
-              @click="openImportFromRadio"
+              aria-label="Read from Radio"
+              @click="openReadFromRadio"
             />
           </UTooltip>
           <UTooltip :text="writeMemoryTooltip">
@@ -938,7 +938,7 @@ async function onSaveSerialLog(): Promise<void> {
           <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
               <p v-if="debugPackets.length === 0" class="text-muted">
-                Import from or write to a radio to capture serial traffic.
+                Read from or write to a radio to capture serial traffic.
               </p>
               <div v-for="packet in debugPackets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
                 <span class="text-muted">{{ packet.timestamp }}</span>

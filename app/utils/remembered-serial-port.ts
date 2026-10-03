@@ -50,7 +50,7 @@ export function readRememberedSerialPort(): string | undefined {
 }
 
 /**
- * Persist the last serial port the user chose in Import or Write.
+ * Persist the last serial port the user chose in Read or Write.
  */
 export function writeRememberedSerialPort(path: string): void {
   const trimmed = path.trim();
