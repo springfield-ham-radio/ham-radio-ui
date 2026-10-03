@@ -255,6 +255,22 @@ fn load_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|error| error.to_string())
 }
 
+/// RepeaterBook requires an identifying User-Agent.
+/// https://www.repeaterbook.com/wiki/doku.php?id=api
+fn repeaterbook_user_agent() -> String {
+    format!(
+        "HamBench/{} (+https://github.com/springfield-ham-radio/ham-radio-ui)",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+fn repeaterbook_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent(repeaterbook_user_agent())
+        .build()
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 async fn fetch_repeaterbook_search(url: String) -> Result<String, String> {
     let parsed = url::Url::parse(&url).map_err(|error| error.to_string())?;
@@ -267,7 +283,9 @@ async fn fetch_repeaterbook_search(url: String) -> Result<String, String> {
         return Err("RepeaterBook lookup URL is not allowed".into());
     }
 
-    let response = reqwest::get(parsed)
+    let response = repeaterbook_client()?
+        .get(parsed)
+        .send()
         .await
         .map_err(|error| error.to_string())?;
 
@@ -543,4 +561,22 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{repeaterbook_client, repeaterbook_user_agent};
+
+    #[test]
+    fn repeaterbook_user_agent_identifies_hambench() {
+        let agent = repeaterbook_user_agent();
+        assert_eq!(
+            agent,
+            format!(
+                "HamBench/{} (+https://github.com/springfield-ham-radio/ham-radio-ui)",
+                env!("CARGO_PKG_VERSION")
+            )
+        );
+        repeaterbook_client().expect("repeaterbook client");
+    }
 }

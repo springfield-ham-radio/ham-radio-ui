@@ -50,6 +50,48 @@ const UHF_THRESHOLD_HZ = 300_000_000;
 const VHF_REPEATER_OFFSET_HZ = 600_000;
 const UHF_REPEATER_OFFSET_HZ = 5_000_000;
 
+/**
+ * Standard US amateur FM repeater splits, keyed by receive frequency.
+ *
+ * Magnitudes follow the ARRL band plan (https://www.arrl.org/band-plan).
+ * `patchFromDuplex` still applies the operator's + or − choice. On 2 m that
+ * choice is the usual one: outputs in 145.20–145.50 and 146.61–146.97 sit
+ * 600 kHz above their inputs (minus), and 147.00–147.39 sit 600 kHz below
+ * theirs (plus).
+ *
+ * - 10 m FM, 29.5–29.7 MHz: inputs 29.520–29.590 pair with outputs
+ *   29.610–29.700 (100 kHz).
+ * - 6 m, 50–54 MHz: inputs pair with outputs 500 kHz higher
+ *   (51.12–51.48 with 51.62–51.98, 52.0–52.48 with 52.5–52.98, and
+ *   53.0–53.48 with 53.5–53.98).
+ * - 2 m, 144–148 MHz: 600 kHz (146.01–146.37 with 146.61–146.97, and
+ *   147.60–147.99 with 147.00–147.39).
+ * - 1.25 m, 222–225 MHz: 1.6 MHz. Outputs 223.85–224.98 are above inputs
+ *   222.25–223.38, so the customary duplex on the output is minus.
+ * - 70 cm, 420–450 MHz: 5 MHz. The plan leaves 442–445 and 447–450 pairing
+ *   as a local option; 5 MHz is the usual US split.
+ * - 33 cm, 902–928 MHz: 25 MHz (902.000–903.000 inputs with 927.000–928.000
+ *   outputs). Note 4 allows regional alternatives such as 12 MHz.
+ * - 23 cm, 1240–1300 MHz: 12 MHz (1270–1276 inputs with 1282–1288 outputs).
+ *   A regional option pairs 1270–1274 with 1290–1294 (20 MHz).
+ *
+ * Frequencies outside these ranges keep the previous fallback: 600 kHz below
+ * 300 MHz and 5 MHz at or above it.
+ */
+const REPEATER_OFFSET_BANDS: ReadonlyArray<{
+  minHz: number;
+  maxHz: number;
+  offsetHz: number;
+}> = [
+  { minHz: 29_500_000, maxHz: 29_700_000, offsetHz: 100_000 },
+  { minHz: 50_000_000, maxHz: 54_000_000, offsetHz: 500_000 },
+  { minHz: 144_000_000, maxHz: 148_000_000, offsetHz: 600_000 },
+  { minHz: 222_000_000, maxHz: 225_000_000, offsetHz: 1_600_000 },
+  { minHz: 420_000_000, maxHz: 450_000_000, offsetHz: 5_000_000 },
+  { minHz: 902_000_000, maxHz: 928_000_000, offsetHz: 25_000_000 },
+  { minHz: 1_240_000_000, maxHz: 1_300_000_000, offsetHz: 12_000_000 },
+];
+
 /** USelect cannot use an empty string as an item value (that means "unselected"). */
 export const DUPLEX_OFF_SELECT_VALUE = 'off';
 
@@ -492,6 +534,14 @@ export function applyChannelPatch(
 }
 
 export function defaultRepeaterOffsetHz(receiveFrequencyHz: number): number {
+  const band = REPEATER_OFFSET_BANDS.find(
+    (entry) => receiveFrequencyHz >= entry.minHz && receiveFrequencyHz <= entry.maxHz,
+  );
+
+  if (band) {
+    return band.offsetHz;
+  }
+
   return receiveFrequencyHz >= UHF_THRESHOLD_HZ ? UHF_REPEATER_OFFSET_HZ : VHF_REPEATER_OFFSET_HZ;
 }
 
