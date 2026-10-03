@@ -19,3 +19,7 @@ corepack enable
 yarn install
 yarn tauri:dev
 ```
+
+## License
+
+MIT. Copyright (c) 2026 Bryan Hunt. See [LICENSE](LICENSE).

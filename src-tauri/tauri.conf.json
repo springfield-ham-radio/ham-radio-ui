@@ -27,6 +27,8 @@
   },
   "bundle": {
     "active": true,
+    "copyright": "Copyright (c) 2026 Bryan Hunt",
+    "license": "MIT",
     "createUpdaterArtifacts": true,
     "targets": "all",
     "resources": [
