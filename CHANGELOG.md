@@ -1,3 +1,9 @@
+## [0.48.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.47.0...v0.48.0) (2026-10-03)
+
+### Features
+
+* **log:** summarize contacts and show the missing table columns ([76313ec](https://github.com/springfield-ham-radio/ham-radio-ui/commit/76313ec6658564ed19160d3a3fee92241bb0fe75))
+
 ## [0.47.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.46.1...v0.47.0) (2026-10-02)
 
 ### Features
