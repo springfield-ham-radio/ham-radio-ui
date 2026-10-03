@@ -1,3 +1,14 @@
+## [0.51.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.51.0...v0.51.1) (2026-10-03)
+
+### Bug Fixes
+
+* **deps:** bump brace-expansion from 2.1.4 to 2.1.7 ([#47](https://github.com/springfield-ham-radio/ham-radio-ui/issues/47)) ([50a8163](https://github.com/springfield-ham-radio/ham-radio-ui/commit/50a81634c682602d0817e7ddd7a13fd4feb10a8c))
+* **deps:** bump devalue from 5.9.1 to 5.9.4 ([#45](https://github.com/springfield-ham-radio/ham-radio-ui/issues/45)) ([379642a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/379642afe291ad88e40d7452d434c9e24a785773))
+* **deps:** bump fast-uri from 3.1.7 to 3.1.8 ([#46](https://github.com/springfield-ham-radio/ham-radio-ui/issues/46)) ([778fbb0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/778fbb08cf7686a89659cc5094f6e5887b2404d7))
+* **deps:** bump ip-address from 10.7.0 to 10.7.3 ([#44](https://github.com/springfield-ham-radio/ham-radio-ui/issues/44)) ([213443e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/213443ec30d68c7025d9cd30c04f54b9164c5134))
+* **deps:** bump the production-npm group across 1 directory with 2 updates ([#40](https://github.com/springfield-ham-radio/ham-radio-ui/issues/40)) ([abf84fe](https://github.com/springfield-ham-radio/ham-radio-ui/commit/abf84fea114d16215e5521338ecf4499d880715e))
+* **deps:** bump undici from 6.28.0 to 6.29.0 ([#43](https://github.com/springfield-ham-radio/ham-radio-ui/issues/43)) ([1c1e1f2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1c1e1f2c7a37f23f4e0f28993f20cd1c82b83f2b))
+
 ## [0.51.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.50.0...v0.51.0) (2026-10-03)
 
 ### Features
