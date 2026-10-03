@@ -59,6 +59,7 @@ import {
 } from '~/utils/radio-image-backup';
 import { createTauriRadioImageBackupStore, loadRadioImageBackup } from '~/utils/radio-image-backup-io';
 import { radioCardIdKey } from '~/composables/radio-card-context';
+import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import {
@@ -123,6 +124,13 @@ export interface RadioAddTarget {
   settingsMemoryMap?: RadioMemoryMap;
 }
 
+/** Model, port, and optional baud for a guest read with no card open. */
+export interface DirectReadRequest {
+  radioId: RadioId;
+  baudRate?: number;
+  serialPort: string;
+}
+
 export interface ChannelRow {
   channelNumber: number;
   name: string;
@@ -143,7 +151,8 @@ export function useRadio() {
   const manufacturers = useState<string[]>('radio-manufacturers', () => []);
   const isLoading = useState('radio-loading', () => false);
   const error = useState<string | null>('radio-error', () => null);
-  const importOpen = useState('radio-import-open', () => false);
+  const readOpen = useState('radio-read-open', () => false);
+  const directReadOpen = useState('radio-direct-read-open', () => false);
   const writeOpen = useState('radio-write-open', () => false);
   const progressOpen = useState('radio-progress-open', () => false);
   const progressKind = useState<'import' | 'write' | 'backup'>('radio-progress-kind', () => 'import');
@@ -156,9 +165,9 @@ export function useRadio() {
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const { lockedPorts: catLockedPorts } = useCatPortLock();
   const { radios } = useSavedRadios();
-  const { transferCardId, focusedCardId, cards } = useRadioBoard();
+  const { transferCardId, focusedCardId, cards, openGuestCard, beginTransfer, clearTransfer } = useRadioBoard();
   const injectedCardId = getCurrentInstance() ? inject(radioCardIdKey, undefined) : undefined;
-  /** Card this component belongs to. Import and Write dialogs use `transferCardId` instead. */
+  /** Card this component belongs to. Read and Write dialogs use `transferCardId` instead. */
   const cardId = computed(() => injectedCardId?.value ?? focusedCardId.value);
   const savedRadio = computed(() => radios.value.find((radio) => radio.id === cardId.value));
   const cardRadio = computed(() => {
@@ -437,32 +446,60 @@ export function useRadio() {
   }
 
   /**
-   * Open the import dialog. CAT on another serial port does not block this.
+   * Open the read dialog. CAT on another serial port does not block this.
+   *
+   * With no card open, this is the same guest read as the Radio page button:
+   * pick a model and port, then open a temporary clone.
    */
-  function openImportFromRadio(): void {
+  function openReadFromRadio(): void {
     const id = cardId.value;
 
     if (!id) {
-      toast.add({
-        title: 'No radio open',
-        description: 'Add a radio on the Radio page, then import into that card.',
-        color: 'warning',
-        icon: 'i-lucide-triangle-alert',
-      });
+      if (configurations.value.length === 0) {
+        openModulesInstall();
+        return;
+      }
+
+      directReadOpen.value = true;
       return;
     }
 
     transferCardId.value = id;
-    importOpen.value = true;
+    readOpen.value = true;
   }
 
-  async function importFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
+  /**
+   * Read into a temporary card that is not saved under Preferences.
+   */
+  async function readIntoGuestCard(request: DirectReadRequest): Promise<void> {
+    const guest: GuestRadio = {
+      name: request.radioId.name,
+      manufacturer: String(request.radioId.manufacturer),
+      model: String(request.radioId.model),
+      serialPort: request.serialPort,
+    };
+
+    if (request.baudRate !== undefined) {
+      guest.baudRate = request.baudRate;
+    }
+
+    const id = openGuestCard(guest);
+    beginTransfer(id);
+
+    try {
+      await readFromRadio(request.serialPort, request.radioId, request.baudRate);
+    } finally {
+      clearTransfer();
+    }
+  }
+
+  async function readFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
     const sessionId = actingCardId();
 
     if (!sessionId) {
       toast.add({
         title: 'No radio open',
-        description: 'Add a radio on the Radio page, then import into that card.',
+        description: 'Add a radio on the Radio page, then read into that card.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -527,7 +564,7 @@ export function useRadio() {
     if (outcome === 'success') {
       progressOpen.value = false;
       toast.add({
-        title: 'Imported from radio',
+        title: 'Read from radio',
         description: `${radioId.name} (${importedBytes} bytes)`,
         color: 'success',
         icon: 'i-lucide-download',
@@ -543,7 +580,7 @@ export function useRadio() {
     if (outcome === 'canceled') {
       progressOpen.value = false;
       toast.add({
-        title: 'Import canceled',
+        title: 'Read canceled',
         color: 'neutral',
         icon: 'i-lucide-ban',
       });
@@ -559,7 +596,7 @@ export function useRadio() {
     if (!session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to write',
-        description: 'Open a memory file or import from a radio first.',
+        description: 'Open a memory file or read from a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -577,7 +614,7 @@ export function useRadio() {
     if (!sessionId || !session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to write',
-        description: 'Open a memory file or import from a radio first.',
+        description: 'Open a memory file or read from a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -836,7 +873,7 @@ export function useRadio() {
 
     logger.error(`Failed to back up radio image: ${captured.message}`);
     toast.add({
-      title: kind === 'read' ? 'Imported without a backup' : 'Backup was not saved',
+      title: kind === 'read' ? 'Read from radio without a backup' : 'Backup was not saved',
       description: captured.message,
       color: 'warning',
       icon: 'i-lucide-triangle-alert',
@@ -876,7 +913,7 @@ export function useRadio() {
     if (!program.value || !memory.value || !activeRadioId.value) {
       toast.add({
         title: 'Nothing to add to',
-        description: 'Open a memory file or import from a radio first.',
+        description: 'Open a memory file or read from a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -926,7 +963,7 @@ export function useRadio() {
     if (!id || !session?.program || !session.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to add to',
-        description: 'Open a memory file or import from a radio first.',
+        description: 'Open a memory file or read from a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -1101,7 +1138,7 @@ export function useRadio() {
     if (!captured) {
       toast.add({
         title: 'No serial log',
-        description: 'Import from or write to a radio first.',
+        description: 'Read from or write to a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -1248,7 +1285,7 @@ export function useRadio() {
     if (!sessionId || !session?.memory || !session.activeRadioId) {
       toast.add({
         title: 'Nothing to save',
-        description: 'Open a memory file or import from a radio first.',
+        description: 'Open a memory file or read from a radio first.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -1345,7 +1382,8 @@ export function useRadio() {
     manufacturers,
     isLoading,
     error,
-    importOpen,
+    readOpen,
+    directReadOpen,
     writeOpen,
     progressOpen,
     progressKind,
@@ -1369,8 +1407,9 @@ export function useRadio() {
     openModulesInstall,
     uninstallRadio,
     getModelsByManufacturer,
-    importFromRadio,
-    openImportFromRadio,
+    readFromRadio,
+    readIntoGuestCard,
+    openReadFromRadio,
     openWriteToRadio,
     writeToRadio,
     updateSettings,

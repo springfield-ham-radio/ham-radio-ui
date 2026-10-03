@@ -160,7 +160,7 @@
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted">Hide common system ports</p>
                 <p class="text-xs text-muted">
-                  Skip Bluetooth Incoming, debug-console, and wlan-debug in Import, Write, and Sniffer. Programming cables stay in the list.
+                  Skip Bluetooth Incoming, debug-console, and wlan-debug in Read, Write, and Sniffer. Programming cables stay in the list.
                 </p>
               </div>
               <USwitch

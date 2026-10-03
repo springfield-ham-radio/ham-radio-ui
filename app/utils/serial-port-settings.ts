@@ -95,7 +95,7 @@ export function defaultSerialPortSettings(): SerialPortSettings {
 /**
  * Parse serial-port preferences from localStorage.
  *
- * Filtering is on by default so Import, Write, and Sniffer lists stay usable
+ * Filtering is on by default so Read, Write, and Sniffer lists stay usable
  * on a Mac without a settings visit. A missing flag is treated as enabled.
  * Custom names and port aliases are optional and stored as the user typed them.
  */

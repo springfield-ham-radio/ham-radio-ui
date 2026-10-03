@@ -75,21 +75,22 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         true,
         Some("CmdOrCtrl+Shift+S"),
     )?;
-    let import_from_radio = MenuItem::with_id(
+    let read_from_radio = MenuItem::with_id(
         app,
-        "import-from-radio",
-        "Import from Radio...",
+        "read-from-radio",
+        "Read from Radio...",
         true,
-        None::<&str>,
+        Some("CmdOrCtrl+Shift+R"),
     )?;
     let write_to_radio = MenuItem::with_id(
         app,
         "write-to-radio",
         "Write to Radio...",
         true,
-        None::<&str>,
+        Some("CmdOrCtrl+Shift+W"),
     )?;
     let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
+    let radio_menu = Submenu::with_items(app, "Radio", true, &[&read_from_radio, &write_to_radio])?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -167,9 +168,6 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory,
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
-                &import_from_radio,
-                &write_to_radio,
-                &PredefinedMenuItem::separator(app)?,
                 &show_backups,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::close_window(app, None)?,
@@ -191,7 +189,14 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
 
         Menu::with_items(
             app,
-            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+            &[
+                &app_menu,
+                &file_menu,
+                &radio_menu,
+                &edit_menu,
+                &view_menu,
+                &window_menu,
+            ],
         )
     }
 
@@ -206,9 +211,6 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory,
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
-                &import_from_radio,
-                &write_to_radio,
-                &PredefinedMenuItem::separator(app)?,
                 &show_backups,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
@@ -218,7 +220,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
             ],
         )?;
 
-        Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu])
+        Menu::with_items(app, &[&file_menu, &radio_menu, &edit_menu, &view_menu])
     }
 }
 
@@ -497,7 +499,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
             "open-memory" => emit_menu_event(app, "open-memory"),
             "save-memory" => emit_menu_event(app, "save-memory"),
             "save-memory-as" => emit_menu_event(app, "save-memory-as"),
-            "import-from-radio" => emit_menu_event(app, "import-from-radio"),
+            "read-from-radio" => emit_menu_event(app, "read-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
             "show-backups" => emit_menu_event(app, "show-backups"),
             "developer-mode" => emit_developer_mode(app),

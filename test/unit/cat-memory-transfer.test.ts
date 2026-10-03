@@ -55,7 +55,7 @@ describe('CAT memory transfer guard', () => {
         hasLoadedMemory: false,
         writeSupported: true,
       }),
-    ).toBe('Open a memory file or import from a radio first');
+    ).toBe('Open a memory file or read from a radio first');
 
     expect(
       writeToRadioTooltip({

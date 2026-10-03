@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RadioId } from '@springfield/ham-radio-api';
+import type { DirectReadRequest } from '~/composables/useRadio';
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import {
   defaultProgrammingBaudRate,
@@ -11,16 +11,11 @@ import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-id
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 
-export interface DirectImportRequest {
-  radioId: RadioId;
-  baudRate?: number;
-  serialPort: string;
-}
 
 const open = defineModel<boolean>('open', { required: true });
 
 const emit = defineEmits<{
-  confirm: [request: DirectImportRequest];
+  confirm: [request: DirectReadRequest];
 }>();
 
 const { configurations, manufacturers } = useRadio();
@@ -187,7 +182,7 @@ async function confirm(): Promise<void> {
 <template>
   <UModal
     v-model:open="open"
-    title="Import from Radio"
+    title="Read from Radio"
     description="Choose the installed model and the cable's serial port. This clone is not added under Preferences."
     class="max-w-lg"
   >
@@ -258,7 +253,7 @@ async function confirm(): Promise<void> {
     <template #footer>
       <div class="flex w-full justify-end gap-2">
         <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-        <UButton color="primary" label="Import" icon="i-lucide-download" @click="confirm" />
+        <UButton color="primary" label="Read" icon="i-lucide-download" @click="confirm" />
       </div>
     </template>
   </UModal>

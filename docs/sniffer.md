@@ -4,7 +4,7 @@ HamBench talks to a separate headless sniffer process over HTTP. Set **Host** an
 
 ## Connection
 
-1. Open **Preferences → Sniffer** and set **Host** (default `127.0.0.1`) and **Port** (default `3010`). **Install directory** (default `~/ham-radio-sniffer`) and **Run command** (default `./ham-radio-sniffer`) are on the Sniffer process card. Changes save automatically. The **Bridge ports** toggle on **Radio → Sniffer** always uses `http://<host>:<port>`. **Preferences → Serial ports** can hide common macOS system devices (Bluetooth Incoming, debug-console, wlan-debug) and any names you add (for example `BryansHeadphones`) from the Computer and Radio port lists; the same filter applies to Import and Write.
+1. Open **Preferences → Sniffer** and set **Host** (default `127.0.0.1`) and **Port** (default `3010`). **Install directory** (default `~/ham-radio-sniffer`) and **Run command** (default `./ham-radio-sniffer`) are on the Sniffer process card. Changes save automatically. The **Bridge ports** toggle on **Radio → Sniffer** always uses `http://<host>:<port>`. **Preferences → Serial ports** can hide common macOS system devices (Bluetooth Incoming, debug-console, wlan-debug) and any names you add (for example `BryansHeadphones`) from the Computer and Radio port lists; the same filter applies to Read and Write.
 2. Open **Radio → Sniffer** and choose ports: **Computer port** is the debug cable (computer ↔ sniffer), **Radio port** is the programming cable (sniffer ↔ radio). Turn on **Bridge ports**. The page header shows **Sniffer** with **Connected** / **Disconnected**. The **Running** / **Stopped** badge sits next to the Bridge heading. When the API is reachable, the version from `/api/health` is shown. Badges follow `/api/health` on that origin, polled while the page is visible.
 3. Traffic streams live into the Traffic panel over SSE. The Traffic header shows whether each port is open and how many bytes the UART has delivered (`C→R` / `R→C`). Use **Save capture** to write a JSON file for offline review or driver verification. Turning on **Bridge ports** keeps the existing SSE connection; reachability follows `/api/health`, not EventSource reconnects.
 
@@ -44,6 +44,6 @@ Saved captures use kind `springfield-ham-radio-sniffer-capture` and include:
 
 - Port metadata (`computerPort`, `radioPort`, `baudRate`)
 - `packets`: coalesced UI frames with `COMPUTER->RADIO` / `RADIO->COMPUTER`
-- `log`: SerialLogger JSON with `SEND` / `RECV` entries (same shape as driver serial logs from Import/Write)
+- `log`: SerialLogger JSON with `SEND` / `RECV` entries (same shape as driver serial logs from Read/Write)
 
 Prefer `log` when comparing a sniffer capture against a driver serial log for protocol verification.

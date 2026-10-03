@@ -1,6 +1,6 @@
 import type { SerialPortOption } from '~/utils/serial-port-list';
 
-/** Shown when Import or Write targets a port CAT already holds. */
+/** Shown when Read or Write targets a port CAT already holds. */
 export const CAT_MEMORY_TRANSFER_BLOCKED_TITLE = 'CAT session is using this port';
 
 /** Toast copy when memory I/O is aimed at a live CAT serial port. */
@@ -10,7 +10,7 @@ export const CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION =
 /**
  * True when CAT already owns `serialPortPath`.
  *
- * Other ports stay free for a second radio's import, write, or CAT session.
+ * Other ports stay free for a second radio's read, write, or CAT session.
  */
 export function isCatMemoryTransferBlocked(
   lockedPorts: readonly string[],
@@ -26,7 +26,7 @@ export function writeToRadioTooltip(options: {
   radioName?: string;
 }): string {
   if (!options.hasLoadedMemory) {
-    return 'Open a memory file or import from a radio first';
+    return 'Open a memory file or read from a radio first';
   }
 
   if (!options.writeSupported) {
@@ -37,7 +37,7 @@ export function writeToRadioTooltip(options: {
 }
 
 /**
- * Label and disable serial ports that a CAT session already holds so Import and
+ * Label and disable serial ports that a CAT session already holds so Read and
  * Write can still pick a second adapter.
  *
  * Pass `omitBusy` on the CAT connect dialog so those ports are not choices.

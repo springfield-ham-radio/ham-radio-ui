@@ -26,7 +26,7 @@ export function useRadioBoard() {
   const cards = useState<RadioBoardCard[]>('radio-board-cards', () => []);
   const layout = useState<RadioBoardLayout>('radio-board-layout', () => 'tabs');
   const focusedCardId = useState<string | undefined>('radio-board-focus', () => undefined);
-  /** Card that Import or Write was opened for, so the dialog does not follow a later click. */
+  /** Card that Read or Write was opened for, so the dialog does not follow a later click. */
   const transferCardId = useState<string | undefined>('radio-transfer-card', () => undefined);
   const hydrated = useState('radio-board-hydrated', () => false);
 

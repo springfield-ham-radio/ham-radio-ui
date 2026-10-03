@@ -29,7 +29,7 @@ export interface RadioConnectionSelection {
 }
 
 /**
- * Shared manufacturer / model / baud / serial-port picker used by Import and CAT.
+ * Shared manufacturer / model / baud / serial-port picker used by Read from Radio and CAT.
  */
 export function useRadioConnectionForm(options: {
   isOpen: () => boolean;
