@@ -1,3 +1,9 @@
+import {
+  DEFAULT_STATION_LOG_MAP_STYLE,
+  parseStationLogMapStyle,
+  type StationLogMapStylePreference,
+} from '~/utils/station-log-map';
+
 export const APPEARANCE_SETTINGS_STORAGE_KEY = 'ham-radio-appearance';
 
 export const SETTINGS_COLUMN_COUNTS = [1, 2, 3, 4] as const;
@@ -10,6 +16,8 @@ export const DEFAULT_SETTINGS_COLUMNS: SettingsColumnCount = 2;
 export interface AppearanceSettings {
   /** Number of fields per row on the Radio Settings tab and channel editors. */
   settingsColumns: SettingsColumnCount;
+  /** Station log basemap. `theme` follows light and dark appearance. */
+  mapStyle: StationLogMapStylePreference;
 }
 
 /**
@@ -32,6 +40,7 @@ export function parseSettingsColumnCount(value: unknown): SettingsColumnCount {
 export function defaultAppearanceSettings(): AppearanceSettings {
   return {
     settingsColumns: DEFAULT_SETTINGS_COLUMNS,
+    mapStyle: DEFAULT_STATION_LOG_MAP_STYLE,
   };
 }
 
@@ -59,6 +68,7 @@ export function parseAppearanceSettings(raw: string | null): AppearanceSettings 
 
     return {
       settingsColumns: parseSettingsColumnCount(record.settingsColumns),
+      mapStyle: parseStationLogMapStyle(record.mapStyle),
     };
   } catch {
     return defaults;
@@ -68,6 +78,7 @@ export function parseAppearanceSettings(raw: string | null): AppearanceSettings 
 export function serializeAppearanceSettings(settings: AppearanceSettings): string {
   return JSON.stringify({
     settingsColumns: parseSettingsColumnCount(settings.settingsColumns),
+    mapStyle: parseStationLogMapStyle(settings.mapStyle),
   });
 }
 

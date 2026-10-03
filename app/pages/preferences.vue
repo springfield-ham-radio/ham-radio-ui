@@ -47,6 +47,21 @@
           </div>
 
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex flex-col gap-3 px-4 py-3">
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-highlighted">Map style</p>
+                  <p class="text-xs text-muted">
+                    Basemap for the station log. Match theme uses Liberty in light mode and Dark in dark mode.
+                  </p>
+                </div>
+                <MapStyleSelect />
+              </div>
+              <MapStylePreview />
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex items-center justify-between gap-4 px-4 py-3">
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted">Settings columns</p>

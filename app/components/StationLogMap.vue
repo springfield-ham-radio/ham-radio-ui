@@ -14,8 +14,6 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { formatStationLocation } from '~/utils/antenna-station';
 import type { StationLogQso } from '~/utils/station-log-db';
 import {
-  OPENFREEMAP_STYLE_DARK,
-  OPENFREEMAP_STYLE_LIGHT,
   QSL_MARKER_COLOR,
   STATION_PIN_COLOR,
   qslMarkerStatus,
@@ -23,6 +21,7 @@ import {
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
+  stationLogMapStyleUrl,
   stationMapFeatureCollection,
   stationMapPins,
   type StationMapPinInput,
@@ -47,13 +46,12 @@ const emit = defineEmits<{
 }>();
 
 const colorMode = useColorMode();
+const { mapStyle } = useAppearanceSettings();
 const container = useTemplateRef('container');
 const map = shallowRef<MapLibreMap | undefined>();
 const loadError = shallowRef<string | undefined>();
 
-const styleUrl = computed(() =>
-  colorMode.value === 'dark' ? OPENFREEMAP_STYLE_DARK : OPENFREEMAP_STYLE_LIGHT,
-);
+const styleUrl = computed(() => stationLogMapStyleUrl(mapStyle.value, colorMode.value));
 
 const points = computed(() => stationLogMapPoints(props.qsos));
 const pins = computed(() => stationMapPins(props.stations));

@@ -7,6 +7,7 @@ import {
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
+  stationLogMapStyleUrl,
   stationMapFeatureCollection,
   stationMapPins,
 } from '../../app/utils/station-log-map.ts';
@@ -110,6 +111,15 @@ describe('stationLogMapFeatureCollection', () => {
       status: 'sent',
       count: 1,
     });
+  });
+});
+
+describe('stationLogMapStyleUrl', () => {
+  it('follows the app theme unless a style is chosen', () => {
+    expect(stationLogMapStyleUrl('theme', 'light')).toBe('https://tiles.openfreemap.org/styles/liberty');
+    expect(stationLogMapStyleUrl('theme', 'dark')).toBe('https://tiles.openfreemap.org/styles/dark');
+    expect(stationLogMapStyleUrl('bright', 'dark')).toBe('https://tiles.openfreemap.org/styles/bright');
+    expect(stationLogMapStyleUrl('fiord', 'light')).toBe('https://tiles.openfreemap.org/styles/fiord');
   });
 });
 

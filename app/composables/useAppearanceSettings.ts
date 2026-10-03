@@ -5,6 +5,7 @@ import {
   writeAppearanceSettings,
   type SettingsColumnCount,
 } from '~/utils/appearance-settings';
+import { parseStationLogMapStyle, type StationLogMapStylePreference } from '~/utils/station-log-map';
 
 /**
  * Shared appearance preferences for layout that is not color mode.
@@ -17,20 +18,35 @@ export function useAppearanceSettings() {
     'appearance-settings-columns',
     () => readAppearanceSettings().settingsColumns,
   );
+  const mapStyle = useState<StationLogMapStylePreference>(
+    'appearance-map-style',
+    () => readAppearanceSettings().mapStyle,
+  );
 
   const settingsFieldsGridStyleValue = computed(() => settingsFieldsGridStyle(settingsColumns.value));
 
-  function setSettingsColumns(value: unknown): void {
-    const next = parseSettingsColumnCount(value);
-    settingsColumns.value = next;
+  function persist(): void {
     writeAppearanceSettings({
-      settingsColumns: next,
+      settingsColumns: settingsColumns.value,
+      mapStyle: mapStyle.value,
     });
+  }
+
+  function setSettingsColumns(value: unknown): void {
+    settingsColumns.value = parseSettingsColumnCount(value);
+    persist();
+  }
+
+  function setMapStyle(value: unknown): void {
+    mapStyle.value = parseStationLogMapStyle(value);
+    persist();
   }
 
   return {
     settingsColumns,
+    mapStyle,
     settingsFieldsGridStyle: settingsFieldsGridStyleValue,
     setSettingsColumns,
+    setMapStyle,
   };
 }

@@ -12,6 +12,7 @@ describe('appearance settings', () => {
   it('should default to two settings columns', () => {
     expect(defaultAppearanceSettings()).toEqual({
       settingsColumns: DEFAULT_SETTINGS_COLUMNS,
+      mapStyle: 'theme',
     });
     expect(DEFAULT_SETTINGS_COLUMNS).toBe(2);
   });
@@ -33,6 +34,7 @@ describe('appearance settings', () => {
 
     expect(parsed).toEqual({
       settingsColumns: 3,
+      mapStyle: 'theme',
     });
   });
 
@@ -52,9 +54,21 @@ describe('appearance settings', () => {
   it('should round-trip settings through serialize and parse', () => {
     const settings = {
       settingsColumns: 4 as const,
+      mapStyle: 'bright' as const,
     };
 
     expect(parseAppearanceSettings(serializeAppearanceSettings(settings))).toEqual(settings);
+  });
+
+  it('should keep a stored column count when the map style is missing or unknown', () => {
+    expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 1 }))).toEqual({
+      settingsColumns: 1,
+      mapStyle: 'theme',
+    });
+    expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 2, mapStyle: 'watercolor' }))).toEqual({
+      settingsColumns: 2,
+      mapStyle: 'theme',
+    });
   });
 
   it('should expose the column count as a CSS custom property', () => {

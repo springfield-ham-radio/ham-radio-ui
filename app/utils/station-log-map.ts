@@ -2,8 +2,46 @@ import { isValidLatitude, isValidLongitude, maidenheadToLatLon, normalizeMaidenh
 import type { StationLogQso } from '~/utils/station-log-db';
 
 /** Public OpenFreeMap styles. No API key. MapLibre draws the required attribution. */
-export const OPENFREEMAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/liberty';
-export const OPENFREEMAP_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
+export const OPENFREEMAP_STYLE_URLS = {
+  liberty: 'https://tiles.openfreemap.org/styles/liberty',
+  bright: 'https://tiles.openfreemap.org/styles/bright',
+  positron: 'https://tiles.openfreemap.org/styles/positron',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+  fiord: 'https://tiles.openfreemap.org/styles/fiord',
+} as const;
+
+export type OpenFreeMapStyleId = keyof typeof OPENFREEMAP_STYLE_URLS;
+
+/** `theme` follows the app appearance: Liberty in light mode, Dark in dark mode. */
+export const STATION_LOG_MAP_STYLE_IDS = ['theme', ...Object.keys(OPENFREEMAP_STYLE_URLS)] as const;
+
+export type StationLogMapStylePreference = (typeof STATION_LOG_MAP_STYLE_IDS)[number];
+
+export const DEFAULT_STATION_LOG_MAP_STYLE: StationLogMapStylePreference = 'theme';
+
+export const OPENFREEMAP_STYLE_LIGHT = OPENFREEMAP_STYLE_URLS.liberty;
+export const OPENFREEMAP_STYLE_DARK = OPENFREEMAP_STYLE_URLS.dark;
+
+export function parseStationLogMapStyle(value: unknown): StationLogMapStylePreference {
+  if (typeof value === 'string' && (STATION_LOG_MAP_STYLE_IDS as readonly string[]).includes(value)) {
+    return value as StationLogMapStylePreference;
+  }
+
+  return DEFAULT_STATION_LOG_MAP_STYLE;
+}
+
+/**
+ * Style URL for the station log map.
+ *
+ * Match-theme uses Liberty unless the app is in dark mode.
+ */
+export function stationLogMapStyleUrl(preference: StationLogMapStylePreference, colorMode: string): string {
+  if (preference === 'theme') {
+    return colorMode === 'dark' ? OPENFREEMAP_STYLE_URLS.dark : OPENFREEMAP_STYLE_URLS.liberty;
+  }
+
+  return OPENFREEMAP_STYLE_URLS[preference];
+}
 
 export type QslMarkerStatus = 'none' | 'sent' | 'received' | 'both' | 'mixed';
 
