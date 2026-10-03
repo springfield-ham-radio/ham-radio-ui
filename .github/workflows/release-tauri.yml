@@ -69,9 +69,15 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.event.release.tag_name }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/checkout@v7
         with:
@@ -139,7 +145,7 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.updater_signing.outputs.private_key_password }}
         with:
@@ -155,7 +161,14 @@ jobs:
     if: always() && (needs.publish-tauri.result == 'success' || needs.publish-tauri.result == 'failure')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v7
         with:
@@ -163,7 +176,7 @@ jobs:
 
       - name: Rename installer downloads
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: node scripts/rename-release-installers.ts
