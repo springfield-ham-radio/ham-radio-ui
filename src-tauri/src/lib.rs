@@ -75,19 +75,24 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         true,
         Some("CmdOrCtrl+Shift+S"),
     )?;
+    // Shift+R is WebView2's hard reload (Ctrl+Shift+R) while browser accelerator
+    // keys stay enabled. Shift+D does not collide with that, with macOS window
+    // shortcuts, or with the File / Edit / View accelerators.
     let read_from_radio = MenuItem::with_id(
         app,
         "read-from-radio",
         "Read from Radio...",
         true,
-        Some("CmdOrCtrl+Shift+R"),
+        Some("CmdOrCtrl+Shift+D"),
     )?;
+    // Shift+W is the macOS close-window / close-all convention. Shift+U matches
+    // CHIRP's Upload and is not a Tauri, macOS, or Windows default.
     let write_to_radio = MenuItem::with_id(
         app,
         "write-to-radio",
         "Write to Radio...",
         true,
-        Some("CmdOrCtrl+Shift+W"),
+        Some("CmdOrCtrl+Shift+U"),
     )?;
     let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
     let radio_menu = Submenu::with_items(app, "Radio", true, &[&read_from_radio, &write_to_radio])?;
