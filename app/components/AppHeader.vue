@@ -96,32 +96,46 @@ onMounted(() => {
   showBrowserFileActions.value = !isTauriRuntime();
 });
 
-defineShortcuts({
-  [openMemoryShortcut]: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void runImportExport(IMPORT_EXPORT_IDS.openMemory);
+const memoryShortcuts = {
+  ...(openMemoryShortcut
+    ? {
+        [openMemoryShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.openMemory);
+            }
+          },
+        },
       }
-    },
-  },
-  [saveMemoryShortcut]: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void runImportExport(IMPORT_EXPORT_IDS.saveMemory);
+    : {}),
+  ...(saveMemoryShortcut
+    ? {
+        [saveMemoryShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.saveMemory);
+            }
+          },
+        },
       }
-    },
-  },
-  [saveMemoryAsShortcut]: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void runImportExport(IMPORT_EXPORT_IDS.saveMemoryAs);
+    : {}),
+  ...(saveMemoryAsShortcut
+    ? {
+        [saveMemoryAsShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.saveMemoryAs);
+            }
+          },
+        },
       }
-    },
-  },
-});
+    : {}),
+};
+
+defineShortcuts(memoryShortcuts);
 </script>
 
 <template>

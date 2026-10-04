@@ -1,3 +1,4 @@
+import { registerBuiltinImportExport } from '~/importExport/builtins';
 import type {
   ImportExportAvailabilityContext,
   ImportExportCategory,
@@ -142,8 +143,39 @@ export function createImportExportRegistry(): ImportExportRegistry {
   };
 }
 
-/** Shared catalog. Built-in entries are registered when `builtins` is imported. */
+/**
+ * Shared catalog.
+ * Built-ins are registered here, as this module loads, so a component can look
+ * up `read-from-radio` during setup without importing `builtins` first.
+ */
 export const channelImportExport = createImportExportRegistry();
+
+registerBuiltinImportExport(channelImportExport);
+
+const reportedMissingIds = new Set<string>();
+
+/** Log a missing id once. Callers keep rendering instead of throwing a page error. */
+export function reportUnknownImportExport(id: string): void {
+  if (reportedMissingIds.has(id)) {
+    return;
+  }
+
+  reportedMissingIds.add(id);
+  console.error(`Unknown import/export id "${id}"`);
+}
+
+function missingImportExportEntry(id: string): ImportExportDefinition {
+  reportUnknownImportExport(id);
+
+  return {
+    id,
+    label: 'Unavailable',
+    icon: 'i-lucide-circle-alert',
+    kind: 'source',
+    category: 'file',
+    handler: () => ({ cancelled: true }),
+  };
+}
 
 /**
  * UI actions bound at startup (file dialogs, radio read/write, toasts).
@@ -157,7 +189,11 @@ const actions = new Map<string, ImportExportHandler>();
  * does not follow whichever card last called `useRadio`.
  */
 export function bindImportExportAction(id: string, handler: ImportExportHandler): void {
-  channelImportExport.require(id);
+  if (!channelImportExport.get(id)) {
+    reportUnknownImportExport(id);
+    return;
+  }
+
   actions.set(id, handler);
 }
 
@@ -175,23 +211,31 @@ export async function runImportExport(
     return action(input);
   }
 
-  return channelImportExport.require(id).handler(input);
+  const entry = channelImportExport.get(id);
+
+  if (!entry) {
+    reportUnknownImportExport(id);
+    return { cancelled: true };
+  }
+
+  return entry.handler(input);
 }
 
 /** Definition handler, ignoring any UI action bound over it. */
 export function importExportDataHandler(id: string): ImportExportHandler {
-  return channelImportExport.require(id).handler;
+  return importExportEntry(id).handler;
 }
 
 export function importExportEntry(id: string): ImportExportDefinition {
-  return channelImportExport.require(id);
+  return channelImportExport.get(id) ?? missingImportExportEntry(id);
 }
 
 export function importExportShortcut(id: string): string {
-  const shortcut = importExportEntry(id).shortcut;
+  const shortcut = channelImportExport.get(id)?.shortcut;
 
   if (!shortcut) {
-    throw new Error(`Import/export "${id}" has no shortcut`);
+    reportUnknownImportExport(id);
+    return '';
   }
 
   return shortcut;

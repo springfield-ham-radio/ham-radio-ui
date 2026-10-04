@@ -12,6 +12,7 @@ export {
   importExportDataHandler,
   importExportEntry,
   importExportShortcut,
+  reportUnknownImportExport,
   runImportExport,
   unboundImportExportAction,
 } from '~/importExport/registry';

@@ -1,10 +1,6 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
-import {
-  channelImportExport,
-  unboundImportExportAction,
-  type ImportExportRegistry,
-} from '~/importExport/registry';
-import type { ImportExportDefinition } from '~/importExport/types';
+import type { ImportExportRegistry } from '~/importExport/registry';
+import type { ImportExportDefinition, ImportExportHandler } from '~/importExport/types';
 import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
 
 const CSV_FILE = {
@@ -145,6 +141,12 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
   });
 }
 
+function unboundImportExportAction(id: string): ImportExportHandler {
+  return () => {
+    throw new Error(`Import/export action "${id}" is not available in this runtime`);
+  };
+}
+
 function radioSource(id: string, label: string, icon: string, shortcut: string): ImportExportDefinition {
   return {
     id,
@@ -170,5 +172,3 @@ function memoryTarget(id: string, label: string, shortcut: string): ImportExport
     handler: unboundImportExportAction(id),
   };
 }
-
-registerBuiltinImportExport(channelImportExport);

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType } from '@springfield/ham-radio-api';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { registerBuiltinImportExport } from '~/importExport/builtins';
@@ -10,6 +10,9 @@ import {
   importExportAvailability,
   importExportContext,
   importExportDataHandler,
+  importExportEntry,
+  importExportShortcut,
+  runImportExport,
 } from '~/importExport/registry';
 import type { ImportExportDefinition } from '~/importExport/types';
 import type { SavedChannel } from '~/utils/saved-channels-db';
@@ -51,6 +54,44 @@ function definition(overrides: Partial<ImportExportDefinition> & Pick<ImportExpo
 }
 
 describe('import/export registry', () => {
+  it('registers every built-in when the shared registry module loads', () => {
+    // RadioBoard and the other pages import registry.ts and look up ids during
+    // setup. They do not import builtins.ts. That lookup used to throw
+    // `Unknown import/export id "read-from-radio"` and Nuxt showed a 500.
+    for (const id of Object.values(IMPORT_EXPORT_IDS)) {
+      expect(channelImportExport.get(id)?.id, id).toBe(id);
+      expect(() => importExportEntry(id)).not.toThrow();
+    }
+
+    expect(importExportEntry(IMPORT_EXPORT_IDS.readFromRadio).label).toBe('Read from Radio');
+    expect(importExportEntry(IMPORT_EXPORT_IDS.writeToRadio).icon).toBe('i-hambench-radio-write');
+  });
+
+  it('reproduces a lookup that runs before registration', () => {
+    const registry = createImportExportRegistry();
+
+    expect(() => registry.require(IMPORT_EXPORT_IDS.readFromRadio)).toThrow(
+      /Unknown import\/export id "read-from-radio"/,
+    );
+
+    registerBuiltinImportExport(registry);
+
+    for (const id of Object.values(IMPORT_EXPORT_IDS)) {
+      expect(registry.require(id).id).toBe(id);
+    }
+  });
+
+  it('logs an unknown id instead of throwing', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(importExportEntry('not-a-source').label).toBe('Unavailable');
+    expect(importExportShortcut('not-a-source')).toBe('');
+    await expect(runImportExport('not-a-source')).resolves.toEqual({ cancelled: true });
+    expect(error).toHaveBeenCalledWith('Unknown import/export id "not-a-source"');
+
+    error.mockRestore();
+  });
+
   it('registers, looks up, and rejects a duplicate id', () => {
     const registry = createImportExportRegistry();
     registry.register(definition({ id: 'alpha' }));
