@@ -1,3 +1,9 @@
+## [0.53.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.0...v0.53.1) (2026-10-04)
+
+### Bug Fixes
+
+* use ARRL band offsets and a RepeaterBook User-Agent ([#55](https://github.com/springfield-ham-radio/ham-radio-ui/issues/55)) ([68da7f7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/68da7f7f2757d69f136592b9dbc16311cadd4329))
+
 ## [0.53.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.52.0...v0.53.0) (2026-10-03)
 
 ### Features
