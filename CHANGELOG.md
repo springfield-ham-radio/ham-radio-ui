@@ -1,3 +1,9 @@
+## [0.53.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.1...v0.53.2) (2026-10-04)
+
+### Bug Fixes
+
+* **deps:** upgrade to ham-radio-api 18 and latest in-house packages ([#56](https://github.com/springfield-ham-radio/ham-radio-ui/issues/56)) ([f913ac4](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f913ac48d5a45a6922044d784d1db6006f63ab53))
+
 ## [0.53.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.0...v0.53.1) (2026-10-04)
 
 ### Bug Fixes
