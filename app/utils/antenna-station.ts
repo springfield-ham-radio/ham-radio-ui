@@ -227,7 +227,7 @@ export function parseStationAntennaStore(raw: string | null): StationAntennaStor
       : migratedStations[0]!.id;
     const antennas = parseAntennaList(record.antennas, fallbackStationId, migratedStations);
     const selectedStationId = resolveSelectedStationId(migratedStations, record.selectedStationId);
-    const atStation = antennas.filter((antenna) => antenna.stationId === selectedStationId);
+    const atStation = antennas.filter((antenna) => antennaIsAtStation(antenna, selectedStationId));
     const selectedId = resolveSelectedId(atStation, record.selectedId);
 
     return {
@@ -253,7 +253,7 @@ export function serializeStationAntennaStore(store: StationAntennaStore): string
     .map((antenna) => normalizeStationAntenna(antenna, fallbackStationId, migratedStations))
     .filter((antenna) => antenna !== undefined);
   const selectedStationId = resolveSelectedStationId(migratedStations, store.selectedStationId);
-  const atStation = antennas.filter((antenna) => antenna.stationId === selectedStationId);
+  const atStation = antennas.filter((antenna) => antennaIsAtStation(antenna, selectedStationId));
 
   return JSON.stringify({
     stations: migratedStations,
@@ -447,6 +447,14 @@ export function selectAntennaInStore(store: StationAntennaStore, id: string): St
 }
 
 /**
+ * True when the antenna is installed at the given site. A radio-mounted
+ * antenna has no `stationId` and never matches, even when no site id is given.
+ */
+export function antennaIsAtStation(antenna: StationAntenna, stationId: string | undefined): boolean {
+  return stationId !== undefined && !antenna.radioId && antenna.stationId === stationId;
+}
+
+/**
  * Antennas assigned to a station. Defaults to the selected station.
  */
 export function antennasAtStation(store: StationAntennaStore, stationId?: string): StationAntenna[] {
@@ -456,7 +464,7 @@ export function antennasAtStation(store: StationAntennaStore, stationId?: string
     return [];
   }
 
-  return store.antennas.filter((antenna) => !antenna.radioId && antenna.stationId === id);
+  return store.antennas.filter((antenna) => antennaIsAtStation(antenna, id));
 }
 
 /**
@@ -880,7 +888,7 @@ export function removeStationFromStore(store: StationAntennaStore, id: string): 
   const antennas = store.antennas.filter((antenna) => antenna.stationId !== id);
   const selectedStationId =
     store.selectedStationId === id ? stations[0]?.id : resolveSelectedStationId(stations, store.selectedStationId);
-  const atStation = antennas.filter((antenna) => antenna.stationId === selectedStationId);
+  const atStation = antennas.filter((antenna) => antennaIsAtStation(antenna, selectedStationId));
 
   return {
     stations,

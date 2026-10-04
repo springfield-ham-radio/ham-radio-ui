@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  antennaIsAtStation,
   formatAntennaBands,
   formatAntennaGeometry,
   formatAntennaProduct,
@@ -21,7 +22,7 @@ const pendingRemove = ref<StationAntenna | undefined>();
 const mountedAntennas = computed(() =>
   props.radioId
     ? antennas.value.filter((antenna) => antenna.radioId === props.radioId)
-    : antennas.value.filter((antenna) => !antenna.radioId && antenna.stationId === props.stationId),
+    : antennas.value.filter((antenna) => antennaIsAtStation(antenna, props.stationId)),
 );
 
 function openCreate(): void {
