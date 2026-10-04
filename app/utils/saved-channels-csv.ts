@@ -5,6 +5,7 @@ import {
   type RadioTone,
 } from '@springfield/ham-radio-api';
 import { formatFrequencyMHz, parseFrequencyMHz } from '~/utils/channel-edit';
+import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 import {
   detectRepeaterImportFormat,
   importedRepeaterNotes,
@@ -13,10 +14,10 @@ import {
   repeaterOnAirFromStatus,
   repeaterUseFromLabel,
 } from '~/utils/repeater-import';
-import type { RepeaterUse, SavedChannel, SavedChannelKind } from '~/utils/saved-channels-db';
+import { coordinatesFromPair, type RepeaterUse, type SavedChannel, type SavedChannelKind } from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
 
 export interface ParsedSavedChannelsCsv {
   source: 'library' | 'repeaterbook' | 'chirp';
@@ -26,6 +27,8 @@ export interface ParsedSavedChannelsCsv {
   uses: Array<RepeaterUse | undefined>;
   onAir: Array<boolean | undefined>;
   callsigns: Array<string | undefined>;
+  latitudes: Array<number | undefined>;
+  longitudes: Array<number | undefined>;
 }
 
 function escapeCsvField(value: string): string {
@@ -54,6 +57,14 @@ function formatToneValue(tone: RadioTone | undefined): string {
   }
 
   return (tone.tone / 10).toFixed(1);
+}
+
+function formatCoordinate(value: number | undefined): string {
+  if (value === undefined) {
+    return '';
+  }
+
+  return String(value);
 }
 
 function formatOnAir(value: boolean | undefined): string {
@@ -89,6 +100,8 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         channel.kind === 'repeater' ? (channel.use ?? '') : '',
         channel.kind === 'repeater' ? formatOnAir(channel.onAir) : '',
         channel.kind === 'repeater' ? escapeCsvField(channel.callsign ?? '') : '',
+        formatCoordinate(channel.latitude),
+        formatCoordinate(channel.longitude),
       ].join(','),
     );
   }
@@ -227,6 +240,8 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       callsigns: parsed.repeaters.map((repeater) =>
         repeater.sourceFormat === 'repeaterbook' ? repeater.callsign || undefined : undefined,
       ),
+      latitudes: parsed.repeaters.map((repeater) => repeater.latitude),
+      longitudes: parsed.repeaters.map((repeater) => repeater.longitude),
     };
   }
 
@@ -245,6 +260,8 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const uses: Array<RepeaterUse | undefined> = [];
   const onAir: Array<boolean | undefined> = [];
   const callsigns: Array<string | undefined> = [];
+  const latitudes: Array<number | undefined> = [];
+  const longitudes: Array<number | undefined> = [];
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -272,14 +289,33 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
     const air = kind === 'repeater' && indexOf('on_air') !== -1 ? repeaterOnAirFromStatus(cell('on_air')) : undefined;
     const callsign = kind === 'repeater' && indexOf('callsign') !== -1 ? cell('callsign') || undefined : undefined;
 
+    const point = coordinatesFromPair(
+      indexOf('latitude') === -1 ? undefined : parseOptionalCoordinate(cell('latitude'), isValidLatitude),
+      indexOf('longitude') === -1 ? undefined : parseOptionalCoordinate(cell('longitude'), isValidLongitude),
+    );
+
     notes.push(note || undefined);
     kinds.push(kind);
     uses.push(use);
     onAir.push(air);
     callsigns.push(callsign);
+    latitudes.push(point.latitude);
+    longitudes.push(point.longitude);
   }
 
-  return { source: 'library', channels, notes, kinds, uses, onAir, callsigns };
+  return { source: 'library', channels, notes, kinds, uses, onAir, callsigns, latitudes, longitudes };
+}
+
+function parseOptionalCoordinate(raw: string, valid: (value: number) => boolean): number | undefined {
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
+
+  return valid(value) ? value : undefined;
 }
 
 function parseSavedChannelKind(value: string): SavedChannelKind {

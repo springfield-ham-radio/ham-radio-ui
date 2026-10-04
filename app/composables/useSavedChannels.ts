@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { RadioChannel, RadioChannelId } from '@springfield/ham-radio-api';
-import { ALL_CHANNELS_TAB_ID, channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
+import {
+  ALL_CHANNELS_TAB_ID,
+  channelsInGroup,
+  type ChannelGroup,
+  type ChannelGroupKind,
+  type ChannelGroupMembership,
+} from '~/utils/channel-groups';
 import {
   findPredefinedChannel,
   isPredefinedChannelId,
@@ -379,6 +385,8 @@ export function useSavedChannels() {
           use: parsed.uses[index],
           onAir: parsed.onAir[index],
           callsign: parsed.callsigns[index],
+          latitude: parsed.latitudes[index],
+          longitude: parsed.longitudes[index],
         }),
       );
 
@@ -393,6 +401,8 @@ export function useSavedChannels() {
             use: repeater.use,
             onAir: repeater.onAir,
             callsign: repeater.callsign || undefined,
+            latitude: repeater.latitude,
+            longitude: repeater.longitude,
           }),
         );
       }
@@ -417,13 +427,23 @@ export function useSavedChannels() {
         const nextOnAir = model.onAir ?? match.onAir;
         const nextNotes = model.notes ?? match.notes;
         const nextCallsign = model.callsign ?? match.callsign;
+        const nextLatitude = model.latitude ?? match.latitude;
+        const nextLongitude = model.longitude ?? match.longitude;
         const callsignWasName =
           Boolean(model.callsign) &&
           !match.callsign &&
           match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
         const nextName = callsignWasName ? undefined : match.name;
+        const unchanged =
+          nextUse === match.use &&
+          nextOnAir === match.onAir &&
+          nextNotes === match.notes &&
+          nextCallsign === match.callsign &&
+          nextName === match.name &&
+          nextLatitude === match.latitude &&
+          nextLongitude === match.longitude;
 
-        if (nextUse === match.use && nextOnAir === match.onAir && nextNotes === match.notes && nextCallsign === match.callsign && nextName === match.name) {
+        if (unchanged) {
           continue;
         }
 
@@ -438,6 +458,8 @@ export function useSavedChannels() {
           onAir: nextOnAir,
           notes: nextNotes,
           callsign: nextCallsign,
+          latitude: nextLatitude,
+          longitude: nextLongitude,
         });
         updated += 1;
       }
@@ -480,25 +502,24 @@ export function useSavedChannels() {
     }
   }
 
-  async function createGroup(name: string, channelIds: readonly RadioChannelId[]): Promise<ChannelGroup> {
+  async function createGroup(
+    name: string,
+    channelIds: readonly RadioChannelId[],
+    kind: ChannelGroupKind = 'group',
+  ): Promise<ChannelGroup> {
     try {
       if (channelIds.some((id) => isPredefinedChannelId(id))) {
         throw new Error('Built-in channels are already in a group');
       }
 
-      const group = await insertChannelGroup(name, channelIds);
+      const group = await insertChannelGroup(name, channelIds, kind);
       await reloadLibrary();
       activeGroupId.value = group.id;
       toast.add({
-        title: 'Group created',
-        description:
-          channelIds.length === 0
-            ? `${group.name} is empty. Import a CSV to add channels.`
-            : channelIds.length === 1
-              ? `${group.name} contains 1 channel.`
-              : `${group.name} contains ${channelIds.length} channels.`,
+        title: kind === 'trip' ? 'Trip group created' : 'Group created',
+        description: groupCreatedDescription(group, channelIds.length),
         color: 'success',
-        icon: 'i-lucide-folder-plus',
+        icon: kind === 'trip' ? 'i-lucide-route' : 'i-lucide-folder-plus',
       });
       return group;
     } catch (cause) {
@@ -600,6 +621,22 @@ export function useSavedChannels() {
     renameGroup,
     removeGroup,
   };
+}
+
+function groupCreatedDescription(group: ChannelGroup, channelCount: number): string {
+  if (group.kind === 'trip') {
+    return `${group.name} is ready. Import the route CSV you already exported.`;
+  }
+
+  if (channelCount === 0) {
+    return `${group.name} is empty. Import a CSV to add channels.`;
+  }
+
+  if (channelCount === 1) {
+    return `${group.name} contains 1 channel.`;
+  }
+
+  return `${group.name} contains ${channelCount} channels.`;
 }
 
 function libraryImportKey(channel: Pick<SavedChannel, 'name' | 'kind' | 'callsign' | 'transmitFrequency' | 'receiveFrequency'>): string {

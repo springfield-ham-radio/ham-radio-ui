@@ -7,6 +7,7 @@ import {
 } from '@springfield/ham-radio-api';
 // RadioChannel is used by createBlankRadioChannel and insert helpers.
 import Database from '@tauri-apps/plugin-sql';
+import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 export const SAVED_CHANNELS_DATABASE = 'sqlite:ham-radio.db';
@@ -32,6 +33,8 @@ export interface SavedChannelRow {
   use_type: string | null;
   on_air: number | null;
   callsign: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -46,8 +49,25 @@ export interface SavedChannel extends RadioChannel {
   onAir?: boolean;
   /** Repeater call sign. Unset on ordinary channels. */
   callsign?: string;
+  /** Decimal degrees from an imported route or library CSV. Both are set, or neither is. */
+  latitude?: number;
+  longitude?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * Keep a coordinate pair only when both values are in range.
+ */
+export function coordinatesFromPair(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): { latitude?: number; longitude?: number } {
+  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+    return {};
+  }
+
+  return { latitude, longitude };
 }
 
 export function savedChannelKindFromDb(value: string | null | undefined): SavedChannelKind {
@@ -146,6 +166,7 @@ export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
     notes: row.notes ?? undefined,
     ...repeaterStatusForKind(savedChannelKindFromDb(row.kind), repeaterUseFromDb(row.use_type), onAirFromDb(row.on_air)),
     callsign: savedChannelKindFromDb(row.kind) === 'repeater' ? row.callsign?.trim() || undefined : undefined,
+    ...coordinatesFromPair(row.latitude, row.longitude),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -160,6 +181,8 @@ export function radioChannelToSavedChannel(
     use?: RepeaterUse;
     onAir?: boolean;
     callsign?: string;
+    latitude?: number;
+    longitude?: number;
     createdAt?: number;
     updatedAt?: number;
   } = {},
@@ -178,6 +201,7 @@ export function radioChannelToSavedChannel(
     notes: options.notes,
     ...repeaterStatusForKind(kind, options.use, options.onAir),
     callsign: kind === 'repeater' ? options.callsign?.trim() || undefined : undefined,
+    ...coordinatesFromPair(options.latitude, options.longitude),
     createdAt: options.createdAt ?? now,
     updatedAt: options.updatedAt ?? now,
   };
@@ -188,7 +212,7 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
   const rows = await database.select<SavedChannelRow[]>(
     `SELECT id, name, kind, transmit_frequency, receive_frequency,
             transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
-            notes, use_type, on_air, callsign, created_at, updated_at
+            notes, use_type, on_air, callsign, latitude, longitude, created_at, updated_at
      FROM saved_channels
      ORDER BY name COLLATE NOCASE ASC, receive_frequency ASC`,
   );
@@ -208,8 +232,8 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
       `INSERT INTO saved_channels (
          id, name, kind, transmit_frequency, receive_frequency,
          transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
-         notes, use_type, on_air, callsign, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+         notes, use_type, on_air, callsign, latitude, longitude, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [
         channel.id,
         channel.name ?? null,
@@ -224,6 +248,8 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
         channel.use ?? null,
         onAirToDb(channel.onAir),
         channel.callsign ?? null,
+        channel.latitude ?? null,
+        channel.longitude ?? null,
         channel.createdAt,
         channel.updatedAt,
       ],
@@ -262,8 +288,10 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
        use_type = $10,
        on_air = $11,
        callsign = $12,
-       updated_at = $13
-     WHERE id = $14`,
+       latitude = $13,
+       longitude = $14,
+       updated_at = $15
+     WHERE id = $16`,
     [
       updated.name ?? null,
       updated.kind,
@@ -277,6 +305,8 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
       updated.use ?? null,
       onAirToDb(updated.onAir),
       updated.callsign ?? null,
+      updated.latitude ?? null,
+      updated.longitude ?? null,
       updated.updatedAt,
       updated.id,
     ],

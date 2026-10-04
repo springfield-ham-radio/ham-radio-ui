@@ -68,6 +68,18 @@ describe('saved-channels-csv', () => {
     expect(parsed.channels[0]?.transmitFrequency).toBe(Frequency(146_325_000));
     expect(parsed.uses[0]).toBe('open');
     expect(parsed.onAir[0]).toBe(true);
+    expect(parsed.latitudes[0]).toBeCloseTo(43.5018912);
+    expect(parsed.longitudes[0]).toBeCloseTo(-70.7260259);
+  });
+
+  it('round-trips repeater coordinates through the library CSV', () => {
+    const csv = serializeSavedChannelsCsv([
+      { ...sample, kind: 'repeater', latitude: 39.0997, longitude: -94.5786 },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.latitudes[0]).toBeCloseTo(39.0997);
+    expect(parsed.longitudes[0]).toBeCloseTo(-94.5786);
   });
 
   it('rejects CSV files missing required columns', () => {

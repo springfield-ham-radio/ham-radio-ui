@@ -478,6 +478,16 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add_trip_groups_and_channel_coordinates",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN latitude REAL;
+ALTER TABLE saved_channels ADD COLUMN longitude REAL;
+ALTER TABLE channel_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group';
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

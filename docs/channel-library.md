@@ -12,7 +12,13 @@ Use **Import CSV** on the Channels page. HamBench accepts:
 
 RepeaterBook and CHIRP rows are stored in the same library and shown with a **Repeater** badge. RepeaterBook `Frequency` is the downlink (radio receive); `Input Freq` is the uplink (radio transmit). Data courtesy of RepeaterBook.com when that export is used.
 
-You can also mark or unmark a row as a repeater in the channel editor. Repeater rows store **Use** (open or closed) and **On-air**. RepeaterBook `Use` and `Operational Status` fill those fields on import.
+You can also mark or unmark a row as a repeater in the channel editor. Repeater rows store **Use** (open or closed) and **On-air**. RepeaterBook `Use` and `Operational Status` fill those fields on import. Latitude and longitude are stored when the CSV includes them.
+
+## Trip lists
+
+**New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
+
+On that group, set **Distance from** to a saved station or type coordinates. Rows sort by straight-line distance from that point. Rows without coordinates stay at the end. Filter by band, **Open use**, and **On-air** when the import included those fields. Select the rows you want and use **Add to radio**.
 
 ## Add to a radio
 

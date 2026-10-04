@@ -1,5 +1,6 @@
 import { Frequency, RadioToneType, type RadioChannel, type RadioTone } from '@springfield/ham-radio-api';
 import { parseFrequencyMHz } from '~/utils/channel-edit';
+import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 import type { RepeaterUse } from '~/utils/saved-channels-db';
 
 export type RepeaterImportFormat = 'repeaterbook' | 'chirp';
@@ -157,9 +158,22 @@ function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater |
     notes: [emptyToUndefined(cell('notes')), digitalAccess ? `Digital access ${digitalAccess}` : undefined]
       .filter((part): part is string => Boolean(part))
       .join(' · ') || undefined,
-    latitude: parseOptionalNumber(cell('lat')),
-    longitude: parseOptionalNumber(cell('long', 'lng')),
+    ...repeaterCoordinates(
+      cell('lat', 'latitude'),
+      cell('long', 'lng', 'lon', 'longitude'),
+    ),
   };
+}
+
+function repeaterCoordinates(latitudeRaw: string, longitudeRaw: string): { latitude?: number; longitude?: number } {
+  const latitude = parseOptionalNumber(latitudeRaw);
+  const longitude = parseOptionalNumber(longitudeRaw);
+
+  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+    return {};
+  }
+
+  return { latitude, longitude };
 }
 
 function parseChirpRow(header: string[], row: string[]): ParsedRepeater | undefined {

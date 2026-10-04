@@ -36,6 +36,8 @@ describe('repeater-import', () => {
       expect(analog.receiveTone).toEqual({ tone: 0, type: RadioToneType.CTCSS });
       expect(analog.use).toBe('open');
       expect(analog.onAir).toBe(true);
+      expect(analog.latitude).toBeCloseTo(43.5018912);
+      expect(analog.longitude).toBeCloseTo(-70.7260259);
       expect(analog.modes).toBe('FM');
     });
 
