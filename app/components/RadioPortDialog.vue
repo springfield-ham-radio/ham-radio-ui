@@ -18,6 +18,8 @@ const props = defineProps<{
   omitUnavailablePorts?: boolean;
   warningTitle?: string;
   warningDescription?: string;
+  /** Width class for the dialog panel. */
+  panelClass?: string;
 }>();
 
 const emit = defineEmits<{
@@ -133,7 +135,7 @@ watch(
     v-model:open="isOpen"
     :title="title"
     :description="description"
-    class="max-w-lg"
+    :class="panelClass ?? 'max-w-lg'"
   >
     <template #body>
       <UAlert
@@ -145,6 +147,7 @@ watch(
         :description="warningDescription"
         class="mb-4"
       />
+      <slot name="review" :selected-port="selectedPort" />
       <UFormField
         label="Serial port"
         description="The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else."
@@ -179,7 +182,7 @@ watch(
           :color="confirmColor"
           :icon="confirmIcon"
           :label="confirmLabel"
-          :disabled="!canSubmit"
+          :disabled="!canSubmit || confirmLoading"
           :loading="confirmLoading"
           @click="confirm"
         />
