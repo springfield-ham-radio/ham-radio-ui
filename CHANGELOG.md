@@ -1,3 +1,9 @@
+## [0.54.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.2...v0.54.0) (2026-10-04)
+
+### Features
+
+* **ui:** review channel and setting changes before writing to a radio ([#69](https://github.com/springfield-ham-radio/ham-radio-ui/issues/69)) ([6a72a9a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6a72a9a4f4e1da660708844ad7fd15a6c8621eac))
+
 ## [0.53.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.1...v0.53.2) (2026-10-04)
 
 ### Bug Fixes
