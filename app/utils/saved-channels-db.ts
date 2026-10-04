@@ -7,6 +7,7 @@ import {
 } from '@springfield/ham-radio-api';
 // RadioChannel is used by createBlankRadioChannel and insert helpers.
 import Database from '@tauri-apps/plugin-sql';
+import { linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
 import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -35,11 +36,15 @@ export interface SavedChannelRow {
   callsign: string | null;
   latitude: number | null;
   longitude: number | null;
+  allstar_node: string | null;
+  echolink_node: string | null;
+  irlp_node: string | null;
+  wires_node: string | null;
   created_at: number;
   updated_at: number;
 }
 
-export interface SavedChannel extends RadioChannel {
+export interface SavedChannel extends RadioChannel, LinkedNodes {
   id: RadioChannelId;
   kind: SavedChannelKind;
   notes?: string;
@@ -155,18 +160,26 @@ export function radioToneFromDb(tone: number, type: string): RadioTone {
 }
 
 export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
+  const kind = savedChannelKindFromDb(row.kind);
+
   return {
     id: RadioChannelId(row.id),
     name: row.name ?? undefined,
-    kind: savedChannelKindFromDb(row.kind),
+    kind,
     transmitFrequency: Frequency(row.transmit_frequency),
     receiveFrequency: Frequency(row.receive_frequency),
     transmitTone: radioToneFromDb(row.transmit_tone, row.transmit_tone_type),
     receiveTone: radioToneFromDb(row.receive_tone, row.receive_tone_type),
     notes: row.notes ?? undefined,
-    ...repeaterStatusForKind(savedChannelKindFromDb(row.kind), repeaterUseFromDb(row.use_type), onAirFromDb(row.on_air)),
-    callsign: savedChannelKindFromDb(row.kind) === 'repeater' ? row.callsign?.trim() || undefined : undefined,
+    ...repeaterStatusForKind(kind, repeaterUseFromDb(row.use_type), onAirFromDb(row.on_air)),
+    callsign: kind === 'repeater' ? row.callsign?.trim() || undefined : undefined,
     ...coordinatesFromPair(row.latitude, row.longitude),
+    ...linkedNodesForKind(kind, {
+      allstarNode: row.allstar_node ?? undefined,
+      echolinkNode: row.echolink_node ?? undefined,
+      irlpNode: row.irlp_node ?? undefined,
+      wiresNode: row.wires_node ?? undefined,
+    }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -183,6 +196,10 @@ export function radioChannelToSavedChannel(
     callsign?: string;
     latitude?: number;
     longitude?: number;
+    allstarNode?: string;
+    echolinkNode?: string;
+    irlpNode?: string;
+    wiresNode?: string;
     createdAt?: number;
     updatedAt?: number;
   } = {},
@@ -202,6 +219,7 @@ export function radioChannelToSavedChannel(
     ...repeaterStatusForKind(kind, options.use, options.onAir),
     callsign: kind === 'repeater' ? options.callsign?.trim() || undefined : undefined,
     ...coordinatesFromPair(options.latitude, options.longitude),
+    ...linkedNodesForKind(kind, options),
     createdAt: options.createdAt ?? now,
     updatedAt: options.updatedAt ?? now,
   };
@@ -212,7 +230,9 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
   const rows = await database.select<SavedChannelRow[]>(
     `SELECT id, name, kind, transmit_frequency, receive_frequency,
             transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
-            notes, use_type, on_air, callsign, latitude, longitude, created_at, updated_at
+            notes, use_type, on_air, callsign, latitude, longitude,
+            allstar_node, echolink_node, irlp_node, wires_node,
+            created_at, updated_at
      FROM saved_channels
      ORDER BY name COLLATE NOCASE ASC, receive_frequency ASC`,
   );
@@ -232,8 +252,10 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
       `INSERT INTO saved_channels (
          id, name, kind, transmit_frequency, receive_frequency,
          transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
-         notes, use_type, on_air, callsign, latitude, longitude, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+         notes, use_type, on_air, callsign, latitude, longitude,
+         allstar_node, echolink_node, irlp_node, wires_node,
+         created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
       [
         channel.id,
         channel.name ?? null,
@@ -250,6 +272,10 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
         channel.callsign ?? null,
         channel.latitude ?? null,
         channel.longitude ?? null,
+        channel.allstarNode ?? null,
+        channel.echolinkNode ?? null,
+        channel.irlpNode ?? null,
+        channel.wiresNode ?? null,
         channel.createdAt,
         channel.updatedAt,
       ],
@@ -266,11 +292,19 @@ export async function insertSavedChannels(channels: RadioChannel[]): Promise<Sav
 export async function updateSavedChannel(channel: SavedChannel): Promise<SavedChannel> {
   const database = await getSavedChannelsDatabase();
   const status = repeaterStatusForKind(channel.kind, channel.use, channel.onAir);
+  const nodes = linkedNodesForKind(channel.kind, channel);
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
   const updated: SavedChannel = {
     ...channel,
     use: status.use,
     onAir: status.onAir,
     callsign: channel.kind === 'repeater' ? channel.callsign?.trim() || undefined : undefined,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    allstarNode: nodes.allstarNode,
+    echolinkNode: nodes.echolinkNode,
+    irlpNode: nodes.irlpNode,
+    wiresNode: nodes.wiresNode,
     updatedAt: Date.now(),
   };
 
@@ -290,8 +324,12 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
        callsign = $12,
        latitude = $13,
        longitude = $14,
-       updated_at = $15
-     WHERE id = $16`,
+       allstar_node = $15,
+       echolink_node = $16,
+       irlp_node = $17,
+       wires_node = $18,
+       updated_at = $19
+     WHERE id = $20`,
     [
       updated.name ?? null,
       updated.kind,
@@ -307,6 +345,10 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
       updated.callsign ?? null,
       updated.latitude ?? null,
       updated.longitude ?? null,
+      updated.allstarNode ?? null,
+      updated.echolinkNode ?? null,
+      updated.irlpNode ?? null,
+      updated.wiresNode ?? null,
       updated.updatedAt,
       updated.id,
     ],
@@ -365,6 +407,16 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
   const name = channel.name?.toLowerCase() ?? '';
   const callsign = channel.callsign?.toLowerCase() ?? '';
   const notes = channel.notes?.toLowerCase() ?? '';
+  const linked = [channel.allstarNode, channel.echolinkNode, channel.irlpNode, channel.wiresNode]
+    .filter((node): node is string => Boolean(node))
+    .join(' ')
+    .toLowerCase();
+  const linkedLabels = [
+    channel.allstarNode ? 'allstar' : '',
+    channel.echolinkNode ? 'echolink' : '',
+    channel.irlpNode ? 'irlp' : '',
+    channel.wiresNode ? 'wires' : '',
+  ].join(' ');
   const useLabel = channel.use ?? '';
   const onAirLabel = channel.onAir === true ? 'on-air' : channel.onAir === false ? 'off-air' : '';
   const transmit = String(channel.transmitFrequency);
@@ -376,6 +428,8 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
     name.includes(trimmed) ||
     callsign.includes(trimmed) ||
     notes.includes(trimmed) ||
+    linked.includes(trimmed) ||
+    linkedLabels.includes(trimmed) ||
     useLabel.includes(trimmed) ||
     onAirLabel.includes(trimmed) ||
     (channel.kind === 'repeater' && 'repeater'.startsWith(trimmed) && trimmed.length >= 3) ||

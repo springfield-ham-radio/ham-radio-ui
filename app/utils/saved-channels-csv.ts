@@ -14,10 +14,11 @@ import {
   repeaterOnAirFromStatus,
   repeaterUseFromLabel,
 } from '~/utils/repeater-import';
+import { parseLinkedNode, type LinkedNodes } from '~/utils/linked-nodes';
 import { coordinatesFromPair, type RepeaterUse, type SavedChannel, type SavedChannelKind } from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude,allstar_node,echolink_node,irlp_node,wires_node';
 
 export interface ParsedSavedChannelsCsv {
   source: 'library' | 'repeaterbook' | 'chirp';
@@ -29,6 +30,9 @@ export interface ParsedSavedChannelsCsv {
   callsigns: Array<string | undefined>;
   latitudes: Array<number | undefined>;
   longitudes: Array<number | undefined>;
+  linkedNodes: LinkedNodes[];
+  /** When true, blank node columns replace stored nodes on a matching row. */
+  replaceLinkedNodes: boolean;
 }
 
 function escapeCsvField(value: string): string {
@@ -102,6 +106,10 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         channel.kind === 'repeater' ? escapeCsvField(channel.callsign ?? '') : '',
         formatCoordinate(channel.latitude),
         formatCoordinate(channel.longitude),
+        channel.kind === 'repeater' ? escapeCsvField(channel.allstarNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.echolinkNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.irlpNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.wiresNode ?? '') : '',
       ].join(','),
     );
   }
@@ -242,6 +250,17 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       ),
       latitudes: parsed.repeaters.map((repeater) => repeater.latitude),
       longitudes: parsed.repeaters.map((repeater) => repeater.longitude),
+      linkedNodes: parsed.repeaters.map((repeater) =>
+        repeater.sourceFormat === 'repeaterbook'
+          ? {
+              allstarNode: repeater.allstarNode,
+              echolinkNode: repeater.echolinkNode,
+              irlpNode: repeater.irlpNode,
+              wiresNode: repeater.wiresNode,
+            }
+          : {},
+      ),
+      replaceLinkedNodes: parsed.nodeColumnsPresent,
     };
   }
 
@@ -262,6 +281,9 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const callsigns: Array<string | undefined> = [];
   const latitudes: Array<number | undefined> = [];
   const longitudes: Array<number | undefined> = [];
+  const linkedNodes: LinkedNodes[] = [];
+  const nodeColumns = ['allstar_node', 'echolink_node', 'irlp_node', 'wires_node'] as const;
+  const replaceLinkedNodes = nodeColumns.some((column) => indexOf(column) !== -1);
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -301,9 +323,31 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
     callsigns.push(callsign);
     latitudes.push(point.latitude);
     longitudes.push(point.longitude);
+    linkedNodes.push(
+      kind === 'repeater'
+        ? {
+            allstarNode: indexOf('allstar_node') === -1 ? undefined : parseLinkedNode(cell('allstar_node')),
+            echolinkNode: indexOf('echolink_node') === -1 ? undefined : parseLinkedNode(cell('echolink_node')),
+            irlpNode: indexOf('irlp_node') === -1 ? undefined : parseLinkedNode(cell('irlp_node')),
+            wiresNode: indexOf('wires_node') === -1 ? undefined : parseLinkedNode(cell('wires_node')),
+          }
+        : {},
+    );
   }
 
-  return { source: 'library', channels, notes, kinds, uses, onAir, callsigns, latitudes, longitudes };
+  return {
+    source: 'library',
+    channels,
+    notes,
+    kinds,
+    uses,
+    onAir,
+    callsigns,
+    latitudes,
+    longitudes,
+    linkedNodes,
+    replaceLinkedNodes,
+  };
 }
 
 function parseOptionalCoordinate(raw: string, valid: (value: number) => boolean): number | undefined {

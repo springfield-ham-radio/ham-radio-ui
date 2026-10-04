@@ -21,6 +21,7 @@ import {
   listChannelGroups,
   renameChannelGroup,
 } from '~/utils/channel-groups-db';
+import { linkedNodesForKind, mergeLinkedNodes, linkedNodesEqual } from '~/utils/linked-nodes';
 import { fillRepeaterBookUseAndOnAir } from '~/utils/repeaterbook-listings';
 import { importedRepeaterNotes, importedRepeaterToRadioChannel, parseRepeaterImportCsv } from '~/utils/repeater-import';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
@@ -156,7 +157,15 @@ export function useSavedChannels() {
     radioChannel: RadioChannel,
     notes?: string,
     kind?: SavedChannel['kind'],
-    repeater?: { use?: SavedChannel['use']; onAir?: SavedChannel['onAir']; callsign?: string },
+    repeater?: {
+      use?: SavedChannel['use'];
+      onAir?: SavedChannel['onAir'];
+      callsign?: string;
+      allstarNode?: string;
+      echolinkNode?: string;
+      irlpNode?: string;
+      wiresNode?: string;
+    },
   ): Promise<SavedChannel> {
     try {
       const trimmedNotes = notes?.trim();
@@ -167,6 +176,10 @@ export function useSavedChannels() {
           use: repeater?.use,
           onAir: repeater?.onAir,
           callsign: repeater?.callsign,
+          allstarNode: repeater?.allstarNode,
+          echolinkNode: repeater?.echolinkNode,
+          irlpNode: repeater?.irlpNode,
+          wiresNode: repeater?.wiresNode,
         }),
       ]);
 
@@ -387,6 +400,7 @@ export function useSavedChannels() {
           callsign: parsed.callsigns[index],
           latitude: parsed.latitudes[index],
           longitude: parsed.longitudes[index],
+          ...linkedNodesForKind(parsed.kinds[index] ?? 'channel', parsed.linkedNodes[index]),
         }),
       );
 
@@ -403,6 +417,10 @@ export function useSavedChannels() {
             callsign: repeater.callsign || undefined,
             latitude: repeater.latitude,
             longitude: repeater.longitude,
+            allstarNode: repeater.allstarNode,
+            echolinkNode: repeater.echolinkNode,
+            irlpNode: repeater.irlpNode,
+            wiresNode: repeater.wiresNode,
           }),
         );
       }
@@ -434,6 +452,7 @@ export function useSavedChannels() {
           !match.callsign &&
           match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
         const nextName = callsignWasName ? undefined : match.name;
+        const nextNodes = mergeLinkedNodes(model, match, parsed.replaceLinkedNodes);
         const unchanged =
           nextUse === match.use &&
           nextOnAir === match.onAir &&
@@ -441,7 +460,8 @@ export function useSavedChannels() {
           nextCallsign === match.callsign &&
           nextName === match.name &&
           nextLatitude === match.latitude &&
-          nextLongitude === match.longitude;
+          nextLongitude === match.longitude &&
+          linkedNodesEqual(nextNodes, match);
 
         if (unchanged) {
           continue;
@@ -460,6 +480,7 @@ export function useSavedChannels() {
           callsign: nextCallsign,
           latitude: nextLatitude,
           longitude: nextLongitude,
+          ...nextNodes,
         });
         updated += 1;
       }

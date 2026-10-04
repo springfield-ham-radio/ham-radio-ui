@@ -7,6 +7,7 @@ import {
   toneSelectItems,
   toneToKey,
 } from '~/utils/channel-edit';
+import { parseLinkedNode } from '~/utils/linked-nodes';
 import { createBlankRadioChannel, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
@@ -24,6 +25,10 @@ const emit = defineEmits<{
       use?: RepeaterUse;
       onAir?: boolean;
       callsign?: string;
+      allstarNode?: string;
+      echolinkNode?: string;
+      irlpNode?: string;
+      wiresNode?: string;
       id?: SavedChannel['id'];
     },
   ];
@@ -41,6 +46,10 @@ const notes = ref('');
 const isRepeater = ref(false);
 const repeaterUse = shallowRef<RepeaterUse>('open');
 const onAir = shallowRef(true);
+const allstarNode = ref('');
+const echolinkNode = ref('');
+const irlpNode = ref('');
+const wiresNode = ref('');
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const isSaving = ref(false);
@@ -80,6 +89,10 @@ watch(
     isRepeater.value = props.channel?.kind === 'repeater';
     repeaterUse.value = props.channel?.use ?? 'open';
     onAir.value = props.channel?.onAir ?? true;
+    allstarNode.value = props.channel?.allstarNode ?? '';
+    echolinkNode.value = props.channel?.echolinkNode ?? '';
+    irlpNode.value = props.channel?.irlpNode ?? '';
+    wiresNode.value = props.channel?.wiresNode ?? '';
     receiveError.value = undefined;
     transmitError.value = undefined;
     isSaving.value = false;
@@ -121,6 +134,10 @@ async function save(): Promise<void> {
       use: isRepeater.value ? repeaterUse.value : undefined,
       onAir: isRepeater.value ? onAir.value : undefined,
       callsign: isRepeater.value ? callsign.value.trim() || undefined : undefined,
+      allstarNode: isRepeater.value ? parseLinkedNode(allstarNode.value) : undefined,
+      echolinkNode: isRepeater.value ? parseLinkedNode(echolinkNode.value) : undefined,
+      irlpNode: isRepeater.value ? parseLinkedNode(irlpNode.value) : undefined,
+      wiresNode: isRepeater.value ? parseLinkedNode(wiresNode.value) : undefined,
       id: props.channel?.id,
     });
   } finally {
@@ -188,6 +205,24 @@ async function save(): Promise<void> {
           </UFormField>
 
           <USwitch v-model="onAir" label="On-air" description="Turn this off when the repeater is off the air." />
+
+          <div class="space-y-3">
+            <p class="text-xs text-muted">Linked-system node numbers. Blank or 0 means the repeater has no node.</p>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <UFormField label="AllStar">
+                <UInput v-model="allstarNode" class="w-full tabular-nums" placeholder="Node" />
+              </UFormField>
+              <UFormField label="EchoLink">
+                <UInput v-model="echolinkNode" class="w-full tabular-nums" placeholder="Node" />
+              </UFormField>
+              <UFormField label="IRLP">
+                <UInput v-model="irlpNode" class="w-full tabular-nums" placeholder="Node" />
+              </UFormField>
+              <UFormField label="WIRES">
+                <UInput v-model="wiresNode" class="w-full tabular-nums" placeholder="Node" />
+              </UFormField>
+            </div>
+          </div>
         </template>
       </div>
     </template>
