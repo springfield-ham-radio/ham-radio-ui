@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { formatHexDiffAddress, memoryHexDiff, type MemoryHexCell } from '~/utils/driver-debug';
 
-const props = defineProps<{
-  before: Uint8Array;
-  after: Uint8Array;
-}>();
+const props = withDefaults(
+  defineProps<{
+    before: Uint8Array;
+    after: Uint8Array;
+    beforeLabel?: string;
+    afterLabel?: string;
+  }>(),
+  {
+    beforeLabel: 'First clone',
+    afterLabel: 'Second clone',
+  },
+);
 
 const diff = computed(() => memoryHexDiff(props.before, props.after));
 const rows = computed(() => diff.value.lines.filter((line) => line.kind === 'row'));
@@ -20,8 +28,8 @@ function cellClass(cell: MemoryHexCell): string {
       <thead>
         <tr class="text-left text-muted">
           <th class="sticky top-0 bg-elevated px-3 py-2 font-medium">Address</th>
-          <th class="sticky top-0 bg-elevated px-3 py-2 font-medium">First clone</th>
-          <th class="sticky top-0 bg-elevated px-3 py-2 font-medium">Second clone</th>
+          <th class="sticky top-0 bg-elevated px-3 py-2 font-medium">{{ beforeLabel }}</th>
+          <th class="sticky top-0 bg-elevated px-3 py-2 font-medium">{{ afterLabel }}</th>
         </tr>
       </thead>
       <tbody>

@@ -248,6 +248,18 @@ export function useRadio() {
     return transferCardId.value ?? cardId.value;
   }
 
+  /** Image and baseline for the card the write dialog was opened against. */
+  const writeTarget = computed(() => {
+    const session = readSession(transferCardId.value);
+
+    return {
+      memory: session?.memory,
+      baseline: session?.radioBaseline,
+      memoryMap: session?.settingsMemoryMap,
+      radioId: session?.activeRadioId,
+    };
+  });
+
   const memory = computed({
     get: () => readSession(cardId.value)?.memory,
     set: (value) => {
@@ -701,6 +713,107 @@ export function useRadio() {
         title: 'Write canceled',
         color: 'neutral',
         icon: 'i-lucide-ban',
+      });
+    }
+  }
+
+  /**
+   * Read the radio into `radioBaseline` without replacing the memory open in the editor.
+   * The write review uses that image to show what a write would change.
+   */
+  async function readRadioForWriteReview(serialPortPath: string, baudRate?: number): Promise<void> {
+    const sessionId = actingCardId();
+    const session = readSession(sessionId);
+
+    if (!sessionId || !session?.activeRadioId || !session.memory) {
+      toast.add({
+        title: 'Nothing to compare',
+        description: 'Open a memory file or read from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      return;
+    }
+
+    const radioId = session.activeRadioId;
+    const config = getConfiguration(radioId);
+
+    if (!config?.readMemory) {
+      toast.add({
+        title: 'Read not supported',
+        description: `${radioId.name} does not support reading memory from the radio.`,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return;
+    }
+
+    await sessionQueue(sessionId);
+
+    const progressIndicator = startProgress('import');
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+
+    try {
+      const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
+      progressOpen.value = false;
+
+      if (memoryData == undefined) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        toast.add({
+          title: 'Read canceled',
+          description: 'The loaded memory was not compared.',
+          color: 'neutral',
+          icon: 'i-lucide-ban',
+        });
+        return;
+      }
+
+      if (memoryData.length === 0) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        toast.add({
+          title: 'Could not read radio',
+          description: 'The radio returned an empty memory image.',
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
+        return;
+      }
+
+      patchSession(sessionId, { radioBaseline: memoryData.slice() });
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      toast.add({
+        title: 'Read radio',
+        description: 'Review compares the loaded memory with this image.',
+        color: 'success',
+        icon: 'i-hambench-radio-read',
+      });
+    } catch (cause) {
+      progressOpen.value = false;
+
+      if (isCancelledTransfer(cause)) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        toast.add({
+          title: 'Read canceled',
+          description: 'The loaded memory was not compared.',
+          color: 'neutral',
+          icon: 'i-lucide-ban',
+        });
+        return;
+      }
+
+      const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
+      logger.withError(cause).error('Failed to read radio for write review');
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      toast.add({
+        title: 'Could not read radio',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
       });
     }
   }
@@ -1412,6 +1525,8 @@ export function useRadio() {
     openReadFromRadio,
     openWriteToRadio,
     writeToRadio,
+    writeTarget,
+    readRadioForWriteReview,
     updateSettings,
     updateChannel,
     addChannel,
