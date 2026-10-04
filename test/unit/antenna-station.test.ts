@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   addAntennaToStore,
   addStationToStore,
+  antennaIsAtStation,
+  antennasAtStation,
   antennaDraftErrors,
   applyAntennaTypeToDraft,
   applyLicenseGridToHomeIfEmpty,
@@ -408,6 +410,38 @@ describe('station antennas', () => {
     store = removeAntennasForRadio(store, 'radio-ht');
     expect(store.antennas.map((antenna) => antenna.id)).toEqual(['ant-home']);
     expect(formatStationAntennaLogLabel(whip, 'UV-5R')).toBe('UV-5R · Signal Stick · Dual-band vertical · 1.5 m AGL');
+  });
+
+  it('should never list a radio-mounted antenna at a station, even when a station is removed', () => {
+    const whip = createStationAntenna(
+      {
+        nickname: 'Signal Stick',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-ht',
+      },
+      { id: 'ant-ht', now: 3 },
+    );
+    const homeAntenna = createStationAntenna(sampleDraft(), { id: 'ant-home', now: 1 });
+    const portable = createRadioStation({ nickname: 'Portable' }, { id: 'station-portable', now: 2 });
+    let store = addStationToStore(defaultStationAntennaStore(), portable);
+    store = addAntennaToStore(store, homeAntenna);
+    store = addAntennaToStore(store, whip);
+
+    expect(antennaIsAtStation(whip, undefined)).toBe(false);
+    expect(antennaIsAtStation(whip, HOME_STATION_ID)).toBe(false);
+    expect(antennaIsAtStation(homeAntenna, HOME_STATION_ID)).toBe(true);
+    expect(antennaIsAtStation(homeAntenna, undefined)).toBe(false);
+    expect(antennasAtStation(store, HOME_STATION_ID).map((antenna) => antenna.id)).toEqual(['ant-home']);
+    expect(antennasAtStation(store, 'station-portable')).toEqual([]);
+
+    store = removeStationFromStore(store, HOME_STATION_ID);
+
+    expect(store.antennas.map((antenna) => antenna.id)).toEqual(['ant-ht']);
+    expect(antennasAtStation(store)).toEqual([]);
+    expect(store.selectedId).toBeUndefined();
+    expect(antennasOnRadio(store, 'radio-ht').map((antenna) => antenna.id)).toEqual(['ant-ht']);
   });
 
   it('should fill a contact with the radio antenna when it is the only one that covers the band', () => {
