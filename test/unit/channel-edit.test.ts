@@ -32,6 +32,7 @@ import {
   parseChannelFieldValue,
   frequencyMHzFieldError,
   parseFrequencyMHz,
+  defaultRepeaterOffsetHz,
   patchFromDuplex,
   reorderProgrammedChannels,
   serializeChannelFieldValue,
@@ -633,6 +634,71 @@ describe('channel extras', () => {
     });
     expect(patchFromDuplex(146_520_000, 146_520_000, 'split')).toEqual({
       settings: { duplex: 'split', split: true },
+    });
+  });
+});
+
+describe('defaultRepeaterOffsetHz', () => {
+  it('uses 100 kHz on 10 m FM, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(29_500_000)).toBe(100_000);
+    expect(defaultRepeaterOffsetHz(29_600_000)).toBe(100_000);
+    expect(defaultRepeaterOffsetHz(29_700_000)).toBe(100_000);
+    expect(defaultRepeaterOffsetHz(29_499_999)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(29_700_001)).toBe(600_000);
+  });
+
+  it('uses 500 kHz on 6 m, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(50_000_000)).toBe(500_000);
+    expect(defaultRepeaterOffsetHz(52_000_000)).toBe(500_000);
+    expect(defaultRepeaterOffsetHz(54_000_000)).toBe(500_000);
+    expect(defaultRepeaterOffsetHz(49_999_999)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(54_000_001)).toBe(600_000);
+  });
+
+  it('uses 600 kHz on 2 m, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(144_000_000)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(146_520_000)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(148_000_000)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(143_999_999)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(148_000_001)).toBe(600_000);
+  });
+
+  it('uses 1.6 MHz on 1.25 m, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(222_000_000)).toBe(1_600_000);
+    expect(defaultRepeaterOffsetHz(223_500_000)).toBe(1_600_000);
+    expect(defaultRepeaterOffsetHz(225_000_000)).toBe(1_600_000);
+    expect(defaultRepeaterOffsetHz(221_999_999)).toBe(600_000);
+    expect(defaultRepeaterOffsetHz(225_000_001)).toBe(600_000);
+  });
+
+  it('uses 5 MHz on 70 cm, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(420_000_000)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(446_000_000)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(450_000_000)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(419_999_999)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(450_000_001)).toBe(5_000_000);
+  });
+
+  it('uses 25 MHz on 33 cm, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(902_000_000)).toBe(25_000_000);
+    expect(defaultRepeaterOffsetHz(927_500_000)).toBe(25_000_000);
+    expect(defaultRepeaterOffsetHz(928_000_000)).toBe(25_000_000);
+    expect(defaultRepeaterOffsetHz(901_999_999)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(928_000_001)).toBe(5_000_000);
+  });
+
+  it('uses 12 MHz on 23 cm, including the edges', () => {
+    expect(defaultRepeaterOffsetHz(1_240_000_000)).toBe(12_000_000);
+    expect(defaultRepeaterOffsetHz(1_270_000_000)).toBe(12_000_000);
+    expect(defaultRepeaterOffsetHz(1_300_000_000)).toBe(12_000_000);
+    expect(defaultRepeaterOffsetHz(1_239_999_999)).toBe(5_000_000);
+    expect(defaultRepeaterOffsetHz(1_300_000_001)).toBe(5_000_000);
+  });
+
+  it('applies the 1.25 m split when duplex is selected with no existing offset', () => {
+    expect(patchFromDuplex(224_000_000, 224_000_000, '-')).toEqual({
+      transmitFrequencyHz: 222_400_000,
+      settings: { duplex: '-', split: false },
     });
   });
 });
