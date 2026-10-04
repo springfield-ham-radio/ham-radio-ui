@@ -463,8 +463,8 @@ export function useRadio() {
    * With no card open, this is the same guest read as the Radio page button:
    * pick a model and port, then open a temporary clone.
    */
-  function openReadFromRadio(): void {
-    const id = cardId.value;
+  function openReadFromRadio(preferredSessionId?: string): void {
+    const id = preferredSessionId ?? cardId.value;
 
     if (!id) {
       if (configurations.value.length === 0) {
@@ -602,8 +602,9 @@ export function useRadio() {
   /**
    * Open the write dialog unless no memory is loaded.
    */
-  function openWriteToRadio(): void {
-    const session = readSession(cardId.value);
+  function openWriteToRadio(preferredSessionId?: string): void {
+    const id = preferredSessionId ?? cardId.value;
+    const session = readSession(id);
 
     if (!session?.memory || !session.activeRadioId) {
       toast.add({
@@ -615,7 +616,7 @@ export function useRadio() {
       return;
     }
 
-    transferCardId.value = cardId.value;
+    transferCardId.value = id;
     writeOpen.value = true;
   }
 
@@ -1342,8 +1343,8 @@ export function useRadio() {
     }
   }
 
-  async function openMemoryFile(): Promise<void> {
-    const sessionId = cardId.value;
+  async function openMemoryFile(preferredSessionId?: string): Promise<void> {
+    const sessionId = preferredSessionId ?? cardId.value;
 
     if (!sessionId) {
       toast.add({
@@ -1383,16 +1384,16 @@ export function useRadio() {
     }
   }
 
-  async function saveMemoryFile(): Promise<void> {
-    await saveMemory(false);
+  async function saveMemoryFile(preferredSessionId?: string): Promise<void> {
+    await saveMemory(false, preferredSessionId);
   }
 
-  async function saveMemoryFileAs(): Promise<void> {
-    await saveMemory(true);
+  async function saveMemoryFileAs(preferredSessionId?: string): Promise<void> {
+    await saveMemory(true, preferredSessionId);
   }
 
-  async function saveMemory(saveAs: boolean): Promise<void> {
-    const sessionId = cardId.value;
+  async function saveMemory(saveAs: boolean, preferredSessionId?: string): Promise<void> {
+    const sessionId = preferredSessionId ?? cardId.value;
     const session = readSession(sessionId);
 
     if (!sessionId || !session?.memory || !session.activeRadioId) {

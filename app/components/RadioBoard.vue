@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TabsItem } from '@nuxt/ui';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { useImportExportRunner } from '~/importExport/runner';
 import type { RadioBoardLayout } from '~/utils/radio-board';
 import { savedRadioModelLabel, type SavedRadio } from '~/utils/saved-radios';
 
 const { radios } = useSavedRadios();
-const { configurations, clearCardSession, openReadFromRadio } = useRadio();
+const { configurations, clearCardSession } = useRadio();
+const { entry, run } = useImportExportRunner();
+const readFromRadio = entry(IMPORT_EXPORT_IDS.readFromRadio);
 const {
   cards,
   layout,
@@ -173,10 +177,10 @@ async function closeRadio(id: string): Promise<void> {
       </p>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <UButton
-          label="Read from Radio"
+          :label="readFromRadio.label"
           color="primary"
-          icon="i-hambench-radio-read"
-          @click="openReadFromRadio"
+          :icon="readFromRadio.icon"
+          @click="run(readFromRadio.id)"
         />
         <UButton
           label="Open radio preferences"
@@ -197,10 +201,10 @@ async function closeRadio(id: string): Promise<void> {
       </p>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <UButton
-          label="Read from Radio"
+          :label="readFromRadio.label"
           color="primary"
-          icon="i-hambench-radio-read"
-          @click="openReadFromRadio"
+          :icon="readFromRadio.icon"
+          @click="run(readFromRadio.id)"
         />
         <UButton
           v-for="radio in radios"

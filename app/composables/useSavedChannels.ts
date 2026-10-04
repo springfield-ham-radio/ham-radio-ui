@@ -29,7 +29,9 @@ import {
   updateSavedChannel,
   type SavedChannel,
 } from '~/utils/saved-channels-db';
-import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportEntry } from '~/importExport/registry';
+import type { ImportExportHandlerInput } from '~/importExport/types';
 import {
   readChannelLibraryCsvWithPicker,
   saveChannelLibraryCsvWithPicker,
@@ -282,11 +284,11 @@ export function useSavedChannels() {
     }
   }
 
-  async function exportLibraryCsv(): Promise<void> {
+  async function exportLibraryCsv(input: ImportExportHandlerInput = {}): Promise<void> {
     try {
-      const exporting = scopedChannels.value;
+      const exporting = input.savedChannels ? [...input.savedChannels] : scopedChannels.value;
 
-      if (activeGroup.value && exporting.length === 0) {
+      if (!input.savedChannels && activeGroup.value && exporting.length === 0) {
         toast.add({
           title: 'Nothing to export',
           description: `${activeGroup.value.name} has no channels.`,
@@ -296,7 +298,15 @@ export function useSavedChannels() {
         return;
       }
 
-      const csv = serializeSavedChannelsCsv(exporting);
+      const rendered = await importExportEntry(IMPORT_EXPORT_IDS.exportChannelsCsv).handler({
+        savedChannels: exporting,
+      });
+      const csv = rendered.text;
+
+      if (!csv) {
+        return;
+      }
+
       const destination = await saveChannelLibraryCsvWithPicker(csv);
 
       if (!destination) {
@@ -325,7 +335,7 @@ export function useSavedChannels() {
     }
   }
 
-  async function importLibraryCsv(): Promise<number> {
+  async function importLibraryCsv(input: ImportExportHandlerInput = {}): Promise<number> {
     if (isPredefinedGroupId(activeGroupId.value)) {
       toast.add({
         title: 'Built-in group',
@@ -337,13 +347,20 @@ export function useSavedChannels() {
     }
 
     try {
-      const text = await readChannelLibraryCsvWithPicker();
+      const text = input.file?.text ?? (await readChannelLibraryCsvWithPicker());
 
       if (text === undefined) {
         return 0;
       }
 
-      const parsed = parseSavedChannelsCsv(text);
+      const rendered = await importExportEntry(IMPORT_EXPORT_IDS.importChannelsCsv).handler({
+        file: { text, name: input.file?.name },
+      });
+      const parsed = rendered.document;
+
+      if (!parsed) {
+        return 0;
+      }
 
       if (parsed.channels.length === 0) {
         toast.add({

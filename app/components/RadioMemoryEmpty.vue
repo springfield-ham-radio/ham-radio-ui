@@ -1,5 +1,10 @@
 <script setup lang="ts">
-const { openReadFromRadio, openMemoryFile } = useRadio();
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { useImportExportRunner } from '~/importExport/runner';
+
+const { entry, run } = useImportExportRunner();
+const readFromRadio = entry(IMPORT_EXPORT_IDS.readFromRadio);
+const openMemory = entry(IMPORT_EXPORT_IDS.openMemory);
 </script>
 
 <template>
@@ -7,17 +12,17 @@ const { openReadFromRadio, openMemoryFile } = useRadio();
     <p class="text-sm text-muted">Open a memory file or read from a radio to get started.</p>
     <div class="flex flex-wrap items-center justify-center gap-2">
       <UButton
-        icon="i-hambench-radio-read"
+        :icon="readFromRadio.icon"
         color="primary"
-        label="Read from Radio"
-        @click="openReadFromRadio"
+        :label="readFromRadio.label"
+        @click="run(readFromRadio.id)"
       />
       <UButton
-        icon="i-lucide-folder-open"
+        :icon="openMemory.icon"
         color="neutral"
         variant="outline"
-        label="Open Memory"
-        @click="openMemoryFile"
+        :label="openMemory.label"
+        @click="run(openMemory.id)"
       />
     </div>
   </div>

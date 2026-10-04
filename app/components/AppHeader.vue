@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportShortcut, runImportExport } from '~/importExport/registry';
 import { APP_NAME } from '~/utils/app-name';
 import { APP_VERSION } from '~/utils/app-version';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
@@ -7,7 +9,10 @@ import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 
 const route = useRoute();
 const router = useRouter();
-const { openMemoryFile, saveMemoryFile, saveMemoryFileAs, memoryFilePath } = useRadio();
+const { memoryFilePath } = useRadio();
+const openMemoryShortcut = importExportShortcut(IMPORT_EXPORT_IDS.openMemory);
+const saveMemoryShortcut = importExportShortcut(IMPORT_EXPORT_IDS.saveMemory);
+const saveMemoryAsShortcut = importExportShortcut(IMPORT_EXPORT_IDS.saveMemoryAs);
 const { enabled: developerMode } = useDeveloperMode();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
@@ -91,32 +96,46 @@ onMounted(() => {
   showBrowserFileActions.value = !isTauriRuntime();
 });
 
-defineShortcuts({
-  meta_o: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void openMemoryFile();
+const memoryShortcuts = {
+  ...(openMemoryShortcut
+    ? {
+        [openMemoryShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.openMemory);
+            }
+          },
+        },
       }
-    },
-  },
-  meta_s: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void saveMemoryFile();
+    : {}),
+  ...(saveMemoryShortcut
+    ? {
+        [saveMemoryShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.saveMemory);
+            }
+          },
+        },
       }
-    },
-  },
-  meta_shift_s: {
-    usingInput: true,
-    handler: () => {
-      if (showBrowserFileActions.value && isRadioPage.value) {
-        void saveMemoryFileAs();
+    : {}),
+  ...(saveMemoryAsShortcut
+    ? {
+        [saveMemoryAsShortcut]: {
+          usingInput: true,
+          handler: () => {
+            if (showBrowserFileActions.value && isRadioPage.value) {
+              void runImportExport(IMPORT_EXPORT_IDS.saveMemoryAs);
+            }
+          },
+        },
       }
-    },
-  },
-});
+    : {}),
+};
+
+defineShortcuts(memoryShortcuts);
 </script>
 
 <template>

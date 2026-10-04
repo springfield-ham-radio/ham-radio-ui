@@ -60,6 +60,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         true,
         None::<&str>,
     )?;
+    // Menu ids and accelerators match the import/export registry
+    // (`app/importExport/ids.ts`). The webview looks the entry up by id.
     let open_memory = MenuItem::with_id(
         app,
         "open-memory",

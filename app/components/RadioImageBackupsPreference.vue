@@ -12,12 +12,15 @@ import {
   type RadioImageBackupListing,
   type RadioImageBackupSettings,
 } from '~/utils/radio-image-backup';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { useImportExportRunner } from '~/importExport/runner';
 import { listRadioImageBackups, showRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const router = useRouter();
 const toast = useToast();
-const { restoreRadioImageBackup } = useRadio();
+const { entry, run } = useImportExportRunner();
+const restoreRadioImage = entry(IMPORT_EXPORT_IDS.restoreRadioImage);
 
 const desktop = isTauriRuntime();
 const settings = ref<RadioImageBackupSettings>(readRadioImageBackupSettings());
@@ -113,9 +116,9 @@ async function restore(fileName: string): Promise<void> {
   restoring.value = fileName;
 
   try {
-    const restored = await restoreRadioImageBackup(fileName);
+    const restored = await run(restoreRadioImage.id, { file: { name: fileName } });
 
-    if (restored) {
+    if ((restored.count ?? 0) > 0) {
       await router.push('/');
     }
   } finally {
@@ -216,11 +219,11 @@ const defaults = defaultRadioImageBackupSettings();
               <p class="truncate text-xs text-muted">{{ row.detail }}</p>
             </div>
             <UButton
-              label="Restore"
+              :label="restoreRadioImage.label"
               color="neutral"
               variant="outline"
               size="sm"
-              icon="i-lucide-archive-restore"
+              :icon="restoreRadioImage.icon"
               :loading="restoring === row.fileName"
               :disabled="restoring !== undefined"
               @click="restore(row.fileName)"

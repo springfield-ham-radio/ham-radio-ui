@@ -11,6 +11,8 @@ import {
 import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
+import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
@@ -35,14 +37,9 @@ const {
   updateSettings,
   updateChannel,
   addChannel,
-  addChannels,
   reorderChannels,
   removeChannels,
   saveSerialLog,
-  openReadFromRadio,
-  openWriteToRadio,
-  openMemoryFile,
-  saveMemoryFile,
   savedRadio,
   cardRadio,
   isLoading,
@@ -58,7 +55,13 @@ const {
   assessmentFor,
   getTransmitPrivilegeWarning,
 } = useOperatorLicense();
-const { saveChannels } = useSavedChannels();
+const { entry, run } = useImportExportRunner();
+const openMemory = entry(IMPORT_EXPORT_IDS.openMemory);
+const saveMemory = entry(IMPORT_EXPORT_IDS.saveMemory);
+const readFromRadio = entry(IMPORT_EXPORT_IDS.readFromRadio);
+const writeToRadio = entry(IMPORT_EXPORT_IDS.writeToRadio);
+const addFromLibrary = entry(IMPORT_EXPORT_IDS.addFromLibrary);
+const saveToLibrary = entry(IMPORT_EXPORT_IDS.saveToLibrary);
 
 interface DisplayChannelRow extends ChannelRow {
   privilegeWarning?: ReturnType<typeof getTransmitPrivilegeWarning>;
@@ -550,7 +553,7 @@ function onAddFromLibrary(sources: SavedChannel[]): void {
     occupiedChannelNumbers.value,
     settingsMemoryMap.value,
   );
-  void addChannels(assignment.programmed);
+  void run(addFromLibrary.id, { programmedChannels: assignment.programmed });
 }
 
 function requestRemoveChannel(channelNumber: number): void {
@@ -605,7 +608,7 @@ async function saveSelectedToLibrary(): Promise<void> {
   isSavingToLibrary.value = true;
 
   try {
-    await saveChannels(portableChannels);
+    await run(saveToLibrary.id, { channels: portableChannels });
     clearRowSelection();
   } catch {
     // Toast is shown by useSavedChannels.
@@ -688,50 +691,50 @@ async function onSaveSerialLog(): Promise<void> {
               class="max-w-56 truncate"
             />
           </UTooltip>
-          <UTooltip text="Open Memory">
+          <UTooltip :text="openMemory.label">
             <UButton
-              icon="i-lucide-folder-open"
+              :icon="openMemory.icon"
               color="neutral"
               variant="outline"
               size="sm"
-              aria-label="Open Memory"
-              @click="openMemoryFile"
+              :aria-label="openMemory.label"
+              @click="run(openMemory.id)"
             />
           </UTooltip>
           <UTooltip :text="saveMemoryTooltip">
             <span class="inline-flex">
               <UButton
-                icon="i-lucide-save"
+                :icon="saveMemory.icon"
                 color="neutral"
                 variant="outline"
                 size="sm"
                 :disabled="!hasLoadedMemory"
-                aria-label="Save"
-                @click="saveMemoryFile"
+                :aria-label="saveMemory.label"
+                @click="run(saveMemory.id)"
               />
             </span>
           </UTooltip>
           <USeparator orientation="vertical" class="h-5" />
-          <UTooltip text="Read from Radio">
+          <UTooltip :text="readFromRadio.label">
             <UButton
-              icon="i-hambench-radio-read"
+              :icon="readFromRadio.icon"
               color="neutral"
               variant="outline"
               size="sm"
-              aria-label="Read from Radio"
-              @click="openReadFromRadio"
+              :aria-label="readFromRadio.label"
+              @click="run(readFromRadio.id)"
             />
           </UTooltip>
           <UTooltip :text="writeMemoryTooltip">
             <span class="inline-flex">
               <UButton
-                icon="i-hambench-radio-write"
+                :icon="writeToRadio.icon"
                 color="neutral"
                 variant="outline"
                 size="sm"
                 :disabled="!canWriteMemory"
-                aria-label="Write to Radio"
-                @click="openWriteToRadio"
+                :aria-label="writeToRadio.label"
+                @click="run(writeToRadio.id)"
               />
             </span>
           </UTooltip>
@@ -786,11 +789,11 @@ async function onSaveSerialLog(): Promise<void> {
               <UTooltip :text="addFromLibraryTooltip">
                 <span class="inline-flex">
                   <UButton
-                    icon="i-lucide-library"
+                    :icon="addFromLibrary.icon"
                     color="primary"
                     variant="soft"
                     size="sm"
-                    label="Add from library"
+                    :label="addFromLibrary.label"
                     :disabled="!canAddChannel"
                     @click="libraryAddOpen = true"
                   />
@@ -806,11 +809,11 @@ async function onSaveSerialLog(): Promise<void> {
                 @click="requestRemoveSelected"
               />
               <UButton
-                icon="i-lucide-bookmark"
+                :icon="saveToLibrary.icon"
                 color="primary"
                 variant="soft"
                 size="sm"
-                label="Save to library"
+                :label="saveToLibrary.label"
                 :disabled="selectedCount === 0 || isSavingToLibrary"
                 :loading="isSavingToLibrary"
                 @click="saveSelectedToLibrary"
