@@ -5,6 +5,7 @@ import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import { HOME_STATION_ID } from '~/utils/antenna-station';
+import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-location';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isTripChannelGroup } from '~/utils/channel-groups';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
@@ -45,6 +46,11 @@ const {
   renameGroup,
   removeGroup,
 } = useSavedChannels();
+
+onMounted(() => {
+  void refresh();
+});
+
 const { addTargets } = useRadio();
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
@@ -120,10 +126,12 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
     });
   }
 
-  const distanceSort = sorting.value.find((entry) => entry.id === 'distance');
+  const primarySort = sorting.value[0];
 
-  if (distanceStartPoint.value && distanceSort) {
-    rows = orderTripChannels(rows, distanceStartPoint.value, distanceSort.desc ? 'desc' : 'asc');
+  if (primarySort?.id === 'distance' && distanceStartPoint.value) {
+    rows = orderTripChannels(rows, distanceStartPoint.value, primarySort.desc ? 'desc' : 'asc');
+  } else if (primarySort?.id === 'location') {
+    rows = sortChannelsByLocation(rows, primarySort.desc ? 'desc' : 'asc');
   }
 
   return rows.map((channel) => {
@@ -310,6 +318,13 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     id: 'callsign',
     header: 'Call sign',
     cell: ({ row }) => (row.original.kind === 'repeater' ? row.original.callsign ?? '' : ''),
+  },
+  {
+    id: 'location',
+    accessorFn: (row: DisplaySavedChannel) => formatChannelLocation(row),
+    header: 'Location',
+    enableSorting: true,
+    cell: ({ row }) => formatChannelLocation(row.original),
   },
   { accessorKey: 'band', header: 'Band' },
   {
@@ -623,6 +638,12 @@ async function onSave(payload: {
   echolink?: boolean;
   irlp?: boolean;
   wires?: boolean;
+  city?: string;
+  county?: string;
+  state?: string;
+  country?: string;
+  landmark?: string;
+  modes?: string;
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -643,6 +664,15 @@ async function onSave(payload: {
         callsign: kind === 'repeater' ? payload.callsign : undefined,
         latitude: editingChannel.value?.latitude,
         longitude: editingChannel.value?.longitude,
+        sourceKey: editingChannel.value?.sourceKey,
+        sourceFormat: editingChannel.value?.sourceFormat,
+        lastUpdate: editingChannel.value?.lastUpdate,
+        city: kind === 'repeater' ? payload.city : undefined,
+        county: kind === 'repeater' ? payload.county : undefined,
+        state: kind === 'repeater' ? payload.state : undefined,
+        country: kind === 'repeater' ? payload.country : undefined,
+        landmark: kind === 'repeater' ? payload.landmark : undefined,
+        modes: kind === 'repeater' ? payload.modes : undefined,
         allstar: kind === 'repeater' ? payload.allstar : undefined,
         echolink: kind === 'repeater' ? payload.echolink : undefined,
         irlp: kind === 'repeater' ? payload.irlp : undefined,
@@ -667,6 +697,12 @@ async function onSave(payload: {
         echolinkNode: payload.echolinkNode,
         irlpNode: payload.irlpNode,
         wiresNode: payload.wiresNode,
+        city: payload.city,
+        county: payload.county,
+        state: payload.state,
+        country: payload.country,
+        landmark: payload.landmark,
+        modes: payload.modes,
       });
     }
 
@@ -699,10 +735,6 @@ async function onImportCsv(): Promise<void> {
     isImporting.value = false;
   }
 }
-
-onMounted(() => {
-  void refresh();
-});
 </script>
 
 <template>
