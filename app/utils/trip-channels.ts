@@ -1,0 +1,189 @@
+import type { GeoPoint } from '~/utils/maidenhead';
+import { haversineDistanceKm, isValidLatitude, isValidLongitude, maidenheadToLatLon } from '~/utils/maidenhead';
+import type { RepeaterUse } from '~/utils/saved-channels-db';
+import { bandNameForFrequency } from '~/utils/transmit-privileges';
+
+/** Select value when the trip list is not sorted from a point. */
+export const TRIP_START_NONE = 'none';
+
+/** Select value that shows typed latitude and longitude fields. */
+export const TRIP_START_COORDINATES = 'coordinates';
+
+const KILOMETERS_PER_MILE = 1.609344;
+
+export interface TripTrimFilters {
+  /** Empty string keeps every band. */
+  band: string;
+  /** Keep repeaters whose Use is open. Rows without Use are hidden. */
+  openOnly: boolean;
+  /** Keep repeaters marked on-air. Rows without On-air are hidden. */
+  onAirOnly: boolean;
+}
+
+export interface TripLocatable {
+  latitude?: number;
+  longitude?: number;
+  use?: RepeaterUse;
+  onAir?: boolean;
+  transmitFrequency: number;
+}
+
+/**
+ * Point for a saved station. Stored coordinates win over the Maidenhead cell center.
+ */
+export function stationStartPoint(station: {
+  latitude?: number;
+  longitude?: number;
+  gridsquare?: string;
+}): GeoPoint | undefined {
+  if (isValidLatitude(station.latitude) && isValidLongitude(station.longitude)) {
+    return { latitude: station.latitude, longitude: station.longitude };
+  }
+
+  if (station.gridsquare) {
+    return maidenheadToLatLon(station.gridsquare);
+  }
+
+  return undefined;
+}
+
+/**
+ * Decimal degrees typed as the trip start. Incomplete or out-of-range text yields no point.
+ */
+export function parseTypedTripCoordinates(latitudeText: string, longitudeText: string): GeoPoint | undefined {
+  const latitudeRaw = latitudeText.trim();
+  const longitudeRaw = longitudeText.trim();
+
+  if (!latitudeRaw || !longitudeRaw) {
+    return undefined;
+  }
+
+  const latitude = Number(latitudeRaw);
+  const longitude = Number(longitudeRaw);
+
+  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+    return undefined;
+  }
+
+  return { latitude, longitude };
+}
+
+/**
+ * Error for one typed coordinate. Blank text is not an error yet.
+ */
+export function typedCoordinateError(text: string, axis: 'latitude' | 'longitude'): string | undefined {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
+
+  if (axis === 'latitude' ? isValidLatitude(value) : isValidLongitude(value)) {
+    return undefined;
+  }
+
+  return axis === 'latitude' ? 'Enter a latitude from -90 to 90' : 'Enter a longitude from -180 to 180';
+}
+
+/**
+ * Band names present on the rows, in first-seen order.
+ */
+export function uniqueTripBands(channels: readonly { transmitFrequency: number }[]): string[] {
+  const bands: string[] = [];
+
+  for (const channel of channels) {
+    const band = bandNameForFrequency(channel.transmitFrequency);
+
+    if (band && !bands.includes(band)) {
+      bands.push(band);
+    }
+  }
+
+  return bands;
+}
+
+/**
+ * Hide rows that fail the trip filters. Unset Use or On-air does not match a filter that asks for it.
+ */
+export function trimTripChannels<T extends TripLocatable>(channels: readonly T[], filters: TripTrimFilters): T[] {
+  return channels.filter((channel) => {
+    if (filters.band && bandNameForFrequency(channel.transmitFrequency) !== filters.band) {
+      return false;
+    }
+
+    if (filters.openOnly && channel.use !== 'open') {
+      return false;
+    }
+
+    if (filters.onAirOnly && channel.onAir !== true) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Straight-line kilometers from the start, or undefined when the row has no coordinates.
+ */
+export function tripDistanceKm(
+  channel: { latitude?: number; longitude?: number },
+  start: GeoPoint | undefined,
+): number | undefined {
+  if (!start || !isValidLatitude(channel.latitude) || !isValidLongitude(channel.longitude)) {
+    return undefined;
+  }
+
+  return haversineDistanceKm(start, { latitude: channel.latitude, longitude: channel.longitude });
+}
+
+/**
+ * Order by straight-line distance from `start`. Rows without coordinates stay at the end, in their previous order.
+ * With no start point the input order is kept.
+ */
+export function orderTripChannels<T extends { latitude?: number; longitude?: number }>(
+  channels: readonly T[],
+  start: GeoPoint | undefined,
+): T[] {
+  if (!start) {
+    return [...channels];
+  }
+
+  return channels
+    .map((channel, index) => ({
+      channel,
+      index,
+      distanceKm: tripDistanceKm(channel, start),
+    }))
+    .sort((left, right) => {
+      if (left.distanceKm === undefined && right.distanceKm === undefined) {
+        return left.index - right.index;
+      }
+
+      if (left.distanceKm === undefined) {
+        return 1;
+      }
+
+      if (right.distanceKm === undefined) {
+        return -1;
+      }
+
+      const delta = left.distanceKm - right.distanceKm;
+
+      return delta === 0 ? left.index - right.index : delta;
+    })
+    .map((row) => row.channel);
+}
+
+/**
+ * Miles label for a trip distance column. `—` when the row cannot be placed.
+ */
+export function formatTripDistance(distanceKm: number | undefined): string {
+  if (distanceKm === undefined) {
+    return '—';
+  }
+
+  return `${(distanceKm / KILOMETERS_PER_MILE).toFixed(1)} mi`;
+}

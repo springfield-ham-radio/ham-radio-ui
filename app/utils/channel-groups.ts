@@ -8,6 +8,9 @@ export const CHANNEL_GROUP_NAME_MAX_LENGTH = 40;
 /** Tab labels that cannot be used for a group the operator creates. */
 export const RESERVED_CHANNEL_GROUP_NAMES = ['All', 'Weather', 'FRS', 'GMRS'] as const;
 
+/** Ordinary library folder, or a trip list built from an imported route export. */
+export type ChannelGroupKind = 'group' | 'trip';
+
 export interface ChannelGroup {
   id: string;
   name: string;
@@ -16,6 +19,16 @@ export interface ChannelGroup {
   /** Built-in groups are not stored and cannot be renamed or removed. */
   builtin?: boolean;
   icon?: string;
+  /** Omitted on built-in groups. Stored groups default to `group`. */
+  kind?: ChannelGroupKind;
+}
+
+export function channelGroupKindFromDb(value: string | null | undefined): ChannelGroupKind {
+  return value === 'trip' ? 'trip' : 'group';
+}
+
+export function isTripChannelGroup(group: Pick<ChannelGroup, 'kind'> | undefined): boolean {
+  return group?.kind === 'trip';
 }
 
 export interface ChannelGroupMembership {

@@ -5,6 +5,7 @@ import {
   formatLatitude,
   formatLongitude,
   isMaidenheadGrid,
+  haversineDistanceKm,
   latLonToMaidenhead,
   maidenheadToLatLon,
   normalizeMaidenhead,
@@ -96,5 +97,10 @@ describe('maidenhead', () => {
     expect(parseDmsInput({ degrees: '90', minutes: '0', seconds: '0.01', hemisphere: 'N' }, 'latitude').error).toMatch(
       /90/,
     );
+  });
+
+  it('measures great-circle distance in kilometers', () => {
+    expect(haversineDistanceKm({ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0 })).toBe(0);
+    expect(haversineDistanceKm({ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 1 })).toBeCloseTo(111.195, 2);
   });
 });

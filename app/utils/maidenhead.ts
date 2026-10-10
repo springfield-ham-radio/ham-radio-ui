@@ -126,6 +126,29 @@ export function isValidLongitude(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= MIN_LONGITUDE && value <= MAX_LONGITUDE;
 }
 
+/** Mean Earth radius used by the haversine helper. */
+const EARTH_RADIUS_KM = 6371.0088;
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+/**
+ * Great-circle distance in kilometers between two points.
+ * Trip lists and library distance sorting share this helper. It does not call a network service.
+ */
+export function haversineDistanceKm(from: GeoPoint, to: GeoPoint): number {
+  const latitudeFrom = toRadians(from.latitude);
+  const latitudeTo = toRadians(to.latitude);
+  const latitudeDelta = latitudeTo - latitudeFrom;
+  const longitudeDelta = toRadians(to.longitude - from.longitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(latitudeFrom) * Math.cos(latitudeTo) * Math.sin(longitudeDelta / 2) ** 2;
+
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(haversine)));
+}
+
 export type CoordinateAxis = 'latitude' | 'longitude';
 export type LatitudeHemisphere = 'N' | 'S';
 export type LongitudeHemisphere = 'E' | 'W';

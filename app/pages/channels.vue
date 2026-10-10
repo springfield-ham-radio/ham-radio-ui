@@ -4,10 +4,24 @@ import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
+import { formatStationSummary, hasStationLocation } from '~/utils/antenna-station';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
+import { isTripChannelGroup } from '~/utils/channel-groups';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
+import {
+  formatTripDistance,
+  orderTripChannels,
+  parseTypedTripCoordinates,
+  stationStartPoint,
+  trimTripChannels,
+  tripDistanceKm,
+  TRIP_START_COORDINATES,
+  TRIP_START_NONE,
+  typedCoordinateError,
+  uniqueTripBands,
+} from '~/utils/trip-channels';
 
 useHead({ title: 'Channels' });
 
@@ -36,6 +50,7 @@ const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
 const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
 const addToRadio = entry(IMPORT_EXPORT_IDS.addToRadio);
 const { focusedCardId } = useRadioBoard();
+const { stations } = useStationAntennas();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
@@ -45,7 +60,13 @@ const editingChannel = ref<SavedChannel | undefined>();
 const addToRadioOpen = ref(false);
 const rowSelection = ref<Record<string, boolean>>({});
 const groupNameOpen = shallowRef(false);
-const groupNameMode = shallowRef<'empty' | 'selection' | 'rename'>('empty');
+const groupNameMode = shallowRef<'empty' | 'selection' | 'rename' | 'trip'>('empty');
+const tripStartId = ref(TRIP_START_NONE);
+const tripLatitudeText = ref('');
+const tripLongitudeText = ref('');
+const tripBand = ref('all');
+const tripOpenOnly = ref(false);
+const tripOnAirOnly = ref(false);
 const isSavingGroup = shallowRef(false);
 const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
@@ -54,12 +75,55 @@ const isDeletingChannels = shallowRef(false);
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
+  distanceLabel: string;
 }
 
+const isTripGroup = computed(() => isTripChannelGroup(activeGroup.value));
+const tripStartPoint = computed(() => {
+  if (tripStartId.value === TRIP_START_COORDINATES) {
+    return parseTypedTripCoordinates(tripLatitudeText.value, tripLongitudeText.value);
+  }
+
+  const station = stations.value.find((entry) => entry.id === tripStartId.value);
+  return station ? stationStartPoint(station) : undefined;
+});
+const tripStartItems = computed(() => [
+  { label: 'None', value: TRIP_START_NONE },
+  ...stations.value.filter((station) => hasStationLocation(station)).map((station) => ({
+    label: formatStationSummary(station),
+    value: station.id,
+  })),
+  { label: 'Type coordinates', value: TRIP_START_COORDINATES },
+]);
+const tripBandItems = computed(() => [
+  { label: 'All bands', value: 'all' },
+  ...uniqueTripBands(filteredChannels.value).map((band) => ({ label: band, value: band })),
+]);
+const tripLatitudeError = computed(() =>
+  tripStartId.value === TRIP_START_COORDINATES ? typedCoordinateError(tripLatitudeText.value, 'latitude') : undefined,
+);
+const tripLongitudeError = computed(() =>
+  tripStartId.value === TRIP_START_COORDINATES ? typedCoordinateError(tripLongitudeText.value, 'longitude') : undefined,
+);
+
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
-  return filteredChannels.value.map((channel) => ({
+  let rows = filteredChannels.value;
+
+  if (isTripGroup.value) {
+    rows = orderTripChannels(
+      trimTripChannels(rows, {
+        band: tripBand.value === 'all' ? '' : tripBand.value,
+        openOnly: tripOpenOnly.value,
+        onAirOnly: tripOnAirOnly.value,
+      }),
+      tripStartPoint.value,
+    );
+  }
+
+  return rows.map((channel) => ({
     ...channel,
     band: bandNameForFrequency(channel.transmitFrequency),
+    distanceLabel: formatTripDistance(tripDistanceKm(channel, tripStartPoint.value)),
   }));
 });
 
@@ -138,6 +202,10 @@ const emptyMessage = computed(() => {
     return 'Select rows and choose Add to radio to copy these channels.';
   }
 
+  if (isTripGroup.value) {
+    return 'This trip is empty. Import the route CSV you exported, then order it from a start point.';
+  }
+
   return activeGroup.value
     ? 'This group is empty. Add a channel or import a CSV to fill it.'
     : 'No saved channels yet. Add one here, import a RepeaterBook or CHIRP CSV, or save memory channels from the Radio page.';
@@ -147,11 +215,19 @@ const groupNameTitle = computed(() => {
     return 'Rename group';
   }
 
+  if (groupNameMode.value === 'trip') {
+    return 'New trip group';
+  }
+
   return groupNameMode.value === 'selection' ? 'New group from selection' : 'New empty group';
 });
 const groupNameDescription = computed(() => {
   if (groupNameMode.value === 'rename') {
     return 'Change the name shown on this group\'s tab.';
+  }
+
+  if (groupNameMode.value === 'trip') {
+    return 'Name the trip. HamBench creates the group, then opens Import CSV for a route export you already made.';
   }
 
   if (groupNameMode.value === 'selection') {
@@ -161,7 +237,14 @@ const groupNameDescription = computed(() => {
 
   return 'Create an empty group, then import a CSV to fill it.';
 });
-const groupNameConfirmLabel = computed(() => (groupNameMode.value === 'rename' ? 'Rename' : 'Create group'));
+const groupNameConfirmLabel = computed(() => {
+  if (groupNameMode.value === 'rename') {
+    return 'Rename';
+  }
+
+  return groupNameMode.value === 'trip' ? 'Create trip group' : 'Create group';
+});
+const groupNamePlaceholder = computed(() => (groupNameMode.value === 'trip' ? 'I-70 to Denver' : 'Travel'));
 const groupNameInitial = computed(() => (groupNameMode.value === 'rename' ? activeGroup.value?.name : undefined));
 const groupNameExisting = computed(() => {
   if (groupNameMode.value !== 'rename' || !activeGroup.value) {
@@ -232,6 +315,15 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     header: 'RX Tone',
     cell: ({ row }) => formatSavedTone(row.original.receiveTone),
   },
+  ...(isTripGroup.value && tripStartPoint.value
+    ? [
+        {
+          id: 'distance',
+          header: 'Distance',
+          cell: ({ row }: { row: { original: DisplaySavedChannel } }) => row.original.distanceLabel,
+        },
+      ]
+    : []),
   {
     id: 'use',
     header: 'Use',
@@ -250,6 +342,12 @@ watch(activeGroupId, () => {
   rowSelection.value = {};
 });
 
+watch(tripBandItems, (items) => {
+  if (!items.some((item) => item.value === tripBand.value)) {
+    tripBand.value = 'all';
+  }
+});
+
 function openEmptyGroup(): void {
   groupNameMode.value = 'empty';
   groupNameOpen.value = true;
@@ -264,6 +362,11 @@ function openGroupFromSelection(): void {
   groupNameOpen.value = true;
 }
 
+function openTripGroup(): void {
+  groupNameMode.value = 'trip';
+  groupNameOpen.value = true;
+}
+
 function openRenameGroup(): void {
   if (!activeGroup.value) {
     return;
@@ -275,12 +378,17 @@ function openRenameGroup(): void {
 
 async function confirmGroupName(name: string): Promise<void> {
   isSavingGroup.value = true;
+  const mode = groupNameMode.value;
+  let importRoute = false;
 
   try {
-    if (groupNameMode.value === 'rename' && activeGroup.value) {
+    if (mode === 'rename' && activeGroup.value) {
       await renameGroup(activeGroup.value.id, name);
+    } else if (mode === 'trip') {
+      await createGroup(name, [], 'trip');
+      importRoute = true;
     } else {
-      const channelIds = groupNameMode.value === 'selection' ? selectedLibraryChannels.value.map((channel) => channel.id) : [];
+      const channelIds = mode === 'selection' ? selectedLibraryChannels.value.map((channel) => channel.id) : [];
       await createGroup(name, channelIds);
       rowSelection.value = {};
     }
@@ -290,6 +398,10 @@ async function confirmGroupName(name: string): Promise<void> {
     // Toast is shown by the composable.
   } finally {
     isSavingGroup.value = false;
+  }
+
+  if (importRoute) {
+    await onImportCsv();
   }
 }
 
@@ -417,6 +529,8 @@ async function onSave(payload: {
         use: kind === 'repeater' ? payload.use : undefined,
         onAir: kind === 'repeater' ? payload.onAir : undefined,
         callsign: kind === 'repeater' ? payload.callsign : undefined,
+        latitude: editingChannel.value?.latitude,
+        longitude: editingChannel.value?.longitude,
         createdAt: editingChannel.value?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
@@ -482,6 +596,16 @@ onMounted(() => {
             aria-label="Export channel library to CSV"
             :loading="isExporting"
             @click="onExportCsv"
+          />
+        </UTooltip>
+        <UTooltip text="Create a trip group, then import a route CSV you exported">
+          <UButton
+            icon="i-lucide-route"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            label="New trip group"
+            @click="openTripGroup"
           />
         </UTooltip>
         <UTooltip :text="newGroupTooltip">
@@ -566,6 +690,33 @@ onMounted(() => {
       size="sm"
       class="w-full max-w-sm"
     />
+
+    <div v-if="isTripGroup" class="flex flex-wrap items-end gap-x-3 gap-y-2">
+      <UFormField label="Distance from" class="w-64">
+        <USelect
+          v-model="tripStartId"
+          :items="tripStartItems"
+          value-key="value"
+          color="neutral"
+          size="sm"
+          class="w-full"
+        />
+      </UFormField>
+      <UFormField v-if="tripStartId === TRIP_START_COORDINATES" label="Latitude" :error="tripLatitudeError" class="w-32">
+        <UInput v-model="tripLatitudeText" placeholder="39.0997" size="sm" class="w-full" aria-label="Start latitude" />
+      </UFormField>
+      <UFormField v-if="tripStartId === TRIP_START_COORDINATES" label="Longitude" :error="tripLongitudeError" class="w-32">
+        <UInput v-model="tripLongitudeText" placeholder="-94.5786" size="sm" class="w-full" aria-label="Start longitude" />
+      </UFormField>
+      <UFormField label="Band" class="w-36">
+        <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
+      </UFormField>
+      <UCheckbox v-model="tripOpenOnly" label="Open use" />
+      <UCheckbox v-model="tripOnAirOnly" label="On-air" />
+      <p v-if="tripStartPoint" class="basis-full text-xs text-muted">
+        Sorted by straight-line distance. Rows without coordinates stay last.
+      </p>
+    </div>
 
     <UAlert
       v-if="error"
@@ -663,6 +814,7 @@ onMounted(() => {
       :confirm-label="groupNameConfirmLabel"
       :existing-names="groupNameExisting"
       :initial-name="groupNameInitial"
+      :placeholder="groupNamePlaceholder"
       :pending="isSavingGroup"
       @confirm="confirmGroupName"
     />

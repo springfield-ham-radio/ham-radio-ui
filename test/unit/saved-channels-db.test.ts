@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType, type RadioChannel } from '@springfield/ham-radio-api';
 import {
+  coordinatesFromPair,
   matchesSavedChannelSearch,
   radioChannelToSavedChannel,
   radioToneFromDb,
@@ -44,6 +45,8 @@ describe('saved-channels-db', () => {
         use_type: 'closed',
         on_air: 0,
         callsign: 'WJ1L',
+        latitude: 43.5018912,
+        longitude: -70.7260259,
         created_at: 1_000,
         updated_at: 2_000,
       };
@@ -61,8 +64,18 @@ describe('saved-channels-db', () => {
       expect(model.callsign).toBe('WJ1L');
       expect(model.use).toBe('closed');
       expect(model.onAir).toBe(false);
+      expect(model.latitude).toBe(43.5018912);
+      expect(model.longitude).toBe(-70.7260259);
       expect(model.createdAt).toBe(1_000);
       expect(model.updatedAt).toBe(2_000);
+    });
+  });
+
+  describe('coordinatesFromPair', () => {
+    it('keeps a pair only when both coordinates are in range', () => {
+      expect(coordinatesFromPair(39.1, -94.5)).toEqual({ latitude: 39.1, longitude: -94.5 });
+      expect(coordinatesFromPair(39.1, undefined)).toEqual({});
+      expect(coordinatesFromPair(91, -94.5)).toEqual({});
     });
   });
 
