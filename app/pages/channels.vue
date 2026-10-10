@@ -34,6 +34,7 @@ const {
   isLoading,
   error,
   search,
+  refresh,
   createChannel,
   updateChannel,
   removeChannel,
@@ -45,6 +46,11 @@ const {
   renameGroup,
   removeGroup,
 } = useSavedChannels();
+
+onMounted(() => {
+  void refresh();
+});
+
 const { addTargets } = useRadio();
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
@@ -729,7 +735,6 @@ async function onImportCsv(): Promise<void> {
     isImporting.value = false;
   }
 }
-
 </script>
 
 <template>
