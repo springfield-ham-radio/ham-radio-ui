@@ -488,6 +488,21 @@ ALTER TABLE channel_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group';
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "add_saved_channels_linked_nodes",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN allstar_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN echolink_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN irlp_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN wires_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN allstar_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN echolink_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN irlp_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN wires_linked INTEGER NOT NULL DEFAULT 0;
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

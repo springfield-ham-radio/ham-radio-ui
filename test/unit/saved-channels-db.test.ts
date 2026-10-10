@@ -47,6 +47,14 @@ describe('saved-channels-db', () => {
         callsign: 'WJ1L',
         latitude: 43.5018912,
         longitude: -70.7260259,
+        allstar_node: '5517',
+        echolink_node: '0',
+        irlp_node: null,
+        wires_node: ' 1234 ',
+        allstar_linked: 1,
+        echolink_linked: 1,
+        irlp_linked: 0,
+        wires_linked: 0,
         created_at: 1_000,
         updated_at: 2_000,
       };
@@ -62,6 +70,14 @@ describe('saved-channels-db', () => {
       expect(model.receiveTone).toEqual({ tone: 23, type: RadioToneType.DCS });
       expect(model.notes).toBe('Club repeater');
       expect(model.callsign).toBe('WJ1L');
+      expect(model.allstarNode).toBe('5517');
+      expect(model.echolinkNode).toBeUndefined();
+      expect(model.irlpNode).toBeUndefined();
+      expect(model.wiresNode).toBe('1234');
+      expect(model.allstar).toBe(true);
+      expect(model.echolink).toBe(true);
+      expect(model.irlp).toBe(false);
+      expect(model.wires).toBe(true);
       expect(model.use).toBe('closed');
       expect(model.onAir).toBe(false);
       expect(model.latitude).toBe(43.5018912);
@@ -110,6 +126,29 @@ describe('saved-channels-db', () => {
       expect(matchesSavedChannelSearch(saved, '146.5200')).toBe(true);
       expect(matchesSavedChannelSearch(saved, '999')).toBe(false);
       expect(matchesSavedChannelSearch(saved, '   ')).toBe(true);
+    });
+
+    it('matches a repeater by node number or linked-system name', () => {
+      const saved = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        allstarNode: '5517',
+        echolinkNode: '0',
+      });
+
+      expect(saved.allstarNode).toBe('5517');
+      expect(saved.echolinkNode).toBeUndefined();
+      expect(matchesSavedChannelSearch(saved, '5517')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'allstar')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'echolink')).toBe(false);
+
+      const namedOnly = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        echolink: true,
+      });
+
+      expect(namedOnly.echolinkNode).toBeUndefined();
+      expect(namedOnly.echolink).toBe(true);
+      expect(matchesSavedChannelSearch(namedOnly, 'echolink')).toBe(true);
     });
 
     it('matches repeater rows by the repeater kind label', () => {

@@ -70,16 +70,91 @@ describe('saved-channels-csv', () => {
     expect(parsed.onAir[0]).toBe(true);
     expect(parsed.latitudes[0]).toBeCloseTo(43.5018912);
     expect(parsed.longitudes[0]).toBeCloseTo(-70.7260259);
+    expect(parsed.replaceLinkedNodes).toBe(false);
+    expect(parsed.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.echolinkNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.irlpNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.wiresNode).toBeUndefined();
   });
 
-  it('round-trips repeater coordinates through the library CSV', () => {
+  it('round-trips repeater coordinates and node numbers through the library CSV', () => {
     const csv = serializeSavedChannelsCsv([
-      { ...sample, kind: 'repeater', latitude: 39.0997, longitude: -94.5786 },
+      {
+        ...sample,
+        kind: 'repeater',
+        latitude: 39.0997,
+        longitude: -94.5786,
+        allstarNode: '5517',
+        echolinkNode: '353167',
+        irlpNode: undefined,
+        wiresNode: '1234',
+      },
     ]);
     const parsed = parseSavedChannelsCsv(csv);
 
     expect(parsed.latitudes[0]).toBeCloseTo(39.0997);
     expect(parsed.longitudes[0]).toBeCloseTo(-94.5786);
+    expect(parsed.replaceLinkedNodes).toBe(true);
+    expect(parsed.replaceLinkedPresence).toBe(true);
+    expect(parsed.linkedNodes[0]).toEqual({
+      allstarNode: '5517',
+      echolinkNode: '353167',
+      irlpNode: undefined,
+      wiresNode: '1234',
+      allstar: true,
+      echolink: true,
+      irlp: false,
+      wires: true,
+    });
+
+    const cleared = parseSavedChannelsCsv(csv.replace('5517', '0'));
+    expect(cleared.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(cleared.linkedNodes[0]?.allstar).toBe(false);
+    expect(cleared.latitudes[0]).toBeCloseTo(39.0997);
+    expect(cleared.replaceLinkedNodes).toBe(true);
+  });
+
+  it('round-trips linked-system presence without a node number', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        allstar: true,
+        echolink: false,
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.linkedNodes[0]?.allstar).toBe(true);
+    expect(parsed.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.echolink).toBe(false);
+    expect(parsed.replaceLinkedPresence).toBe(true);
+
+    const zeroNode = parseSavedChannelsCsv(csv.replace(',,,,,,1,0,0,0', ',,0,,,,1,0,0,0'));
+    expect(zeroNode.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(zeroNode.linkedNodes[0]?.allstar).toBe(true);
+  });
+
+  it('imports website CSV node columns onto repeater rows', () => {
+    const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,"Location",lat,long,Call,Use,Op Status,EchoLink,IRLP,AllStar
+145.600000,145.000000,-,79.7,79.7,"Algutsrum",56.68281700,16.56464800,SK7RFL,OPEN,On-Air,353167,,0
+`;
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('repeaterbook');
+    expect(parsed.replaceLinkedNodes).toBe(true);
+    expect(parsed.latitudes[0]).toBeCloseTo(56.682817);
+    expect(parsed.longitudes[0]).toBeCloseTo(16.564648);
+    expect(parsed.linkedNodes[0]).toEqual({
+      allstarNode: undefined,
+      echolinkNode: '353167',
+      irlpNode: undefined,
+      wiresNode: undefined,
+      allstar: false,
+      echolink: true,
+      irlp: false,
+      wires: false,
+    });
   });
 
   it('rejects CSV files missing required columns', () => {

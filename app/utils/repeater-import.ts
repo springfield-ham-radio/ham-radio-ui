@@ -1,7 +1,14 @@
 import { Frequency, RadioToneType, type RadioChannel, type RadioTone } from '@springfield/ham-radio-api';
 import { parseFrequencyMHz } from '~/utils/channel-edit';
-import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
-import type { RepeaterUse } from '~/utils/saved-channels-db';
+import {
+  linkedSystemsInText,
+  normalizeLinkedNodes,
+  parseLinkedNode,
+  repeaterBookLinkedTextColumnsPresent,
+  repeaterBookNodeColumnsPresent,
+  type LinkedNodes,
+} from '~/utils/linked-nodes';
+import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 
 export type RepeaterImportFormat = 'repeaterbook' | 'chirp';
 
@@ -24,11 +31,26 @@ export interface ParsedRepeater {
   notes?: string;
   latitude?: number;
   longitude?: number;
+  allstarNode?: string;
+  echolinkNode?: string;
+  irlpNode?: string;
+  wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
 }
 
 export interface ParsedRepeaterImport {
   format: RepeaterImportFormat;
   repeaters: ParsedRepeater[];
+  /** True when the RepeaterBook header included node columns. CHIRP exports never do. */
+  nodeColumnsPresent: boolean;
+  /**
+   * True when the RepeaterBook header included Modes, Mode, or Digital Access.
+   * Those cells can name a linked system without giving its node number.
+   */
+  linkedTextColumnsPresent: boolean;
 }
 
 const NONE_TONE: RadioTone = { tone: 0, type: RadioToneType.CTCSS };
@@ -63,7 +85,12 @@ export function parseRepeaterImportCsv(text: string): ParsedRepeaterImport {
     }
   }
 
-  return { format, repeaters };
+  return {
+    format,
+    repeaters,
+    nodeColumnsPresent: format === 'repeaterbook' && repeaterBookNodeColumnsPresent(header),
+    linkedTextColumnsPresent: format === 'repeaterbook' && repeaterBookLinkedTextColumnsPresent(header),
+  };
 }
 
 /**
@@ -162,18 +189,12 @@ function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater |
       cell('lat', 'latitude'),
       cell('long', 'lng', 'lon', 'longitude'),
     ),
+    ...repeaterBookLinkedNodes(cell),
   };
 }
 
 function repeaterCoordinates(latitudeRaw: string, longitudeRaw: string): { latitude?: number; longitude?: number } {
-  const latitude = parseOptionalNumber(latitudeRaw);
-  const longitude = parseOptionalNumber(longitudeRaw);
-
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-    return {};
-  }
-
-  return { latitude, longitude };
+  return coordinatesFromPair(parseOptionalNumber(latitudeRaw), parseOptionalNumber(longitudeRaw));
 }
 
 function parseChirpRow(header: string[], row: string[]): ParsedRepeater | undefined {
@@ -286,6 +307,27 @@ function parseDcsCode(raw: string): RadioTone {
   }
 
   return { tone: Math.trunc(code), type: RadioToneType.DCS };
+}
+
+/**
+ * Website CSV uses EchoLink, IRLP, and AllStar. The export field list uses
+ * `EchoLink Node`, `IRLP Node`, `AllStar Node`, and `Wires Node` (also `WIRES Node`).
+ */
+function repeaterBookLinkedNodes(cell: (...names: string[]) => string): LinkedNodes {
+  const named = linkedSystemsInText(
+    [collectRepeaterBookModes(cell), cell('modes'), cell('mode'), cell('digital_access')].filter(Boolean).join(' '),
+  );
+
+  return normalizeLinkedNodes({
+    allstarNode: parseLinkedNode(cell('allstar_node', 'allstar')),
+    echolinkNode: parseLinkedNode(cell('echolink_node', 'echolink')),
+    irlpNode: parseLinkedNode(cell('irlp_node', 'irlp')),
+    wiresNode: parseLinkedNode(cell('wires_node')),
+    allstar: named.allstar,
+    echolink: named.echolink,
+    irlp: named.irlp,
+    wires: named.wires,
+  });
 }
 
 function collectRepeaterBookModes(cell: (...names: string[]) => string): string {

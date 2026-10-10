@@ -14,10 +14,18 @@ import {
   repeaterOnAirFromStatus,
   repeaterUseFromLabel,
 } from '~/utils/repeater-import';
+import {
+  formatLinkedPresence,
+  linkedNodesForKind,
+  normalizeLinkedNodes,
+  parseLinkedNode,
+  parseLinkedPresence,
+  type LinkedNodes,
+} from '~/utils/linked-nodes';
 import { coordinatesFromPair, type RepeaterUse, type SavedChannel, type SavedChannelKind } from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude,allstar_node,echolink_node,irlp_node,wires_node,allstar,echolink,irlp,wires';
 
 export interface ParsedSavedChannelsCsv {
   source: 'library' | 'repeaterbook' | 'chirp';
@@ -29,6 +37,11 @@ export interface ParsedSavedChannelsCsv {
   callsigns: Array<string | undefined>;
   latitudes: Array<number | undefined>;
   longitudes: Array<number | undefined>;
+  linkedNodes: LinkedNodes[];
+  /** When true, blank node columns replace stored node numbers on a matching row. */
+  replaceLinkedNodes: boolean;
+  /** When true, incoming presence flags replace stored presence on a matching row. */
+  replaceLinkedPresence: boolean;
 }
 
 function escapeCsvField(value: string): string {
@@ -102,6 +115,14 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         channel.kind === 'repeater' ? escapeCsvField(channel.callsign ?? '') : '',
         formatCoordinate(channel.latitude),
         formatCoordinate(channel.longitude),
+        channel.kind === 'repeater' ? escapeCsvField(channel.allstarNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.echolinkNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.irlpNode ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.wiresNode ?? '') : '',
+        channel.kind === 'repeater' ? formatLinkedPresence(channel.allstar) : '',
+        channel.kind === 'repeater' ? formatLinkedPresence(channel.echolink) : '',
+        channel.kind === 'repeater' ? formatLinkedPresence(channel.irlp) : '',
+        channel.kind === 'repeater' ? formatLinkedPresence(channel.wires) : '',
       ].join(','),
     );
   }
@@ -242,6 +263,22 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
       ),
       latitudes: parsed.repeaters.map((repeater) => repeater.latitude),
       longitudes: parsed.repeaters.map((repeater) => repeater.longitude),
+      linkedNodes: parsed.repeaters.map((repeater) =>
+        repeater.sourceFormat === 'repeaterbook'
+          ? linkedNodesForKind('repeater', {
+              allstarNode: repeater.allstarNode,
+              echolinkNode: repeater.echolinkNode,
+              irlpNode: repeater.irlpNode,
+              wiresNode: repeater.wiresNode,
+              allstar: repeater.allstar,
+              echolink: repeater.echolink,
+              irlp: repeater.irlp,
+              wires: repeater.wires,
+            })
+          : {},
+      ),
+      replaceLinkedNodes: parsed.nodeColumnsPresent,
+      replaceLinkedPresence: parsed.nodeColumnsPresent || parsed.linkedTextColumnsPresent,
     };
   }
 
@@ -262,6 +299,11 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const callsigns: Array<string | undefined> = [];
   const latitudes: Array<number | undefined> = [];
   const longitudes: Array<number | undefined> = [];
+  const linkedNodes: LinkedNodes[] = [];
+  const nodeColumns = ['allstar_node', 'echolink_node', 'irlp_node', 'wires_node'] as const;
+  const presenceColumns = ['allstar', 'echolink', 'irlp', 'wires'] as const;
+  const replaceLinkedNodes = nodeColumns.some((column) => indexOf(column) !== -1);
+  const replaceLinkedPresence = replaceLinkedNodes || presenceColumns.some((column) => indexOf(column) !== -1);
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -301,9 +343,48 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
     callsigns.push(callsign);
     latitudes.push(point.latitude);
     longitudes.push(point.longitude);
+    const allstarNode = indexOf('allstar_node') === -1 ? undefined : parseLinkedNode(cell('allstar_node'));
+    const echolinkNode = indexOf('echolink_node') === -1 ? undefined : parseLinkedNode(cell('echolink_node'));
+    const irlpNode = indexOf('irlp_node') === -1 ? undefined : parseLinkedNode(cell('irlp_node'));
+    const wiresNode = indexOf('wires_node') === -1 ? undefined : parseLinkedNode(cell('wires_node'));
+    const presence = (column: (typeof presenceColumns)[number], node: string | undefined): boolean | undefined => {
+      if (indexOf(column) === -1) {
+        return node ? true : undefined;
+      }
+
+      return parseLinkedPresence(cell(column)) || Boolean(node);
+    };
+
+    linkedNodes.push(
+      kind === 'repeater'
+        ? normalizeLinkedNodes({
+            allstarNode,
+            echolinkNode,
+            irlpNode,
+            wiresNode,
+            allstar: presence('allstar', allstarNode),
+            echolink: presence('echolink', echolinkNode),
+            irlp: presence('irlp', irlpNode),
+            wires: presence('wires', wiresNode),
+          })
+        : {},
+    );
   }
 
-  return { source: 'library', channels, notes, kinds, uses, onAir, callsigns, latitudes, longitudes };
+  return {
+    source: 'library',
+    channels,
+    notes,
+    kinds,
+    uses,
+    onAir,
+    callsigns,
+    latitudes,
+    longitudes,
+    linkedNodes,
+    replaceLinkedNodes,
+    replaceLinkedPresence,
+  };
 }
 
 function parseOptionalCoordinate(raw: string, valid: (value: number) => boolean): number | undefined {

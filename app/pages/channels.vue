@@ -8,6 +8,7 @@ import { formatStationSummary, hasStationLocation } from '~/utils/antenna-statio
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isTripChannelGroup } from '~/utils/channel-groups';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
+import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import {
@@ -72,6 +73,7 @@ const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
 const deleteChannelsOpen = shallowRef(false);
 const isDeletingChannels = shallowRef(false);
+const linkedOnly = ref(false);
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
@@ -107,7 +109,7 @@ const tripLongitudeError = computed(() =>
 );
 
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
-  let rows = filteredChannels.value;
+  let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
 
   if (isTripGroup.value) {
     rows = orderTripChannels(
@@ -198,6 +200,10 @@ const addChannelTooltip = computed(() =>
   builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
 );
 const emptyMessage = computed(() => {
+  if (linkedOnly.value) {
+    return 'No linked repeaters match. Turn off Linked only to see every channel.';
+  }
+
   if (builtinGroup.value) {
     return 'Select rows and choose Add to radio to copy these channels.';
   }
@@ -331,6 +337,16 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
     id: 'onAir',
     header: 'On-air',
+  },
+  {
+    id: 'linked',
+    header: 'Linked',
+    meta: {
+      class: {
+        th: 'min-w-36 whitespace-nowrap',
+        td: 'min-w-36 whitespace-nowrap',
+      },
+    },
   },
   {
     id: 'actions',
@@ -511,6 +527,14 @@ async function onSave(payload: {
   use?: RepeaterUse;
   onAir?: boolean;
   callsign?: string;
+  allstarNode?: string;
+  echolinkNode?: string;
+  irlpNode?: string;
+  wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -531,6 +555,14 @@ async function onSave(payload: {
         callsign: kind === 'repeater' ? payload.callsign : undefined,
         latitude: editingChannel.value?.latitude,
         longitude: editingChannel.value?.longitude,
+        allstar: kind === 'repeater' ? payload.allstar : undefined,
+        echolink: kind === 'repeater' ? payload.echolink : undefined,
+        irlp: kind === 'repeater' ? payload.irlp : undefined,
+        wires: kind === 'repeater' ? payload.wires : undefined,
+        allstarNode: kind === 'repeater' ? payload.allstarNode : undefined,
+        echolinkNode: kind === 'repeater' ? payload.echolinkNode : undefined,
+        irlpNode: kind === 'repeater' ? payload.irlpNode : undefined,
+        wiresNode: kind === 'repeater' ? payload.wiresNode : undefined,
         createdAt: editingChannel.value?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
@@ -539,6 +571,14 @@ async function onSave(payload: {
         use: payload.use,
         onAir: payload.onAir,
         callsign: payload.callsign,
+        allstar: payload.allstar,
+        echolink: payload.echolink,
+        irlp: payload.irlp,
+        wires: payload.wires,
+        allstarNode: payload.allstarNode,
+        echolinkNode: payload.echolinkNode,
+        irlpNode: payload.irlpNode,
+        wiresNode: payload.wiresNode,
       });
     }
 
@@ -683,13 +723,16 @@ onMounted(() => {
       @remove="removeGroupOpen = true"
     />
 
-    <UInput
-      v-model="search"
-      icon="i-lucide-search"
-      placeholder="Search by name, frequency, or repeater"
-      size="sm"
-      class="w-full max-w-sm"
-    />
+    <div class="flex flex-wrap items-center gap-3">
+      <UInput
+        v-model="search"
+        icon="i-lucide-search"
+        placeholder="Search by name, frequency, node, or repeater"
+        size="sm"
+        class="w-full max-w-sm"
+      />
+      <UCheckbox v-model="linkedOnly" label="Linked only" />
+    </div>
 
     <div v-if="isTripGroup" class="flex flex-wrap items-end gap-x-3 gap-y-2">
       <UFormField label="Distance from" class="w-64">
@@ -754,6 +797,24 @@ onMounted(() => {
             size="xs"
             :label="row.original.use === 'open' ? 'Open' : 'Closed'"
           />
+        </template>
+        <template #linked-cell="{ row }">
+          <div v-if="linkedNodeBadges(row.original).length > 0" class="flex flex-nowrap items-center gap-1">
+            <UTooltip
+              v-for="badge in linkedNodeBadges(row.original)"
+              :key="badge.label"
+              :text="badge.text"
+            >
+              <UBadge
+                :color="badge.color"
+                variant="subtle"
+                size="sm"
+                :label="badge.label"
+                class="shrink-0"
+                :ui="{ label: 'whitespace-nowrap' }"
+              />
+            </UTooltip>
+          </div>
         </template>
         <template #onAir-cell="{ row }">
           <UTooltip
