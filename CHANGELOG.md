@@ -1,3 +1,9 @@
+## [0.55.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.54.0...v0.55.0) (2026-10-10)
+
+### Features
+
+* **channels:** trip lists from an imported route export ([#70](https://github.com/springfield-ham-radio/ham-radio-ui/issues/70)) ([79e375a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/79e375a0c54a28ceb0a7ab6ebd3e2729b6ace83f))
+
 ## [0.54.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.2...v0.54.0) (2026-10-04)
 
 ### Features
