@@ -14,12 +14,14 @@ import {
   upsertRadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import hamRadioApiPackage from '@springfield/ham-radio-api/package.json';
+
 /** Official catalog served via GitHub Pages. */
 export const OFFICIAL_MODULE_CATALOG_URL =
   'https://springfield-ham-radio.github.io/radio-module-catalog/catalog.json';
 
-/** Minimum @springfield/ham-radio-api version this app was built against. */
-export const APP_HAM_RADIO_API_VERSION = '17.3.0';
+/** Installed @springfield/ham-radio-api version. Catalog minApiVersion is compared against this. */
+export const APP_HAM_RADIO_API_VERSION: string = hamRadioApiPackage.version;
 
 export interface InstalledRadioModuleResult {
   moduleId: string;
