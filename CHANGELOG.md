@@ -1,3 +1,9 @@
+## [0.57.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.56.0...v0.57.0) (2026-10-10)
+
+### Features
+
+* **channels:** sort the library by distance from a station ([#82](https://github.com/springfield-ham-radio/ham-radio-ui/issues/82)) ([da501a0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/da501a0ebcac738666b3dd9ba6f99eea59d2385b))
+
 ## [0.56.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.55.0...v0.56.0) (2026-10-10)
 
 ### Features
