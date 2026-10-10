@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType, type RadioChannel } from '@springfield/ham-radio-api';
 import {
+  coordinateColumnsForDb,
   coordinatesFromPair,
   matchesSavedChannelSearch,
   radioChannelToSavedChannel,
@@ -85,6 +86,41 @@ describe('saved-channels-db', () => {
       expect(model.createdAt).toBe(1_000);
       expect(model.updatedAt).toBe(2_000);
     });
+
+    it('reads a stored Null Island pair as unlocated', () => {
+      const row: SavedChannelRow = {
+        id: '22222222-2222-2222-2222-222222222222',
+        name: 'Austin',
+        kind: 'repeater',
+        transmit_frequency: 146_940_000,
+        receive_frequency: 146_340_000,
+        transmit_tone: 0,
+        transmit_tone_type: 'CTCSS',
+        receive_tone: 0,
+        receive_tone_type: 'CTCSS',
+        notes: null,
+        use_type: null,
+        on_air: null,
+        callsign: 'W5KA',
+        latitude: 0,
+        longitude: 0,
+        allstar_node: null,
+        echolink_node: null,
+        irlp_node: null,
+        wires_node: null,
+        allstar_linked: 0,
+        echolink_linked: 0,
+        irlp_linked: 0,
+        wires_linked: 0,
+        created_at: 1,
+        updated_at: 1,
+      };
+
+      const model = savedChannelRowToModel(row);
+
+      expect(model.latitude).toBeUndefined();
+      expect(model.longitude).toBeUndefined();
+    });
   });
 
   describe('coordinatesFromPair', () => {
@@ -92,6 +128,26 @@ describe('saved-channels-db', () => {
       expect(coordinatesFromPair(39.1, -94.5)).toEqual({ latitude: 39.1, longitude: -94.5 });
       expect(coordinatesFromPair(39.1, undefined)).toEqual({});
       expect(coordinatesFromPair(91, -94.5)).toEqual({});
+      expect(coordinatesFromPair(null, null)).toEqual({});
+    });
+
+    it('treats Null Island as unlocated and keeps a single zero axis', () => {
+      expect(coordinatesFromPair(0, 0)).toEqual({});
+      expect(coordinatesFromPair(0, -94.5)).toEqual({ latitude: 0, longitude: -94.5 });
+      expect(coordinatesFromPair(39.1, 0)).toEqual({ latitude: 39.1, longitude: 0 });
+    });
+  });
+
+  describe('coordinateColumnsForDb', () => {
+    it('binds absent coordinates and Null Island as SQL NULL', () => {
+      expect(coordinateColumnsForDb({})).toEqual({ latitude: null, longitude: null });
+      expect(coordinateColumnsForDb({ latitude: undefined, longitude: undefined })).toEqual({
+        latitude: null,
+        longitude: null,
+      });
+      expect(coordinateColumnsForDb({ latitude: 0, longitude: 0 })).toEqual({ latitude: null, longitude: null });
+      expect(coordinateColumnsForDb({ latitude: 0, longitude: -94.5 })).toEqual({ latitude: 0, longitude: -94.5 });
+      expect(coordinateColumnsForDb({ latitude: 39.1, longitude: 0 })).toEqual({ latitude: 39.1, longitude: 0 });
     });
   });
 
@@ -109,6 +165,32 @@ describe('saved-channels-db', () => {
       expect(saved.createdAt).toBe(10);
       expect(saved.updatedAt).toBe(20);
       expect(saved.kind).toBe('channel');
+      expect(saved.latitude).toBeUndefined();
+      expect(saved.longitude).toBeUndefined();
+    });
+
+    it('drops a Null Island pair instead of storing zeros', () => {
+      const saved = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        latitude: 0,
+        longitude: 0,
+      });
+
+      expect(saved.latitude).toBeUndefined();
+      expect(saved.longitude).toBeUndefined();
+      expect(coordinateColumnsForDb(saved)).toEqual({ latitude: null, longitude: null });
+    });
+
+    it('keeps a real coordinate pair on add-from-library rows', () => {
+      const saved = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        latitude: 30.2672,
+        longitude: -97.7431,
+      });
+
+      expect(saved.latitude).toBeCloseTo(30.2672);
+      expect(saved.longitude).toBeCloseTo(-97.7431);
+      expect(coordinateColumnsForDb(saved)).toEqual({ latitude: 30.2672, longitude: -97.7431 });
     });
   });
 

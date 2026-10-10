@@ -1,6 +1,6 @@
 import type { GeoPoint } from '~/utils/maidenhead';
 import { haversineDistanceKm, isValidLatitude, isValidLongitude, maidenheadToLatLon } from '~/utils/maidenhead';
-import type { RepeaterUse } from '~/utils/saved-channels-db';
+import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 /** Select value when the trip list is not sorted from a point. */
@@ -36,8 +36,10 @@ export function stationStartPoint(station: {
   longitude?: number;
   gridsquare?: string;
 }): GeoPoint | undefined {
-  if (isValidLatitude(station.latitude) && isValidLongitude(station.longitude)) {
-    return { latitude: station.latitude, longitude: station.longitude };
+  const stored = coordinatesFromPair(station.latitude, station.longitude);
+
+  if (stored.latitude !== undefined && stored.longitude !== undefined) {
+    return { latitude: stored.latitude, longitude: stored.longitude };
   }
 
   if (station.gridsquare) {
@@ -60,12 +62,13 @@ export function parseTypedTripCoordinates(latitudeText: string, longitudeText: s
 
   const latitude = Number(latitudeRaw);
   const longitude = Number(longitudeRaw);
+  const point = coordinatesFromPair(latitude, longitude);
 
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+  if (point.latitude === undefined || point.longitude === undefined) {
     return undefined;
   }
 
-  return { latitude, longitude };
+  return { latitude: point.latitude, longitude: point.longitude };
 }
 
 /**
@@ -168,11 +171,13 @@ export function tripDistanceKm(
   channel: { latitude?: number; longitude?: number },
   start: GeoPoint | undefined,
 ): number | undefined {
-  if (!start || !isValidLatitude(channel.latitude) || !isValidLongitude(channel.longitude)) {
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+  if (!start || point.latitude === undefined || point.longitude === undefined) {
     return undefined;
   }
 
-  return haversineDistanceKm(start, { latitude: channel.latitude, longitude: channel.longitude });
+  return haversineDistanceKm(start, { latitude: point.latitude, longitude: point.longitude });
 }
 
 /**

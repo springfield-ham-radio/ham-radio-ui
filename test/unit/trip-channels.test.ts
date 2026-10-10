@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency } from '@springfield/ham-radio-api';
+import { parseRepeaterImportCsv } from '../../app/utils/repeater-import.ts';
 import { bandNameForFrequency } from '../../app/utils/transmit-privileges.ts';
 import {
   defaultDistanceStartId,
@@ -42,10 +44,14 @@ describe('trip-channels', () => {
     });
     expect(stationStartPoint({ gridsquare: 'FN42' })?.latitude).toBeCloseTo(42.5, 1);
     expect(stationStartPoint({})).toBeUndefined();
+    expect(stationStartPoint({ latitude: 0, longitude: 0, gridsquare: 'EM38' })?.latitude).toBeCloseTo(38.5, 0);
+    expect(stationStartPoint({ latitude: 0, longitude: -94.58 })).toEqual({ latitude: 0, longitude: -94.58 });
   });
 
   it('parses typed coordinates and reports range errors', () => {
     expect(parseTypedTripCoordinates('39.1', '-94.58')).toEqual({ latitude: 39.1, longitude: -94.58 });
+    expect(parseTypedTripCoordinates('0', '0')).toBeUndefined();
+    expect(parseTypedTripCoordinates('0', '-94.58')).toEqual({ latitude: 0, longitude: -94.58 });
     expect(parseTypedTripCoordinates('39.1', '')).toBeUndefined();
     expect(typedCoordinateError('', 'latitude')).toBeUndefined();
     expect(typedCoordinateError('91', 'latitude')).toMatch(/-90 to 90/);
@@ -69,6 +75,28 @@ describe('trip-channels', () => {
 
     expect(ordered.map((channel) => channel.id)).toEqual(['far', 'near', 'unknown', 'unknown-later']);
     expect(orderTripChannels([far, near], undefined, 'desc').map((channel) => channel.id)).toEqual(['far', 'near']);
+  });
+
+  it('sorts Null Island and the Austin export last and shows an em dash', () => {
+    const nullIsland = row('null-island', 0, 0, 146_940_000);
+    const equator = row('equator', 0, -94.58, 146_520_000);
+    const ordered = orderTripChannels([nullIsland, far, equator], start);
+
+    expect(tripDistanceKm(nullIsland, start)).toBeUndefined();
+    expect(tripDistanceKm(equator, start)).toBeTypeOf('number');
+    expect(formatTripDistance(tripDistanceKm(nullIsland, start))).toBe('—');
+    expect(ordered.map((channel) => channel.id)).toEqual(['far', 'equator', 'null-island']);
+
+    const austin = parseRepeaterImportCsv(readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8'));
+    const austinRows = austin.repeaters.map((repeater, index) =>
+      row(`austin-${index}`, repeater.latitude, repeater.longitude, repeater.receiveFrequency),
+    );
+    const mixed = orderTripChannels([austinRows[0]!, near, austinRows[1]!], start, 'desc');
+
+    expect(austinRows.length).toBeGreaterThan(0);
+    expect(austinRows.every((channel) => tripDistanceKm(channel, start) === undefined)).toBe(true);
+    expect(mixed.map((channel) => channel.id)).toEqual(['near', 'austin-0', 'austin-1']);
+    expect(formatTripDistance(tripDistanceKm(austinRows[0]!, start))).toBe('—');
   });
 
   it('formats kilometers and miles from the same kilometer value', () => {
