@@ -1,3 +1,9 @@
+## [0.58.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.57.0...v0.58.0) (2026-10-10)
+
+### Features
+
+* **channels:** store repeater records and update them on re-import ([#85](https://github.com/springfield-ham-radio/ham-radio-ui/issues/85)) ([75b1331](https://github.com/springfield-ham-radio/ham-radio-ui/commit/75b13314aa7cfb2825bf1cd17b5186cc7ebdd048))
+
 ## [0.57.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.56.0...v0.57.0) (2026-10-10)
 
 ### Features
