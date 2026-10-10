@@ -799,13 +799,20 @@ onMounted(() => {
           />
         </template>
         <template #linked-cell="{ row }">
-          <div v-if="linkedNodeBadges(row.original).length > 0" class="flex items-center gap-1">
+          <div v-if="linkedNodeBadges(row.original).length > 0" class="flex flex-nowrap items-center gap-1">
             <UTooltip
               v-for="badge in linkedNodeBadges(row.original)"
               :key="badge.label"
               :text="badge.text"
             >
-              <UBadge color="neutral" variant="subtle" size="xs" :label="badge.label" />
+              <UBadge
+                :color="badge.color"
+                variant="subtle"
+                size="sm"
+                :label="badge.label"
+                class="shrink-0"
+                :ui="{ label: 'whitespace-nowrap' }"
+              />
             </UTooltip>
           </div>
         </template>

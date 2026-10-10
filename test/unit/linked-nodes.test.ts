@@ -82,8 +82,8 @@ describe('linked-nodes', () => {
     expect(channelHasLinkedNode({ allstar: true })).toBe(true);
     expect(channelHasLinkedNode({})).toBe(false);
     expect(linkedNodeBadges(nodes)).toEqual([
-      { label: 'AllStar 5517', text: 'AllStar 5517' },
-      { label: 'WIRES', text: 'WIRES' },
+      { label: 'AllStar 5517', text: 'AllStar 5517', color: 'info' },
+      { label: 'WIRES', text: 'WIRES', color: 'warning' },
     ]);
   });
 });

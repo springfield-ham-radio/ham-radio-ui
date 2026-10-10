@@ -24,14 +24,15 @@ export interface LinkedNodes {
 }
 
 export const LINKED_NODE_BADGES = [
-  { field: 'allstarNode', present: 'allstar', label: 'AllStar' },
-  { field: 'echolinkNode', present: 'echolink', label: 'EchoLink' },
-  { field: 'irlpNode', present: 'irlp', label: 'IRLP' },
-  { field: 'wiresNode', present: 'wires', label: 'WIRES' },
+  { field: 'allstarNode', present: 'allstar', label: 'AllStar', color: 'info' },
+  { field: 'echolinkNode', present: 'echolink', label: 'EchoLink', color: 'teal' },
+  { field: 'irlpNode', present: 'irlp', label: 'IRLP', color: 'violet' },
+  { field: 'wiresNode', present: 'wires', label: 'WIRES', color: 'warning' },
 ] as const satisfies ReadonlyArray<{
   field: 'allstarNode' | 'echolinkNode' | 'irlpNode' | 'wiresNode';
   present: 'allstar' | 'echolink' | 'irlp' | 'wires';
   label: string;
+  color: 'info' | 'teal' | 'violet' | 'warning';
 }>;
 
 const REPEATERBOOK_NODE_HEADERS = [
@@ -233,7 +234,9 @@ export function linkedNodeSearchText(nodes: LinkedNodes | undefined): string {
     .toLowerCase();
 }
 
-export function linkedNodeBadges(nodes: LinkedNodes | undefined): Array<{ label: string; text: string }> {
+export function linkedNodeBadges(
+  nodes: LinkedNodes | undefined,
+): Array<{ label: string; text: string; color: (typeof LINKED_NODE_BADGES)[number]['color'] }> {
   const stored = linkedNodesForKind('repeater', nodes);
 
   return LINKED_NODE_BADGES.flatMap((badge) => {
@@ -243,7 +246,7 @@ export function linkedNodeBadges(nodes: LinkedNodes | undefined): Array<{ label:
 
     const node = stored[badge.field];
     const text = node ? `${badge.label} ${node}` : badge.label;
-    return [{ label: text, text }];
+    return [{ label: text, text, color: badge.color }];
   });
 }
 
