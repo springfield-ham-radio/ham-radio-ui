@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Frequency } from '@springfield/ham-radio-api';
 import { bandNameForFrequency } from '../../app/utils/transmit-privileges.ts';
 import {
+  defaultDistanceStartId,
   formatTripDistance,
   orderTripChannels,
   parseTypedTripCoordinates,
@@ -60,6 +61,34 @@ describe('trip-channels', () => {
     expect(formatTripDistance(undefined)).toBe('—');
     expect(formatTripDistance(1.609344)).toBe('1.0 mi');
     expect(orderTripChannels([far, near], undefined).map((channel) => channel.id)).toEqual(['far', 'near']);
+  });
+
+  it('keeps unlocated rows last when distance is sorted descending', () => {
+    const unknownLater = row('unknown-later', undefined, undefined, 146_520_000);
+    const ordered = orderTripChannels([unknown, near, far, unknownLater], start, 'desc');
+
+    expect(ordered.map((channel) => channel.id)).toEqual(['far', 'near', 'unknown', 'unknown-later']);
+    expect(orderTripChannels([far, near], undefined, 'desc').map((channel) => channel.id)).toEqual(['far', 'near']);
+  });
+
+  it('formats kilometers and miles from the same kilometer value', () => {
+    expect(formatTripDistance(1.609344, 'mi')).toBe('1.0 mi');
+    expect(formatTripDistance(1.609344, 'km')).toBe('1.6 km');
+    expect(formatTripDistance(10, 'km')).toBe('10.0 km');
+    expect(formatTripDistance(undefined, 'km')).toBe('—');
+  });
+
+  it('defaults Distance from to the selected station, then Home', () => {
+    const home = { id: 'station-home', gridsquare: 'EM38' };
+    const portable = { id: 'station-portable', latitude: 39.2, longitude: -94.6 };
+    const bare = { id: 'station-bare' };
+    const options = { homeStationId: 'station-home' };
+
+    expect(defaultDistanceStartId([home, portable], { ...options, selectedStationId: portable.id })).toBe(portable.id);
+    expect(defaultDistanceStartId([bare, home], { ...options, selectedStationId: bare.id })).toBe(home.id);
+    expect(defaultDistanceStartId([bare, portable], { ...options, selectedStationId: bare.id })).toBe(portable.id);
+    expect(defaultDistanceStartId([bare], { ...options, selectedStationId: bare.id })).toBe('none');
+    expect(stationStartPoint(home)?.latitude).toBeGreaterThan(0);
   });
 
   it('filters by band, open use, and on-air', () => {

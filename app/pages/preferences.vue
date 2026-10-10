@@ -142,7 +142,8 @@
           <RadioImageBackupsPreference />
         </section>
 
-        <section v-else-if="currentSection === 'channels'">
+        <section v-else-if="currentSection === 'channels'" class="flex flex-col gap-4">
+          <DistanceUnitPreference />
           <PredefinedChannelGroupsPreference />
         </section>
 
