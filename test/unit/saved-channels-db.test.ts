@@ -51,6 +51,10 @@ describe('saved-channels-db', () => {
         echolink_node: '0',
         irlp_node: null,
         wires_node: ' 1234 ',
+        allstar_linked: 1,
+        echolink_linked: 1,
+        irlp_linked: 0,
+        wires_linked: 0,
         created_at: 1_000,
         updated_at: 2_000,
       };
@@ -70,6 +74,10 @@ describe('saved-channels-db', () => {
       expect(model.echolinkNode).toBeUndefined();
       expect(model.irlpNode).toBeUndefined();
       expect(model.wiresNode).toBe('1234');
+      expect(model.allstar).toBe(true);
+      expect(model.echolink).toBe(true);
+      expect(model.irlp).toBe(false);
+      expect(model.wires).toBe(true);
       expect(model.use).toBe('closed');
       expect(model.onAir).toBe(false);
       expect(model.latitude).toBe(43.5018912);
@@ -132,6 +140,15 @@ describe('saved-channels-db', () => {
       expect(matchesSavedChannelSearch(saved, '5517')).toBe(true);
       expect(matchesSavedChannelSearch(saved, 'allstar')).toBe(true);
       expect(matchesSavedChannelSearch(saved, 'echolink')).toBe(false);
+
+      const namedOnly = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        echolink: true,
+      });
+
+      expect(namedOnly.echolinkNode).toBeUndefined();
+      expect(namedOnly.echolink).toBe(true);
+      expect(matchesSavedChannelSearch(namedOnly, 'echolink')).toBe(true);
     });
 
     it('matches repeater rows by the repeater kind label', () => {

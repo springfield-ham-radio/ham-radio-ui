@@ -341,6 +341,12 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
     id: 'linked',
     header: 'Linked',
+    meta: {
+      class: {
+        th: 'min-w-36 whitespace-nowrap',
+        td: 'min-w-36 whitespace-nowrap',
+      },
+    },
   },
   {
     id: 'actions',
@@ -525,6 +531,10 @@ async function onSave(payload: {
   echolinkNode?: string;
   irlpNode?: string;
   wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -545,6 +555,10 @@ async function onSave(payload: {
         callsign: kind === 'repeater' ? payload.callsign : undefined,
         latitude: editingChannel.value?.latitude,
         longitude: editingChannel.value?.longitude,
+        allstar: kind === 'repeater' ? payload.allstar : undefined,
+        echolink: kind === 'repeater' ? payload.echolink : undefined,
+        irlp: kind === 'repeater' ? payload.irlp : undefined,
+        wires: kind === 'repeater' ? payload.wires : undefined,
         allstarNode: kind === 'repeater' ? payload.allstarNode : undefined,
         echolinkNode: kind === 'repeater' ? payload.echolinkNode : undefined,
         irlpNode: kind === 'repeater' ? payload.irlpNode : undefined,
@@ -557,6 +571,10 @@ async function onSave(payload: {
         use: payload.use,
         onAir: payload.onAir,
         callsign: payload.callsign,
+        allstar: payload.allstar,
+        echolink: payload.echolink,
+        irlp: payload.irlp,
+        wires: payload.wires,
         allstarNode: payload.allstarNode,
         echolinkNode: payload.echolinkNode,
         irlpNode: payload.irlpNode,

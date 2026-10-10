@@ -95,17 +95,44 @@ describe('saved-channels-csv', () => {
     expect(parsed.latitudes[0]).toBeCloseTo(39.0997);
     expect(parsed.longitudes[0]).toBeCloseTo(-94.5786);
     expect(parsed.replaceLinkedNodes).toBe(true);
+    expect(parsed.replaceLinkedPresence).toBe(true);
     expect(parsed.linkedNodes[0]).toEqual({
       allstarNode: '5517',
       echolinkNode: '353167',
       irlpNode: undefined,
       wiresNode: '1234',
+      allstar: true,
+      echolink: true,
+      irlp: false,
+      wires: true,
     });
 
     const cleared = parseSavedChannelsCsv(csv.replace('5517', '0'));
     expect(cleared.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(cleared.linkedNodes[0]?.allstar).toBe(false);
     expect(cleared.latitudes[0]).toBeCloseTo(39.0997);
     expect(cleared.replaceLinkedNodes).toBe(true);
+  });
+
+  it('round-trips linked-system presence without a node number', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        allstar: true,
+        echolink: false,
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.linkedNodes[0]?.allstar).toBe(true);
+    expect(parsed.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.echolink).toBe(false);
+    expect(parsed.replaceLinkedPresence).toBe(true);
+
+    const zeroNode = parseSavedChannelsCsv(csv.replace(',,,,,,1,0,0,0', ',,0,,,,1,0,0,0'));
+    expect(zeroNode.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(zeroNode.linkedNodes[0]?.allstar).toBe(true);
   });
 
   it('imports website CSV node columns onto repeater rows', () => {
@@ -123,6 +150,10 @@ describe('saved-channels-csv', () => {
       echolinkNode: '353167',
       irlpNode: undefined,
       wiresNode: undefined,
+      allstar: false,
+      echolink: true,
+      irlp: false,
+      wires: false,
     });
   });
 

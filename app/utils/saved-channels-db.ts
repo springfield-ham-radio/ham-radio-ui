@@ -7,7 +7,7 @@ import {
 } from '@springfield/ham-radio-api';
 // RadioChannel is used by createBlankRadioChannel and insert helpers.
 import Database from '@tauri-apps/plugin-sql';
-import { linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
+import { linkedNodeSearchText, linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
 import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -40,6 +40,10 @@ export interface SavedChannelRow {
   echolink_node: string | null;
   irlp_node: string | null;
   wires_node: string | null;
+  allstar_linked: number | null;
+  echolink_linked: number | null;
+  irlp_linked: number | null;
+  wires_linked: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -179,6 +183,10 @@ export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
       echolinkNode: row.echolink_node ?? undefined,
       irlpNode: row.irlp_node ?? undefined,
       wiresNode: row.wires_node ?? undefined,
+      allstar: row.allstar_linked === 1,
+      echolink: row.echolink_linked === 1,
+      irlp: row.irlp_linked === 1,
+      wires: row.wires_linked === 1,
     }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -200,6 +208,10 @@ export function radioChannelToSavedChannel(
     echolinkNode?: string;
     irlpNode?: string;
     wiresNode?: string;
+    allstar?: boolean;
+    echolink?: boolean;
+    irlp?: boolean;
+    wires?: boolean;
     createdAt?: number;
     updatedAt?: number;
   } = {},
@@ -232,6 +244,7 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
             transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
             notes, use_type, on_air, callsign, latitude, longitude,
             allstar_node, echolink_node, irlp_node, wires_node,
+            allstar_linked, echolink_linked, irlp_linked, wires_linked,
             created_at, updated_at
      FROM saved_channels
      ORDER BY name COLLATE NOCASE ASC, receive_frequency ASC`,
@@ -254,8 +267,9 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
          transmit_tone, transmit_tone_type, receive_tone, receive_tone_type,
          notes, use_type, on_air, callsign, latitude, longitude,
          allstar_node, echolink_node, irlp_node, wires_node,
+         allstar_linked, echolink_linked, irlp_linked, wires_linked,
          created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
       [
         channel.id,
         channel.name ?? null,
@@ -276,6 +290,10 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
         channel.echolinkNode ?? null,
         channel.irlpNode ?? null,
         channel.wiresNode ?? null,
+        channel.allstar ? 1 : 0,
+        channel.echolink ? 1 : 0,
+        channel.irlp ? 1 : 0,
+        channel.wires ? 1 : 0,
         channel.createdAt,
         channel.updatedAt,
       ],
@@ -305,6 +323,10 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
     echolinkNode: nodes.echolinkNode,
     irlpNode: nodes.irlpNode,
     wiresNode: nodes.wiresNode,
+    allstar: nodes.allstar,
+    echolink: nodes.echolink,
+    irlp: nodes.irlp,
+    wires: nodes.wires,
     updatedAt: Date.now(),
   };
 
@@ -328,8 +350,12 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
        echolink_node = $16,
        irlp_node = $17,
        wires_node = $18,
-       updated_at = $19
-     WHERE id = $20`,
+       allstar_linked = $19,
+       echolink_linked = $20,
+       irlp_linked = $21,
+       wires_linked = $22,
+       updated_at = $23
+     WHERE id = $24`,
     [
       updated.name ?? null,
       updated.kind,
@@ -349,6 +375,10 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
       updated.echolinkNode ?? null,
       updated.irlpNode ?? null,
       updated.wiresNode ?? null,
+      updated.allstar ? 1 : 0,
+      updated.echolink ? 1 : 0,
+      updated.irlp ? 1 : 0,
+      updated.wires ? 1 : 0,
       updated.updatedAt,
       updated.id,
     ],
@@ -407,16 +437,7 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
   const name = channel.name?.toLowerCase() ?? '';
   const callsign = channel.callsign?.toLowerCase() ?? '';
   const notes = channel.notes?.toLowerCase() ?? '';
-  const linked = [channel.allstarNode, channel.echolinkNode, channel.irlpNode, channel.wiresNode]
-    .filter((node): node is string => Boolean(node))
-    .join(' ')
-    .toLowerCase();
-  const linkedLabels = [
-    channel.allstarNode ? 'allstar' : '',
-    channel.echolinkNode ? 'echolink' : '',
-    channel.irlpNode ? 'irlp' : '',
-    channel.wiresNode ? 'wires' : '',
-  ].join(' ');
+  const linked = linkedNodeSearchText(channel);
   const useLabel = channel.use ?? '';
   const onAirLabel = channel.onAir === true ? 'on-air' : channel.onAir === false ? 'off-air' : '';
   const transmit = String(channel.transmitFrequency);
@@ -429,7 +450,6 @@ export function matchesSavedChannelSearch(channel: SavedChannel, query: string):
     callsign.includes(trimmed) ||
     notes.includes(trimmed) ||
     linked.includes(trimmed) ||
-    linkedLabels.includes(trimmed) ||
     useLabel.includes(trimmed) ||
     onAirLabel.includes(trimmed) ||
     (channel.kind === 'repeater' && 'repeater'.startsWith(trimmed) && trimmed.length >= 3) ||

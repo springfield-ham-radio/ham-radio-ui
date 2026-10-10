@@ -165,6 +165,10 @@ export function useSavedChannels() {
       echolinkNode?: string;
       irlpNode?: string;
       wiresNode?: string;
+      allstar?: boolean;
+      echolink?: boolean;
+      irlp?: boolean;
+      wires?: boolean;
     },
   ): Promise<SavedChannel> {
     try {
@@ -180,6 +184,10 @@ export function useSavedChannels() {
           echolinkNode: repeater?.echolinkNode,
           irlpNode: repeater?.irlpNode,
           wiresNode: repeater?.wiresNode,
+          allstar: repeater?.allstar,
+          echolink: repeater?.echolink,
+          irlp: repeater?.irlp,
+          wires: repeater?.wires,
         }),
       ]);
 
@@ -421,6 +429,10 @@ export function useSavedChannels() {
             echolinkNode: repeater.echolinkNode,
             irlpNode: repeater.irlpNode,
             wiresNode: repeater.wiresNode,
+            allstar: repeater.allstar,
+            echolink: repeater.echolink,
+            irlp: repeater.irlp,
+            wires: repeater.wires,
           }),
         );
       }
@@ -452,7 +464,10 @@ export function useSavedChannels() {
           !match.callsign &&
           match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
         const nextName = callsignWasName ? undefined : match.name;
-        const nextNodes = mergeLinkedNodes(model, match, parsed.replaceLinkedNodes);
+        const nextNodes = mergeLinkedNodes(model, match, {
+          replaceNumbers: parsed.replaceLinkedNodes,
+          replacePresence: parsed.replaceLinkedPresence,
+        });
         const unchanged =
           nextUse === match.use &&
           nextOnAir === match.onAir &&

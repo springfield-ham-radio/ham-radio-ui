@@ -1,6 +1,13 @@
 import { Frequency, RadioToneType, type RadioChannel, type RadioTone } from '@springfield/ham-radio-api';
 import { parseFrequencyMHz } from '~/utils/channel-edit';
-import { parseLinkedNode, repeaterBookNodeColumnsPresent, type LinkedNodes } from '~/utils/linked-nodes';
+import {
+  linkedSystemsInText,
+  normalizeLinkedNodes,
+  parseLinkedNode,
+  repeaterBookLinkedTextColumnsPresent,
+  repeaterBookNodeColumnsPresent,
+  type LinkedNodes,
+} from '~/utils/linked-nodes';
 import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 
 export type RepeaterImportFormat = 'repeaterbook' | 'chirp';
@@ -28,6 +35,10 @@ export interface ParsedRepeater {
   echolinkNode?: string;
   irlpNode?: string;
   wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
 }
 
 export interface ParsedRepeaterImport {
@@ -35,6 +46,11 @@ export interface ParsedRepeaterImport {
   repeaters: ParsedRepeater[];
   /** True when the RepeaterBook header included node columns. CHIRP exports never do. */
   nodeColumnsPresent: boolean;
+  /**
+   * True when the RepeaterBook header included Modes, Mode, or Digital Access.
+   * Those cells can name a linked system without giving its node number.
+   */
+  linkedTextColumnsPresent: boolean;
 }
 
 const NONE_TONE: RadioTone = { tone: 0, type: RadioToneType.CTCSS };
@@ -73,6 +89,7 @@ export function parseRepeaterImportCsv(text: string): ParsedRepeaterImport {
     format,
     repeaters,
     nodeColumnsPresent: format === 'repeaterbook' && repeaterBookNodeColumnsPresent(header),
+    linkedTextColumnsPresent: format === 'repeaterbook' && repeaterBookLinkedTextColumnsPresent(header),
   };
 }
 
@@ -297,12 +314,20 @@ function parseDcsCode(raw: string): RadioTone {
  * `EchoLink Node`, `IRLP Node`, `AllStar Node`, and `Wires Node` (also `WIRES Node`).
  */
 function repeaterBookLinkedNodes(cell: (...names: string[]) => string): LinkedNodes {
-  return {
+  const named = linkedSystemsInText(
+    [collectRepeaterBookModes(cell), cell('modes'), cell('mode'), cell('digital_access')].filter(Boolean).join(' '),
+  );
+
+  return normalizeLinkedNodes({
     allstarNode: parseLinkedNode(cell('allstar_node', 'allstar')),
     echolinkNode: parseLinkedNode(cell('echolink_node', 'echolink')),
     irlpNode: parseLinkedNode(cell('irlp_node', 'irlp')),
     wiresNode: parseLinkedNode(cell('wires_node')),
-  };
+    allstar: named.allstar,
+    echolink: named.echolink,
+    irlp: named.irlp,
+    wires: named.wires,
+  });
 }
 
 function collectRepeaterBookModes(cell: (...names: string[]) => string): string {
