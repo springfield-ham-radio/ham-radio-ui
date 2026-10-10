@@ -1,3 +1,9 @@
+## [0.59.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.58.0...v0.59.0) (2026-10-10)
+
+### Features
+
+* **location:** shared location-format module over GeoPoint ([d339837](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d3398371f02918d44738cb69621b5e66a3f5208e))
+
 ## [0.58.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.57.0...v0.58.0) (2026-10-10)
 
 ### Features
