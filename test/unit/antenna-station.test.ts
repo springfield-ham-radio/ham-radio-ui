@@ -642,5 +642,8 @@ describe('radio stations', () => {
 
     expect(formatStationLocation(station)).toBe('FN42 · 42° 30\' 00.00" N 71° 00\' 00.00" W');
     expect(formatStationLocation(defaultHomeStation())).toBe('Location not set');
+    expect(formatStationLocation({ latitude: 0, longitude: -94.5 })).toMatch(/0° 00' 00.00" N/);
+    expect(formatStationLocation({ latitude: 0, longitude: 0 })).toBe('Location not set');
+    expect(formatStationLocation({ gridsquare: 'FN42', latitude: 0, longitude: 0 })).toBe('FN42');
   });
 });

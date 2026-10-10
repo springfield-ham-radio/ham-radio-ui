@@ -149,226 +149,25 @@ export function haversineDistanceKm(from: GeoPoint, to: GeoPoint): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
-export type CoordinateAxis = 'latitude' | 'longitude';
-export type LatitudeHemisphere = 'N' | 'S';
-export type LongitudeHemisphere = 'E' | 'W';
-export type DmsHemisphere = LatitudeHemisphere | LongitudeHemisphere;
+export type {
+  CoordinateAxis,
+  DmsHemisphere,
+  DmsInput,
+  DmsParseResult,
+  DmsParts,
+  LatitudeHemisphere,
+  LongitudeHemisphere,
+} from '~/utils/location-format';
 
-export interface DmsParts {
-  degrees: number;
-  minutes: number;
-  seconds: number;
-  hemisphere: DmsHemisphere;
-}
-
-export interface DmsInput {
-  degrees: string;
-  minutes: string;
-  seconds: string;
-  hemisphere: DmsHemisphere;
-}
-
-export type DmsParseResult = { empty: true } | { empty: false; value: number } | { empty: false; error: string };
-
-const SECONDS_DECIMALS = 2;
-const SECONDS_FACTOR = 10 ** SECONDS_DECIMALS;
-
-/**
- * Empty DMS fields. Hemisphere defaults to N / W until the operator picks otherwise.
- */
-export function emptyDmsInput(axis: CoordinateAxis): DmsInput {
-  return {
-    degrees: '',
-    minutes: '',
-    seconds: '',
-    hemisphere: axis === 'latitude' ? 'N' : 'W',
-  };
-}
-
-/**
- * Splits signed decimal degrees into unsigned degrees, minutes, decimal seconds, and hemisphere.
- */
-export function decimalDegreesToDms(decimal: number, axis: CoordinateAxis): DmsParts {
-  let hemisphere: DmsHemisphere;
-
-  if (axis === 'latitude') {
-    hemisphere = decimal < 0 ? 'S' : 'N';
-  } else {
-    hemisphere = decimal < 0 ? 'W' : 'E';
-  }
-
-  const abs = Math.abs(decimal);
-  const totalHundredths = Math.round(abs * 3600 * SECONDS_FACTOR);
-  let degrees = Math.floor(totalHundredths / (3600 * SECONDS_FACTOR));
-  let remainder = totalHundredths - degrees * 3600 * SECONDS_FACTOR;
-  let minutes = Math.floor(remainder / (60 * SECONDS_FACTOR));
-  let secondsHundredths = remainder - minutes * 60 * SECONDS_FACTOR;
-
-  if (secondsHundredths >= 60 * SECONDS_FACTOR) {
-    secondsHundredths = 0;
-    minutes += 1;
-  }
-
-  if (minutes >= 60) {
-    minutes = 0;
-    degrees += 1;
-  }
-
-  return {
-    degrees,
-    minutes,
-    seconds: secondsHundredths / SECONDS_FACTOR,
-    hemisphere,
-  };
-}
-
-/**
- * Signed decimal degrees from unsigned DMS and a hemisphere.
- */
-export function dmsToDecimalDegrees(parts: DmsParts): number {
-  const unsigned = parts.degrees + parts.minutes / 60 + parts.seconds / 3600;
-  const signed = parts.hemisphere === 'S' || parts.hemisphere === 'W' ? -unsigned : unsigned;
-
-  return roundCoord(signed);
-}
-
-/**
- * Fills the editor fields from stored decimal degrees, or blanks them when unset.
- */
-export function dmsInputFromDecimal(decimal: number | undefined, axis: CoordinateAxis): DmsInput {
-  if (decimal === undefined) {
-    return emptyDmsInput(axis);
-  }
-
-  const parts = decimalDegreesToDms(decimal, axis);
-
-  return {
-    degrees: String(parts.degrees),
-    minutes: String(parts.minutes),
-    seconds: String(parts.seconds),
-    hemisphere: parts.hemisphere,
-  };
-}
-
-/**
- * Parses operator-entered DMS. Blank fields are an empty coordinate; missing minutes or seconds are zero.
- */
-export function parseDmsInput(input: DmsInput, axis: CoordinateAxis): DmsParseResult {
-  const degreesText = input.degrees.trim();
-  const minutesText = input.minutes.trim();
-  const secondsText = input.seconds.trim();
-
-  if (!degreesText && !minutesText && !secondsText) {
-    return { empty: true };
-  }
-
-  const maxDegrees = axis === 'latitude' ? MAX_LATITUDE : MAX_LONGITUDE;
-  const degrees = parseWholeNumber(degreesText, 0);
-  const minutes = parseWholeNumber(minutesText, 0);
-  const seconds = parseSeconds(secondsText);
-
-  if (degrees === undefined) {
-    return { empty: false, error: `Degrees must be a whole number from 0 to ${maxDegrees}.` };
-  }
-
-  if (minutes === undefined) {
-    return { empty: false, error: 'Minutes must be a whole number from 0 to 59.' };
-  }
-
-  if (seconds === undefined) {
-    return { empty: false, error: 'Seconds must be from 0 up to (but not including) 60.' };
-  }
-
-  if (degrees < 0 || degrees > maxDegrees) {
-    return { empty: false, error: `Degrees must be a whole number from 0 to ${maxDegrees}.` };
-  }
-
-  if (minutes < 0 || minutes > 59) {
-    return { empty: false, error: 'Minutes must be a whole number from 0 to 59.' };
-  }
-
-  if (seconds < 0 || seconds >= 60) {
-    return { empty: false, error: 'Seconds must be from 0 up to (but not including) 60.' };
-  }
-
-  if (degrees === maxDegrees && (minutes > 0 || seconds > 0)) {
-    return { empty: false, error: `${axis === 'latitude' ? 'Latitude' : 'Longitude'} cannot exceed ${maxDegrees}°.` };
-  }
-
-  if (axis === 'latitude' && input.hemisphere !== 'N' && input.hemisphere !== 'S') {
-    return { empty: false, error: 'Latitude hemisphere must be N or S.' };
-  }
-
-  if (axis === 'longitude' && input.hemisphere !== 'E' && input.hemisphere !== 'W') {
-    return { empty: false, error: 'Longitude hemisphere must be E or W.' };
-  }
-
-  const value = dmsToDecimalDegrees({
-    degrees,
-    minutes,
-    seconds,
-    hemisphere: input.hemisphere,
-  });
-
-  if (axis === 'latitude' && !isValidLatitude(value)) {
-    return { empty: false, error: `Latitude must be between ${MIN_LATITUDE}° and ${MAX_LATITUDE}°.` };
-  }
-
-  if (axis === 'longitude' && !isValidLongitude(value)) {
-    return { empty: false, error: `Longitude must be between ${MIN_LONGITUDE}° and ${MAX_LONGITUDE}°.` };
-  }
-
-  return { empty: false, value };
-}
-
-/**
- * Formats latitude for display, for example 38° 30' 00.00" N.
- */
-export function formatLatitude(latitude: number): string {
-  return formatDms(decimalDegreesToDms(latitude, 'latitude'));
-}
-
-/**
- * Formats longitude for display, for example 90° 11' 57.84" W.
- */
-export function formatLongitude(longitude: number): string {
-  return formatDms(decimalDegreesToDms(longitude, 'longitude'));
-}
-
-function formatDms(parts: DmsParts): string {
-  const minutes = String(parts.minutes).padStart(2, '0');
-  const seconds = parts.seconds.toFixed(SECONDS_DECIMALS).padStart(5, '0');
-
-  return `${parts.degrees}° ${minutes}' ${seconds}" ${parts.hemisphere}`;
-}
-
-function parseWholeNumber(text: string, blankValue: number): number | undefined {
-  if (!text) {
-    return blankValue;
-  }
-
-  if (!/^-?\d+$/.test(text)) {
-    return undefined;
-  }
-
-  const value = Number(text);
-
-  return Number.isInteger(value) ? value : undefined;
-}
-
-function parseSeconds(text: string): number | undefined {
-  if (!text) {
-    return 0;
-  }
-
-  if (!/^-?\d+(?:\.\d+)?$/.test(text)) {
-    return undefined;
-  }
-
-  const value = Number(text);
-
-  return Number.isFinite(value) ? value : undefined;
-}
+export {
+  decimalDegreesToDms,
+  dmsInputFromDecimal,
+  dmsToDecimalDegrees,
+  emptyDmsInput,
+  formatLatitude,
+  formatLongitude,
+  parseDmsInput,
+} from '~/utils/location-format';
 
 function wrapLongitude(longitude: number): number {
   const wrapped = ((((longitude + 180) % 360) + 360) % 360) - 180;
