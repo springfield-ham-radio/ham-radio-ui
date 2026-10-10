@@ -1,3 +1,4 @@
+import { geoJsonFeature } from '~/utils/location-format';
 import { isValidLatitude, isValidLongitude, maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
 import type { StationLogQso } from '~/utils/station-log-db';
 
@@ -251,18 +252,16 @@ export function stationLogUnmappedCount(qsos: readonly StationLogQso[]): number 
 export function stationLogMapFeatureCollection(points: readonly StationLogMapPoint[]): StationLogMapFeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: points.map((point) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [point.longitude, point.latitude],
-      },
-      properties: {
-        grid: point.grid,
-        status: point.status,
-        count: point.qsos.length,
-      },
-    })),
+    features: points.map((point) =>
+      geoJsonFeature(
+        { latitude: point.latitude, longitude: point.longitude },
+        {
+          grid: point.grid,
+          status: point.status,
+          count: point.qsos.length,
+        },
+      ),
+    ),
   };
 }
 
@@ -318,16 +317,14 @@ export function stationMapPins(stations: readonly StationMapPinInput[]): Station
 export function stationMapFeatureCollection(pins: readonly StationMapPin[]): StationMapFeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: pins.map((pin) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [pin.longitude, pin.latitude],
-      },
-      properties: {
-        id: pin.id,
-        nickname: pin.nickname,
-      },
-    })),
+    features: pins.map((pin) =>
+      geoJsonFeature(
+        { latitude: pin.latitude, longitude: pin.longitude },
+        {
+          id: pin.id,
+          nickname: pin.nickname,
+        },
+      ),
+    ),
   };
 }

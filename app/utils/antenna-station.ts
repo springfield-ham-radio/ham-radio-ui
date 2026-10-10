@@ -15,9 +15,8 @@ import {
   type AntennaTypeId,
 } from '~/utils/antenna-types';
 import { equipmentCoversAdifBand } from '~/utils/radio-bands';
+import { formatLatitude, formatLongitude } from '~/utils/location-format';
 import {
-  formatLatitude,
-  formatLongitude,
   isValidLatitude,
   isValidLongitude,
   latLonToMaidenhead,

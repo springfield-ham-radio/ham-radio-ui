@@ -1,5 +1,5 @@
-import type { GeoPoint } from '~/utils/maidenhead';
-import { haversineDistanceKm, isValidLatitude, isValidLongitude, maidenheadToLatLon } from '~/utils/maidenhead';
+import { distanceKm } from '~/utils/location-format';
+import { isValidLatitude, isValidLongitude, maidenheadToLatLon, type GeoPoint } from '~/utils/maidenhead';
 import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
@@ -177,7 +177,7 @@ export function tripDistanceKm(
     return undefined;
   }
 
-  return haversineDistanceKm(start, { latitude: point.latitude, longitude: point.longitude });
+  return distanceKm(start, { latitude: point.latitude, longitude: point.longitude });
 }
 
 /**

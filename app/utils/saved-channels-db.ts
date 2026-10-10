@@ -8,7 +8,7 @@ import {
 // RadioChannel is used by createBlankRadioChannel and insert helpers.
 import Database from '@tauri-apps/plugin-sql';
 import { linkedNodeSearchText, linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
-import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
+import { locatedPoint } from '~/utils/location-format';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 export const SAVED_CHANNELS_DATABASE = 'sqlite:ham-radio.db';
@@ -74,15 +74,13 @@ export function coordinatesFromPair(
   latitude: number | null | undefined,
   longitude: number | null | undefined,
 ): { latitude?: number; longitude?: number } {
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+  const point = locatedPoint(latitude, longitude);
+
+  if (!point) {
     return {};
   }
 
-  if (latitude === 0 && longitude === 0) {
-    return {};
-  }
-
-  return { latitude, longitude };
+  return { latitude: point.latitude, longitude: point.longitude };
 }
 
 /**
