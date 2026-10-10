@@ -1,5 +1,5 @@
 import { coordinatesFromPair } from '~/utils/saved-channels-db';
-import { formatLatitude, formatLongitude } from '~/utils/maidenhead';
+import { formatLatitude, formatLongitude } from '~/utils/location-format';
 
 /** Shown when a row has neither a city/state nor coordinates. */
 export const CHANNEL_LOCATION_EMPTY = '—';

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compassPoint,
   compassPointBetween,
+  decimalDegreesToDms,
   distanceKm,
   formatDecimalDegrees,
   formatLatitude,
@@ -91,6 +92,8 @@ describe('distance and bearing', () => {
     expect(compassPoint(180)).toBe('S');
     expect(compassPoint(270)).toBe('W');
     expect(compassPoint(359)).toBe('N');
+    expect(compassPoint(348.75)).toBe('N');
+    expect(compassPoint(360)).toBe('N');
     expect(compassPoint(-90)).toBe('W');
     expect(compassPointBetween(origin, { latitude: 0, longitude: 1 })).toBe('E');
     expect(compassPointBetween(stLouis, { latitude: stLouis.latitude + 1, longitude: stLouis.longitude })).toBe('N');
@@ -163,5 +166,27 @@ describe('isLocated', () => {
 describe('DMS display', () => {
   it('still formats latitude from the shared module', () => {
     expect(formatLatitude(38.5)).toBe('38° 30\' 00.00" N');
+  });
+
+  it('rounds 59.995 seconds up to one minute', () => {
+    const decimal = 59.995 / 3600;
+
+    expect(decimalDegreesToDms(decimal, 'latitude')).toEqual({
+      degrees: 0,
+      minutes: 1,
+      seconds: 0,
+      hemisphere: 'N',
+    });
+    expect(formatLatitude(decimal)).toBe('0° 01\' 00.00" N');
+  });
+});
+
+describe('antimeridian distance', () => {
+  it('measures the short arc across the date line', () => {
+    const west = { latitude: 0, longitude: 179 };
+    const east = { latitude: 0, longitude: -179 };
+
+    expect(distanceKm(west, east)).toBeCloseTo(222.39, 1);
+    expect(distanceKm(west, east)).toBeLessThan(distanceKm(west, { latitude: 0, longitude: 0 }));
   });
 });

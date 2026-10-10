@@ -138,7 +138,7 @@ export function decimalDegreesToDms(decimal: number, axis: CoordinateAxis): DmsP
   }
 
   const abs = Math.abs(decimal);
-  const totalHundredths = Math.round(abs * 3600 * SECONDS_FACTOR);
+  const totalHundredths = Math.round(Number((abs * 3600 * SECONDS_FACTOR).toPrecision(15)));
   let degrees = Math.floor(totalHundredths / (3600 * SECONDS_FACTOR));
   let remainder = totalHundredths - degrees * 3600 * SECONDS_FACTOR;
   let minutes = Math.floor(remainder / (60 * SECONDS_FACTOR));

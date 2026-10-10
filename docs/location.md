@@ -13,5 +13,5 @@ Blank coordinates are absent (`undefined` in memory, `NULL` in SQLite). The exac
 | Record | Stored location | Notes |
 | --- | --- | --- |
 | Station | Grid, point, and `locationSource` | `grid` or `coordinates` on the station record in browser storage. A grid edit saves the cell center. A coordinate edit saves the point and a 6-character grid. |
-| Channel | Point only | `saved_channels.latitude` and `saved_channels.longitude` (migration 11). No grid column. |
+| Channel | Point plus repeater record fields | `saved_channels.latitude` and `saved_channels.longitude` (migration 11). Repeater rows also store `source_key`, `source_format`, `city`, `county`, `state`, `country`, `landmark`, `modes`, and `last_update` (migration 14). No grid column. The Channels **Location** column shows city and state when either is set, otherwise DMS from a located coordinate pair, otherwise —. |
 | QSO | Grid only | `their_gridsquare` and `my_gridsquare`. Issue #81 may add an optional point. |
