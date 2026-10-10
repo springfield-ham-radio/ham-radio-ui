@@ -8,6 +8,7 @@ import {
   parseRepeaterImportCsv,
   type ParsedRepeater,
 } from '../../app/utils/repeater-import.ts';
+import { parseSavedChannelsCsv } from '../../app/utils/saved-channels-csv.ts';
 import {
   radioChannelToSavedChannel,
   savedChannelRowToModel,
@@ -256,5 +257,145 @@ describe('planLibraryImport', () => {
     expect(followed.update[0]?.transmitTone.tone).toBe(1109);
     expect(followed.update[0]?.modes).toBe('FM DMR');
     expect(followed.update[0]?.notes).toBe('do not clobber');
+  });
+
+  it('counts a newer RepeaterBook Last Update as an update and leaves an identical re-import unchanged', () => {
+    const storedCsv = `State ID,Rptr ID,Frequency,Input Freq,PL,TSQ,Nearest City,County,State,Callsign,Use,Operational Status,FM Analog,Lat,Long,Last Update
+23,21812,146.92500,146.32500,103.5,,Lyman,York,Maine,WJ1L,OPEN,On-air,Yes,43.50,-70.72,2026-01-01
+`;
+    const newerDateCsv = storedCsv.replace('2026-01-01', '2026-06-01');
+
+    const existing = toSaved(parseRepeaterImportCsv(storedCsv).repeaters[0]!);
+    const policy = policyFor(storedCsv);
+    const newerOnly = toSaved(parseRepeaterImportCsv(newerDateCsv).repeaters[0]!);
+
+    const refreshed = planLibraryImport([existing], [newerOnly], policyFor(newerDateCsv));
+
+    expect(refreshed.added).toBe(0);
+    expect(refreshed.updated).toBe(1);
+    expect(refreshed.update[0]?.lastUpdate).toBe('2026-06-01');
+    expect(refreshed.update[0]?.transmitFrequency).toBe(existing.transmitFrequency);
+    expect(refreshed.update[0]?.modes).toBe(existing.modes);
+
+    const again = planLibraryImport([refreshed.update[0]!], [newerOnly], policyFor(newerDateCsv));
+
+    expect(again.updated).toBe(0);
+    expect(again.unchanged).toBe(1);
+
+    const identicalStored = planLibraryImport([existing], [toSaved(parseRepeaterImportCsv(storedCsv).repeaters[0]!)], policy);
+
+    expect(identicalStored.updated).toBe(0);
+    expect(identicalStored.unchanged).toBe(1);
+  });
+
+  it('keeps the stored name when re-import supplies a callsign that matches the name', () => {
+    const parsed = parseRepeaterImportCsv(
+      `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",County,State,Modes
+146.940000,146.34000,-,107.2,107.2,W5KA,"Austin",Travis,Texas,FM
+`,
+    );
+    const incoming = toSaved(parsed.repeaters[0]!);
+    const legacy = radioChannelToSavedChannel(importedRepeaterToRadioChannel(parsed.repeaters[0]!), {
+      id: RadioChannelId('44444444-4444-4444-4444-444444444444'),
+      kind: 'repeater',
+      notes: 'keep',
+    });
+    legacy.name = 'W5KA';
+
+    const plan = planLibraryImport([legacy], [incoming], policyFor(
+      `Output Freq,Input Freq,Call,"Location",State,Modes
+146.940000,146.34000,W5KA,"Austin",Texas,FM
+`,
+    ));
+
+    expect(plan.updated).toBe(1);
+    expect(plan.update[0]?.name).toBe('W5KA');
+    expect(plan.update[0]?.callsign).toBe('W5KA');
+    expect(plan.update[0]?.notes).toBe('keep');
+  });
+
+  it('keeps the first row notes and the last row modes when duplicate source keys collapse in one file', () => {
+    const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",County,State,Modes,Digital Access
+927.187500,902.18750,-,151.4,151.4,K5TRA,"Austin",Travis,Texas,FM AllStar EchoLink P-25 ,293
+927.187500,902.18750,-,151.4,151.4,K5TRA,"Austin",Travis,Texas,FM ,
+`;
+    const parsed = parseRepeaterImportCsv(csv);
+    const models = parsed.repeaters.map((repeater) => toSaved(repeater));
+    const plan = planLibraryImport([], models, policyFor(csv));
+    const collapsed = plan.insert.find((row) => row.sourceKey === models[0]?.sourceKey);
+
+    expect(plan.added).toBe(1);
+    expect(parsed.repeaters).toHaveLength(2);
+    expect(models[0]?.sourceKey).toBe(models[1]?.sourceKey);
+    expect(collapsed?.notes).toBe('Digital access 293');
+    expect(collapsed?.modes).toBe('FM');
+  });
+
+  it('leaves stored repeater record fields intact when a HamBench CSV lacks the new columns', () => {
+    const oldHeader =
+      'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
+    const oldCsv = `${oldHeader}
+Repeater —,146.3400,146.9400,CTCSS,107.2,CTCSS,107.2,Operator note,repeater,open,yes,W5KA,30.27,-97.74
+`;
+    const parsed = parseSavedChannelsCsv(oldCsv);
+
+    expect(parsed.recordColumns.sourceKey).toBe(false);
+    expect(parsed.recordColumns.city).toBe(false);
+    expect(parsed.recordColumns.modes).toBe(false);
+
+    const existing: SavedChannel = {
+      id: RadioChannelId('55555555-5555-5555-5555-555555555555'),
+      name: 'Repeater —',
+      kind: 'repeater',
+      transmitFrequency: parsed.channels[0]!.transmitFrequency,
+      receiveFrequency: parsed.channels[0]!.receiveFrequency,
+      transmitTone: parsed.channels[0]!.transmitTone,
+      receiveTone: parsed.channels[0]!.receiveTone,
+      notes: 'Operator note',
+      use: 'open',
+      onAir: true,
+      callsign: 'W5KA',
+      latitude: 30.27,
+      longitude: -97.74,
+      sourceKey: 'rb:w5ka:146940000:austin',
+      sourceFormat: 'repeaterbook',
+      city: 'Austin',
+      county: 'Travis',
+      state: 'Texas',
+      modes: 'FM AllStar',
+      lastUpdate: '2026-01-01',
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    const incoming = radioChannelToSavedChannel(parsed.channels[0]!, {
+      notes: parsed.notes[0],
+      kind: parsed.kinds[0],
+      use: parsed.uses[0],
+      onAir: parsed.onAir[0],
+      callsign: parsed.callsigns[0],
+      latitude: parsed.latitudes[0],
+      longitude: parsed.longitudes[0],
+      sourceKey: parsed.sourceKeys[0],
+      sourceFormat: parsed.sourceFormats[0],
+      city: parsed.cities[0],
+      county: parsed.counties[0],
+      state: parsed.states[0],
+      country: parsed.countries[0],
+      landmark: parsed.landmarks[0],
+      modes: parsed.modes[0],
+      lastUpdate: parsed.lastUpdates[0],
+    });
+
+    const plan = planLibraryImport([existing], [incoming], {
+      columns: parsed.recordColumns,
+      replaceLinkedNodes: parsed.replaceLinkedNodes,
+      replaceLinkedPresence: parsed.replaceLinkedPresence,
+      importedAt,
+    });
+
+    expect(plan.updated).toBe(0);
+    expect(plan.unchanged).toBe(1);
+    expect(plan.update).toHaveLength(0);
   });
 });

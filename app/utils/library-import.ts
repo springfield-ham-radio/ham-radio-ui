@@ -140,9 +140,20 @@ export function planLibraryImport(
       return [channel];
     }
 
-    const sameRecord = importedChannelsEqual({ ...channel, lastUpdate: original.lastUpdate }, original);
+    if (importedChannelsEqual(channel, original)) {
+      return [];
+    }
 
-    if (sameRecord) {
+    const fieldsMatchStoredLastUpdate = importedChannelsEqual(
+      { ...channel, lastUpdate: original.lastUpdate },
+      original,
+    );
+
+    if (fieldsMatchStoredLastUpdate) {
+      if (policy.columns.lastUpdate && isLastUpdateNewer(channel.lastUpdate, original.lastUpdate)) {
+        return [channel];
+      }
+
       return [];
     }
 
@@ -188,17 +199,13 @@ function stampImportedRow(model: SavedChannel, policy: LibraryImportPolicy): Sav
 function mergeImportedChannel(match: SavedChannel, model: SavedChannel, policy: LibraryImportPolicy): SavedChannel {
   const columns = policy.columns;
   const point = nextCoordinates(match, model);
-  const callsignWasName =
-    Boolean(model.callsign) &&
-    !match.callsign &&
-    match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
   const nodes = mergeLinkedNodes(model, match, {
     replaceNumbers: policy.replaceLinkedNodes,
     replacePresence: policy.replaceLinkedPresence,
   });
   const next: SavedChannel = {
     ...match,
-    name: callsignWasName ? undefined : match.name,
+    name: match.name,
     notes: match.notes,
     callsign: model.callsign?.trim() || match.callsign,
     transmitFrequency: model.transmitFrequency,
@@ -256,6 +263,29 @@ function pickSourceFormat(
   }
 
   return incoming ?? existing;
+}
+
+function isLastUpdateNewer(incoming: string | undefined, stored: string | undefined): boolean {
+  if (!incoming) {
+    return false;
+  }
+
+  if (!stored) {
+    return true;
+  }
+
+  if (incoming === stored) {
+    return false;
+  }
+
+  const incomingMs = Date.parse(incoming);
+  const storedMs = Date.parse(stored);
+
+  if (Number.isFinite(incomingMs) && Number.isFinite(storedMs)) {
+    return incomingMs > storedMs;
+  }
+
+  return incoming > stored;
 }
 
 function tonesEqual(left: RadioTone, right: RadioTone): boolean {
