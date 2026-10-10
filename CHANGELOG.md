@@ -1,3 +1,9 @@
+## [0.56.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.55.0...v0.56.0) (2026-10-10)
+
+### Features
+
+* **channels:** show linked-system nodes on repeaters ([#71](https://github.com/springfield-ham-radio/ham-radio-ui/issues/71)) ([5e7a0a3](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5e7a0a31d60201ca120899e90d58e4852539375c))
+
 ## [0.55.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.54.0...v0.55.0) (2026-10-10)
 
 ### Features
