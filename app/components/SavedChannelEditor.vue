@@ -33,6 +33,12 @@ const emit = defineEmits<{
       echolink?: boolean;
       irlp?: boolean;
       wires?: boolean;
+      city?: string;
+      county?: string;
+      state?: string;
+      country?: string;
+      landmark?: string;
+      modes?: string;
       id?: SavedChannel['id'];
     },
   ];
@@ -58,6 +64,12 @@ const allstarNode = ref('');
 const echolinkNode = ref('');
 const irlpNode = ref('');
 const wiresNode = ref('');
+const city = ref('');
+const county = ref('');
+const state = ref('');
+const country = ref('');
+const landmark = ref('');
+const modes = ref('');
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const isSaving = ref(false);
@@ -105,6 +117,12 @@ watch(
     echolinkOn.value = Boolean(props.channel?.echolink || props.channel?.echolinkNode);
     irlpOn.value = Boolean(props.channel?.irlp || props.channel?.irlpNode);
     wiresOn.value = Boolean(props.channel?.wires || props.channel?.wiresNode);
+    city.value = props.channel?.city ?? '';
+    county.value = props.channel?.county ?? '';
+    state.value = props.channel?.state ?? '';
+    country.value = props.channel?.country ?? '';
+    landmark.value = props.channel?.landmark ?? '';
+    modes.value = props.channel?.modes ?? '';
     receiveError.value = undefined;
     transmitError.value = undefined;
     isSaving.value = false;
@@ -213,6 +231,12 @@ async function save(): Promise<void> {
       use: isRepeater.value ? repeaterUse.value : undefined,
       onAir: isRepeater.value ? onAir.value : undefined,
       callsign: isRepeater.value ? callsign.value.trim() || undefined : undefined,
+      city: isRepeater.value ? city.value.trim() || undefined : undefined,
+      county: isRepeater.value ? county.value.trim() || undefined : undefined,
+      state: isRepeater.value ? state.value.trim() || undefined : undefined,
+      country: isRepeater.value ? country.value.trim() || undefined : undefined,
+      landmark: isRepeater.value ? landmark.value.trim() || undefined : undefined,
+      modes: isRepeater.value ? modes.value.trim() || undefined : undefined,
       ...linkedEditorPayload(),
       id: props.channel?.id,
     });
@@ -281,6 +305,33 @@ async function save(): Promise<void> {
           </UFormField>
 
           <USwitch v-model="onAir" label="On-air" description="Turn this off when the repeater is off the air." />
+
+          <div class="space-y-3">
+            <p class="text-xs text-muted">
+              Location and modes come from the repeater record. A re-import refreshes them and leaves your name and notes.
+            </p>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <UFormField label="City">
+                <UInput v-model="city" class="w-full" placeholder="Austin" />
+              </UFormField>
+              <UFormField label="State">
+                <UInput v-model="state" class="w-full" placeholder="Texas" />
+              </UFormField>
+              <UFormField label="County">
+                <UInput v-model="county" class="w-full" placeholder="Travis" />
+              </UFormField>
+              <UFormField label="Country">
+                <UInput v-model="country" class="w-full" placeholder="United States" />
+              </UFormField>
+            </div>
+            <UFormField label="Landmark">
+              <UInput v-model="landmark" class="w-full" placeholder="West Peak" />
+            </UFormField>
+            <UFormField label="Modes">
+              <UInput v-model="modes" class="w-full" placeholder="FM" />
+            </UFormField>
+            <p v-if="channel?.lastUpdate" class="text-xs text-muted">Last update {{ channel.lastUpdate }}</p>
+          </div>
 
           <div class="space-y-3">
             <p class="text-xs text-muted">

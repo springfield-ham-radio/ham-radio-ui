@@ -56,6 +56,15 @@ describe('saved-channels-db', () => {
         echolink_linked: 1,
         irlp_linked: 0,
         wires_linked: 0,
+        source_key: 'rb:23:21812',
+        source_format: 'repeaterbook',
+        city: 'Lyman',
+        county: 'York',
+        state: 'Maine',
+        country: 'United States',
+        landmark: null,
+        modes: 'FM',
+        last_update: '2026-01-01',
         created_at: 1_000,
         updated_at: 2_000,
       };
@@ -83,6 +92,15 @@ describe('saved-channels-db', () => {
       expect(model.onAir).toBe(false);
       expect(model.latitude).toBe(43.5018912);
       expect(model.longitude).toBe(-70.7260259);
+      expect(model.sourceKey).toBe('rb:23:21812');
+      expect(model.sourceFormat).toBe('repeaterbook');
+      expect(model.city).toBe('Lyman');
+      expect(model.county).toBe('York');
+      expect(model.state).toBe('Maine');
+      expect(model.country).toBe('United States');
+      expect(model.landmark).toBeUndefined();
+      expect(model.modes).toBe('FM');
+      expect(model.lastUpdate).toBe('2026-01-01');
       expect(model.createdAt).toBe(1_000);
       expect(model.updatedAt).toBe(2_000);
     });
@@ -112,6 +130,15 @@ describe('saved-channels-db', () => {
         echolink_linked: 0,
         irlp_linked: 0,
         wires_linked: 0,
+        source_key: null,
+        source_format: null,
+        city: null,
+        county: null,
+        state: null,
+        country: null,
+        landmark: null,
+        modes: null,
+        last_update: null,
         created_at: 1,
         updated_at: 1,
       };
@@ -231,6 +258,22 @@ describe('saved-channels-db', () => {
       expect(namedOnly.echolinkNode).toBeUndefined();
       expect(namedOnly.echolink).toBe(true);
       expect(matchesSavedChannelSearch(namedOnly, 'echolink')).toBe(true);
+    });
+
+    it('matches a repeater by city, county, or state', () => {
+      const saved = radioChannelToSavedChannel(sampleChannel, {
+        kind: 'repeater',
+        city: 'Austin',
+        county: 'Travis',
+        state: 'Texas',
+        landmark: 'Buckman Mtn',
+      });
+
+      expect(matchesSavedChannelSearch(saved, 'austin')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'travis')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'texas')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'buckman')).toBe(true);
+      expect(matchesSavedChannelSearch(saved, 'maine')).toBe(false);
     });
 
     it('matches repeater rows by the repeater kind label', () => {
