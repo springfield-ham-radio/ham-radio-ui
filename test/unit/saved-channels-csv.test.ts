@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType } from '@springfield/ham-radio-api';
 import {
@@ -155,6 +156,34 @@ describe('saved-channels-csv', () => {
       irlp: false,
       wires: false,
     });
+  });
+
+  it('leaves blank library coordinates and a Null Island pair unlocated', () => {
+    const header = 'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
+    const csv = `${header}
+Blank,146.940,146.340,CTCSS,107.2,CTCSS,107.2,,repeater,open,yes,W5KA,,
+Zero,146.820,146.220,CTCSS,100.0,CTCSS,100.0,,repeater,open,yes,N5MHI,0,0
+Equator,146.640,146.040,CTCSS,88.5,CTCSS,88.5,,repeater,open,yes,KE5RS,0,-97.85
+`;
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('library');
+    expect(parsed.latitudes[0]).toBeUndefined();
+    expect(parsed.longitudes[0]).toBeUndefined();
+    expect(parsed.latitudes[1]).toBeUndefined();
+    expect(parsed.longitudes[1]).toBeUndefined();
+    expect(parsed.latitudes[2]).toBe(0);
+    expect(parsed.longitudes[2]).toBeCloseTo(-97.85);
+  });
+
+  it('imports the Austin RepeaterBook export through the library parser with null coordinates', () => {
+    const csv = readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8');
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('repeaterbook');
+    expect(parsed.latitudes.length).toBeGreaterThan(0);
+    expect(parsed.latitudes.every((latitude) => latitude === undefined)).toBe(true);
+    expect(parsed.longitudes.every((longitude) => longitude === undefined)).toBe(true);
   });
 
   it('rejects CSV files missing required columns', () => {

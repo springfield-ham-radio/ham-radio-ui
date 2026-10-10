@@ -426,7 +426,13 @@ function emptyToUndefined(value: string): string | undefined {
 }
 
 function parseOptionalNumber(raw: string): number | undefined {
-  const value = Number(raw.trim());
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
 
   if (!Number.isFinite(value)) {
     return undefined;

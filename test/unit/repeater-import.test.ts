@@ -79,6 +79,7 @@ describe('repeater-import', () => {
       const dtcs = parsed.repeaters[3]!;
       expect(dtcs.transmitTone).toEqual({ tone: 754, type: RadioToneType.DCS });
       expect(dtcs.receiveTone).toEqual({ tone: 754, type: RadioToneType.DCS });
+      expect(parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined)).toBe(true);
     });
 
     it('parses a RepeaterBook search download that uses Output Freq and Call', () => {
@@ -111,6 +112,37 @@ describe('repeater-import', () => {
 
       const access = parsed.repeaters[2]!;
       expect(access.notes).toBe('Digital access 293');
+      expect(parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined)).toBe(true);
+    });
+
+    it('leaves blank Lat and Long cells unlocated instead of storing zero', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",lat,long
+146.940000,146.34000,-,107.2,107.2,W5KA,"Austin",,
+146.820000,146.22000,-,100.0,100.0,N5MHI,"Austin",0,0
+146.640000,146.04000,-,88.5,88.5,KE5RS,"Leander",0,-97.85
+442.100000,447.10000,+,100.0,100.0,K5TRA,"Austin",30.27,0
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.repeaters[0]?.latitude).toBeUndefined();
+      expect(parsed.repeaters[0]?.longitude).toBeUndefined();
+      expect(parsed.repeaters[1]?.latitude).toBeUndefined();
+      expect(parsed.repeaters[1]?.longitude).toBeUndefined();
+      expect(parsed.repeaters[2]?.latitude).toBe(0);
+      expect(parsed.repeaters[2]?.longitude).toBeCloseTo(-97.85);
+      expect(parsed.repeaters[3]?.latitude).toBeCloseTo(30.27);
+      expect(parsed.repeaters[3]?.longitude).toBe(0);
+    });
+
+    it('imports the Austin RepeaterBook export with no coordinates as unlocated', () => {
+      const csv = readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8');
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.format).toBe('repeaterbook');
+      expect(parsed.repeaters.length).toBeGreaterThan(0);
+      expect(
+        parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined),
+      ).toBe(true);
     });
 
     it('reads Use and Op Status from a RepeaterBook search export', () => {

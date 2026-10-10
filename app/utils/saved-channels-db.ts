@@ -67,6 +67,8 @@ export interface SavedChannel extends RadioChannel, LinkedNodes {
 
 /**
  * Keep a coordinate pair only when both values are in range.
+ * The exact pair (0, 0) is Null Island: no ham repeater is there, so it is unlocated.
+ * A single zero (the equator or the prime meridian) stays valid.
  */
 export function coordinatesFromPair(
   latitude: number | null | undefined,
@@ -76,7 +78,27 @@ export function coordinatesFromPair(
     return {};
   }
 
+  if (latitude === 0 && longitude === 0) {
+    return {};
+  }
+
   return { latitude, longitude };
+}
+
+/**
+ * SQL bindings for the latitude and longitude columns. Absent coordinates, and the
+ * Null Island pair, are NULL rather than 0.
+ */
+export function coordinateColumnsForDb(channel: {
+  latitude?: number | null;
+  longitude?: number | null;
+}): { latitude: number | null; longitude: number | null } {
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+  return {
+    latitude: point.latitude ?? null,
+    longitude: point.longitude ?? null,
+  };
 }
 
 export function savedChannelKindFromDb(value: string | null | undefined): SavedChannelKind {
@@ -261,6 +283,8 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
   const database = await getSavedChannelsDatabase();
 
   for (const channel of channels) {
+    const point = coordinateColumnsForDb(channel);
+
     await database.execute(
       `INSERT INTO saved_channels (
          id, name, kind, transmit_frequency, receive_frequency,
@@ -284,8 +308,8 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
         channel.use ?? null,
         onAirToDb(channel.onAir),
         channel.callsign ?? null,
-        channel.latitude ?? null,
-        channel.longitude ?? null,
+        point.latitude,
+        point.longitude,
         channel.allstarNode ?? null,
         channel.echolinkNode ?? null,
         channel.irlpNode ?? null,
@@ -300,7 +324,15 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
     );
   }
 
-  return channels;
+  return channels.map((channel) => {
+    const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+    return {
+      ...channel,
+      latitude: point.latitude,
+      longitude: point.longitude,
+    };
+  });
 }
 
 export async function insertSavedChannels(channels: RadioChannel[]): Promise<SavedChannel[]> {
@@ -329,6 +361,7 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
     wires: nodes.wires,
     updatedAt: Date.now(),
   };
+  const columns = coordinateColumnsForDb(updated);
 
   await database.execute(
     `UPDATE saved_channels SET
@@ -369,8 +402,8 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
       updated.use ?? null,
       onAirToDb(updated.onAir),
       updated.callsign ?? null,
-      updated.latitude ?? null,
-      updated.longitude ?? null,
+      columns.latitude,
+      columns.longitude,
       updated.allstarNode ?? null,
       updated.echolinkNode ?? null,
       updated.irlpNode ?? null,

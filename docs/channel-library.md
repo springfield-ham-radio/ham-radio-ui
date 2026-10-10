@@ -14,11 +14,15 @@ RepeaterBook and CHIRP rows are stored in the same library and shown with a **Re
 
 You can also mark or unmark a row as a repeater in the channel editor. Repeater rows store **Use** (open or closed) and **On-air**. RepeaterBook `Use` and `Operational Status` fill those fields on import. Latitude and longitude are stored when the CSV includes them.
 
+## Distance
+
+**Distance from** is on every group. Pick a saved station or type coordinates. HamBench starts with the selected station when that station has a location, otherwise Home. The **Distance** column is straight-line miles or kilometers (**Preferences → Channels**; miles unless you change it). Sort the column either way. Rows without coordinates, including CHIRP imports and built-in Weather, FRS, and GMRS, show — and stay last. Hide **Distance** from **Columns**. With no start point the column is hidden. Bearing is not shown.
+
 ## Trip lists
 
 **New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
 
-On that group, set **Distance from** to a saved station or type coordinates. Rows sort by straight-line distance from that point. Rows without coordinates stay at the end. Filter by band, **Open use**, and **On-air** when the import included those fields. Select the rows you want and use **Add to radio**.
+Trip groups use the same **Distance from** control. Filter by band, **Open use**, and **On-air** when the import included those fields. Select the rows you want and use **Add to radio**.
 
 ## Add to a radio
 

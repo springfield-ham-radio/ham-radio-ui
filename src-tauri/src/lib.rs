@@ -503,6 +503,12 @@ ALTER TABLE saved_channels ADD COLUMN wires_linked INTEGER NOT NULL DEFAULT 0;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "clear_null_island_channel_coordinates",
+            sql: "UPDATE saved_channels SET latitude = NULL, longitude = NULL WHERE latitude = 0 AND longitude = 0;",
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
