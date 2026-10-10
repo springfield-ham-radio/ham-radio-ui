@@ -509,6 +509,30 @@ ALTER TABLE saved_channels ADD COLUMN wires_linked INTEGER NOT NULL DEFAULT 0;
             sql: "UPDATE saved_channels SET latitude = NULL, longitude = NULL WHERE latitude = 0 AND longitude = 0;",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "add_saved_channel_repeater_record",
+            sql: r#"
+-- City, county, state, country, landmark, and modes used to be folded into notes
+-- (for example 'Austin, Texas · FM AllStar EchoLink · Digital access 293').
+-- Those notes are not split here. City text contains commas and dashes, modes are
+-- free text, and the separator can appear in notes an operator wrote, so a
+-- mechanical parse would mis-file that text. Existing notes stay as written.
+-- Coordinates stay in latitude/longitude from migration 11. Blank coordinates and
+-- the exact pair (0, 0) remain unlocated; this migration does not add coordinate columns.
+ALTER TABLE saved_channels ADD COLUMN source_key TEXT;
+ALTER TABLE saved_channels ADD COLUMN source_format TEXT;
+ALTER TABLE saved_channels ADD COLUMN city TEXT;
+ALTER TABLE saved_channels ADD COLUMN county TEXT;
+ALTER TABLE saved_channels ADD COLUMN state TEXT;
+ALTER TABLE saved_channels ADD COLUMN country TEXT;
+ALTER TABLE saved_channels ADD COLUMN landmark TEXT;
+ALTER TABLE saved_channels ADD COLUMN modes TEXT;
+ALTER TABLE saved_channels ADD COLUMN last_update TEXT;
+CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

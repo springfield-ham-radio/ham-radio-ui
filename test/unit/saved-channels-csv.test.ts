@@ -186,6 +186,56 @@ Equator,146.640,146.040,CTCSS,88.5,CTCSS,88.5,,repeater,open,yes,KE5RS,0,-97.85
     expect(parsed.longitudes.every((longitude) => longitude === undefined)).toBe(true);
   });
 
+  it('round-trips repeater record fields through the library CSV', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        callsign: 'W5KA',
+        sourceKey: 'rb:w5ka:146940000:austin',
+        sourceFormat: 'repeaterbook',
+        city: 'Austin',
+        county: 'Travis',
+        state: 'Texas',
+        country: 'United States',
+        landmark: 'Buckman Mtn',
+        modes: 'FM AllStar',
+        lastUpdate: '2026-01-01',
+        notes: 'Operator note',
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('library');
+    expect(parsed.recordColumns.city).toBe(true);
+    expect(parsed.recordColumns.modes).toBe(true);
+    expect(parsed.recordColumns.lastUpdate).toBe(true);
+    expect(parsed.sourceKeys[0]).toBe('rb:w5ka:146940000:austin');
+    expect(parsed.sourceFormats[0]).toBe('repeaterbook');
+    expect(parsed.cities[0]).toBe('Austin');
+    expect(parsed.counties[0]).toBe('Travis');
+    expect(parsed.states[0]).toBe('Texas');
+    expect(parsed.countries[0]).toBe('United States');
+    expect(parsed.landmarks[0]).toBe('Buckman Mtn');
+    expect(parsed.modes[0]).toBe('FM AllStar');
+    expect(parsed.lastUpdates[0]).toBe('2026-01-01');
+    expect(parsed.notes[0]).toBe('Operator note');
+  });
+
+  it('imports RepeaterBook record fields without folding location into notes', () => {
+    const parsed = parseSavedChannelsCsv(repeaterBookCsv);
+
+    expect(parsed.cities[0]).toBe('Lyman');
+    expect(parsed.states[0]).toBe('Maine');
+    expect(parsed.countries[0]).toBe('United States');
+    expect(parsed.modes[0]).toBe('FM');
+    expect(parsed.lastUpdates[0]).toBe('2026-01-01');
+    expect(parsed.sourceKeys[0]).toBe('rb:23:21812');
+    expect(parsed.notes[0]).toBe('Club machine');
+    expect(parsed.recordColumns.city).toBe(true);
+    expect(parsed.recordColumns.lastUpdate).toBe(true);
+  });
+
   it('rejects CSV files missing required columns', () => {
     expect(() => parseSavedChannelsCsv('name,tx_mhz\nA,146.52\n')).toThrow(/missing required column/);
   });

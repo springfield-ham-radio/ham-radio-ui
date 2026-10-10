@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
+  importedRepeaterNotes,
   importedRepeaterToRadioChannel,
   parseRepeaterImportCsv,
 } from '../../app/utils/repeater-import.ts';
@@ -40,6 +41,11 @@ describe('repeater-import', () => {
       expect(analog.latitude).toBeCloseTo(43.5018912);
       expect(analog.longitude).toBeCloseTo(-70.7260259);
       expect(analog.modes).toBe('FM');
+      expect(analog.county).toBe('York');
+      expect(analog.country).toBe('United States');
+      expect(analog.lastUpdate).toBe('2026-01-01');
+      expect(importedRepeaterNotes(analog)).toBe('Club machine');
+      expect(importedRepeaterNotes(analog)).not.toContain('Lyman');
     });
 
     it('parses RepeaterBook DCS PL codes and listed digital modes', () => {
@@ -103,6 +109,10 @@ describe('repeater-import', () => {
       expect(leander.transmitTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
       expect(leander.receiveTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
       expect(leander.modes).toBe('FM AllStar EchoLink');
+      expect(leander.sourceKey).toBe('rb:ke5rs:441600000:leander');
+      expect(leander.sourceFormat).toBe('repeaterbook');
+      expect(leander.latitude).toBeUndefined();
+      expect(importedRepeaterNotes(leander)).toBeUndefined();
 
       const noTone = parsed.repeaters[1]!;
       expect(noTone.callsign).toBe('W5KA');
@@ -239,6 +249,11 @@ describe('repeater-import', () => {
         parsed.repeaters.filter((repeater) => repeater[field]).length;
 
       expect(parsed.repeaters).toHaveLength(52);
+      expect(parsed.recordColumns.city).toBe(true);
+      expect(parsed.recordColumns.state).toBe(true);
+      expect(parsed.recordColumns.lastUpdate).toBe(false);
+      expect(parsed.repeaters[0]?.sourceKey).toBe('rb:w5ka:1293100000:austin - south austin med ctr');
+      expect(new Set(parsed.repeaters.map((repeater) => repeater.sourceKey)).size).toBeLessThan(parsed.repeaters.length);
       expect(parsed.nodeColumnsPresent).toBe(false);
       expect(count('allstar')).toBe(13);
       expect(count('echolink')).toBe(9);
@@ -259,6 +274,9 @@ describe('repeater-import', () => {
       expect(parsed.repeaters[0]?.echolinkNode).toBeUndefined();
       expect(parsed.repeaters[0]?.irlpNode).toBeUndefined();
       expect(parsed.repeaters[0]?.wiresNode).toBeUndefined();
+      expect(parsed.repeaters.every((repeater) => repeater.city === undefined && repeater.state === undefined)).toBe(true);
+      expect(parsed.recordColumns.city).toBe(false);
+      expect(parsed.recordColumns.state).toBe(false);
     });
 
     it('rejects CSV files that are not RepeaterBook or CHIRP exports', () => {

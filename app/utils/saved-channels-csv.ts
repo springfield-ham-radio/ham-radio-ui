@@ -22,10 +22,18 @@ import {
   parseLinkedPresence,
   type LinkedNodes,
 } from '~/utils/linked-nodes';
-import { coordinatesFromPair, type RepeaterUse, type SavedChannel, type SavedChannelKind } from '~/utils/saved-channels-db';
+import {
+  coordinatesFromPair,
+  type RepeaterUse,
+  type SavedChannel,
+  type SavedChannelKind,
+  type SavedChannelRecordColumns,
+  type SavedChannelSourceFormat,
+  sourceFormatFromDb,
+} from '~/utils/saved-channels-db';
 
 export const SAVED_CHANNELS_CSV_HEADER =
-  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude,allstar_node,echolink_node,irlp_node,wires_node,allstar,echolink,irlp,wires';
+  'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude,allstar_node,echolink_node,irlp_node,wires_node,allstar,echolink,irlp,wires,source_key,source_format,city,county,state,country,landmark,modes,last_update';
 
 export interface ParsedSavedChannelsCsv {
   source: 'library' | 'repeaterbook' | 'chirp';
@@ -38,6 +46,16 @@ export interface ParsedSavedChannelsCsv {
   latitudes: Array<number | undefined>;
   longitudes: Array<number | undefined>;
   linkedNodes: LinkedNodes[];
+  sourceKeys: Array<string | undefined>;
+  sourceFormats: Array<SavedChannelSourceFormat | undefined>;
+  cities: Array<string | undefined>;
+  counties: Array<string | undefined>;
+  states: Array<string | undefined>;
+  countries: Array<string | undefined>;
+  landmarks: Array<string | undefined>;
+  modes: Array<string | undefined>;
+  lastUpdates: Array<string | undefined>;
+  recordColumns: SavedChannelRecordColumns;
   /** When true, blank node columns replace stored node numbers on a matching row. */
   replaceLinkedNodes: boolean;
   /** When true, incoming presence flags replace stored presence on a matching row. */
@@ -123,6 +141,15 @@ export function serializeSavedChannelsCsv(channels: SavedChannel[]): string {
         channel.kind === 'repeater' ? formatLinkedPresence(channel.echolink) : '',
         channel.kind === 'repeater' ? formatLinkedPresence(channel.irlp) : '',
         channel.kind === 'repeater' ? formatLinkedPresence(channel.wires) : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.sourceKey ?? '') : '',
+        channel.kind === 'repeater' ? (channel.sourceFormat ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.city ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.county ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.state ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.country ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.landmark ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.modes ?? '') : '',
+        channel.kind === 'repeater' ? escapeCsvField(channel.lastUpdate ?? '') : '',
       ].join(','),
     );
   }
@@ -277,6 +304,16 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
             })
           : {},
       ),
+      sourceKeys: parsed.repeaters.map((repeater) => repeater.sourceKey),
+      sourceFormats: parsed.repeaters.map((repeater) => repeater.sourceFormat),
+      cities: parsed.repeaters.map((repeater) => repeater.city),
+      counties: parsed.repeaters.map((repeater) => repeater.county),
+      states: parsed.repeaters.map((repeater) => repeater.state),
+      countries: parsed.repeaters.map((repeater) => repeater.country),
+      landmarks: parsed.repeaters.map((repeater) => repeater.landmark),
+      modes: parsed.repeaters.map((repeater) => repeater.modes),
+      lastUpdates: parsed.repeaters.map((repeater) => repeater.lastUpdate),
+      recordColumns: parsed.recordColumns,
       replaceLinkedNodes: parsed.nodeColumnsPresent,
       replaceLinkedPresence: parsed.nodeColumnsPresent || parsed.linkedTextColumnsPresent,
     };
@@ -300,6 +337,15 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
   const latitudes: Array<number | undefined> = [];
   const longitudes: Array<number | undefined> = [];
   const linkedNodes: LinkedNodes[] = [];
+  const sourceKeys: Array<string | undefined> = [];
+  const sourceFormats: Array<SavedChannelSourceFormat | undefined> = [];
+  const cities: Array<string | undefined> = [];
+  const counties: Array<string | undefined> = [];
+  const states: Array<string | undefined> = [];
+  const countries: Array<string | undefined> = [];
+  const landmarks: Array<string | undefined> = [];
+  const modes: Array<string | undefined> = [];
+  const lastUpdates: Array<string | undefined> = [];
   const nodeColumns = ['allstar_node', 'echolink_node', 'irlp_node', 'wires_node'] as const;
   const presenceColumns = ['allstar', 'echolink', 'irlp', 'wires'] as const;
   const replaceLinkedNodes = nodeColumns.some((column) => indexOf(column) !== -1);
@@ -369,7 +415,36 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
           })
         : {},
     );
+    const recordText = (column: string): string | undefined => {
+      if (indexOf(column) === -1) {
+        return undefined;
+      }
+
+      return cell(column) || undefined;
+    };
+
+    sourceKeys.push(kind === 'repeater' ? recordText('source_key') : undefined);
+    sourceFormats.push(kind === 'repeater' ? sourceFormatFromDb(recordText('source_format')) : undefined);
+    cities.push(kind === 'repeater' ? recordText('city') : undefined);
+    counties.push(kind === 'repeater' ? recordText('county') : undefined);
+    states.push(kind === 'repeater' ? recordText('state') : undefined);
+    countries.push(kind === 'repeater' ? recordText('country') : undefined);
+    landmarks.push(kind === 'repeater' ? recordText('landmark') : undefined);
+    modes.push(kind === 'repeater' ? recordText('modes') : undefined);
+    lastUpdates.push(kind === 'repeater' ? recordText('last_update') : undefined);
   }
+
+  const recordColumns: SavedChannelRecordColumns = {
+    sourceKey: indexOf('source_key') !== -1,
+    sourceFormat: indexOf('source_format') !== -1,
+    city: indexOf('city') !== -1,
+    county: indexOf('county') !== -1,
+    state: indexOf('state') !== -1,
+    country: indexOf('country') !== -1,
+    landmark: indexOf('landmark') !== -1,
+    modes: indexOf('modes') !== -1,
+    lastUpdate: indexOf('last_update') !== -1,
+  };
 
   return {
     source: 'library',
@@ -382,6 +457,16 @@ export function parseSavedChannelsCsv(text: string): ParsedSavedChannelsCsv {
     latitudes,
     longitudes,
     linkedNodes,
+    sourceKeys,
+    sourceFormats,
+    cities,
+    counties,
+    states,
+    countries,
+    landmarks,
+    modes,
+    lastUpdates,
+    recordColumns,
     replaceLinkedNodes,
     replaceLinkedPresence,
   };
