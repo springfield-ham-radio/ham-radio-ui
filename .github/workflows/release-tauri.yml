@@ -13,16 +13,14 @@ on:
         description: Git tag to rebuild (e.g. v0.1.0)
         required: true
         type: string
-  release:
-    types: [published]
 
 permissions:
   contents: write
 
-# One queue for workflow_call, workflow_dispatch, and release: published.
-# A second trigger waits. Cancelling here used to kill the installer build
-# when the GitHub App token published the release and started this workflow
-# again for the same tag.
+# One queue for workflow_call (CI) and workflow_dispatch (manual rebuild).
+# There is no release: published trigger: semantic-release already publishes
+# the GitHub Release, and CI calls this workflow with that tag. A release
+# event would start a second build of the same tag.
 #
 # The group stays a fixed name. On workflow_call, github.workflow is the
 # caller ("CI") and github.ref is the branch, so ${{ github.workflow }}-${{ github.ref }}
@@ -86,7 +84,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ inputs.tag }}
           token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/checkout@v7
@@ -159,11 +157,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.updater_signing.outputs.private_key_password }}
         with:
-          tagName: ${{ inputs.tag || github.event.release.tag_name }}
-          releaseName: HamBench ${{ inputs.tag || github.event.release.tag_name }}
+          tagName: ${{ inputs.tag }}
+          releaseName: HamBench ${{ inputs.tag }}
           releaseBody: See the assets to download this version and install.
           releaseDraft: false
-          prerelease: ${{ contains(inputs.tag || github.event.release.tag_name, '-') }}
+          prerelease: ${{ contains(inputs.tag, '-') }}
           args: ${{ matrix.args }}
 
   rename-downloads:
@@ -188,7 +186,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/rename-release-installers.ts
 
       # tauri-action updates the release without make_latest, and the API

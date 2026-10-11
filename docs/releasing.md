@@ -20,7 +20,7 @@ The `beta` branch publishes prereleases (`0.2.0-beta.1`).
 2. The CI `release` job runs semantic-release: changelog, git tag `vX.Y.Z`, and a GitHub Release.
 3. CI then calls the **Release Tauri** workflow (same run) to build installers and upload them to that release.
 
-GitHub does not start new workflows from events created with `GITHUB_TOKEN`, so installer builds are chained from CI via `workflow_call` rather than the `release` event alone.
+Installer builds run once, from that CI call. Release Tauri does not listen for `release: published`. semantic-release publishes the GitHub Release in one step (the GitHub plugin uploads no assets, and `draftRelease` stays at its default, false). `tauri-action` then uploads installers to that existing release (`releaseDraft: false`). It does not publish a second release.
 
 You can rebuild installers for an existing tag from the Actions UI (**Release Tauri** → Run workflow → enter the tag).
 
@@ -39,7 +39,7 @@ The ARM64 job uses the `ubuntu-22.04-arm` runner, the same Ubuntu release as the
 
 Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
 
-CI builds installers in the same workflow run after semantic-release (via `workflow_call`). A standalone `release` event from `GITHUB_TOKEN` does not start other workflows.
+CI builds installers in the same workflow run after semantic-release (via `workflow_call`). Publishing a release from the GitHub UI does not start this workflow; rebuild that tag with **Release Tauri** → Run workflow.
 
 macOS Gatekeeper and Windows SmartScreen will warn. Current macOS often reports an unsigned Safari download as **“HamBench” is damaged and can’t be opened**. That is quarantine, not a corrupt file. Users should not move it to the Trash. Clear the quarantine, then open it:
 
