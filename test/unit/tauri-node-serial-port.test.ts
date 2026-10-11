@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SendReceiveOperation } from '@springfield/ham-radio-driver/dist/utils/protocol-operations.js';
 import { createLoggingSerialPort, SerialLogger } from '@springfield/ham-radio-driver/dist/utils/serial-logger.js';
@@ -169,5 +170,85 @@ describe('ham-radio-driver setBaudRate with TauriNodeSerialPort', () => {
 
     expect(tauri.setBaudRate).toHaveBeenCalledWith(57600);
     serialLogger.close();
+=======
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSerialPathCloseTracking } from '../../app/utils/serial-port-path-close.ts';
+
+const openCalls: string[] = [];
+let closeDelayMs = 50;
+
+vi.mock('tauri-plugin-serialplugin-api', () => {
+  class MockTauriSerialPort {
+    options: { path: string };
+
+    constructor(options: { path: string }) {
+      this.options = options;
+    }
+
+    async open(): Promise<void> {
+      openCalls.push(this.options.path);
+    }
+
+    async writeDataTerminalReady(): Promise<void> {}
+
+    async writeRequestToSend(): Promise<void> {}
+
+    async watch(): Promise<{ unwatch: () => Promise<void> }> {
+      return { unwatch: async () => {} };
+    }
+
+    async clearBuffer(): Promise<void> {}
+
+    async close(): Promise<void> {
+      await new Promise((resolve) => {
+        setTimeout(resolve, closeDelayMs);
+      });
+    }
+
+    async writeBinary(): Promise<number> {
+      return 0;
+    }
+  }
+
+  return {
+    ClearBuffer: { Input: 'input' },
+    DataBits: { Eight: 8 },
+    FlowControl: { None: 'none' },
+    Parity: { None: 'none' },
+    StopBits: { One: 1 },
+    SerialPort: MockTauriSerialPort,
+  };
+});
+
+describe('TauriNodeSerialPort path close ordering', () => {
+  beforeEach(() => {
+    resetSerialPathCloseTracking();
+    openCalls.length = 0;
+    closeDelayMs = 50;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetSerialPathCloseTracking();
+  });
+
+  it('waits for an in-flight close before opening the same path again', async () => {
+    const { TauriNodeSerialPort } = await import('../../app/utils/tauri-node-serial-port.ts');
+    const path = '/dev/cu.usbserial-test';
+
+    const first = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(first.isOpen).toBe(true));
+
+    first.close();
+    const second = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(openCalls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(closeDelayMs + 400);
+    await vi.waitFor(() => expect(openCalls).toHaveLength(2));
+    await vi.waitFor(() => expect(second.isOpen).toBe(true));
+>>>>>>> 16f29b8 (fix: serialize serial port reopen and save write failure logs)
   });
 });

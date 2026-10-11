@@ -62,12 +62,13 @@ import { radioCardIdKey } from '~/composables/radio-card-context';
 import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
+import { type SerialLogOperation } from '~/utils/serial-log-file';
 import {
-  defaultSerialLogFileName,
-  serializeSerialLogFile,
-  serialLogEntryCount,
-  type SerialLogOperation,
-} from '~/utils/serial-log-file';
+  mergeSessionSerialLog,
+  serialLogForProgressSave,
+  snapshotFromDriverSerialLog,
+  type CapturedSerialLogSnapshot,
+} from '~/utils/serial-log-session';
 
 const logger = new LogLayer({
   transport: [
@@ -78,13 +79,7 @@ const logger = new LogLayer({
   ],
 });
 
-interface CapturedSerialLog {
-  fileName: string;
-  contents: string;
-  entryCount: number;
-  operation: SerialLogOperation;
-  log: unknown;
-}
+type CapturedSerialLog = CapturedSerialLogSnapshot;
 
 interface SerialLoggedDriver {
   getSerialLogData(): unknown;
@@ -302,6 +297,50 @@ export function useRadio() {
       patchSession(cardId.value, { serialLog: value });
     },
   });
+
+  /** Serial log for the card receiving a read/write transfer (may differ from the focused card). */
+  const transferSerialLog = computed(() => readSession(actingCardId())?.serialLog);
+
+  const progressSerialLog = computed(() => {
+    const log = transferSerialLog.value;
+
+    if (!log || !progressError.value) {
+      return log;
+    }
+
+    return serialLogForProgressSave(log, progressKind.value);
+  });
+
+  let backupFailureDecision: ((choice: 'skip' | 'abort') => void) | undefined;
+
+  function waitForBackupFailureDecision(): Promise<'skip' | 'abort'> {
+    return new Promise((resolve) => {
+      backupFailureDecision = (choice) => {
+        backupFailureDecision = undefined;
+        resolve(choice);
+      };
+    });
+  }
+
+  function continueWriteWithoutBackupFromDialog(): void {
+    progressError.value = null;
+    backupFailureDecision?.('skip');
+  }
+
+  function dismissBackupFailureProgress(): void {
+    if (backupFailureDecision) {
+      backupFailureDecision('abort');
+      backupFailureDecision = undefined;
+      toast.add({
+        title: 'Write canceled',
+        description: 'The radio was not changed because a backup could not be saved.',
+        color: 'neutral',
+        icon: 'i-lucide-ban',
+      });
+    }
+
+    progressOpen.value = false;
+  }
 
   function clearCardSession(id: string): void {
     const next = { ...sessions.value };
@@ -906,9 +945,9 @@ export function useRadio() {
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
-      progressOpen.value = false;
 
       if (memoryData == undefined) {
+        progressOpen.value = false;
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         toast.add({
           title: 'Backup canceled',
@@ -920,15 +959,20 @@ export function useRadio() {
       }
 
       if (memoryData.length === 0) {
-        await nextTick();
-        return confirmWriteWithoutBackup('The radio returned an empty memory image.') ? 'skip' : 'abort';
+        progressError.value = 'The radio returned an empty memory image.';
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        const choice = await waitForBackupFailureDecision();
+        progressError.value = null;
+
+        return choice === 'skip' ? 'skip' : 'abort';
       }
 
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      progressOpen.value = false;
       return memoryData.slice();
     } catch (cause) {
-      progressOpen.value = false;
-
       if (isCancelledTransfer(cause)) {
+        progressOpen.value = false;
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         toast.add({
           title: 'Backup canceled',
@@ -941,9 +985,12 @@ export function useRadio() {
 
       const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
       logger.withError(cause).error('Failed to read radio for backup');
+      progressError.value = message;
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
-      await nextTick();
-      return confirmWriteWithoutBackup(message) ? 'skip' : 'abort';
+      const choice = await waitForBackupFailureDecision();
+      progressError.value = null;
+
+      return choice === 'skip' ? 'skip' : 'abort';
     }
   }
 
@@ -1222,28 +1269,54 @@ export function useRadio() {
     radioId: RadioId,
     serialPortPath: string,
   ): void {
-    const log = driver.getSerialLogData();
-    const entryCount = serialLogEntryCount(log);
+    const session = readSession(sessionId);
+    const incoming = snapshotFromDriverSerialLog(operation, radioId, serialPortPath, driver.getSerialLogData());
+    const merged = mergeSessionSerialLog(session?.serialLog, incoming);
 
-    if (entryCount === 0) {
-      patchSession(sessionId, { serialLog: undefined });
+    if (merged) {
+      patchSession(sessionId, { serialLog: merged });
+    }
+  }
+
+  async function saveProgressSerialLog(): Promise<void> {
+    const captured = progressSerialLog.value;
+
+    if (!captured) {
+      toast.add({
+        title: 'No serial log',
+        description: 'Read from or write to a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
       return;
     }
 
-    patchSession(sessionId, {
-      serialLog: {
-        fileName: defaultSerialLogFileName(operation, radioId),
-        contents: serializeSerialLogFile({
-          operation,
-          radioId,
-          serialPortPath,
-          log,
-        }),
-        entryCount,
-        operation,
-        log,
-      },
-    });
+    try {
+      const destination = await saveJsonFileWithPicker(captured.contents, captured.fileName, {
+        title: 'Save Serial Log',
+        filterName: 'Serial Log',
+      });
+
+      if (destination === undefined) {
+        return;
+      }
+
+      toast.add({
+        title: 'Serial log saved',
+        description: `${memoryFileDisplayName(destination)} · ${captured.entryCount} frames`,
+        color: 'success',
+        icon: 'i-lucide-file-text',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to save serial log';
+      logger.withError(cause).error('Failed to save serial log');
+      toast.add({
+        title: 'Could not save serial log',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
   }
 
   async function saveSerialLog(): Promise<void> {
@@ -1512,6 +1585,8 @@ export function useRadio() {
     addTargets,
     memoryFilePath,
     serialLog,
+    transferSerialLog,
+    progressSerialLog,
     savedRadio,
     cardRadio,
     modulesInstallOpen,
@@ -1536,6 +1611,9 @@ export function useRadio() {
     removeChannels,
     cancelTransfer,
     saveSerialLog,
+    saveProgressSerialLog,
+    continueWriteWithoutBackupFromDialog,
+    dismissBackupFailureProgress,
     openMemoryFile,
     restoreRadioImageBackup,
     saveMemoryFile,

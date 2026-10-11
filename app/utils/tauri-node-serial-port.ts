@@ -9,6 +9,7 @@ import {
   type SerialportOptions,
   type WatchHandle,
 } from 'tauri-plugin-serialplugin-api';
+import { trackSerialPathClose, waitForSerialPathClose } from '~/utils/serial-port-path-close';
 
 type WriteCallback = (error?: Error | null) => void;
 type PipedDestination = { write: (chunk: Buffer) => unknown };
@@ -85,6 +86,7 @@ function toBytes(data: Uint8Array | Buffer | number[] | string): Uint8Array {
 export class TauriNodeSerialPort extends EventEmitter {
   isOpen = false;
 
+  private readonly path: string;
   private readonly tauriPort: TauriSerialPort;
   private readonly rts: boolean;
   private readonly dtr: boolean;
@@ -106,6 +108,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   }) {
     super();
 
+    this.path = options.path;
     this.rts = options.rts ?? true;
     this.dtr = options.dtr ?? true;
 
@@ -167,7 +170,9 @@ export class TauriNodeSerialPort extends EventEmitter {
   }
 
   close(callback?: WriteCallback): void {
-    void this.closePort()
+    const closing = this.closePort();
+    trackSerialPathClose(this.path, closing);
+    void closing
       .then(() => callback?.(null))
       .catch((error: unknown) => {
         const closeError = error instanceof Error ? error : new Error(String(error));
@@ -219,6 +224,7 @@ export class TauriNodeSerialPort extends EventEmitter {
     const generation = ++this.openGeneration;
 
     try {
+      await waitForSerialPathClose(this.path);
       await this.tauriPort.open();
       await this.tauriPort.writeDataTerminalReady(this.dtr);
       await this.tauriPort.writeRequestToSend(this.rts);
