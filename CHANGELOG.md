@@ -1,3 +1,9 @@
+## [0.61.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.5...v0.61.0) (2026-10-11)
+
+### Features
+
+* add a collapsible repeater map on Channels ([#101](https://github.com/springfield-ham-radio/ham-radio-ui/issues/101)) ([bf1078b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/bf1078b83a9c7c26e0f5988b5edbb754382f5deb)), closes [#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)
+
 ## [0.60.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.4...v0.60.5) (2026-10-11)
 
 ### Bug Fixes
