@@ -12,6 +12,7 @@ import {
 
 type WriteCallback = (error?: Error | null) => void;
 type PipedDestination = { write: (chunk: Buffer) => unknown };
+type UpdateOptions = { baudRate?: number };
 
 /**
  * `tauri-plugin-serialplugin` coalesces RX into Channel events after this many
@@ -79,7 +80,7 @@ function toBytes(data: Uint8Array | Buffer | number[] | string): Uint8Array {
 /**
  * Node-serialport compatible wrapper around tauri-plugin-serialplugin.
  *
- * ham-radio-driver expects an EventEmitter with pipe/write/close/isOpen.
+ * ham-radio-driver expects an EventEmitter with pipe/write/close/isOpen/update.
  */
 export class TauriNodeSerialPort extends EventEmitter {
   isOpen = false;
@@ -172,6 +173,46 @@ export class TauriNodeSerialPort extends EventEmitter {
         const closeError = error instanceof Error ? error : new Error(String(error));
         callback?.(closeError);
       });
+  }
+
+  /**
+   * node-serialport `update({ baudRate })` — switches rate on the open handle without close/reopen.
+   */
+  update(options: UpdateOptions, callback?: WriteCallback): void | Promise<void> {
+    const promise = this.applyBaudUpdate(options);
+
+    if (callback) {
+      void promise
+        .then(() => callback(null))
+        .catch((error: unknown) => {
+          const updateError = error instanceof Error ? error : new Error(String(error));
+          this.emit('error', updateError);
+          callback(updateError);
+        });
+      return;
+    }
+
+    return promise.catch((error: unknown) => {
+      const updateError = error instanceof Error ? error : new Error(String(error));
+      this.emit('error', updateError);
+      throw updateError;
+    });
+  }
+
+  private async applyBaudUpdate(options: UpdateOptions): Promise<void> {
+    if (!this.isOpen) {
+      throw new Error('Port is not open');
+    }
+
+    if (options.baudRate === undefined) {
+      throw new Error('baudRate is required');
+    }
+
+    const baudRate = options.baudRate;
+    await this.tauriPort.setBaudRate(baudRate);
+    this.tauriPort.options.baudRate = baudRate;
+    await this.tauriPort.writeDataTerminalReady(this.dtr);
+    await this.tauriPort.writeRequestToSend(this.rts);
   }
 
   private async openPort(): Promise<void> {
