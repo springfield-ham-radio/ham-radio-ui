@@ -1,3 +1,9 @@
+## [0.60.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.1...v0.60.2) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump rustls from 0.23.43 to 0.23.45 in /src-tauri ([#89](https://github.com/springfield-ham-radio/ham-radio-ui/issues/89)) ([adf7636](https://github.com/springfield-ham-radio/ham-radio-ui/commit/adf763663840816e57bf975c36e1b1ded3b5dd7f))
+
 ## [0.60.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.0...v0.60.1) (2026-10-11)
 
 ### Bug Fixes
