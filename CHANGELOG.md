@@ -1,3 +1,9 @@
+## [0.59.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.0...v0.59.1) (2026-10-11)
+
+### Bug Fixes
+
+* derive the ham-radio-api version from the installed package ([#86](https://github.com/springfield-ham-radio/ham-radio-ui/issues/86)) ([b2f67c3](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b2f67c33108d22ed77ff2ac1da657ee5f906820c))
+
 ## [0.59.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.58.0...v0.59.0) (2026-10-10)
 
 ### Features
