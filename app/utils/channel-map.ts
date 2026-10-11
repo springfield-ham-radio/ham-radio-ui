@@ -15,23 +15,27 @@ import { formatTripDistance, type DistanceUnit } from '~/utils/trip-channels';
 /** Slate fallback for bands outside the repeater palette. */
 export const CHANNEL_MAP_BAND_FALLBACK = '#64748b';
 
-const CHANNEL_MAP_BAND_COLORS: Record<string, string> = {
-  '220': '#a855f7',
-  '1.25M': '#7c3aed',
-  '2M': '#2563eb',
-  '4M': '#0891b2',
-  '6M': '#0d9488',
-  '10M': '#059669',
-  '12M': '#16a34a',
-  '15M': '#65a30d',
-  '17M': '#ca8a04',
-  '20M': '#d97706',
-  '30M': '#ea580c',
-  '40M': '#dc2626',
-  '60M': '#e11d48',
-  '70CM': '#db2777',
-  '33CM': '#c026d3',
-  '23CM': '#9333ea',
+/** Keys match `bandNameForFrequency` / `displayBandName` labels (for example `2 Meter`, not `2M`). */
+export const CHANNEL_MAP_BAND_COLORS: Record<string, string> = {
+  '160 Meter': '#475569',
+  '80 Meter': '#64748b',
+  '60 Meter': '#e11d48',
+  '40 Meter': '#dc2626',
+  '30 Meter': '#ea580c',
+  '20 Meter': '#d97706',
+  '17 Meter': '#ca8a04',
+  '15 Meter': '#65a30d',
+  '12 Meter': '#16a34a',
+  '10 Meter': '#059669',
+  '6 Meter': '#0d9488',
+  '2 Meter': '#2563eb',
+  '1.25 Meter': '#7c3aed',
+  '70 Centimeter': '#db2777',
+  '33 Centimeter': '#c026d3',
+  '23 Centimeter': '#9333ea',
+  GMRS: '#0891b2',
+  'FRS/GMRS': '#14b8a6',
+  'Weather Radio': '#6366f1',
 };
 
 export interface ChannelMapChannel {
@@ -94,7 +98,7 @@ export const CHANNEL_MAP_EMPTY_STYLE = {
 };
 
 export function channelMapBandColor(band: string): string {
-  const key = band.trim().toUpperCase();
+  const key = band.trim();
 
   if (!key) {
     return CHANNEL_MAP_BAND_FALLBACK;
@@ -381,6 +385,14 @@ export function channelMapPopupDistanceLine(
   const bearing = compassPointBetween(start, point);
 
   return `${formatTripDistance(km, unit)} ${bearing}`;
+}
+
+/** Format stored kilometers for the range input in the operator's distance unit. */
+export function formatChannelMapRangeDisplay(radiusKm: number, unit: DistanceUnit): string {
+  const value = unit === 'km' ? radiusKm : radiusKm / 1.609344;
+  const rounded = Math.round(value * 100) / 100;
+
+  return String(rounded);
 }
 
 export function parseChannelMapRangeRadius(text: string): number | undefined {

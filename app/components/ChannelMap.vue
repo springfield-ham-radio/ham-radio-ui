@@ -251,27 +251,33 @@ function ensureLayers(instance: MapLibreMap): void {
     });
   }
 
-  if (!instance.getLayer(RANGE_LAYER_ID)) {
-    instance.addLayer({
-      id: RANGE_LAYER_ID,
-      type: 'fill',
-      source: RANGE_SOURCE_ID,
-      paint: {
-        'fill-color': STATION_PIN_COLOR,
-        'fill-opacity': 0.08,
+  if (!instance.getLayer(RANGE_LAYER_ID) && instance.getLayer(CLUSTER_LAYER_ID)) {
+    instance.addLayer(
+      {
+        id: RANGE_LAYER_ID,
+        type: 'fill',
+        source: RANGE_SOURCE_ID,
+        paint: {
+          'fill-color': STATION_PIN_COLOR,
+          'fill-opacity': 0.08,
+        },
       },
-    });
+      { beforeId: CLUSTER_LAYER_ID },
+    );
 
-    instance.addLayer({
-      id: `${RANGE_LAYER_ID}-outline`,
-      type: 'line',
-      source: RANGE_SOURCE_ID,
-      paint: {
-        'line-color': STATION_PIN_COLOR,
-        'line-width': 1.5,
-        'line-opacity': 0.65,
+    instance.addLayer(
+      {
+        id: `${RANGE_LAYER_ID}-outline`,
+        type: 'line',
+        source: RANGE_SOURCE_ID,
+        paint: {
+          'line-color': STATION_PIN_COLOR,
+          'line-width': 1.5,
+          'line-opacity': 0.65,
+        },
       },
-    });
+      { beforeId: CLUSTER_LAYER_ID },
+    );
   }
 }
 
@@ -345,9 +351,21 @@ function openChannelPopup(channel: ChannelMapChannel, lngLat: LngLatLike): void 
     frequency.textContent = `TX ${properties.transmitLabel} · RX ${properties.receiveLabel}`;
     root.append(frequency);
 
-    const tones = document.createElement('div');
-    tones.textContent = `TX ${properties.transmitToneLabel} · RX ${properties.receiveToneLabel}`;
-    root.append(tones);
+    const toneParts: string[] = [];
+
+    if (properties.transmitToneLabel) {
+      toneParts.push(`TX ${properties.transmitToneLabel}`);
+    }
+
+    if (properties.receiveToneLabel) {
+      toneParts.push(`RX ${properties.receiveToneLabel}`);
+    }
+
+    if (toneParts.length > 0) {
+      const tones = document.createElement('div');
+      tones.textContent = toneParts.join(' · ');
+      root.append(tones);
+    }
 
     const location = document.createElement('div');
     location.textContent = properties.locationLabel;
@@ -369,10 +387,10 @@ function openChannelPopup(channel: ChannelMapChannel, lngLat: LngLatLike): void 
     .addTo(instance);
 }
 
-function applyStyle(instance: MapLibreMap, style: string | typeof CHANNEL_MAP_EMPTY_STYLE): void {
+function applyStyle(instance: MapLibreMap, style: string | typeof CHANNEL_MAP_EMPTY_STYLE, fit = false): void {
   instance.setStyle(style);
   instance.once('style.load', () => {
-    syncData(instance, false);
+    syncData(instance, fit);
   });
 }
 
@@ -384,16 +402,12 @@ function bindPointer(instance: MapLibreMap): void {
   listenersBound = true;
 
   instance.on('click', CLUSTER_LAYER_ID, (event) => {
-    const feature = event.features?.[0];
-    const clusterId = feature?.properties?.cluster_id;
-    const source = geoJsonSource(instance, MARKER_SOURCE_ID);
+    void (async () => {
+      const feature = event.features?.[0];
+      const clusterId = Number(feature?.properties?.cluster_id);
+      const source = geoJsonSource(instance, MARKER_SOURCE_ID);
 
-    if (feature === undefined || clusterId === undefined || !source) {
-      return;
-    }
-
-    source.getClusterExpansionZoom(clusterId, (error, zoom) => {
-      if (error || zoom === undefined || zoom === null) {
+      if (feature === undefined || !Number.isInteger(clusterId) || !source) {
         return;
       }
 
@@ -403,8 +417,13 @@ function bindPointer(instance: MapLibreMap): void {
         return;
       }
 
-      instance.easeTo({ center: coordinates, zoom });
-    });
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        instance.easeTo({ center: coordinates, zoom });
+      } catch {
+        // Cluster went away between click and worker reply.
+      }
+    })();
   });
 
   instance.on('click', UNCLUSTERED_LAYER_ID, (event) => {
@@ -433,7 +452,7 @@ function bindPointer(instance: MapLibreMap): void {
 function showEmptyStyle(instance: MapLibreMap): void {
   usingEmptyStyle.value = true;
   loadError.value = 'The map could not be loaded. Check your connection.';
-  applyStyle(instance, CHANNEL_MAP_EMPTY_STYLE);
+  applyStyle(instance, CHANNEL_MAP_EMPTY_STYLE, false);
 }
 
 watch(styleUrl, (url) => {
@@ -502,8 +521,7 @@ function onOnlineChange(): void {
   if (usingEmptyStyle.value) {
     usingEmptyStyle.value = false;
     loadError.value = undefined;
-    applyStyle(instance, styleUrl.value);
-    syncData(instance, true);
+    applyStyle(instance, styleUrl.value, true);
   }
 }
 

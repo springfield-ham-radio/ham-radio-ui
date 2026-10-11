@@ -14,6 +14,7 @@ import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/sa
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import {
   channelMapRangeRadiusKm,
+  formatChannelMapRangeDisplay,
   parseChannelMapRangeRadius,
 } from '~/utils/channel-map';
 import {
@@ -112,7 +113,9 @@ const showMap = computed({
   },
 });
 const mapRangeText = ref(
-  channelMapSettings.value.rangeRadius !== undefined ? String(channelMapSettings.value.rangeRadius) : '',
+  channelMapSettings.value.rangeRadiusKm !== undefined
+    ? formatChannelMapRangeDisplay(channelMapSettings.value.rangeRadiusKm, distanceUnit.value)
+    : '',
 );
 const highlightedChannelId = ref<string>();
 const hoveredChannelId = ref<string>();
@@ -144,6 +147,17 @@ const tablePanes: SplitterItem[] = [
 ];
 
 const splitterItems = computed(() => (showMap.value ? mapPanes : tablePanes));
+
+const tableMeta = computed(() => {
+  void highlightedChannelId.value;
+
+  return {
+    class: {
+      tr: (row: TableRow<DisplaySavedChannel>) =>
+        String(row.original.id) === highlightedChannelId.value ? 'bg-primary/15 dark:bg-primary/25' : '',
+    },
+  };
+});
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
@@ -348,16 +362,20 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
         },
       }),
     cell: ({ row }) =>
-      h(UCheckbox, {
-        modelValue: row.getIsSelected(),
-        'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
-          row.toggleSelected(!!value);
-        },
-        'aria-label': `Select ${row.original.name || 'saved channel'}`,
-        onClick: (event: Event) => {
-          event.stopPropagation();
-        },
-      }),
+      h(
+        'span',
+        { 'data-channel-row-id': String(row.original.id) },
+        h(UCheckbox, {
+          modelValue: row.getIsSelected(),
+          'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+            row.toggleSelected(!!value);
+          },
+          'aria-label': `Select ${row.original.name || 'saved channel'}`,
+          onClick: (event: Event) => {
+            event.stopPropagation();
+          },
+        }),
+      ),
   },
   {
     id: 'name',
@@ -517,41 +535,39 @@ watch(tripBandItems, (items) => {
 });
 
 watch(mapRangeText, () => {
-  const rangeRadius = parseChannelMapRangeRadius(mapRangeText.value);
-  channelMapSettings.value = { ...channelMapSettings.value, rangeRadius };
+  const rangeRadiusKm = channelMapRangeRadiusKm(parseChannelMapRangeRadius(mapRangeText.value), distanceUnit.value);
+  channelMapSettings.value = { ...channelMapSettings.value, rangeRadiusKm };
   writeChannelMapSettings(channelMapSettings.value);
+});
+
+watch(distanceUnit, (unit) => {
+  const storedKm = channelMapSettings.value.rangeRadiusKm;
+
+  if (storedKm === undefined) {
+    return;
+  }
+
+  mapRangeText.value = formatChannelMapRangeDisplay(storedKm, unit);
+});
+
+watch(showMap, (open) => {
+  if (!open) {
+    highlightedChannelId.value = undefined;
+    hoveredChannelId.value = undefined;
+  }
 });
 
 function onMapHighlight(channelId: string): void {
   highlightedChannelId.value = channelId;
 
   nextTick(() => {
-    const row = document.querySelector(`[data-channel-row-id="${channelId}"]`);
+    const row = document.querySelector(`[data-channel-row-id="${CSS.escape(channelId)}"]`);
     row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
 }
 
-function onChannelTableHover(event: MouseEvent): void {
-  const row = (event.target as Element).closest('tbody tr[data-index]');
-
-  if (!row) {
-    hoveredChannelId.value = undefined;
-    return;
-  }
-
-  const index = row.getAttribute('data-index');
-
-  if (index === null) {
-    hoveredChannelId.value = undefined;
-    return;
-  }
-
-  const channel = displayChannels.value[Number(index)];
-  hoveredChannelId.value = channel ? String(channel.id) : undefined;
-}
-
-function onChannelTableLeave(): void {
-  hoveredChannelId.value = undefined;
+function onChannelRowHover(_event: Event, row: TableRow<DisplaySavedChannel> | null): void {
+  hoveredChannelId.value = row ? String(row.original.id) : undefined;
 }
 
 function openEmptyGroup(): void {
@@ -667,6 +683,10 @@ function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void
 
   if (isPredefinedChannelId(row.original.id)) {
     return;
+  }
+
+  if (showMap.value) {
+    highlightedChannelId.value = String(row.original.id);
   }
 
   openEdit(row.original);
@@ -1022,11 +1042,7 @@ async function onImportCsv(): Promise<void> {
         />
       </template>
       <template #channels>
-        <div
-          class="h-full min-h-0 w-full overflow-auto"
-          @mouseover="onChannelTableHover"
-          @mouseleave="onChannelTableLeave"
-        >
+        <div class="h-full min-h-0 w-full overflow-auto">
           <UTable
             ref="table"
             v-model:row-selection="rowSelection"
@@ -1034,6 +1050,7 @@ async function onImportCsv(): Promise<void> {
             v-model:column-visibility="columnVisibility"
             :data="displayChannels"
             :columns="columns"
+            :meta="tableMeta"
             :get-row-id="(row) => String(row.id)"
             :loading="isLoading"
             :sorting-options="{ manualSorting: true, enableSortingRemoval: false }"
@@ -1048,6 +1065,7 @@ async function onImportCsv(): Promise<void> {
             }"
             :empty="emptyMessage"
             @select="onSelectChannel"
+            @hover="onChannelRowHover"
           >
         <template #use-cell="{ row }">
           <UBadge
@@ -1103,11 +1121,7 @@ async function onImportCsv(): Promise<void> {
           </button>
         </template>
         <template #name-cell="{ row }">
-          <div
-            class="flex min-w-0 items-center gap-1.5"
-            :data-channel-row-id="String(row.original.id)"
-            :class="{ 'rounded-sm bg-primary/10': String(row.original.id) === highlightedChannelId }"
-          >
+          <div class="flex min-w-0 items-center gap-1.5">
             <UTooltip v-if="row.original.kind === 'repeater'" text="Repeater">
               <UBadge
                 color="primary"
