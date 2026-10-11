@@ -22,6 +22,16 @@ Importing a file again matches an existing row by source key. When a row has no 
 
 The **Location** column shows city and state (`Austin, Texas`) when those are known, then formatted coordinates, then —. Sort it either way. Rows with no location stay last. Hide it from **Columns**. The search box matches city, county, state, country, and landmark. The repeater editor shows the same location fields and modes.
 
+## Map
+
+Use **Map** above the channel table to open a collapsible repeater map. The map shows the same rows as the table after group, search, **Linked only**, and trip filters. Open or closed state and the splitter size are remembered; the map starts **closed** on first visit.
+
+Markers use band colors with a legend for the bands in view. Click a pin to highlight the row, scroll it into view, and open a popup with call sign, frequencies, tones, and location. When **Distance from** has a start point, the popup also shows straight-line distance and compass bearing. Row hover highlights the matching pin without changing checkbox selection.
+
+**Distance from** also drives a distance-start pin on the map. An optional **Range** field (miles or kilometers per **Preferences → Channels**) draws a ring around that start point; leave it blank to turn the ring off. Rows without coordinates are counted in a short note under the map.
+
+If tiles cannot load, the map keeps markers on a plain background and shows a connection warning. Basemap choice is documented in `docs/adr/0003-map-basemap.md`.
+
 ## Distance
 
 **Distance from** is on every group. Pick a saved station or type coordinates. HamBench starts with the selected station when that station has a location, otherwise Home. The **Distance** column is straight-line miles or kilometers (**Preferences → Channels**; miles unless you change it). Sort the column either way. Rows without coordinates, including CHIRP imports and RepeaterBook website exports that omit latitude and longitude, show — and stay last. Hide **Distance** from **Columns**. With no start point the column is hidden. Bearing is not shown.

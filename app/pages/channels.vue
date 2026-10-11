@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RadioChannel } from '@springfield/ham-radio-api';
-import type { TableColumn, TableRow } from '@nuxt/ui';
+import type { SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
@@ -12,6 +12,15 @@ import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
+import {
+  channelMapRangeRadiusKm,
+  formatChannelMapRangeDisplay,
+  parseChannelMapRangeRadius,
+} from '~/utils/channel-map';
+import {
+  readChannelMapSettings,
+  writeChannelMapSettings,
+} from '~/utils/channel-map-settings';
 import {
   defaultDistanceStartId,
   formatTripDistance,
@@ -95,6 +104,60 @@ const isRemovingGroup = shallowRef(false);
 const deleteChannelsOpen = shallowRef(false);
 const isDeletingChannels = shallowRef(false);
 const linkedOnly = ref(false);
+const channelMapSettings = ref(readChannelMapSettings());
+const showMap = computed({
+  get: () => channelMapSettings.value.open,
+  set(open: boolean) {
+    channelMapSettings.value = { ...channelMapSettings.value, open };
+    writeChannelMapSettings(channelMapSettings.value);
+  },
+});
+const mapRangeText = ref(
+  channelMapSettings.value.rangeRadiusKm !== undefined
+    ? formatChannelMapRangeDisplay(channelMapSettings.value.rangeRadiusKm, distanceUnit.value)
+    : '',
+);
+const highlightedChannelId = ref<string>();
+const hoveredChannelId = ref<string>();
+
+const mapRangeRadiusKm = computed(() =>
+  channelMapRangeRadiusKm(parseChannelMapRangeRadius(mapRangeText.value), distanceUnit.value),
+);
+
+const mapPanes: SplitterItem[] = [
+  {
+    id: 'map',
+    slot: 'map',
+    defaultSize: 42,
+    minSize: 18,
+    maxSize: 85,
+    class: 'h-full min-h-0 w-full flex-col overflow-hidden',
+  },
+  {
+    id: 'channels',
+    slot: 'channels',
+    defaultSize: 58,
+    minSize: 15,
+    class: 'h-full min-h-0 w-full flex-col',
+  },
+];
+
+const tablePanes: SplitterItem[] = [
+  { id: 'channels', slot: 'channels', defaultSize: 100, class: 'h-full min-h-0 w-full flex-col' },
+];
+
+const splitterItems = computed(() => (showMap.value ? mapPanes : tablePanes));
+
+const tableMeta = computed(() => {
+  void highlightedChannelId.value;
+
+  return {
+    class: {
+      tr: (row: TableRow<DisplaySavedChannel>) =>
+        String(row.original.id) === highlightedChannelId.value ? 'bg-primary/15 dark:bg-primary/25' : '',
+    },
+  };
+});
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
@@ -299,16 +362,20 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
         },
       }),
     cell: ({ row }) =>
-      h(UCheckbox, {
-        modelValue: row.getIsSelected(),
-        'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
-          row.toggleSelected(!!value);
-        },
-        'aria-label': `Select ${row.original.name || 'saved channel'}`,
-        onClick: (event: Event) => {
-          event.stopPropagation();
-        },
-      }),
+      h(
+        'span',
+        { 'data-channel-row-id': String(row.original.id) },
+        h(UCheckbox, {
+          modelValue: row.getIsSelected(),
+          'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+            row.toggleSelected(!!value);
+          },
+          'aria-label': `Select ${row.original.name || 'saved channel'}`,
+          onClick: (event: Event) => {
+            event.stopPropagation();
+          },
+        }),
+      ),
   },
   {
     id: 'name',
@@ -467,6 +534,42 @@ watch(tripBandItems, (items) => {
   }
 });
 
+watch(mapRangeText, () => {
+  const rangeRadiusKm = channelMapRangeRadiusKm(parseChannelMapRangeRadius(mapRangeText.value), distanceUnit.value);
+  channelMapSettings.value = { ...channelMapSettings.value, rangeRadiusKm };
+  writeChannelMapSettings(channelMapSettings.value);
+});
+
+watch(distanceUnit, (unit) => {
+  const storedKm = channelMapSettings.value.rangeRadiusKm;
+
+  if (storedKm === undefined) {
+    return;
+  }
+
+  mapRangeText.value = formatChannelMapRangeDisplay(storedKm, unit);
+});
+
+watch(showMap, (open) => {
+  if (!open) {
+    highlightedChannelId.value = undefined;
+    hoveredChannelId.value = undefined;
+  }
+});
+
+function onMapHighlight(channelId: string): void {
+  highlightedChannelId.value = channelId;
+
+  nextTick(() => {
+    const row = document.querySelector(`[data-channel-row-id="${CSS.escape(channelId)}"]`);
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+}
+
+function onChannelRowHover(_event: Event, row: TableRow<DisplaySavedChannel> | null): void {
+  hoveredChannelId.value = row ? String(row.original.id) : undefined;
+}
+
 function openEmptyGroup(): void {
   groupNameMode.value = 'empty';
   groupNameOpen.value = true;
@@ -580,6 +683,10 @@ function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void
 
   if (isPredefinedChannelId(row.original.id)) {
     return;
+  }
+
+  if (showMap.value) {
+    highlightedChannelId.value = String(row.original.id);
   }
 
   openEdit(row.original);
@@ -820,6 +927,15 @@ async function onImportCsv(): Promise<void> {
             />
           </span>
         </UTooltip>
+        <UButton
+          icon="i-lucide-map"
+          color="neutral"
+          :variant="showMap ? 'soft' : 'outline'"
+          size="sm"
+          label="Map"
+          :aria-pressed="showMap"
+          @click="showMap = !showMap"
+        />
         <UTooltip :text="addChannelTooltip">
           <span class="inline-flex">
             <UButton
@@ -862,6 +978,20 @@ async function onImportCsv(): Promise<void> {
         :stations="stations"
         @update:start-id="distanceStartChosen = true"
       />
+      <UFormField
+        v-if="distanceStartPoint"
+        :label="distanceUnit === 'km' ? 'Range (km)' : 'Range (mi)'"
+        class="w-28"
+      >
+        <UInput
+          v-model="mapRangeText"
+          placeholder="Off"
+          size="sm"
+          class="w-full"
+          inputmode="decimal"
+          aria-label="Map range ring radius"
+        />
+      </UFormField>
       <UFormField v-if="isTripGroup" label="Band" class="w-36">
         <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
       </UFormField>
@@ -891,29 +1021,52 @@ async function onImportCsv(): Promise<void> {
       :description="error"
     />
 
-    <div class="min-h-0 flex-1 overflow-auto">
-      <UTable
-        ref="table"
-        v-model:row-selection="rowSelection"
-        v-model:sorting="sorting"
-        v-model:column-visibility="columnVisibility"
-        :data="displayChannels"
-        :columns="columns"
-        :get-row-id="(row) => String(row.id)"
-        :loading="isLoading"
-        :sorting-options="{ manualSorting: true, enableSortingRemoval: false }"
-        sticky
-        class="max-h-full"
-        :ui="{
-          thead: 'bg-default',
-          th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
-          td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
-          empty: 'py-8 text-center text-sm text-muted',
-          tr: builtinGroup ? '' : 'cursor-pointer',
-        }"
-        :empty="emptyMessage"
-        @select="onSelectChannel"
-      >
+    <USplitter
+      :key="showMap ? 'map' : 'table'"
+      orientation="vertical"
+      :items="splitterItems"
+      :auto-save-id="showMap ? 'ham-radio-channels' : undefined"
+      class="min-h-0 w-full flex-1"
+      :ui="{ handle: 'h-3' }"
+    >
+      <template #map>
+        <ChannelMap
+          class="h-full min-h-0"
+          :channels="displayChannels"
+          :highlighted-channel-id="highlightedChannelId"
+          :hovered-channel-id="hoveredChannelId"
+          :distance-start-point="distanceStartPoint"
+          :range-radius-km="mapRangeRadiusKm"
+          :distance-unit="distanceUnit"
+          @highlight="onMapHighlight"
+        />
+      </template>
+      <template #channels>
+        <div class="h-full min-h-0 w-full overflow-auto">
+          <UTable
+            ref="table"
+            v-model:row-selection="rowSelection"
+            v-model:sorting="sorting"
+            v-model:column-visibility="columnVisibility"
+            :data="displayChannels"
+            :columns="columns"
+            :meta="tableMeta"
+            :get-row-id="(row) => String(row.id)"
+            :loading="isLoading"
+            :sorting-options="{ manualSorting: true, enableSortingRemoval: false }"
+            sticky
+            class="max-h-full"
+            :ui="{
+              thead: 'bg-default',
+              th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
+              td: 'h-8 px-2 py-0 text-xs tabular-nums align-middle',
+              empty: 'py-8 text-center text-sm text-muted',
+              tr: builtinGroup ? '' : 'cursor-pointer',
+            }"
+            :empty="emptyMessage"
+            @select="onSelectChannel"
+            @hover="onChannelRowHover"
+          >
         <template #use-cell="{ row }">
           <UBadge
             v-if="row.original.kind === 'repeater' && row.original.use"
@@ -1002,8 +1155,16 @@ async function onImportCsv(): Promise<void> {
             />
           </div>
         </template>
-      </UTable>
-    </div>
+          </UTable>
+        </div>
+      </template>
+      <template #resize-handle>
+        <div
+          class="pointer-events-none absolute inset-x-4 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-accented group-hover:bg-primary group-data-[state=drag]:bg-primary"
+        />
+        <span class="sr-only">Resize map</span>
+      </template>
+    </USplitter>
 
     <SavedChannelEditor v-model:open="editorOpen" :channel="editingChannel" @save="onSave" />
     <ChannelGroupNameDialog
