@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
 import {
@@ -39,6 +40,30 @@ describe('radio module install helpers', () => {
 
     expect(catalog.modules[0]?.id).toBe('baofeng');
     expect(isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, catalog.modules[0]!.minApiVersion)).toBe(true);
+  });
+
+  it('should match the installed @springfield/ham-radio-api package version', () => {
+    const require = createRequire(import.meta.url);
+    const apiPackage = require('@springfield/ham-radio-api/package.json') as { version: string };
+
+    expect(APP_HAM_RADIO_API_VERSION).toBe(apiPackage.version);
+    expect(APP_HAM_RADIO_API_VERSION).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('should accept or reject minApiVersion at semver boundaries', () => {
+    const installed = APP_HAM_RADIO_API_VERSION;
+    const parts = installed.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const [major, minor, patch] = parts;
+    const previousPatch = `${major}.${minor}.${Math.max(0, patch - 1)}`;
+    const nextPatch = `${major}.${minor}.${patch + 1}`;
+    const nextMajor = `${major + 1}.0.0`;
+
+    expect(isApiVersionCompatible(installed, installed)).toBe(true);
+    expect(isApiVersionCompatible(installed, previousPatch)).toBe(true);
+    expect(isApiVersionCompatible(installed, nextPatch)).toBe(false);
+    expect(isApiVersionCompatible(installed, nextMajor)).toBe(false);
+    // compareSemver strips non-digits per segment; a prerelease on the app version still satisfies an equal release min.
+    expect(isApiVersionCompatible(`${installed}-beta.1`, installed)).toBe(true);
   });
 
   it('should detect module install directories', () => {

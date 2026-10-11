@@ -10,6 +10,7 @@ const props = defineProps<{
   existingNames: string[];
   pending: boolean;
   initialName?: string;
+  placeholder?: string;
 }>();
 
 const emit = defineEmits<{
@@ -48,7 +49,7 @@ function submit(): void {
           <UInput
             v-model="name"
             autofocus
-            placeholder="Travel"
+            :placeholder="placeholder ?? 'Travel'"
             :maxlength="CHANNEL_GROUP_NAME_MAX_LENGTH"
             class="w-full"
           />

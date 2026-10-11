@@ -7,7 +7,9 @@ mod zoom;
 use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
+use tauri_plugin_window_state::StateFlags;
 
 fn find_check_in_items<R: tauri::Runtime>(
     items: &[MenuItemKind<R>],
@@ -478,6 +480,61 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add_trip_groups_and_channel_coordinates",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN latitude REAL;
+ALTER TABLE saved_channels ADD COLUMN longitude REAL;
+ALTER TABLE channel_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'group';
+"#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "add_saved_channels_linked_nodes",
+            sql: r#"
+ALTER TABLE saved_channels ADD COLUMN allstar_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN echolink_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN irlp_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN wires_node TEXT;
+ALTER TABLE saved_channels ADD COLUMN allstar_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN echolink_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN irlp_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE saved_channels ADD COLUMN wires_linked INTEGER NOT NULL DEFAULT 0;
+"#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "clear_null_island_channel_coordinates",
+            sql: "UPDATE saved_channels SET latitude = NULL, longitude = NULL WHERE latitude = 0 AND longitude = 0;",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "add_saved_channel_repeater_record",
+            sql: r#"
+-- City, county, state, country, landmark, and modes used to be folded into notes
+-- (for example 'Austin, Texas · FM AllStar EchoLink · Digital access 293').
+-- Those notes are not split here. City text contains commas and dashes, modes are
+-- free text, and the separator can appear in notes an operator wrote, so a
+-- mechanical parse would mis-file that text. Existing notes stay as written.
+-- Coordinates stay in latitude/longitude from migration 11. Blank coordinates and
+-- the exact pair (0, 0) remain unlocated; this migration does not add coordinate columns.
+ALTER TABLE saved_channels ADD COLUMN source_key TEXT;
+ALTER TABLE saved_channels ADD COLUMN source_format TEXT;
+ALTER TABLE saved_channels ADD COLUMN city TEXT;
+ALTER TABLE saved_channels ADD COLUMN county TEXT;
+ALTER TABLE saved_channels ADD COLUMN state TEXT;
+ALTER TABLE saved_channels ADD COLUMN country TEXT;
+ALTER TABLE saved_channels ADD COLUMN landmark TEXT;
+ALTER TABLE saved_channels ADD COLUMN modes TEXT;
+ALTER TABLE saved_channels ADD COLUMN last_update TEXT;
+CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -485,6 +542,17 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        // Do not persist VISIBLE: a saved hidden state would keep the window hidden forever.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -558,6 +626,13 @@ ALTER TABLE station_log_qsos ADD COLUMN my_antenna TEXT;
                         .build(),
                 )?;
             }
+
+            let main_window = app
+                .get_webview_window("main")
+                .ok_or("main window not found")?;
+            main_window.show()?;
+            main_window.set_focus()?;
+            // Windows created at runtime must also be built hidden and shown after build().
 
             Ok(())
         })
