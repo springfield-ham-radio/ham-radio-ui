@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import {
-  AttributionControl,
   LngLatBounds,
-  Map as MapLibreMap,
-  NavigationControl,
   Popup,
-  setWorkerUrl,
   type GeoJSONSource,
   type LngLatLike,
+  type Map as MapLibreMap,
   type MapGeoJSONFeature,
 } from 'maplibre-gl';
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   CHANNEL_MAP_EMPTY_STYLE,
   channelMapBandColor,
@@ -28,11 +23,9 @@ import {
   channelMapUnlocatedMessage,
   type ChannelMapChannel,
 } from '~/utils/channel-map';
-import { stationLogMapStyleUrl, STATION_PIN_COLOR } from '~/utils/station-log-map';
+import { STATION_PIN_COLOR, stationLogMapStyleUrl } from '~/utils/station-log-map';
 import type { GeoPoint } from '~/utils/location-format';
 import type { DistanceUnit } from '~/utils/trip-channels';
-
-setWorkerUrl(maplibreWorkerUrl);
 
 const MARKER_SOURCE_ID = 'channel-map-markers';
 const HOVER_SOURCE_ID = 'channel-map-hover';
@@ -61,8 +54,7 @@ const emit = defineEmits<{
 
 const colorMode = useColorMode();
 const { mapStyle } = useAppearanceSettings();
-const container = useTemplateRef('container');
-const map = shallowRef<MapLibreMap | undefined>();
+const mapCanvas = useTemplateRef('mapCanvas');
 const loadError = shallowRef<string | undefined>();
 const usingEmptyStyle = shallowRef(false);
 
@@ -90,6 +82,10 @@ const locatedIdKey = computed(() => channelMapLocatedIdKey(props.channels, props
 let popup: Popup | undefined;
 let listenersBound = false;
 let mapReady = false;
+
+function mapInstance(): MapLibreMap | undefined {
+  return mapCanvas.value?.map;
+}
 
 function geoJsonSource(instance: MapLibreMap, sourceId: string): GeoJSONSource | undefined {
   const source = instance.getSource(sourceId);
@@ -322,8 +318,14 @@ function channelFromFeature(feature: MapGeoJSONFeature): ChannelMapChannel | und
   return props.channels.find((channel) => String(channel.id) === id);
 }
 
+function setPopup(next: Popup | undefined): void {
+  popup?.remove();
+  popup = next;
+  mapCanvas.value?.registerPopup(popup);
+}
+
 function openChannelPopup(channel: ChannelMapChannel, lngLat: LngLatLike): void {
-  const instance = map.value;
+  const instance = mapInstance();
 
   if (!instance) {
     return;
@@ -380,11 +382,9 @@ function openChannelPopup(channel: ChannelMapChannel, lngLat: LngLatLike): void 
     root.append(distance);
   }
 
-  popup?.remove();
-  popup = new Popup({ closeButton: true, maxWidth: '280px' })
-    .setLngLat(lngLat)
-    .setDOMContent(root)
-    .addTo(instance);
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function applyStyle(instance: MapLibreMap, style: string | typeof CHANNEL_MAP_EMPTY_STYLE, fit = false): void {
@@ -392,6 +392,12 @@ function applyStyle(instance: MapLibreMap, style: string | typeof CHANNEL_MAP_EM
   instance.once('style.load', () => {
     syncData(instance, fit);
   });
+}
+
+function showEmptyStyle(instance: MapLibreMap): void {
+  usingEmptyStyle.value = true;
+  loadError.value = 'The map could not be loaded. Check your connection.';
+  applyStyle(instance, CHANNEL_MAP_EMPTY_STYLE, false);
 }
 
 function bindPointer(instance: MapLibreMap): void {
@@ -449,71 +455,26 @@ function bindPointer(instance: MapLibreMap): void {
   }
 }
 
-function showEmptyStyle(instance: MapLibreMap): void {
-  usingEmptyStyle.value = true;
-  loadError.value = 'The map could not be loaded. Check your connection.';
-  applyStyle(instance, CHANNEL_MAP_EMPTY_STYLE, false);
+function onMapReady(instance: MapLibreMap): void {
+  mapReady = true;
+  syncData(instance, true);
+  bindPointer(instance);
 }
 
-watch(styleUrl, (url) => {
-  const instance = map.value;
-
-  if (!instance || !mapReady || usingEmptyStyle.value) {
+function onCanvasStyleLoad(instance: MapLibreMap): void {
+  if (!mapReady) {
     return;
   }
 
-  applyStyle(instance, url);
-});
+  syncData(instance, false);
+}
 
-watch(hoverCollection, () => {
-  const instance = map.value;
-
-  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, HOVER_SOURCE_ID)) {
+function onConnectivityChange(online: boolean, instance: MapLibreMap): void {
+  if (!mapReady) {
     return;
   }
 
-  geoJsonSource(instance, HOVER_SOURCE_ID)?.setData(hoverCollection.value);
-});
-
-watch([rangeCollection, startCollection], () => {
-  const instance = map.value;
-
-  if (!instance?.isStyleLoaded()) {
-    return;
-  }
-
-  geoJsonSource(instance, START_SOURCE_ID)?.setData(startCollection.value);
-  geoJsonSource(instance, RANGE_SOURCE_ID)?.setData(rangeCollection.value);
-});
-
-watch(featureCollection, () => {
-  const instance = map.value;
-
-  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, MARKER_SOURCE_ID)) {
-    return;
-  }
-
-  geoJsonSource(instance, MARKER_SOURCE_ID)?.setData(featureCollection.value);
-});
-
-watch(locatedIdKey, () => {
-  const instance = map.value;
-
-  if (!instance?.isStyleLoaded()) {
-    return;
-  }
-
-  syncData(instance, true);
-});
-
-function onOnlineChange(): void {
-  const instance = map.value;
-
-  if (!instance || !mapReady) {
-    return;
-  }
-
-  if (!navigator.onLine) {
+  if (!online) {
     showEmptyStyle(instance);
     return;
   }
@@ -525,80 +486,69 @@ function onOnlineChange(): void {
   }
 }
 
-onMounted(() => {
-  const element = container.value;
+watch(styleUrl, (url) => {
+  const instance = mapInstance();
 
-  if (!element) {
+  if (!instance || !mapReady || usingEmptyStyle.value || !url) {
     return;
   }
 
-  const initialStyle = import.meta.client && !navigator.onLine ? CHANNEL_MAP_EMPTY_STYLE : styleUrl.value;
-  usingEmptyStyle.value = initialStyle === CHANNEL_MAP_EMPTY_STYLE;
+  applyStyle(instance, url);
+});
 
-  if (usingEmptyStyle.value) {
-    loadError.value = 'The map could not be loaded. Check your connection.';
+watch(hoverCollection, () => {
+  const instance = mapInstance();
+
+  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, HOVER_SOURCE_ID)) {
+    return;
   }
 
-  const instance = new MapLibreMap({
-    container: element,
-    style: initialStyle,
-    center: [0, 15],
-    zoom: 1.2,
-    attributionControl: false,
-    dragRotate: false,
-    pitchWithRotate: false,
-    touchPitch: false,
-  });
+  geoJsonSource(instance, HOVER_SOURCE_ID)?.setData(hoverCollection.value);
+});
 
-  instance.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
-  instance.addControl(new AttributionControl({ compact: false }), 'bottom-right');
+watch([rangeCollection, startCollection], () => {
+  const instance = mapInstance();
 
-  let didLoad = false;
+  if (!instance?.isStyleLoaded()) {
+    return;
+  }
 
-  instance.on('load', () => {
-    didLoad = true;
-    mapReady = true;
+  geoJsonSource(instance, START_SOURCE_ID)?.setData(startCollection.value);
+  geoJsonSource(instance, RANGE_SOURCE_ID)?.setData(rangeCollection.value);
+});
 
-    if (!usingEmptyStyle.value) {
-      loadError.value = undefined;
-    }
+watch(featureCollection, () => {
+  const instance = mapInstance();
 
-    syncData(instance, true);
-    bindPointer(instance);
-  });
+  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, MARKER_SOURCE_ID)) {
+    return;
+  }
 
-  instance.on('error', () => {
-    if (!didLoad && !usingEmptyStyle.value) {
-      showEmptyStyle(instance);
-    }
-  });
+  geoJsonSource(instance, MARKER_SOURCE_ID)?.setData(featureCollection.value);
+});
 
-  const observer = new ResizeObserver(() => {
-    instance.resize();
-  });
-  observer.observe(element);
+watch(locatedIdKey, () => {
+  const instance = mapInstance();
 
-  window.addEventListener('online', onOnlineChange);
-  window.addEventListener('offline', onOnlineChange);
+  if (!instance?.isStyleLoaded()) {
+    return;
+  }
 
-  map.value = instance;
-
-  onUnmounted(() => {
-    observer.disconnect();
-    window.removeEventListener('online', onOnlineChange);
-    window.removeEventListener('offline', onOnlineChange);
-    popup?.remove();
-    instance.remove();
-    map.value = undefined;
-  });
+  syncData(instance, true);
 });
 </script>
 
 <template>
   <section class="channel-map flex h-full min-h-0 w-full flex-col gap-2" aria-label="Repeater map">
-    <div
-      ref="container"
+    <MapCanvas
+      ref="mapCanvas"
+      offline-fallback
+      v-model:load-error="loadError"
+      v-model:using-empty-style="usingEmptyStyle"
       class="channel-map__canvas min-h-0 w-full flex-1 overflow-hidden rounded-md border border-default"
+      @ready="onMapReady"
+      @style-load="onCanvasStyleLoad"
+      @connectivity-change="onConnectivityChange"
     />
 
     <div v-if="legend.length > 0" class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -628,10 +578,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.channel-map__canvas :deep(.maplibregl-map img) {
-  max-width: none;
-}
-
 .channel-map__swatch {
   width: 0.625rem;
   height: 0.625rem;
