@@ -1,3 +1,9 @@
+## [0.59.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.4...v0.59.5) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump shell-quote from 1.10.0 to 1.12.0 ([#76](https://github.com/springfield-ham-radio/ham-radio-ui/issues/76)) ([c895bed](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c895bed9c865517024993eaa523a65e218252e6a))
+
 ## [0.59.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.3...v0.59.4) (2026-10-11)
 
 ### Bug Fixes
