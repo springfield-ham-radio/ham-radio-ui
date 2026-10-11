@@ -1,7 +1,18 @@
 import { Frequency, RadioToneType, type RadioChannel, type RadioTone } from '@springfield/ham-radio-api';
 import { parseFrequencyMHz } from '~/utils/channel-edit';
-import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
-import type { RepeaterUse } from '~/utils/saved-channels-db';
+import {
+  linkedSystemsInText,
+  normalizeLinkedNodes,
+  parseLinkedNode,
+  repeaterBookLinkedTextColumnsPresent,
+  repeaterBookNodeColumnsPresent,
+  type LinkedNodes,
+} from '~/utils/linked-nodes';
+import {
+  coordinatesFromPair,
+  type RepeaterUse,
+  type SavedChannelRecordColumns,
+} from '~/utils/saved-channels-db';
 
 export type RepeaterImportFormat = 'repeaterbook' | 'chirp';
 
@@ -24,11 +35,30 @@ export interface ParsedRepeater {
   notes?: string;
   latitude?: number;
   longitude?: number;
+  /** RepeaterBook Last Update when the export includes that column. */
+  lastUpdate?: string;
+  allstarNode?: string;
+  echolinkNode?: string;
+  irlpNode?: string;
+  wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
 }
 
 export interface ParsedRepeaterImport {
   format: RepeaterImportFormat;
   repeaters: ParsedRepeater[];
+  /** True when the RepeaterBook header included node columns. CHIRP exports never do. */
+  nodeColumnsPresent: boolean;
+  /**
+   * True when the RepeaterBook header included Modes, Mode, or Digital Access.
+   * Those cells can name a linked system without giving its node number.
+   */
+  linkedTextColumnsPresent: boolean;
+  /** Which record columns this file can replace on a matching row. */
+  recordColumns: SavedChannelRecordColumns;
 }
 
 const NONE_TONE: RadioTone = { tone: 0, type: RadioToneType.CTCSS };
@@ -63,7 +93,13 @@ export function parseRepeaterImportCsv(text: string): ParsedRepeaterImport {
     }
   }
 
-  return { format, repeaters };
+  return {
+    format,
+    repeaters,
+    nodeColumnsPresent: format === 'repeaterbook' && repeaterBookNodeColumnsPresent(header),
+    linkedTextColumnsPresent: format === 'repeaterbook' && repeaterBookLinkedTextColumnsPresent(header),
+    recordColumns: repeaterRecordColumns(format, header),
+  };
 }
 
 /**
@@ -80,28 +116,61 @@ export function importedRepeaterToRadioChannel(repeater: ParsedRepeater): RadioC
 }
 
 /**
- * Build library notes from location and RepeaterBook/CHIRP comment fields.
+ * Notes copied onto a new library row.
+ *
+ * City, county, state, country, landmark, and modes are stored on the repeater
+ * record. They are not folded into notes. A RepeaterBook Notes cell and a
+ * Digital Access code (an access code, not a node number) still land here.
  */
 export function importedRepeaterNotes(repeater: ParsedRepeater): string | undefined {
-  const parts = [
-    formatRepeaterLocation(repeater),
-    repeater.landmark,
-    repeater.modes,
-    repeater.notes,
-  ].filter((part): part is string => Boolean(part && part.trim()));
-
-  if (parts.length === 0) {
-    return undefined;
-  }
-
-  return parts.join(' · ');
+  const notes = repeater.notes?.trim();
+  return notes ? notes : undefined;
 }
 
 /**
- * City, state, and country in a single location label.
+ * Which record columns this header can overwrite on re-import.
+ * CHIRP CSV has no city, state, or coordinates, so those flags stay off.
  */
-export function formatRepeaterLocation(repeater: ParsedRepeater): string {
-  return [repeater.city, repeater.state, repeater.country].filter((part) => part && part.trim()).join(', ');
+export function repeaterRecordColumns(format: RepeaterImportFormat, header: readonly string[]): SavedChannelRecordColumns {
+  const has = (...names: string[]): boolean => names.some((name) => header.includes(name));
+
+  if (format === 'chirp') {
+    return {
+      sourceKey: true,
+      sourceFormat: true,
+      city: false,
+      county: false,
+      state: false,
+      country: false,
+      landmark: false,
+      modes: has('mode'),
+      lastUpdate: false,
+    };
+  }
+
+  return {
+    sourceKey: true,
+    sourceFormat: true,
+    city: has('nearest_city', 'city', 'location'),
+    county: has('county'),
+    state: has('state'),
+    country: has('country'),
+    landmark: has('landmark'),
+    modes: has(
+      'modes',
+      'mode',
+      'fm_analog',
+      'dmr',
+      'd_star',
+      'system_fusion',
+      'nxdn',
+      'apco_p_25',
+      'p25',
+      'm17',
+      'tetra',
+    ),
+    lastUpdate: has('last_update'),
+  };
 }
 
 export function detectRepeaterImportFormat(header: string[]): RepeaterImportFormat | undefined {
@@ -134,16 +203,17 @@ function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater |
   const stateId = cell('state_id');
   const repeaterId = cell('rptr_id');
   const callsign = cell('callsign') || cell('call') || cell('name');
+  const location = cell('nearest_city', 'city', 'location');
   const sourceKey = repeaterId
     ? `rb:${stateId || 'unknown'}:${repeaterId}`
-    : `rb:${cell('state') || 'unknown'}:${callsign || 'unknown'}:${receiveHz}`;
+    : `rb:${sourceKeyPart(callsign)}:${receiveHz}:${sourceKeyPart(location)}`;
   const digitalAccess = emptyToUndefined(cell('digital_access'));
 
   return {
     sourceKey,
     sourceFormat: 'repeaterbook',
     callsign,
-    city: emptyToUndefined(cell('nearest_city', 'city', 'location')),
+    city: emptyToUndefined(location),
     county: emptyToUndefined(cell('county')),
     state: emptyToUndefined(cell('state')),
     country: emptyToUndefined(cell('country')),
@@ -162,18 +232,18 @@ function parseRepeaterBookRow(header: string[], row: string[]): ParsedRepeater |
       cell('lat', 'latitude'),
       cell('long', 'lng', 'lon', 'longitude'),
     ),
+    lastUpdate: emptyToUndefined(cell('last_update')),
+    ...repeaterBookLinkedNodes(cell),
   };
 }
 
+function sourceKeyPart(value: string): string {
+  const normalized = value.trim().toLowerCase().replaceAll(/\s+/g, ' ');
+  return normalized || 'unknown';
+}
+
 function repeaterCoordinates(latitudeRaw: string, longitudeRaw: string): { latitude?: number; longitude?: number } {
-  const latitude = parseOptionalNumber(latitudeRaw);
-  const longitude = parseOptionalNumber(longitudeRaw);
-
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-    return {};
-  }
-
-  return { latitude, longitude };
+  return coordinatesFromPair(parseOptionalNumber(latitudeRaw), parseOptionalNumber(longitudeRaw));
 }
 
 function parseChirpRow(header: string[], row: string[]): ParsedRepeater | undefined {
@@ -288,6 +358,27 @@ function parseDcsCode(raw: string): RadioTone {
   return { tone: Math.trunc(code), type: RadioToneType.DCS };
 }
 
+/**
+ * Website CSV uses EchoLink, IRLP, and AllStar. The export field list uses
+ * `EchoLink Node`, `IRLP Node`, `AllStar Node`, and `Wires Node` (also `WIRES Node`).
+ */
+function repeaterBookLinkedNodes(cell: (...names: string[]) => string): LinkedNodes {
+  const named = linkedSystemsInText(
+    [collectRepeaterBookModes(cell), cell('modes'), cell('mode'), cell('digital_access')].filter(Boolean).join(' '),
+  );
+
+  return normalizeLinkedNodes({
+    allstarNode: parseLinkedNode(cell('allstar_node', 'allstar')),
+    echolinkNode: parseLinkedNode(cell('echolink_node', 'echolink')),
+    irlpNode: parseLinkedNode(cell('irlp_node', 'irlp')),
+    wiresNode: parseLinkedNode(cell('wires_node')),
+    allstar: named.allstar,
+    echolink: named.echolink,
+    irlp: named.irlp,
+    wires: named.wires,
+  });
+}
+
 function collectRepeaterBookModes(cell: (...names: string[]) => string): string {
   const modes: string[] = [];
 
@@ -384,7 +475,13 @@ function emptyToUndefined(value: string): string | undefined {
 }
 
 function parseOptionalNumber(raw: string): number | undefined {
-  const value = Number(raw.trim());
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
 
   if (!Number.isFinite(value)) {
     return undefined;
