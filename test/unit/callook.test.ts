@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callookGeocodeQueries, qthFromCallook, resolveCallookGrid, type CallookResponse } from '../../app/utils/callook.ts';
+import {
+  callookGeocodeQueries,
+  fetchCallookLicense,
+  pointFromCallook,
+  qthFromCallook,
+  resolveCallookGrid,
+  type CallookResponse,
+} from '../../app/utils/callook.ts';
 import { latLonToMaidenhead } from '../../app/utils/maidenhead.ts';
 
 const libertyHill: CallookResponse = {
@@ -10,8 +17,6 @@ const libertyHill: CallookResponse = {
     line2: 'LIBERTY HILL, TX 78642',
   },
   location: {
-    latitude: '',
-    longitude: '',
     gridsquare: '',
   },
 };
@@ -73,5 +78,72 @@ describe('callook license place', () => {
     expect(urls).toHaveLength(2);
     expect(urls[0]).toContain(encodeURIComponent('411 BLESSING RANCH RD, LIBERTY HILL, TX 78642'));
     expect(urls[1]).toContain(encodeURIComponent('LIBERTY HILL, TX 78642'));
+  });
+
+  it('uses Callook coordinates when the grid is blank', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      resolveCallookGrid({
+        status: 'VALID',
+        location: { latitude: 38.627, longitude: -90.1994, gridsquare: '' },
+      }),
+    ).resolves.toBe('EM48VP');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('parses Callook latitude and longitude strings at the fetch edge', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          status: 'VALID',
+          current: { callsign: 'W0SL', operClass: 'EXTRA' },
+          location: { latitude: '38.627000', longitude: '-90.199400', gridsquare: 'EM48vp' },
+        }),
+      ),
+    );
+
+    const license = await fetchCallookLicense('w0sl');
+
+    expect(license.location).toEqual({
+      latitude: 38.627,
+      longitude: -90.1994,
+      gridsquare: 'EM48vp',
+    });
+    expect(pointFromCallook(license)).toEqual({ latitude: 38.627, longitude: -90.1994 });
+  });
+
+  it('drops blank Callook coordinates and the exact pair (0, 0)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          status: 'VALID',
+          location: { latitude: '', longitude: '', gridsquare: '' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          status: 'VALID',
+          location: { latitude: '0', longitude: '0', gridsquare: 'JJ00aa' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blank = await fetchCallookLicense('W0SL');
+    const nullIsland = await fetchCallookLicense('W0SL');
+
+    expect(blank.location?.latitude).toBeUndefined();
+    expect(blank.location?.longitude).toBeUndefined();
+    expect(pointFromCallook(blank)).toBeUndefined();
+    expect(nullIsland.location?.latitude).toBeUndefined();
+    expect(nullIsland.location?.longitude).toBeUndefined();
+    expect(nullIsland.location?.gridsquare).toBe('JJ00aa');
+    expect(pointFromCallook({ status: 'VALID', location: { latitude: 0, longitude: -90.1994 } })).toEqual({
+      latitude: 0,
+      longitude: -90.1994,
+    });
   });
 });

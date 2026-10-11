@@ -21,6 +21,7 @@ jobs:
       - run: yarn install --immutable
       - run: yarn build
       - run: yarn lint
+      - run: yarn test:unit
 
   release:
     needs: build
@@ -33,7 +34,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}

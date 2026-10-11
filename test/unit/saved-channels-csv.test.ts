@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioChannelId, RadioToneType } from '@springfield/ham-radio-api';
 import {
@@ -68,6 +69,171 @@ describe('saved-channels-csv', () => {
     expect(parsed.channels[0]?.transmitFrequency).toBe(Frequency(146_325_000));
     expect(parsed.uses[0]).toBe('open');
     expect(parsed.onAir[0]).toBe(true);
+    expect(parsed.latitudes[0]).toBeCloseTo(43.5018912);
+    expect(parsed.longitudes[0]).toBeCloseTo(-70.7260259);
+    expect(parsed.replaceLinkedNodes).toBe(false);
+    expect(parsed.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.echolinkNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.irlpNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.wiresNode).toBeUndefined();
+  });
+
+  it('round-trips repeater coordinates and node numbers through the library CSV', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        latitude: 39.0997,
+        longitude: -94.5786,
+        allstarNode: '5517',
+        echolinkNode: '353167',
+        irlpNode: undefined,
+        wiresNode: '1234',
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.latitudes[0]).toBeCloseTo(39.0997);
+    expect(parsed.longitudes[0]).toBeCloseTo(-94.5786);
+    expect(parsed.replaceLinkedNodes).toBe(true);
+    expect(parsed.replaceLinkedPresence).toBe(true);
+    expect(parsed.linkedNodes[0]).toEqual({
+      allstarNode: '5517',
+      echolinkNode: '353167',
+      irlpNode: undefined,
+      wiresNode: '1234',
+      allstar: true,
+      echolink: true,
+      irlp: false,
+      wires: true,
+    });
+
+    const cleared = parseSavedChannelsCsv(csv.replace('5517', '0'));
+    expect(cleared.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(cleared.linkedNodes[0]?.allstar).toBe(false);
+    expect(cleared.latitudes[0]).toBeCloseTo(39.0997);
+    expect(cleared.replaceLinkedNodes).toBe(true);
+  });
+
+  it('round-trips linked-system presence without a node number', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        allstar: true,
+        echolink: false,
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.linkedNodes[0]?.allstar).toBe(true);
+    expect(parsed.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(parsed.linkedNodes[0]?.echolink).toBe(false);
+    expect(parsed.replaceLinkedPresence).toBe(true);
+
+    const zeroNode = parseSavedChannelsCsv(csv.replace(',,,,,,1,0,0,0', ',,0,,,,1,0,0,0'));
+    expect(zeroNode.linkedNodes[0]?.allstarNode).toBeUndefined();
+    expect(zeroNode.linkedNodes[0]?.allstar).toBe(true);
+  });
+
+  it('imports website CSV node columns onto repeater rows', () => {
+    const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,"Location",lat,long,Call,Use,Op Status,EchoLink,IRLP,AllStar
+145.600000,145.000000,-,79.7,79.7,"Algutsrum",56.68281700,16.56464800,SK7RFL,OPEN,On-Air,353167,,0
+`;
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('repeaterbook');
+    expect(parsed.replaceLinkedNodes).toBe(true);
+    expect(parsed.latitudes[0]).toBeCloseTo(56.682817);
+    expect(parsed.longitudes[0]).toBeCloseTo(16.564648);
+    expect(parsed.linkedNodes[0]).toEqual({
+      allstarNode: undefined,
+      echolinkNode: '353167',
+      irlpNode: undefined,
+      wiresNode: undefined,
+      allstar: false,
+      echolink: true,
+      irlp: false,
+      wires: false,
+    });
+  });
+
+  it('leaves blank library coordinates and a Null Island pair unlocated', () => {
+    const header = 'name,tx_mhz,rx_mhz,tx_tone_type,tx_tone,rx_tone_type,rx_tone,notes,kind,use,on_air,callsign,latitude,longitude';
+    const csv = `${header}
+Blank,146.940,146.340,CTCSS,107.2,CTCSS,107.2,,repeater,open,yes,W5KA,,
+Zero,146.820,146.220,CTCSS,100.0,CTCSS,100.0,,repeater,open,yes,N5MHI,0,0
+Equator,146.640,146.040,CTCSS,88.5,CTCSS,88.5,,repeater,open,yes,KE5RS,0,-97.85
+`;
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('library');
+    expect(parsed.latitudes[0]).toBeUndefined();
+    expect(parsed.longitudes[0]).toBeUndefined();
+    expect(parsed.latitudes[1]).toBeUndefined();
+    expect(parsed.longitudes[1]).toBeUndefined();
+    expect(parsed.latitudes[2]).toBe(0);
+    expect(parsed.longitudes[2]).toBeCloseTo(-97.85);
+  });
+
+  it('imports the Austin RepeaterBook export through the library parser with null coordinates', () => {
+    const csv = readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8');
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('repeaterbook');
+    expect(parsed.latitudes.length).toBeGreaterThan(0);
+    expect(parsed.latitudes.every((latitude) => latitude === undefined)).toBe(true);
+    expect(parsed.longitudes.every((longitude) => longitude === undefined)).toBe(true);
+  });
+
+  it('round-trips repeater record fields through the library CSV', () => {
+    const csv = serializeSavedChannelsCsv([
+      {
+        ...sample,
+        kind: 'repeater',
+        callsign: 'W5KA',
+        sourceKey: 'rb:w5ka:146940000:austin',
+        sourceFormat: 'repeaterbook',
+        city: 'Austin',
+        county: 'Travis',
+        state: 'Texas',
+        country: 'United States',
+        landmark: 'Buckman Mtn',
+        modes: 'FM AllStar',
+        lastUpdate: '2026-01-01',
+        notes: 'Operator note',
+      },
+    ]);
+    const parsed = parseSavedChannelsCsv(csv);
+
+    expect(parsed.source).toBe('library');
+    expect(parsed.recordColumns.city).toBe(true);
+    expect(parsed.recordColumns.modes).toBe(true);
+    expect(parsed.recordColumns.lastUpdate).toBe(true);
+    expect(parsed.sourceKeys[0]).toBe('rb:w5ka:146940000:austin');
+    expect(parsed.sourceFormats[0]).toBe('repeaterbook');
+    expect(parsed.cities[0]).toBe('Austin');
+    expect(parsed.counties[0]).toBe('Travis');
+    expect(parsed.states[0]).toBe('Texas');
+    expect(parsed.countries[0]).toBe('United States');
+    expect(parsed.landmarks[0]).toBe('Buckman Mtn');
+    expect(parsed.modes[0]).toBe('FM AllStar');
+    expect(parsed.lastUpdates[0]).toBe('2026-01-01');
+    expect(parsed.notes[0]).toBe('Operator note');
+  });
+
+  it('imports RepeaterBook record fields without folding location into notes', () => {
+    const parsed = parseSavedChannelsCsv(repeaterBookCsv);
+
+    expect(parsed.cities[0]).toBe('Lyman');
+    expect(parsed.states[0]).toBe('Maine');
+    expect(parsed.countries[0]).toBe('United States');
+    expect(parsed.modes[0]).toBe('FM');
+    expect(parsed.lastUpdates[0]).toBe('2026-01-01');
+    expect(parsed.sourceKeys[0]).toBe('rb:23:21812');
+    expect(parsed.notes[0]).toBe('Club machine');
+    expect(parsed.recordColumns.city).toBe(true);
+    expect(parsed.recordColumns.lastUpdate).toBe(true);
   });
 
   it('rejects CSV files missing required columns', () => {

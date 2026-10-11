@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
+  importedRepeaterNotes,
   importedRepeaterToRadioChannel,
   parseRepeaterImportCsv,
 } from '../../app/utils/repeater-import.ts';
@@ -36,7 +38,14 @@ describe('repeater-import', () => {
       expect(analog.receiveTone).toEqual({ tone: 0, type: RadioToneType.CTCSS });
       expect(analog.use).toBe('open');
       expect(analog.onAir).toBe(true);
+      expect(analog.latitude).toBeCloseTo(43.5018912);
+      expect(analog.longitude).toBeCloseTo(-70.7260259);
       expect(analog.modes).toBe('FM');
+      expect(analog.county).toBe('York');
+      expect(analog.country).toBe('United States');
+      expect(analog.lastUpdate).toBe('2026-01-01');
+      expect(importedRepeaterNotes(analog)).toBe('Club machine');
+      expect(importedRepeaterNotes(analog)).not.toContain('Lyman');
     });
 
     it('parses RepeaterBook DCS PL codes and listed digital modes', () => {
@@ -76,6 +85,7 @@ describe('repeater-import', () => {
       const dtcs = parsed.repeaters[3]!;
       expect(dtcs.transmitTone).toEqual({ tone: 754, type: RadioToneType.DCS });
       expect(dtcs.receiveTone).toEqual({ tone: 754, type: RadioToneType.DCS });
+      expect(parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined)).toBe(true);
     });
 
     it('parses a RepeaterBook search download that uses Output Freq and Call', () => {
@@ -99,6 +109,10 @@ describe('repeater-import', () => {
       expect(leander.transmitTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
       expect(leander.receiveTone).toEqual({ tone: 1000, type: RadioToneType.CTCSS });
       expect(leander.modes).toBe('FM AllStar EchoLink');
+      expect(leander.sourceKey).toBe('rb:ke5rs:441600000:leander');
+      expect(leander.sourceFormat).toBe('repeaterbook');
+      expect(leander.latitude).toBeUndefined();
+      expect(importedRepeaterNotes(leander)).toBeUndefined();
 
       const noTone = parsed.repeaters[1]!;
       expect(noTone.callsign).toBe('W5KA');
@@ -108,6 +122,37 @@ describe('repeater-import', () => {
 
       const access = parsed.repeaters[2]!;
       expect(access.notes).toBe('Digital access 293');
+      expect(parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined)).toBe(true);
+    });
+
+    it('leaves blank Lat and Long cells unlocated instead of storing zero', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",lat,long
+146.940000,146.34000,-,107.2,107.2,W5KA,"Austin",,
+146.820000,146.22000,-,100.0,100.0,N5MHI,"Austin",0,0
+146.640000,146.04000,-,88.5,88.5,KE5RS,"Leander",0,-97.85
+442.100000,447.10000,+,100.0,100.0,K5TRA,"Austin",30.27,0
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.repeaters[0]?.latitude).toBeUndefined();
+      expect(parsed.repeaters[0]?.longitude).toBeUndefined();
+      expect(parsed.repeaters[1]?.latitude).toBeUndefined();
+      expect(parsed.repeaters[1]?.longitude).toBeUndefined();
+      expect(parsed.repeaters[2]?.latitude).toBe(0);
+      expect(parsed.repeaters[2]?.longitude).toBeCloseTo(-97.85);
+      expect(parsed.repeaters[3]?.latitude).toBeCloseTo(30.27);
+      expect(parsed.repeaters[3]?.longitude).toBe(0);
+    });
+
+    it('imports the Austin RepeaterBook export with no coordinates as unlocated', () => {
+      const csv = readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8');
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.format).toBe('repeaterbook');
+      expect(parsed.repeaters.length).toBeGreaterThan(0);
+      expect(
+        parsed.repeaters.every((repeater) => repeater.latitude === undefined && repeater.longitude === undefined),
+      ).toBe(true);
     });
 
     it('reads Use and Op Status from a RepeaterBook search export', () => {
@@ -121,6 +166,117 @@ describe('repeater-import', () => {
       expect(parsed.repeaters[0]?.onAir).toBe(true);
       expect(parsed.repeaters[1]?.use).toBe('closed');
       expect(parsed.repeaters[1]?.onAir).toBe(false);
+    });
+
+    it('parses RepeaterBook export field-list node columns and treats 0 as none', () => {
+      const csv = `State ID,Rptr ID,Frequency,Input Freq,PL,TSQ,Callsign,Use,Operational Status,AllStar Node,EchoLink Node,IRLP Node,Wires Node,FM Analog
+23,21812,146.92500,146.32500,103.5,,WJ1L,OPEN,On-air,5517,0,,1234,Yes
+23,99,446.00000,441.00000,,,K1ABC,OPEN,On-air,0,353167,7777,0,Yes
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.nodeColumnsPresent).toBe(true);
+      expect(parsed.repeaters[0]).toMatchObject({
+        allstarNode: '5517',
+        echolinkNode: undefined,
+        irlpNode: undefined,
+        wiresNode: '1234',
+      });
+      expect(parsed.repeaters[1]).toMatchObject({
+        allstarNode: undefined,
+        echolinkNode: '353167',
+        irlpNode: '7777',
+        wiresNode: undefined,
+      });
+    });
+
+    it('parses website CSV node columns EchoLink, IRLP, and AllStar', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,"Location",lat,long,Call,Use,Op Status,Mode,Digital Access,EchoLink,IRLP,AllStar,Coverage,Last Update
+145.300000,145.300000,0,118.8,,"Lidkoping",58.66000000,13.15000000,SM6YRB,OPEN,On-Air,Analog/analog,,,,5517,,2021-04-16
+145.600000,145.000000,-,79.7,79.7,"Algutsrum",56.68281700,16.56464800,SK7RFL,OPEN,On-Air,Analog/analog,,353167,,,,2022-08-10
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.nodeColumnsPresent).toBe(true);
+      expect(parsed.repeaters[0]?.allstarNode).toBe('5517');
+      expect(parsed.repeaters[0]?.echolinkNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.irlpNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.wiresNode).toBeUndefined();
+      expect(parsed.repeaters[1]?.echolinkNode).toBe('353167');
+      expect(parsed.repeaters[1]?.allstarNode).toBeUndefined();
+    });
+
+    it('does not treat mode names or digital access codes as node numbers', () => {
+      const csv = `Output Freq,Input Freq,Offset,Uplink Tone,Downlink Tone,Call,"Location",County,State,Modes,Digital Access
+441.600000,446.60000,+,100.0,100.0,KE5RS,"Leander",Williamson,Texas,FM AllStar EchoLink ,293
+146.940000,146.34000,-,107.2,107.2,W5KA,"Austin",Travis,Texas,DSTAR ,1293
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.nodeColumnsPresent).toBe(false);
+      expect(parsed.linkedTextColumnsPresent).toBe(true);
+      expect(parsed.repeaters[0]?.modes).toBe('FM AllStar EchoLink');
+      expect(parsed.repeaters[0]?.allstarNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.echolinkNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.allstar).toBe(true);
+      expect(parsed.repeaters[0]?.echolink).toBe(true);
+      expect(parsed.repeaters[0]?.irlp).toBe(false);
+      expect(parsed.repeaters[0]?.wires).toBe(false);
+      expect(parsed.repeaters[0]?.notes).toBe('Digital access 293');
+      expect(parsed.repeaters[1]?.allstar).toBe(false);
+      expect(parsed.repeaters[1]?.echolink).toBe(false);
+      expect(parsed.repeaters[1]?.allstarNode).toBeUndefined();
+      expect(parsed.repeaters[1]?.notes).toBe('Digital access 1293');
+    });
+
+    it('keeps a system present when Modes names it and the node cell is zero', () => {
+      const csv = `Output Freq,Input Freq,Call,Modes,AllStar Node,EchoLink Node
+146.940000,146.340000,W5KA,FM AllStar EchoLink,0,0
+`;
+      const parsed = parseRepeaterImportCsv(csv);
+
+      expect(parsed.nodeColumnsPresent).toBe(true);
+      expect(parsed.repeaters[0]?.allstarNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.echolinkNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.allstar).toBe(true);
+      expect(parsed.repeaters[0]?.echolink).toBe(true);
+    });
+
+    it('counts linked systems named in the Austin RepeaterBook export', () => {
+      const csv = readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8');
+      const parsed = parseRepeaterImportCsv(csv);
+      const count = (field: 'allstar' | 'echolink' | 'irlp' | 'wires'): number =>
+        parsed.repeaters.filter((repeater) => repeater[field]).length;
+
+      expect(parsed.repeaters).toHaveLength(52);
+      expect(parsed.recordColumns.city).toBe(true);
+      expect(parsed.recordColumns.state).toBe(true);
+      expect(parsed.recordColumns.lastUpdate).toBe(false);
+      expect(parsed.repeaters[0]?.sourceKey).toBe('rb:w5ka:1293100000:austin - south austin med ctr');
+      expect(new Set(parsed.repeaters.map((repeater) => repeater.sourceKey)).size).toBeLessThan(parsed.repeaters.length);
+      expect(parsed.nodeColumnsPresent).toBe(false);
+      expect(count('allstar')).toBe(13);
+      expect(count('echolink')).toBe(9);
+      expect(count('irlp')).toBe(0);
+      expect(count('wires')).toBe(4);
+      expect(
+        parsed.repeaters.every(
+          (repeater) => !repeater.allstarNode && !repeater.echolinkNode && !repeater.irlpNode && !repeater.wiresNode,
+        ),
+      ).toBe(true);
+    });
+
+    it('leaves CHIRP rows without node numbers', () => {
+      const parsed = parseRepeaterImportCsv(chirpCsv);
+
+      expect(parsed.nodeColumnsPresent).toBe(false);
+      expect(parsed.repeaters[0]?.allstarNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.echolinkNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.irlpNode).toBeUndefined();
+      expect(parsed.repeaters[0]?.wiresNode).toBeUndefined();
+      expect(parsed.repeaters.every((repeater) => repeater.city === undefined && repeater.state === undefined)).toBe(true);
+      expect(parsed.recordColumns.city).toBe(false);
+      expect(parsed.recordColumns.state).toBe(false);
     });
 
     it('rejects CSV files that are not RepeaterBook or CHIRP exports', () => {

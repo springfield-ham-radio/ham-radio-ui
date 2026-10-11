@@ -8,6 +8,8 @@ export default defineAppConfig({
       warning: 'amber',
       error: 'red',
       neutral: 'neutral',
+      teal: 'teal',
+      violet: 'violet',
     },
   },
 });

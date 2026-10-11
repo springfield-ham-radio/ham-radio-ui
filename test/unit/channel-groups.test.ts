@@ -1,8 +1,26 @@
 import { RadioChannelId } from '@springfield/ham-radio-api';
 import { describe, expect, it } from 'vitest';
-import { channelsInGroup, normalizeChannelGroupName, validateChannelGroupName, ALL_CHANNELS_TAB_ID } from '../../app/utils/channel-groups.ts';
+import {
+  channelsInGroup,
+  channelGroupKindFromDb,
+  isTripChannelGroup,
+  normalizeChannelGroupName,
+  validateChannelGroupName,
+  ALL_CHANNELS_TAB_ID,
+} from '../../app/utils/channel-groups.ts';
 
 describe('channel-groups', () => {
+  describe('channelGroupKindFromDb', () => {
+    it('treats trip groups as trips and everything else as a library group', () => {
+      expect(channelGroupKindFromDb('trip')).toBe('trip');
+      expect(channelGroupKindFromDb('group')).toBe('group');
+      expect(channelGroupKindFromDb(null)).toBe('group');
+      expect(isTripChannelGroup({ kind: 'trip' })).toBe(true);
+      expect(isTripChannelGroup({ kind: 'group' })).toBe(false);
+      expect(isTripChannelGroup(undefined)).toBe(false);
+    });
+  });
+
   describe('validateChannelGroupName', () => {
     it('rejects a blank name, the reserved All tab, and duplicates', () => {
       expect(validateChannelGroupName('   ', [])).toBe('Enter a group name');

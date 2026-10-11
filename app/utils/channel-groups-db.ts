@@ -1,8 +1,10 @@
 import { RadioChannelId } from '@springfield/ham-radio-api';
 import {
+  channelGroupKindFromDb,
   normalizeChannelGroupName,
   validateChannelGroupName,
   type ChannelGroup,
+  type ChannelGroupKind,
   type ChannelGroupMembership,
 } from '~/utils/channel-groups';
 import { getSavedChannelsDatabase } from '~/utils/saved-channels-db';
@@ -10,6 +12,7 @@ import { getSavedChannelsDatabase } from '~/utils/saved-channels-db';
 interface ChannelGroupRow {
   id: string;
   name: string;
+  kind: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -20,9 +23,13 @@ interface ChannelGroupMemberRow {
 }
 
 function channelGroupRowToModel(row: ChannelGroupRow): ChannelGroup {
+  const kind = channelGroupKindFromDb(row.kind);
+
   return {
     id: row.id,
     name: row.name,
+    kind,
+    icon: kind === 'trip' ? 'i-lucide-route' : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -31,7 +38,7 @@ function channelGroupRowToModel(row: ChannelGroupRow): ChannelGroup {
 export async function listChannelGroups(): Promise<ChannelGroup[]> {
   const database = await getSavedChannelsDatabase();
   const rows = await database.select<ChannelGroupRow[]>(
-    `SELECT id, name, created_at, updated_at
+    `SELECT id, name, kind, created_at, updated_at
      FROM channel_groups
      ORDER BY name COLLATE NOCASE ASC`,
   );
@@ -51,7 +58,11 @@ export async function listChannelGroupMemberships(): Promise<ChannelGroupMembers
   }));
 }
 
-export async function insertChannelGroup(name: string, channelIds: readonly RadioChannelId[]): Promise<ChannelGroup> {
+export async function insertChannelGroup(
+  name: string,
+  channelIds: readonly RadioChannelId[],
+  kind: ChannelGroupKind = 'group',
+): Promise<ChannelGroup> {
   const groups = await listChannelGroups();
   const error = validateChannelGroupName(name, groups.map((group) => group.name));
 
@@ -63,14 +74,16 @@ export async function insertChannelGroup(name: string, channelIds: readonly Radi
   const group: ChannelGroup = {
     id: crypto.randomUUID(),
     name: normalizeChannelGroupName(name),
+    kind,
+    icon: kind === 'trip' ? 'i-lucide-route' : undefined,
     createdAt: now,
     updatedAt: now,
   };
   const database = await getSavedChannelsDatabase();
 
   await database.execute(
-    'INSERT INTO channel_groups (id, name, created_at, updated_at) VALUES ($1, $2, $3, $4)',
-    [group.id, group.name, group.createdAt, group.updatedAt],
+    'INSERT INTO channel_groups (id, name, kind, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
+    [group.id, group.name, kind, group.createdAt, group.updatedAt],
   );
   await addChannelsToGroup(group.id, channelIds);
 

@@ -1,3 +1,69 @@
+## [0.60.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.5...v0.60.0) (2026-10-11)
+
+### Features
+
+* remember window size and position between launches ([#91](https://github.com/springfield-ham-radio/ham-radio-ui/issues/91)) ([15a8f4a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/15a8f4a7e200000f995ed0c7e236f271078fcf86)), closes [#88](https://github.com/springfield-ham-radio/ham-radio-ui/issues/88)
+
+## [0.59.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.4...v0.59.5) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump shell-quote from 1.10.0 to 1.12.0 ([#76](https://github.com/springfield-ham-radio/ham-radio-ui/issues/76)) ([c895bed](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c895bed9c865517024993eaa523a65e218252e6a))
+
+## [0.59.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.3...v0.59.4) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump source-map-js from 1.2.1 to 1.2.2 ([#77](https://github.com/springfield-ham-radio/ham-radio-ui/issues/77)) ([e939d6c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e939d6c91a0cf3bb128ab25e6c51986a4607e4aa))
+
+## [0.59.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.2...v0.59.3) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump seroval from 1.6.2 to 1.6.9 ([#78](https://github.com/springfield-ham-radio/ham-radio-ui/issues/78)) ([feea791](https://github.com/springfield-ham-radio/ham-radio-ui/commit/feea791f232bf864ccadae91fc09f07277cd7869))
+
+## [0.59.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.1...v0.59.2) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump handlebars from 4.7.9 to 4.7.10 ([#79](https://github.com/springfield-ham-radio/ham-radio-ui/issues/79)) ([b3af149](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b3af149e08059f5e64414fd7184993268605ad68))
+
+## [0.59.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.0...v0.59.1) (2026-10-11)
+
+### Bug Fixes
+
+* derive the ham-radio-api version from the installed package ([#86](https://github.com/springfield-ham-radio/ham-radio-ui/issues/86)) ([b2f67c3](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b2f67c33108d22ed77ff2ac1da657ee5f906820c))
+
+## [0.59.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.58.0...v0.59.0) (2026-10-10)
+
+### Features
+
+* **location:** shared location-format module over GeoPoint ([d339837](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d3398371f02918d44738cb69621b5e66a3f5208e))
+
+## [0.58.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.57.0...v0.58.0) (2026-10-10)
+
+### Features
+
+* **channels:** store repeater records and update them on re-import ([#85](https://github.com/springfield-ham-radio/ham-radio-ui/issues/85)) ([75b1331](https://github.com/springfield-ham-radio/ham-radio-ui/commit/75b13314aa7cfb2825bf1cd17b5186cc7ebdd048))
+
+## [0.57.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.56.0...v0.57.0) (2026-10-10)
+
+### Features
+
+* **channels:** sort the library by distance from a station ([#82](https://github.com/springfield-ham-radio/ham-radio-ui/issues/82)) ([da501a0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/da501a0ebcac738666b3dd9ba6f99eea59d2385b))
+
+## [0.56.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.55.0...v0.56.0) (2026-10-10)
+
+### Features
+
+* **channels:** show linked-system nodes on repeaters ([#71](https://github.com/springfield-ham-radio/ham-radio-ui/issues/71)) ([5e7a0a3](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5e7a0a31d60201ca120899e90d58e4852539375c))
+
+## [0.55.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.54.0...v0.55.0) (2026-10-10)
+
+### Features
+
+* **channels:** trip lists from an imported route export ([#70](https://github.com/springfield-ham-radio/ham-radio-ui/issues/70)) ([79e375a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/79e375a0c54a28ceb0a7ab6ebd3e2729b6ace83f))
+
 ## [0.54.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.53.2...v0.54.0) (2026-10-04)
 
 ### Features

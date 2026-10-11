@@ -1,4 +1,5 @@
-import { isValidLatitude, isValidLongitude, latLonToMaidenhead, normalizeMaidenhead, type GeoPoint } from '~/utils/maidenhead';
+import { parseLocatedPoint, pointFromGeoJsonPoint, type GeoPoint } from '~/utils/location-format';
+import { latLonToMaidenhead, normalizeMaidenhead } from '~/utils/maidenhead';
 
 export type CallookStatus = 'VALID' | 'INVALID' | 'UPDATING';
 
@@ -28,8 +29,9 @@ export interface CallookResponse {
     attn?: string;
   };
   location?: {
-    latitude?: string;
-    longitude?: string;
+    /** Signed decimal degrees. Absent when Callook left the field blank or the pair is (0, 0). */
+    latitude?: number;
+    longitude?: number;
     gridsquare?: string;
   };
   otherInfo?: {
@@ -67,7 +69,7 @@ export async function fetchCallookLicense(callSign: string): Promise<CallookResp
       throw new Error(`Callook lookup failed with HTTP ${response.status}`);
     }
 
-    const payload = (await response.json()) as CallookResponse;
+    const payload = callookFromPayload(await response.json());
 
     if (payload.status !== 'UPDATING') {
       return payload;
@@ -117,14 +119,25 @@ export function qthFromCallook(response: CallookResponse): string | undefined {
 
 /**
  * Maidenhead locator for a looked-up license.
- * Uses Callook's grid when that lookup produced one. Otherwise geocodes the
- * mailing address, because Callook sometimes returns a name with empty coordinates.
+ * Uses Callook's grid when that lookup produced one, then the parsed coordinates.
+ * Otherwise geocodes the mailing address, because Callook sometimes returns a name
+ * with empty coordinates.
  */
 export async function resolveCallookGrid(response: CallookResponse): Promise<string | undefined> {
   const declared = normalizeMaidenhead(response.location?.gridsquare);
 
   if (declared) {
     return declared;
+  }
+
+  const callookPoint = pointFromCallook(response);
+
+  if (callookPoint) {
+    const grid = latLonToMaidenhead(callookPoint.latitude, callookPoint.longitude, 6);
+
+    if (grid) {
+      return grid;
+    }
   }
 
   for (const query of callookGeocodeQueries(response)) {
@@ -155,6 +168,45 @@ export function callookGeocodeQueries(response: CallookResponse): string[] {
   }
 
   return queries;
+}
+
+/**
+ * WGS84 point from Callook latitude and longitude.
+ * Blank fields and the exact pair (0, 0) are unlocated.
+ */
+export function pointFromCallook(response: CallookResponse): GeoPoint | undefined {
+  return parseLocatedPoint(response.location?.latitude, response.location?.longitude);
+}
+
+function callookFromPayload(payload: unknown): CallookResponse {
+  if (!isRecord(payload)) {
+    throw new Error('Callook lookup returned an unexpected payload');
+  }
+
+  const status = payload.status;
+
+  if (status !== 'VALID' && status !== 'INVALID' && status !== 'UPDATING') {
+    throw new Error('Callook lookup returned an unexpected payload');
+  }
+
+  const location = isRecord(payload.location) ? payload.location : undefined;
+  const point = location ? parseLocatedPoint(location.latitude, location.longitude) : undefined;
+
+  return {
+    ...(payload as CallookResponse),
+    status,
+    location: location
+      ? {
+          latitude: point?.latitude,
+          longitude: point?.longitude,
+          gridsquare: typeof location.gridsquare === 'string' ? location.gridsquare : undefined,
+        }
+      : undefined,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
 }
 
 function titleCasePlace(value: string): string {
@@ -194,16 +246,9 @@ function pointFromPhoton(payload: unknown): GeoPoint | undefined {
   const geometry = (features[0] as { geometry?: { coordinates?: unknown } } | undefined)?.geometry;
   const coordinates = geometry?.coordinates;
 
-  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+  if (!Array.isArray(coordinates)) {
     return undefined;
   }
 
-  const longitude = coordinates[0];
-  const latitude = coordinates[1];
-
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-    return undefined;
-  }
-
-  return { latitude, longitude };
+  return pointFromGeoJsonPoint({ type: 'Point', coordinates });
 }
