@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Frequency } from '@springfield/ham-radio-api';
+import { parseRepeaterImportCsv } from '../../app/utils/repeater-import.ts';
 import { bandNameForFrequency } from '../../app/utils/transmit-privileges.ts';
 import {
+  defaultDistanceStartId,
   formatTripDistance,
   orderTripChannels,
   parseTypedTripCoordinates,
@@ -41,10 +44,14 @@ describe('trip-channels', () => {
     });
     expect(stationStartPoint({ gridsquare: 'FN42' })?.latitude).toBeCloseTo(42.5, 1);
     expect(stationStartPoint({})).toBeUndefined();
+    expect(stationStartPoint({ latitude: 0, longitude: 0, gridsquare: 'EM38' })?.latitude).toBeCloseTo(38.5, 0);
+    expect(stationStartPoint({ latitude: 0, longitude: -94.58 })).toEqual({ latitude: 0, longitude: -94.58 });
   });
 
   it('parses typed coordinates and reports range errors', () => {
     expect(parseTypedTripCoordinates('39.1', '-94.58')).toEqual({ latitude: 39.1, longitude: -94.58 });
+    expect(parseTypedTripCoordinates('0', '0')).toBeUndefined();
+    expect(parseTypedTripCoordinates('0', '-94.58')).toEqual({ latitude: 0, longitude: -94.58 });
     expect(parseTypedTripCoordinates('39.1', '')).toBeUndefined();
     expect(typedCoordinateError('', 'latitude')).toBeUndefined();
     expect(typedCoordinateError('91', 'latitude')).toMatch(/-90 to 90/);
@@ -60,6 +67,56 @@ describe('trip-channels', () => {
     expect(formatTripDistance(undefined)).toBe('—');
     expect(formatTripDistance(1.609344)).toBe('1.0 mi');
     expect(orderTripChannels([far, near], undefined).map((channel) => channel.id)).toEqual(['far', 'near']);
+  });
+
+  it('keeps unlocated rows last when distance is sorted descending', () => {
+    const unknownLater = row('unknown-later', undefined, undefined, 146_520_000);
+    const ordered = orderTripChannels([unknown, near, far, unknownLater], start, 'desc');
+
+    expect(ordered.map((channel) => channel.id)).toEqual(['far', 'near', 'unknown', 'unknown-later']);
+    expect(orderTripChannels([far, near], undefined, 'desc').map((channel) => channel.id)).toEqual(['far', 'near']);
+  });
+
+  it('sorts Null Island and the Austin export last and shows an em dash', () => {
+    const nullIsland = row('null-island', 0, 0, 146_940_000);
+    const equator = row('equator', 0, -94.58, 146_520_000);
+    const ordered = orderTripChannels([nullIsland, far, equator], start);
+
+    expect(tripDistanceKm(nullIsland, start)).toBeUndefined();
+    expect(tripDistanceKm(equator, start)).toBeTypeOf('number');
+    expect(formatTripDistance(tripDistanceKm(nullIsland, start))).toBe('—');
+    expect(ordered.map((channel) => channel.id)).toEqual(['far', 'equator', 'null-island']);
+
+    const austin = parseRepeaterImportCsv(readFileSync(new URL('../fixtures/austin-repeaters.csv', import.meta.url), 'utf8'));
+    const austinRows = austin.repeaters.map((repeater, index) =>
+      row(`austin-${index}`, repeater.latitude, repeater.longitude, repeater.receiveFrequency),
+    );
+    const mixed = orderTripChannels([austinRows[0]!, near, austinRows[1]!], start, 'desc');
+
+    expect(austinRows.length).toBeGreaterThan(0);
+    expect(austinRows.every((channel) => tripDistanceKm(channel, start) === undefined)).toBe(true);
+    expect(mixed.map((channel) => channel.id)).toEqual(['near', 'austin-0', 'austin-1']);
+    expect(formatTripDistance(tripDistanceKm(austinRows[0]!, start))).toBe('—');
+  });
+
+  it('formats kilometers and miles from the same kilometer value', () => {
+    expect(formatTripDistance(1.609344, 'mi')).toBe('1.0 mi');
+    expect(formatTripDistance(1.609344, 'km')).toBe('1.6 km');
+    expect(formatTripDistance(10, 'km')).toBe('10.0 km');
+    expect(formatTripDistance(undefined, 'km')).toBe('—');
+  });
+
+  it('defaults Distance from to the selected station, then Home', () => {
+    const home = { id: 'station-home', gridsquare: 'EM38' };
+    const portable = { id: 'station-portable', latitude: 39.2, longitude: -94.6 };
+    const bare = { id: 'station-bare' };
+    const options = { homeStationId: 'station-home' };
+
+    expect(defaultDistanceStartId([home, portable], { ...options, selectedStationId: portable.id })).toBe(portable.id);
+    expect(defaultDistanceStartId([bare, home], { ...options, selectedStationId: bare.id })).toBe(home.id);
+    expect(defaultDistanceStartId([bare, portable], { ...options, selectedStationId: bare.id })).toBe(portable.id);
+    expect(defaultDistanceStartId([bare], { ...options, selectedStationId: bare.id })).toBe('none');
+    expect(stationStartPoint(home)?.latitude).toBeGreaterThan(0);
   });
 
   it('filters by band, open use, and on-air', () => {

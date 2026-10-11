@@ -21,8 +21,15 @@ import {
   listChannelGroups,
   renameChannelGroup,
 } from '~/utils/channel-groups-db';
+import { linkedNodesForKind } from '~/utils/linked-nodes';
+import { formatLibraryImportSummary, planLibraryImport } from '~/utils/library-import';
 import { fillRepeaterBookUseAndOnAir } from '~/utils/repeaterbook-listings';
-import { importedRepeaterNotes, importedRepeaterToRadioChannel, parseRepeaterImportCsv } from '~/utils/repeater-import';
+import {
+  importedRepeaterNotes,
+  importedRepeaterToRadioChannel,
+  parseRepeaterImportCsv,
+  type ParsedRepeater,
+} from '~/utils/repeater-import';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   deleteSavedChannel,
@@ -156,7 +163,25 @@ export function useSavedChannels() {
     radioChannel: RadioChannel,
     notes?: string,
     kind?: SavedChannel['kind'],
-    repeater?: { use?: SavedChannel['use']; onAir?: SavedChannel['onAir']; callsign?: string },
+    repeater?: {
+      use?: SavedChannel['use'];
+      onAir?: SavedChannel['onAir'];
+      callsign?: string;
+      allstarNode?: string;
+      echolinkNode?: string;
+      irlpNode?: string;
+      wiresNode?: string;
+      allstar?: boolean;
+      echolink?: boolean;
+      irlp?: boolean;
+      wires?: boolean;
+      city?: string;
+      county?: string;
+      state?: string;
+      country?: string;
+      landmark?: string;
+      modes?: string;
+    },
   ): Promise<SavedChannel> {
     try {
       const trimmedNotes = notes?.trim();
@@ -167,6 +192,20 @@ export function useSavedChannels() {
           use: repeater?.use,
           onAir: repeater?.onAir,
           callsign: repeater?.callsign,
+          allstarNode: repeater?.allstarNode,
+          echolinkNode: repeater?.echolinkNode,
+          irlpNode: repeater?.irlpNode,
+          wiresNode: repeater?.wiresNode,
+          allstar: repeater?.allstar,
+          echolink: repeater?.echolink,
+          irlp: repeater?.irlp,
+          wires: repeater?.wires,
+          city: repeater?.city,
+          county: repeater?.county,
+          state: repeater?.state,
+          country: repeater?.country,
+          landmark: repeater?.landmark,
+          modes: repeater?.modes,
         }),
       ]);
 
@@ -387,6 +426,16 @@ export function useSavedChannels() {
           callsign: parsed.callsigns[index],
           latitude: parsed.latitudes[index],
           longitude: parsed.longitudes[index],
+          ...linkedNodesForKind(parsed.kinds[index] ?? 'channel', parsed.linkedNodes[index]),
+          sourceKey: parsed.sourceKeys[index],
+          sourceFormat: parsed.sourceFormats[index],
+          city: parsed.cities[index],
+          county: parsed.counties[index],
+          state: parsed.states[index],
+          country: parsed.countries[index],
+          landmark: parsed.landmarks[index],
+          modes: parsed.modes[index],
+          lastUpdate: parsed.lastUpdates[index],
         }),
       );
 
@@ -394,84 +443,27 @@ export function useSavedChannels() {
         const repeaters = await fillRepeaterBookUseAndOnAir(parseRepeaterImportCsv(text).repeaters, (url) =>
           invoke<string>('fetch_repeaterbook_search', { url }),
         );
-        models = repeaters.map((repeater) =>
-          radioChannelToSavedChannel(importedRepeaterToRadioChannel(repeater), {
-            notes: importedRepeaterNotes(repeater),
-            kind: 'repeater',
-            use: repeater.use,
-            onAir: repeater.onAir,
-            callsign: repeater.callsign || undefined,
-            latitude: repeater.latitude,
-            longitude: repeater.longitude,
-          }),
-        );
+        models = repeaters.map((repeater) => savedChannelFromParsedRepeater(repeater));
       }
 
-      const existing = new Map(channels.value.map((channel) => [libraryImportKey(channel), channel]));
-      const toInsert: SavedChannel[] = [];
-      const memberIds: RadioChannelId[] = [];
-      let updated = 0;
+      const plan = planLibraryImport(channels.value, models, {
+        columns: parsed.recordColumns,
+        replaceLinkedNodes: parsed.replaceLinkedNodes,
+        replaceLinkedPresence: parsed.replaceLinkedPresence,
+        importedAt: new Date().toISOString(),
+      });
 
-      for (const model of models) {
-        const match = existing.get(libraryImportKey(model));
-
-        if (!match) {
-          toInsert.push(model);
-          existing.set(libraryImportKey(model), model);
-          memberIds.push(model.id);
-          continue;
-        }
-
-        memberIds.push(match.id);
-        const nextUse = model.use ?? match.use;
-        const nextOnAir = model.onAir ?? match.onAir;
-        const nextNotes = model.notes ?? match.notes;
-        const nextCallsign = model.callsign ?? match.callsign;
-        const nextLatitude = model.latitude ?? match.latitude;
-        const nextLongitude = model.longitude ?? match.longitude;
-        const callsignWasName =
-          Boolean(model.callsign) &&
-          !match.callsign &&
-          match.name?.trim().toLowerCase() === model.callsign?.trim().toLowerCase();
-        const nextName = callsignWasName ? undefined : match.name;
-        const unchanged =
-          nextUse === match.use &&
-          nextOnAir === match.onAir &&
-          nextNotes === match.notes &&
-          nextCallsign === match.callsign &&
-          nextName === match.name &&
-          nextLatitude === match.latitude &&
-          nextLongitude === match.longitude;
-
-        if (unchanged) {
-          continue;
-        }
-
-        if (toInsert.some((row) => row.id === match.id)) {
-          continue;
-        }
-
-        await updateSavedChannel({
-          ...match,
-          name: nextName,
-          use: nextUse,
-          onAir: nextOnAir,
-          notes: nextNotes,
-          callsign: nextCallsign,
-          latitude: nextLatitude,
-          longitude: nextLongitude,
-        });
-        updated += 1;
+      for (const row of plan.update) {
+        await updateSavedChannel(row);
       }
 
-      await insertSavedChannelModels(toInsert);
+      await insertSavedChannelModels(plan.insert);
 
       if (activeGroup.value && !activeGroup.value.builtin) {
-        await addChannelsToGroup(activeGroup.value.id, memberIds);
+        await addChannelsToGroup(activeGroup.value.id, plan.memberIds);
       }
 
       await reloadLibrary();
-      const added = toInsert.length;
       const sourceLabel =
         parsed.source === 'repeaterbook'
           ? 'RepeaterBook CSV'
@@ -479,17 +471,15 @@ export function useSavedChannels() {
             ? 'CHIRP CSV'
             : 'CSV';
       const destination = activeGroup.value ? activeGroup.value.name : 'the library';
-      const summary = [
-        added === 1 ? '1 new' : `${added} new`,
-        updated === 1 ? '1 updated' : `${updated} updated`,
-      ].join(', ');
+      const description = `${formatLibraryImportSummary(plan.added, plan.updated, plan.unchanged)} from ${sourceLabel} in ${destination}.`;
+
       toast.add({
         title: parsed.source === 'library' ? 'Library imported' : 'Repeaters imported',
-        description: `${summary} from ${sourceLabel} in ${destination}.`,
+        description,
         color: 'success',
         icon: 'i-lucide-file-up',
       });
-      return added;
+      return plan.added;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Failed to import channel library';
       toast.add({
@@ -639,7 +629,31 @@ function groupCreatedDescription(group: ChannelGroup, channelCount: number): str
   return `${group.name} contains ${channelCount} channels.`;
 }
 
-function libraryImportKey(channel: Pick<SavedChannel, 'name' | 'kind' | 'callsign' | 'transmitFrequency' | 'receiveFrequency'>): string {
-  const label = (channel.callsign || channel.name || '').trim().toLowerCase();
-  return `${channel.kind}|${label}|${channel.transmitFrequency}|${channel.receiveFrequency}`;
+function savedChannelFromParsedRepeater(repeater: ParsedRepeater): SavedChannel {
+  return radioChannelToSavedChannel(importedRepeaterToRadioChannel(repeater), {
+    notes: importedRepeaterNotes(repeater),
+    kind: 'repeater',
+    use: repeater.use,
+    onAir: repeater.onAir,
+    callsign: repeater.callsign || undefined,
+    latitude: repeater.latitude,
+    longitude: repeater.longitude,
+    allstarNode: repeater.allstarNode,
+    echolinkNode: repeater.echolinkNode,
+    irlpNode: repeater.irlpNode,
+    wiresNode: repeater.wiresNode,
+    allstar: repeater.allstar,
+    echolink: repeater.echolink,
+    irlp: repeater.irlp,
+    wires: repeater.wires,
+    sourceKey: repeater.sourceKey,
+    sourceFormat: repeater.sourceFormat,
+    city: repeater.city,
+    county: repeater.county,
+    state: repeater.state,
+    country: repeater.country,
+    landmark: repeater.landmark,
+    modes: repeater.modes,
+    lastUpdate: repeater.lastUpdate,
+  });
 }

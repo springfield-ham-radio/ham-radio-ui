@@ -15,9 +15,8 @@ import {
   type AntennaTypeId,
 } from '~/utils/antenna-types';
 import { equipmentCoversAdifBand } from '~/utils/radio-bands';
+import { formatLatitude, formatLongitude, locatedPoint } from '~/utils/location-format';
 import {
-  formatLatitude,
-  formatLongitude,
   isValidLatitude,
   isValidLongitude,
   latLonToMaidenhead,
@@ -957,19 +956,18 @@ export function formatStationLocation(station: {
   longitude?: number;
 }): string {
   const grid = station.gridsquare;
-  const latitude = station.latitude;
-  const longitude = station.longitude;
+  const point = locatedPoint(station.latitude, station.longitude);
 
-  if (grid && isValidLatitude(latitude) && isValidLongitude(longitude)) {
-    return `${grid} · ${formatLatitude(latitude)} ${formatLongitude(longitude)}`;
+  if (grid && point) {
+    return `${grid} · ${formatLatitude(point.latitude)} ${formatLongitude(point.longitude)}`;
   }
 
   if (grid) {
     return grid;
   }
 
-  if (isValidLatitude(latitude) && isValidLongitude(longitude)) {
-    return `${formatLatitude(latitude)} ${formatLongitude(longitude)}`;
+  if (point) {
+    return `${formatLatitude(point.latitude)} ${formatLongitude(point.longitude)}`;
   }
 
   return 'Location not set';
