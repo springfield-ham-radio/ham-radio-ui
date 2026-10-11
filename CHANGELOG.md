@@ -1,3 +1,10 @@
+## [0.60.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.0...v0.60.1) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump postcss-selector-parser from 7.1.5 to 7.1.6 ([#90](https://github.com/springfield-ham-radio/ham-radio-ui/issues/90)) ([b1b35ff](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b1b35ffa71fdc2dc29a34c54edf4daa3d50f7568))
+* **release:** pin conventional-changelog-conventionalcommits to 9.3.1 ([#95](https://github.com/springfield-ham-radio/ham-radio-ui/issues/95)) ([78a7aac](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78a7aacd92370b8a2ae16f61179a5e0049f6fef8))
+
 ## [0.60.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.5...v0.60.0) (2026-10-11)
 
 ### Features
