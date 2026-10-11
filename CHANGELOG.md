@@ -1,3 +1,9 @@
+## [0.60.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.3...v0.60.4) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** update Tauri to 2.12 (Rust and JS together) ([#97](https://github.com/springfield-ham-radio/ham-radio-ui/issues/97)) ([ba62a38](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ba62a38afb90519694f2e449a2358c66913d70a9))
+
 ## [0.60.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.2...v0.60.3) (2026-10-11)
 
 ### Bug Fixes
