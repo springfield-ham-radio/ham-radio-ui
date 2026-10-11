@@ -62,6 +62,11 @@ import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import { type SerialLogOperation } from '~/utils/serial-log-file';
+import {
+  hasPendingBackupFailureDecision,
+  resolveBackupFailureDecision,
+  waitForBackupFailureDecision,
+} from '~/utils/radio-backup-failure-decision';
 import { readProgressSerialLog, settleBackupFailureOnProgressClose } from '~/utils/radio-progress-session';
 import {
   mergeSessionSerialLog,
@@ -312,8 +317,6 @@ export function useRadio() {
     ),
   );
 
-  let backupFailureDecision: ((choice: 'skip' | 'abort') => void) | undefined;
-
   function notifyWriteCanceledForBackupFailure(): void {
     toast.add({
       title: 'Write canceled',
@@ -323,33 +326,13 @@ export function useRadio() {
     });
   }
 
-  function resolveBackupFailureDecision(choice: 'skip' | 'abort'): void {
-    const settle = backupFailureDecision;
-
-    if (!settle) {
-      return;
-    }
-
-    backupFailureDecision = undefined;
-    settle(choice);
-  }
-
-  function waitForBackupFailureDecision(): Promise<'skip' | 'abort'> {
-    return new Promise((resolve) => {
-      backupFailureDecision = (choice) => {
-        backupFailureDecision = undefined;
-        resolve(choice);
-      };
-    });
-  }
-
   function continueWriteWithoutBackupFromDialog(): void {
     progressError.value = null;
     resolveBackupFailureDecision('skip');
   }
 
   function dismissBackupFailureProgress(): void {
-    if (backupFailureDecision) {
+    if (hasPendingBackupFailureDecision()) {
       resolveBackupFailureDecision('abort');
       notifyWriteCanceledForBackupFailure();
     }
@@ -358,11 +341,22 @@ export function useRadio() {
   }
 
   function onProgressDialogClosed(): void {
-    settleBackupFailureOnProgressClose(Boolean(backupFailureDecision), () => {
+    settleBackupFailureOnProgressClose(hasPendingBackupFailureDecision(), () => {
       resolveBackupFailureDecision('abort');
       notifyWriteCanceledForBackupFailure();
     });
-    progressTransferCardId.value = undefined;
+
+    if (!transferInFlight.value) {
+      progressTransferCardId.value = undefined;
+    }
+
+    resetTransferInFlightIfIdle();
+  }
+
+  function resetTransferInFlightIfIdle(): void {
+    if (!hasPendingBackupFailureDecision() && !progressOpen.value) {
+      transferInFlight.value = false;
+    }
   }
 
   function beginTransferOperation(): boolean {
@@ -382,6 +376,10 @@ export function useRadio() {
 
   function endTransferOperation(): void {
     transferInFlight.value = false;
+
+    if (!progressOpen.value) {
+      progressTransferCardId.value = undefined;
+    }
   }
 
   function clearCardSession(id: string): void {
@@ -975,9 +973,9 @@ export function useRadio() {
     progressError.value = captured.message;
     const choice = await waitForBackupFailureDecision();
     progressError.value = null;
-    progressOpen.value = false;
 
     if (choice === 'abort') {
+      progressOpen.value = false;
       notifyWriteCanceledForBackupFailure();
       return false;
     }
@@ -1042,7 +1040,10 @@ export function useRadio() {
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         const choice = await waitForBackupFailureDecision();
         progressError.value = null;
-        progressOpen.value = false;
+
+        if (choice === 'abort') {
+          progressOpen.value = false;
+        }
 
         return choice === 'skip' ? 'skip' : 'abort';
       }
@@ -1069,7 +1070,10 @@ export function useRadio() {
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
       const choice = await waitForBackupFailureDecision();
       progressError.value = null;
-      progressOpen.value = false;
+
+      if (choice === 'abort') {
+        progressOpen.value = false;
+      }
 
       return choice === 'skip' ? 'skip' : 'abort';
     }

@@ -1,7 +1,8 @@
+import type { BackupFailureChoice } from '~/utils/radio-backup-failure-decision';
 import type { CapturedSerialLogSnapshot } from '~/utils/serial-log-session';
 import { serialLogForProgressSave } from '~/utils/serial-log-session';
 
-export type BackupFailureChoice = 'skip' | 'abort';
+export type { BackupFailureChoice };
 
 /**
  * When the progress modal closes while a backup-failure choice is pending, treat it as cancel.
