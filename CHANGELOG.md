@@ -1,3 +1,9 @@
+## [0.59.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.1...v0.59.2) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump handlebars from 4.7.9 to 4.7.10 ([#79](https://github.com/springfield-ham-radio/ham-radio-ui/issues/79)) ([b3af149](https://github.com/springfield-ham-radio/ham-radio-ui/commit/b3af149e08059f5e64414fd7184993268605ad68))
+
 ## [0.59.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.0...v0.59.1) (2026-10-11)
 
 ### Bug Fixes
