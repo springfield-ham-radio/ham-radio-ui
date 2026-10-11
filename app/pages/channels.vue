@@ -4,13 +4,16 @@ import type { TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
-import { formatStationSummary, hasStationLocation } from '~/utils/antenna-station';
+import { HOME_STATION_ID } from '~/utils/antenna-station';
+import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-location';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isTripChannelGroup } from '~/utils/channel-groups';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
+import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import {
+  defaultDistanceStartId,
   formatTripDistance,
   orderTripChannels,
   parseTypedTripCoordinates,
@@ -19,7 +22,6 @@ import {
   tripDistanceKm,
   TRIP_START_COORDINATES,
   TRIP_START_NONE,
-  typedCoordinateError,
   uniqueTripBands,
 } from '~/utils/trip-channels';
 
@@ -44,13 +46,19 @@ const {
   renameGroup,
   removeGroup,
 } = useSavedChannels();
+
+onMounted(() => {
+  void refresh();
+});
+
 const { addTargets } = useRadio();
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
 const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
 const addToRadio = entry(IMPORT_EXPORT_IDS.addToRadio);
 const { focusedCardId } = useRadioBoard();
-const { stations } = useStationAntennas();
+const { stations, selectedStationId } = useStationAntennas();
+const { unit: distanceUnit } = useDistanceUnit();
 
 const isExporting = ref(false);
 const isImporting = ref(false);
@@ -61,9 +69,23 @@ const addToRadioOpen = ref(false);
 const rowSelection = ref<Record<string, boolean>>({});
 const groupNameOpen = shallowRef(false);
 const groupNameMode = shallowRef<'empty' | 'selection' | 'rename' | 'trip'>('empty');
-const tripStartId = ref(TRIP_START_NONE);
-const tripLatitudeText = ref('');
-const tripLongitudeText = ref('');
+const distanceStartId = ref(TRIP_START_NONE);
+const distanceStartChosen = ref(false);
+const distanceLatitudeText = ref('');
+const distanceLongitudeText = ref('');
+const sorting = ref<{ id: string; desc: boolean }[]>([]);
+const columnVisibility = ref<Record<string, boolean>>({});
+const table = useTemplateRef<{
+  tableApi: {
+    getAllColumns: () => Array<{
+      id: string;
+      columnDef: { header?: unknown };
+      getCanHide: () => boolean;
+      getIsVisible: () => boolean;
+    }>;
+    getColumn: (id: string) => { toggleVisibility: (visible: boolean) => void } | undefined;
+  };
+}>('table');
 const tripBand = ref('all');
 const tripOpenOnly = ref(false);
 const tripOnAirOnly = ref(false);
@@ -72,59 +94,56 @@ const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
 const deleteChannelsOpen = shallowRef(false);
 const isDeletingChannels = shallowRef(false);
+const linkedOnly = ref(false);
 
 interface DisplaySavedChannel extends SavedChannel {
   band: string;
+  distanceKm?: number;
   distanceLabel: string;
 }
 
 const isTripGroup = computed(() => isTripChannelGroup(activeGroup.value));
-const tripStartPoint = computed(() => {
-  if (tripStartId.value === TRIP_START_COORDINATES) {
-    return parseTypedTripCoordinates(tripLatitudeText.value, tripLongitudeText.value);
+const distanceStartPoint = computed(() => {
+  if (distanceStartId.value === TRIP_START_COORDINATES) {
+    return parseTypedTripCoordinates(distanceLatitudeText.value, distanceLongitudeText.value);
   }
 
-  const station = stations.value.find((entry) => entry.id === tripStartId.value);
+  const station = stations.value.find((entry) => entry.id === distanceStartId.value);
   return station ? stationStartPoint(station) : undefined;
 });
-const tripStartItems = computed(() => [
-  { label: 'None', value: TRIP_START_NONE },
-  ...stations.value.filter((station) => hasStationLocation(station)).map((station) => ({
-    label: formatStationSummary(station),
-    value: station.id,
-  })),
-  { label: 'Type coordinates', value: TRIP_START_COORDINATES },
-]);
 const tripBandItems = computed(() => [
   { label: 'All bands', value: 'all' },
   ...uniqueTripBands(filteredChannels.value).map((band) => ({ label: band, value: band })),
 ]);
-const tripLatitudeError = computed(() =>
-  tripStartId.value === TRIP_START_COORDINATES ? typedCoordinateError(tripLatitudeText.value, 'latitude') : undefined,
-);
-const tripLongitudeError = computed(() =>
-  tripStartId.value === TRIP_START_COORDINATES ? typedCoordinateError(tripLongitudeText.value, 'longitude') : undefined,
-);
-
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
-  let rows = filteredChannels.value;
+  let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
 
   if (isTripGroup.value) {
-    rows = orderTripChannels(
-      trimTripChannels(rows, {
-        band: tripBand.value === 'all' ? '' : tripBand.value,
-        openOnly: tripOpenOnly.value,
-        onAirOnly: tripOnAirOnly.value,
-      }),
-      tripStartPoint.value,
-    );
+    rows = trimTripChannels(rows, {
+      band: tripBand.value === 'all' ? '' : tripBand.value,
+      openOnly: tripOpenOnly.value,
+      onAirOnly: tripOnAirOnly.value,
+    });
   }
 
-  return rows.map((channel) => ({
-    ...channel,
-    band: bandNameForFrequency(channel.transmitFrequency),
-    distanceLabel: formatTripDistance(tripDistanceKm(channel, tripStartPoint.value)),
-  }));
+  const primarySort = sorting.value[0];
+
+  if (primarySort?.id === 'distance' && distanceStartPoint.value) {
+    rows = orderTripChannels(rows, distanceStartPoint.value, primarySort.desc ? 'desc' : 'asc');
+  } else if (primarySort?.id === 'location') {
+    rows = sortChannelsByLocation(rows, primarySort.desc ? 'desc' : 'asc');
+  }
+
+  return rows.map((channel) => {
+    const distanceKm = tripDistanceKm(channel, distanceStartPoint.value);
+
+    return {
+      ...channel,
+      band: bandNameForFrequency(channel.transmitFrequency),
+      distanceKm,
+      distanceLabel: formatTripDistance(distanceKm, distanceUnit.value),
+    };
+  });
 });
 
 const selectedLibraryChannels = computed(() => {
@@ -198,6 +217,10 @@ const addChannelTooltip = computed(() =>
   builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
 );
 const emptyMessage = computed(() => {
+  if (linkedOnly.value) {
+    return 'No linked repeaters match. Turn off Linked only to see every channel.';
+  }
+
   if (builtinGroup.value) {
     return 'Select rows and choose Add to radio to copy these channels.';
   }
@@ -262,6 +285,8 @@ const removeGroupDescription = computed(() =>
 const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
   {
     id: 'select',
+    enableHiding: false,
+    enableSorting: false,
     header: ({ table }) =>
       h(UCheckbox, {
         modelValue: table.getIsSomePageRowsSelected() ? 'indeterminate' : table.getIsAllPageRowsSelected(),
@@ -294,6 +319,13 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     header: 'Call sign',
     cell: ({ row }) => (row.original.kind === 'repeater' ? row.original.callsign ?? '' : ''),
   },
+  {
+    id: 'location',
+    accessorFn: (row: DisplaySavedChannel) => formatChannelLocation(row),
+    header: 'Location',
+    enableSorting: true,
+    cell: ({ row }) => formatChannelLocation(row.original),
+  },
   { accessorKey: 'band', header: 'Band' },
   {
     id: 'transmit',
@@ -315,11 +347,13 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     header: 'RX Tone',
     cell: ({ row }) => formatSavedTone(row.original.receiveTone),
   },
-  ...(isTripGroup.value && tripStartPoint.value
+  ...(distanceStartPoint.value
     ? [
         {
           id: 'distance',
+          accessorFn: (row: DisplaySavedChannel) => row.distanceKm,
           header: 'Distance',
+          enableSorting: true,
           cell: ({ row }: { row: { original: DisplaySavedChannel } }) => row.original.distanceLabel,
         },
       ]
@@ -333,14 +367,99 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
     header: 'On-air',
   },
   {
+    id: 'linked',
+    header: 'Linked',
+    meta: {
+      class: {
+        th: 'min-w-36 whitespace-nowrap',
+        td: 'min-w-36 whitespace-nowrap',
+      },
+    },
+  },
+  {
     id: 'actions',
     header: '',
+    enableHiding: false,
+    enableSorting: false,
   },
 ]);
+
+const columnMenuItems = computed(() => {
+  const api = table.value?.tableApi;
+  void columnVisibility.value;
+  void columns.value;
+  void distanceStartPoint.value;
+
+  if (!api) {
+    return [];
+  }
+
+  return api
+    .getAllColumns()
+    .filter((column) => column.getCanHide())
+    .map((column) => ({
+      label: typeof column.columnDef.header === 'string' ? column.columnDef.header : column.id,
+      type: 'checkbox' as const,
+      checked: column.getIsVisible(),
+      onUpdateChecked(checked: boolean) {
+        api.getColumn(column.id)?.toggleVisibility(checked);
+      },
+      onSelect(event: Event) {
+        event.preventDefault();
+      },
+    }));
+});
 
 watch(activeGroupId, () => {
   rowSelection.value = {};
 });
+
+watch(
+  [stations, selectedStationId],
+  () => {
+    const current = distanceStartId.value;
+    const missingStation =
+      current !== TRIP_START_NONE &&
+      current !== TRIP_START_COORDINATES &&
+      !stations.value.some((station) => station.id === current);
+
+    if (missingStation) {
+      distanceStartChosen.value = false;
+    }
+
+    if (distanceStartChosen.value) {
+      return;
+    }
+
+    distanceStartId.value = defaultDistanceStartId(stations.value, {
+      selectedStationId: selectedStationId.value,
+      homeStationId: HOME_STATION_ID,
+    });
+  },
+  { immediate: true },
+);
+
+watch(
+  distanceStartPoint,
+  (point) => {
+    if (!point) {
+      sorting.value = sorting.value.filter((entry) => entry.id !== 'distance');
+
+      if (columnVisibility.value.distance !== undefined) {
+        const next = { ...columnVisibility.value };
+        delete next.distance;
+        columnVisibility.value = next;
+      }
+
+      return;
+    }
+
+    if (!sorting.value.some((entry) => entry.id === 'distance')) {
+      sorting.value = [{ id: 'distance', desc: false }];
+    }
+  },
+  { immediate: true },
+);
 
 watch(tripBandItems, (items) => {
   if (!items.some((item) => item.value === tripBand.value)) {
@@ -511,6 +630,20 @@ async function onSave(payload: {
   use?: RepeaterUse;
   onAir?: boolean;
   callsign?: string;
+  allstarNode?: string;
+  echolinkNode?: string;
+  irlpNode?: string;
+  wiresNode?: string;
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
+  city?: string;
+  county?: string;
+  state?: string;
+  country?: string;
+  landmark?: string;
+  modes?: string;
   id?: SavedChannel['id'];
 }): Promise<void> {
   try {
@@ -531,6 +664,23 @@ async function onSave(payload: {
         callsign: kind === 'repeater' ? payload.callsign : undefined,
         latitude: editingChannel.value?.latitude,
         longitude: editingChannel.value?.longitude,
+        sourceKey: editingChannel.value?.sourceKey,
+        sourceFormat: editingChannel.value?.sourceFormat,
+        lastUpdate: editingChannel.value?.lastUpdate,
+        city: kind === 'repeater' ? payload.city : undefined,
+        county: kind === 'repeater' ? payload.county : undefined,
+        state: kind === 'repeater' ? payload.state : undefined,
+        country: kind === 'repeater' ? payload.country : undefined,
+        landmark: kind === 'repeater' ? payload.landmark : undefined,
+        modes: kind === 'repeater' ? payload.modes : undefined,
+        allstar: kind === 'repeater' ? payload.allstar : undefined,
+        echolink: kind === 'repeater' ? payload.echolink : undefined,
+        irlp: kind === 'repeater' ? payload.irlp : undefined,
+        wires: kind === 'repeater' ? payload.wires : undefined,
+        allstarNode: kind === 'repeater' ? payload.allstarNode : undefined,
+        echolinkNode: kind === 'repeater' ? payload.echolinkNode : undefined,
+        irlpNode: kind === 'repeater' ? payload.irlpNode : undefined,
+        wiresNode: kind === 'repeater' ? payload.wiresNode : undefined,
         createdAt: editingChannel.value?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
@@ -539,6 +689,20 @@ async function onSave(payload: {
         use: payload.use,
         onAir: payload.onAir,
         callsign: payload.callsign,
+        allstar: payload.allstar,
+        echolink: payload.echolink,
+        irlp: payload.irlp,
+        wires: payload.wires,
+        allstarNode: payload.allstarNode,
+        echolinkNode: payload.echolinkNode,
+        irlpNode: payload.irlpNode,
+        wiresNode: payload.wiresNode,
+        city: payload.city,
+        county: payload.county,
+        state: payload.state,
+        country: payload.country,
+        landmark: payload.landmark,
+        modes: payload.modes,
       });
     }
 
@@ -571,10 +735,6 @@ async function onImportCsv(): Promise<void> {
     isImporting.value = false;
   }
 }
-
-onMounted(() => {
-  void refresh();
-});
 </script>
 
 <template>
@@ -683,38 +843,42 @@ onMounted(() => {
       @remove="removeGroupOpen = true"
     />
 
-    <UInput
-      v-model="search"
-      icon="i-lucide-search"
-      placeholder="Search by name, frequency, or repeater"
-      size="sm"
-      class="w-full max-w-sm"
-    />
+    <div class="flex flex-wrap items-center gap-3">
+      <UInput
+        v-model="search"
+        icon="i-lucide-search"
+        placeholder="Search by name, frequency, node, or repeater"
+        size="sm"
+        class="w-full max-w-sm"
+      />
+      <UCheckbox v-model="linkedOnly" label="Linked only" />
+    </div>
 
-    <div v-if="isTripGroup" class="flex flex-wrap items-end gap-x-3 gap-y-2">
-      <UFormField label="Distance from" class="w-64">
-        <USelect
-          v-model="tripStartId"
-          :items="tripStartItems"
-          value-key="value"
-          color="neutral"
-          size="sm"
-          class="w-full"
-        />
-      </UFormField>
-      <UFormField v-if="tripStartId === TRIP_START_COORDINATES" label="Latitude" :error="tripLatitudeError" class="w-32">
-        <UInput v-model="tripLatitudeText" placeholder="39.0997" size="sm" class="w-full" aria-label="Start latitude" />
-      </UFormField>
-      <UFormField v-if="tripStartId === TRIP_START_COORDINATES" label="Longitude" :error="tripLongitudeError" class="w-32">
-        <UInput v-model="tripLongitudeText" placeholder="-94.5786" size="sm" class="w-full" aria-label="Start longitude" />
-      </UFormField>
-      <UFormField label="Band" class="w-36">
+    <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+      <ChannelDistanceFrom
+        v-model:start-id="distanceStartId"
+        v-model:latitude-text="distanceLatitudeText"
+        v-model:longitude-text="distanceLongitudeText"
+        :stations="stations"
+        @update:start-id="distanceStartChosen = true"
+      />
+      <UFormField v-if="isTripGroup" label="Band" class="w-36">
         <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
       </UFormField>
-      <UCheckbox v-model="tripOpenOnly" label="Open use" />
-      <UCheckbox v-model="tripOnAirOnly" label="On-air" />
-      <p v-if="tripStartPoint" class="basis-full text-xs text-muted">
-        Sorted by straight-line distance. Rows without coordinates stay last.
+      <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" />
+      <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" />
+      <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }" class="ml-auto">
+        <UButton
+          label="Columns"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          trailing-icon="i-lucide-chevron-down"
+          aria-label="Choose visible columns"
+        />
+      </UDropdownMenu>
+      <p v-if="distanceStartPoint" class="basis-full text-xs text-muted">
+        Straight-line distance. Rows without coordinates show — and stay last when this column is sorted.
       </p>
     </div>
 
@@ -729,11 +893,15 @@ onMounted(() => {
 
     <div class="min-h-0 flex-1 overflow-auto">
       <UTable
+        ref="table"
         v-model:row-selection="rowSelection"
+        v-model:sorting="sorting"
+        v-model:column-visibility="columnVisibility"
         :data="displayChannels"
         :columns="columns"
         :get-row-id="(row) => String(row.id)"
         :loading="isLoading"
+        :sorting-options="{ manualSorting: true, enableSortingRemoval: false }"
         sticky
         class="max-h-full"
         :ui="{
@@ -755,6 +923,24 @@ onMounted(() => {
             :label="row.original.use === 'open' ? 'Open' : 'Closed'"
           />
         </template>
+        <template #linked-cell="{ row }">
+          <div v-if="linkedNodeBadges(row.original).length > 0" class="flex flex-nowrap items-center gap-1">
+            <UTooltip
+              v-for="badge in linkedNodeBadges(row.original)"
+              :key="badge.label"
+              :text="badge.text"
+            >
+              <UBadge
+                :color="badge.color"
+                variant="subtle"
+                size="sm"
+                :label="badge.label"
+                class="shrink-0"
+                :ui="{ label: 'whitespace-nowrap' }"
+              />
+            </UTooltip>
+          </div>
+        </template>
         <template #onAir-cell="{ row }">
           <UTooltip
             v-if="row.original.kind === 'repeater' && row.original.onAir !== undefined"
@@ -767,6 +953,19 @@ onMounted(() => {
               :aria-label="row.original.onAir ? 'On-air' : 'Off-air'"
             />
           </UTooltip>
+        </template>
+        <template #distance-header="{ column }">
+          <button
+            type="button"
+            class="inline-flex items-center gap-0.5 font-medium"
+            @click="column.toggleSorting(column.getIsSorted() === 'asc')"
+          >
+            Distance
+            <UIcon
+              :name="column.getIsSorted() === 'desc' ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'"
+              class="size-3.5 text-muted"
+            />
+          </button>
         </template>
         <template #name-cell="{ row }">
           <div class="flex min-w-0 items-center gap-1.5">

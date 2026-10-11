@@ -4,12 +4,13 @@ import { compileChannelSchema } from '../../app/utils/channel-schema.ts';
 import { importDriverModule } from '../../app/utils/driver-import.ts';
 import { compileMemoryMap } from '../../app/utils/memory-map.ts';
 
+// Pinned from springfield-ham-radio/radio-module-baofeng @ 5035b01cc2 (ADR 0005: radio modules are not published to npm, so @springfield/radio-module-baofeng 3.1.0 is stale).
 const uv5rChannelSchema = JSON.parse(
-  readFileSync(new URL('../../../radio-module-baofeng/src/shared/schemas/channel-schema.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../fixtures/baofeng/channel-schema.json', import.meta.url), 'utf8'),
 ) as unknown;
 
 const uv5rMemoryMap = JSON.parse(
-  readFileSync(new URL('../../../radio-module-baofeng/src/shared/memory-maps/uv5r-settings.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../fixtures/baofeng/uv5r-settings.json', import.meta.url), 'utf8'),
 ) as unknown;
 
 describe('installed driver documents', () => {

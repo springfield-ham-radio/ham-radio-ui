@@ -1,6 +1,6 @@
-import type { GeoPoint } from '~/utils/maidenhead';
-import { haversineDistanceKm, isValidLatitude, isValidLongitude, maidenheadToLatLon } from '~/utils/maidenhead';
-import type { RepeaterUse } from '~/utils/saved-channels-db';
+import { distanceKm } from '~/utils/location-format';
+import { isValidLatitude, isValidLongitude, maidenheadToLatLon, type GeoPoint } from '~/utils/maidenhead';
+import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
 /** Select value when the trip list is not sorted from a point. */
@@ -36,8 +36,10 @@ export function stationStartPoint(station: {
   longitude?: number;
   gridsquare?: string;
 }): GeoPoint | undefined {
-  if (isValidLatitude(station.latitude) && isValidLongitude(station.longitude)) {
-    return { latitude: station.latitude, longitude: station.longitude };
+  const stored = coordinatesFromPair(station.latitude, station.longitude);
+
+  if (stored.latitude !== undefined && stored.longitude !== undefined) {
+    return { latitude: stored.latitude, longitude: stored.longitude };
   }
 
   if (station.gridsquare) {
@@ -60,12 +62,13 @@ export function parseTypedTripCoordinates(latitudeText: string, longitudeText: s
 
   const latitude = Number(latitudeRaw);
   const longitude = Number(longitudeRaw);
+  const point = coordinatesFromPair(latitude, longitude);
 
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+  if (point.latitude === undefined || point.longitude === undefined) {
     return undefined;
   }
 
-  return { latitude, longitude };
+  return { latitude: point.latitude, longitude: point.longitude };
 }
 
 /**
@@ -125,6 +128,42 @@ export function trimTripChannels<T extends TripLocatable>(channels: readonly T[]
   });
 }
 
+export type DistanceUnit = 'mi' | 'km';
+
+export interface DistanceStartStation {
+  id: string;
+  latitude?: number;
+  longitude?: number;
+  gridsquare?: string;
+}
+
+/**
+ * Station to select for Distance from.
+ *
+ * The operator's selected station wins when it has a point, then Home, then the first
+ * located station. Returns `none` when no station can be placed.
+ */
+export function defaultDistanceStartId(
+  stations: readonly DistanceStartStation[],
+  options: { selectedStationId?: string; homeStationId: string },
+): string {
+  const selected = stations.find((station) => station.id === options.selectedStationId);
+
+  if (selected && stationStartPoint(selected)) {
+    return selected.id;
+  }
+
+  const home = stations.find((station) => station.id === options.homeStationId);
+
+  if (home && stationStartPoint(home)) {
+    return home.id;
+  }
+
+  const located = stations.find((station) => stationStartPoint(station));
+
+  return located?.id ?? TRIP_START_NONE;
+}
+
 /**
  * Straight-line kilometers from the start, or undefined when the row has no coordinates.
  */
@@ -132,20 +171,25 @@ export function tripDistanceKm(
   channel: { latitude?: number; longitude?: number },
   start: GeoPoint | undefined,
 ): number | undefined {
-  if (!start || !isValidLatitude(channel.latitude) || !isValidLongitude(channel.longitude)) {
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+  if (!start || point.latitude === undefined || point.longitude === undefined) {
     return undefined;
   }
 
-  return haversineDistanceKm(start, { latitude: channel.latitude, longitude: channel.longitude });
+  return distanceKm(start, { latitude: point.latitude, longitude: point.longitude });
 }
 
 /**
- * Order by straight-line distance from `start`. Rows without coordinates stay at the end, in their previous order.
- * With no start point the input order is kept.
+ * Order by straight-line distance from `start`.
+ *
+ * Rows without coordinates stay at the end, in their previous order, for both
+ * ascending and descending sorts. With no start point the input order is kept.
  */
 export function orderTripChannels<T extends { latitude?: number; longitude?: number }>(
   channels: readonly T[],
   start: GeoPoint | undefined,
+  direction: 'asc' | 'desc' = 'asc',
 ): T[] {
   if (!start) {
     return [...channels];
@@ -170,7 +214,7 @@ export function orderTripChannels<T extends { latitude?: number; longitude?: num
         return -1;
       }
 
-      const delta = left.distanceKm - right.distanceKm;
+      const delta = direction === 'desc' ? right.distanceKm - left.distanceKm : left.distanceKm - right.distanceKm;
 
       return delta === 0 ? left.index - right.index : delta;
     })
@@ -178,12 +222,16 @@ export function orderTripChannels<T extends { latitude?: number; longitude?: num
 }
 
 /**
- * Miles label for a trip distance column. `—` when the row cannot be placed.
+ * Distance label for the channel table. `—` when the row cannot be placed.
+ * Miles are the default. One mile is 1.609344 kilometers.
  */
-export function formatTripDistance(distanceKm: number | undefined): string {
+export function formatTripDistance(distanceKm: number | undefined, unit: DistanceUnit = 'mi'): string {
   if (distanceKm === undefined) {
     return '—';
   }
 
-  return `${(distanceKm / KILOMETERS_PER_MILE).toFixed(1)} mi`;
+  const value = unit === 'km' ? distanceKm : distanceKm / KILOMETERS_PER_MILE;
+  const suffix = unit === 'km' ? 'km' : 'mi';
+
+  return `${value.toFixed(1)} ${suffix}`;
 }

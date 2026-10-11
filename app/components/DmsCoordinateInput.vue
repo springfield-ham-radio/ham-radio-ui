@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type CoordinateAxis, type DmsInput } from '~/utils/maidenhead';
+import { type CoordinateAxis, type DmsInput } from '~/utils/location-format';
 
 const props = defineProps<{
   axis: CoordinateAxis;

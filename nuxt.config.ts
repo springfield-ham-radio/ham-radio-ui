@@ -19,6 +19,9 @@ export default defineNuxtConfig({
 
   ui: {
     fonts: false,
+    theme: {
+      colors: ['primary', 'secondary', 'success', 'info', 'warning', 'error', 'teal', 'violet'],
+    },
   },
 
   colorMode: {
