@@ -5,6 +5,26 @@ export interface StableReleaseCandidate {
   prerelease: boolean;
 }
 
+/** Fields from `gh release list --json tagName,isDraft,isPrerelease`. */
+export interface GhReleaseListItem {
+  tagName: string;
+  isDraft: boolean;
+  isPrerelease: boolean;
+}
+
+export function releasesFromGhList(items: GhReleaseListItem[]): StableReleaseCandidate[] {
+  return items.map((release) => ({
+    id: 0,
+    tagName: release.tagName,
+    draft: release.isDraft,
+    prerelease: release.isPrerelease,
+  }));
+}
+
+export function parseGhReleaseList(json: string): StableReleaseCandidate[] {
+  return releasesFromGhList(JSON.parse(json) as GhReleaseListItem[]);
+}
+
 interface StableVersion {
   major: number;
   minor: number;
