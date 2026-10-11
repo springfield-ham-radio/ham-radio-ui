@@ -1,3 +1,9 @@
+## [0.59.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.3...v0.59.4) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump source-map-js from 1.2.1 to 1.2.2 ([#77](https://github.com/springfield-ham-radio/ham-radio-ui/issues/77)) ([e939d6c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e939d6c91a0cf3bb128ab25e6c51986a4607e4aa))
+
 ## [0.59.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.2...v0.59.3) (2026-10-11)
 
 ### Bug Fixes
