@@ -40,8 +40,24 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+  rust-host:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Check Rust
+        working-directory: src-tauri
+        run: cargo check --locked
+
   release:
-    needs: build
+    needs: [build, rust-host]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
     # Same group as tauri, per ref, and never cancelled. The next release on
     # this ref waits until the previous installer build finishes, including
