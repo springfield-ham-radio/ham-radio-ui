@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import type { LoadedRadioConfig, RadioCatalogRecord } from '../../app/utils/radio-catalog-db.ts';
+import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
 import {
   buildAvailableManufacturerGroups,
   buildInstalledRadioListItems,
@@ -326,5 +327,73 @@ describe('radio module listing', () => {
     expect(available[0]?.canInstall).toBe(false);
     expect(available[0]?.radios.every((radio) => radio.canInstall === false)).toBe(true);
     expect(available[0]?.installBlockedReason).toContain('newer version of HamBench');
+  });
+
+  it('should allow install when minApiVersion matches the installed ham-radio-api', () => {
+    const entry = {
+      ...kenwoodEntry,
+      minApiVersion: APP_HAM_RADIO_API_VERSION,
+    } as RadioModuleCatalogEntry;
+    const available = buildAvailableManufacturerGroups([], [entry]);
+
+    expect(available[0]?.canInstall).toBe(true);
+    expect(available[0]?.radios.every((radio) => radio.canInstall === true)).toBe(true);
+    expect(available[0]?.installBlockedReason).toBeUndefined();
+  });
+
+  it('should block install when minApiVersion is one patch above the installed ham-radio-api', () => {
+    const parts = APP_HAM_RADIO_API_VERSION.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const minApiVersion = `${parts[0]}.${parts[1]}.${(parts[2] ?? 0) + 1}`;
+    const entry = {
+      ...kenwoodEntry,
+      minApiVersion,
+    } as RadioModuleCatalogEntry;
+    const available = buildAvailableManufacturerGroups([], [entry]);
+
+    expect(available[0]?.canInstall).toBe(false);
+    expect(available[0]?.radios.every((radio) => radio.canInstall === false)).toBe(true);
+    expect(available[0]?.installBlockedReason).toContain('newer version of HamBench');
+  });
+
+  it('should show an update badge but block update when the catalog needs a newer API', () => {
+    const parts = APP_HAM_RADIO_API_VERSION.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const minApiVersion = `${parts[0]}.${parts[1]}.${(parts[2] ?? 0) + 1}`;
+    const entry = {
+      ...baofengEntry,
+      minApiVersion,
+    } as RadioModuleCatalogEntry;
+    const installed = record({
+      modelId: 'baofeng-uv5r',
+      name: 'UV-5R',
+      manufacturer: 'Baofeng',
+      version: '3.0.0',
+      source: 'installed',
+      sourcePath: '/tmp/radio-modules/baofeng/3.0.0',
+    });
+    const items = buildInstalledRadioListItems([installed], [entry]);
+
+    expect(items[0]?.updateAvailable).toBe(true);
+    expect(items[0]?.canUpdate).toBe(false);
+    expect(items[0]?.updateBlockedReason).toContain('newer version of HamBench');
+  });
+
+  it('should allow catalog update when minApiVersion matches the installed ham-radio-api', () => {
+    const entry = {
+      ...baofengEntry,
+      minApiVersion: APP_HAM_RADIO_API_VERSION,
+    } as RadioModuleCatalogEntry;
+    const installed = record({
+      modelId: 'baofeng-uv5r',
+      name: 'UV-5R',
+      manufacturer: 'Baofeng',
+      version: '3.0.0',
+      source: 'installed',
+      sourcePath: '/tmp/radio-modules/baofeng/3.0.0',
+    });
+    const items = buildInstalledRadioListItems([installed], [entry]);
+
+    expect(items[0]?.updateAvailable).toBe(true);
+    expect(items[0]?.canUpdate).toBe(true);
+    expect(items[0]?.updateBlockedReason).toBeUndefined();
   });
 });
