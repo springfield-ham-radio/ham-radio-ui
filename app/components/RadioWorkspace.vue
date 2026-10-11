@@ -16,7 +16,8 @@ import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
-import { assignLibraryChannelsToSlots, availableChannelNumbers, channelCapacity, nextAvailableChannelNumber } from '~/utils/channel-edit';
+import { assignLibraryChannelsToSlots, channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber } from '~/utils/channel-edit';
+import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { privilegeValue } from '~/utils/license-people';
@@ -399,7 +400,7 @@ const addChannelTooltip = computed(() => {
   return 'Add a memory channel';
 });
 const freeSlotNumbers = computed(() =>
-  availableChannelNumbers(occupiedChannelNumbers.value, radioChannelCapacity.value),
+  channelSlotsAfterLastOccupied(occupiedChannelNumbers.value, radioChannelCapacity.value),
 );
 const libraryRadioName = computed(() => cardRadio.value?.name ?? activeRadioId.value?.name ?? 'this radio');
 const addFromLibraryTooltip = computed(() => {
@@ -494,7 +495,10 @@ async function applyChannelReorder(fromIndex: number, toIndex: number): Promise<
   }
 }
 
-const { start: startChannelSortable, stop: stopChannelSortable } = useSortable('.channel-table-tbody', sortableRows, {
+const channelTableRoot = ref<HTMLElement | null>(null);
+const channelTableTbody = shallowRef<HTMLElement | null>(null);
+
+const { start: startChannelSortable, stop: stopChannelSortable } = useSortable(channelTableTbody, sortableRows, {
   animation: 150,
   draggable: 'tr',
   handle: '.channel-drag-handle',
@@ -526,14 +530,23 @@ const { start: startChannelSortable, stop: stopChannelSortable } = useSortable('
   },
 });
 
+function syncChannelTableSortableTarget(): void {
+  channelTableTbody.value = channelTableRoot.value ? channelTableTbodyFromRoot(channelTableRoot.value) : null;
+}
+
 watch(
-  () => [activeRadioId.value, displayChannels.value.length] as const,
+  () => [activeRadioId.value, displayChannels.value.length, channelTableRoot.value] as const,
   async () => {
     stopChannelSortable();
     await nextTick();
+    syncChannelTableSortableTarget();
     startChannelSortable();
   },
 );
+
+onUnmounted(() => {
+  stopChannelSortable();
+});
 
 function onChannelPatch(patch: Parameters<typeof updateChannel>[1]): void {
   if (editingChannelNumber.value === undefined) {
@@ -820,7 +833,7 @@ async function onSaveSerialLog(): Promise<void> {
               />
             </div>
           </div>
-          <div class="min-h-0 flex-1 overflow-hidden">
+          <div ref="channelTableRoot" class="min-h-0 flex-1 overflow-hidden">
             <UTable
               v-model:row-selection="rowSelection"
               :data="displayChannels"
@@ -890,8 +903,9 @@ async function onSaveSerialLog(): Promise<void> {
           <p class="mt-2 shrink-0 text-xs text-muted">
             Drag the handle to move a channel into another occupied memory slot. Empty slots stay empty. Select
             channels to save them to the library or remove them from this radio. Shift-click selects a range, and
-            Command-click adds or removes one channel. Add a channel to the next unused memory slot, or choose Add
-            from library to copy saved channels into unused slots. You can also select saved channels on the Channels
+            Command-click adds or removes one channel. Add a channel after the last programmed memory slot (wrapping to
+            the first free slot when the end is full), or choose Add from library to copy saved channels into unused
+            slots in that same order. You can also select saved channels on the Channels
             page and choose Add to radio. Click a row to edit the loaded memory. While editing, Replace from library
             copies a saved channel into that slot.
           </p>

@@ -227,10 +227,52 @@ export function availableChannelNumbers(occupied: Iterable<number>, capacity: nu
 }
 
 /**
- * Lowest unused slot index, or `undefined` when the radio is full.
+ * Unused slot indexes after the highest occupied index, then wrapping from 0.
+ */
+export function channelSlotsAfterLastOccupied(
+  occupied: Iterable<number>,
+  capacity: number,
+  count = capacity,
+): number[] {
+  if (capacity <= 0 || count <= 0) {
+    return [];
+  }
+
+  const used = new Set(occupied);
+  let highest = -1;
+
+  for (const channelNumber of used) {
+    if (channelNumber >= 0 && channelNumber < capacity && channelNumber > highest) {
+      highest = channelNumber;
+    }
+  }
+
+  const slots: number[] = [];
+
+  const takeSlot = (channelNumber: number): void => {
+    if (slots.length >= count || used.has(channelNumber)) {
+      return;
+    }
+
+    slots.push(channelNumber);
+  };
+
+  for (let channelNumber = highest + 1; channelNumber < capacity && slots.length < count; channelNumber += 1) {
+    takeSlot(channelNumber);
+  }
+
+  for (let channelNumber = 0; channelNumber <= highest && slots.length < count; channelNumber += 1) {
+    takeSlot(channelNumber);
+  }
+
+  return slots;
+}
+
+/**
+ * Lowest unused slot in {@link channelSlotsAfterLastOccupied} order, or `undefined` when full.
  */
 export function nextAvailableChannelNumber(occupied: Iterable<number>, capacity: number): number | undefined {
-  return availableChannelNumbers(occupied, capacity)[0];
+  return channelSlotsAfterLastOccupied(occupied, capacity, 1)[0];
 }
 
 export function blankRadioChannel(): RadioChannel {
@@ -384,8 +426,53 @@ export function assignLibraryChannelsToSlots(
   occupied: Iterable<number>,
   memoryMap: RadioMemoryMap | undefined,
 ): { programmed: RadioProgrammedChannel[]; skipped: number } {
-  const slots = availableChannelNumbers(occupied, channelCapacity(memoryMap));
+  const slots = channelSlotsAfterLastOccupied(occupied, channelCapacity(memoryMap));
   return programLibraryChannelsIntoSlots(sources, slots, memoryMap);
+}
+
+function formatOccupiedSlotGroups(slots: readonly number[]): string {
+  if (slots.length === 0) {
+    return '';
+  }
+
+  const groups: Array<{ start: number; end: number }> = [];
+
+  for (const slot of slots) {
+    const last = groups[groups.length - 1];
+
+    if (last && slot === last.end + 1) {
+      last.end = slot;
+      continue;
+    }
+
+    groups.push({ start: slot, end: slot });
+  }
+
+  const parts = groups.map((group) =>
+    group.start === group.end ? String(group.start) : `${group.start} to ${group.end}`,
+  );
+
+  if (parts.length === 1) {
+    return parts[0]!;
+  }
+
+  if (parts.length === 2) {
+    return `${parts[0]} and ${parts[1]}`;
+  }
+
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+}
+
+function formatMemorySlotLabel(slots: readonly number[]): string {
+  if (slots.length === 0) {
+    return 'memory slots';
+  }
+
+  if (slots.length === 1) {
+    return `memory slot ${slots[0]}`;
+  }
+
+  return `memory slots ${formatOccupiedSlotGroups(slots)}`;
 }
 
 /**
@@ -408,9 +495,7 @@ export function describeLibrarySlotAssignment(options: {
   }
 
   const take = Math.min(sourceCount, slotNumbers.length);
-  const first = slotNumbers[0];
-  const last = slotNumbers[take - 1];
-  const slotLabel = first === last ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
+  const slotLabel = formatMemorySlotLabel(slotNumbers.slice(0, take));
 
   if (take < sourceCount) {
     return `Only ${slotNumbers.length} unused slots remain on ${radioName}. Add the first ${take} selected channels to ${slotLabel}? Write to the radio to apply the change on the device.`;

@@ -14,7 +14,7 @@ import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import {
   applyChannelPatch,
-  availableChannelNumbers,
+  channelSlotsAfterLastOccupied,
   channelCapacity,
   channelNameMaxLength,
   reorderProgrammedChannels,
@@ -203,7 +203,7 @@ export function useRadio() {
           modelLabel: savedRadioModelLabel(saved, configurations.value),
           ready,
           freeSlotNumbers: ready
-            ? availableChannelNumbers(occupied, channelCapacity(session?.settingsMemoryMap))
+            ? channelSlotsAfterLastOccupied(occupied, channelCapacity(session?.settingsMemoryMap))
             : [],
           settingsMemoryMap: session?.settingsMemoryMap,
         },
