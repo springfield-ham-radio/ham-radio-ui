@@ -1,3 +1,9 @@
+## [0.60.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.5...v0.60.0) (2026-10-11)
+
+### Features
+
+* remember window size and position between launches ([#91](https://github.com/springfield-ham-radio/ham-radio-ui/issues/91)) ([15a8f4a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/15a8f4a7e200000f995ed0c7e236f271078fcf86)), closes [#88](https://github.com/springfield-ham-radio/ham-radio-ui/issues/88)
+
 ## [0.59.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.4...v0.59.5) (2026-10-11)
 
 ### Bug Fixes
