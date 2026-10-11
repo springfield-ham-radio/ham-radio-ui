@@ -1,3 +1,9 @@
+## [0.59.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.2...v0.59.3) (2026-10-11)
+
+### Bug Fixes
+
+* **deps:** bump seroval from 1.6.2 to 1.6.9 ([#78](https://github.com/springfield-ham-radio/ham-radio-ui/issues/78)) ([feea791](https://github.com/springfield-ham-radio/ham-radio-ui/commit/feea791f232bf864ccadae91fc09f07277cd7869))
+
 ## [0.59.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.59.1...v0.59.2) (2026-10-11)
 
 ### Bug Fixes
