@@ -1,8 +1,12 @@
 import type { RadioId } from '@springfield/ham-radio-api';
+import { RadioModelId } from '@springfield/ham-radio-api';
 import {
   defaultSerialLogFileName,
+  SERIAL_LOG_FILE_KIND,
+  SERIAL_LOG_FILE_VERSION,
   serializeSerialLogFile,
   serialLogEntryCount,
+  type SerialLogDocument,
   type SerialLogOperation,
 } from '~/utils/serial-log-file';
 
@@ -60,15 +64,51 @@ export function mergeSessionSerialLog(
 /**
  * When a write fails after a pre-write read, offer saving backup frames under a write log file name.
  */
+function radioIdFromSerialLogDocument(document: SerialLogDocument): RadioId | undefined {
+  if (!document.radioId) {
+    return undefined;
+  }
+
+  return {
+    model: RadioModelId(document.radioId.model),
+    name: document.radioId.name,
+    manufacturer: document.radioId.manufacturer,
+  };
+}
+
+function parseSerialLogDocument(contents: string): SerialLogDocument | undefined {
+  try {
+    const parsed = JSON.parse(contents) as SerialLogDocument;
+
+    if (parsed.kind !== SERIAL_LOG_FILE_KIND || parsed.version !== SERIAL_LOG_FILE_VERSION) {
+      return undefined;
+    }
+
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
 export function serialLogForProgressSave(
   log: CapturedSerialLogSnapshot,
   progressKind: 'import' | 'write' | 'backup',
 ): CapturedSerialLogSnapshot {
   if (progressKind === 'write' && log.operation === 'import' && log.fileName.includes('-import-')) {
+    const document = parseSerialLogDocument(log.contents);
+    const radioId = document ? radioIdFromSerialLogDocument(document) : undefined;
+    const fileName = log.fileName.replace('-import-', '-write-');
+
     return {
       ...log,
-      fileName: log.fileName.replace('-import-', '-write-'),
+      fileName,
       operation: 'write',
+      contents: serializeSerialLogFile({
+        operation: 'write',
+        radioId,
+        serialPortPath: document?.serialPortPath,
+        log: log.log,
+      }),
     };
   }
 

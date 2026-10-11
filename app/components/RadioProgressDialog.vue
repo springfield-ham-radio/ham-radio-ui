@@ -10,6 +10,7 @@ const {
   saveProgressSerialLog,
   continueWriteWithoutBackupFromDialog,
   dismissBackupFailureProgress,
+  onProgressDialogClosed,
 } = useRadio();
 
 const now = ref(Date.now());
@@ -18,10 +19,14 @@ let tickTimer: ReturnType<typeof setInterval> | undefined;
 
 watch(
   progressOpen,
-  (open) => {
+  (open, wasOpen) => {
     if (tickTimer) {
       clearInterval(tickTimer);
       tickTimer = undefined;
+    }
+
+    if (!open && wasOpen) {
+      onProgressDialogClosed();
     }
 
     if (open && !progressError.value) {

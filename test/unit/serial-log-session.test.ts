@@ -60,6 +60,7 @@ describe('serialLogForProgressSave', () => {
 
     expect(forSave.fileName).toMatch(/kenwood-th-f6-write-serial-/);
     expect(forSave.operation).toBe('write');
+    expect(JSON.parse(forSave.contents).operation).toBe('write');
   });
 
   it('leaves import logs unchanged for read failures', () => {
