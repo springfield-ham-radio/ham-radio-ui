@@ -39,8 +39,6 @@ const { mapStyle } = useAppearanceSettings();
 const container = useTemplateRef('container');
 const map = shallowRef<MapLibreMap | undefined>();
 
-const styleUrl = computed(() => stationLogMapStyleUrl(mapStyle.value, colorMode.value));
-
 let consumerPopup: Popup | undefined;
 let mapReady = false;
 let didLoad = false;
@@ -55,7 +53,7 @@ function initialStyle(): string | StyleSpecification {
     return CHANNEL_MAP_EMPTY_STYLE;
   }
 
-  return styleUrl.value;
+  return stationLogMapStyleUrl(mapStyle.value, colorMode.value);
 }
 
 function swapToEmptyStyle(instance: MapLibreMap): void {
