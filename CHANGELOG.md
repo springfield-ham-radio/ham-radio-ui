@@ -1,3 +1,9 @@
+## [0.60.5](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.4...v0.60.5) (2026-10-11)
+
+### Bug Fixes
+
+* **release:** restore Windows builds on Tauri 2.12 and fix latest-release step ([#99](https://github.com/springfield-ham-radio/ham-radio-ui/issues/99)) ([78923a6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/78923a68ec3dfd254b61470f14ea5109c23e98e9))
+
 ## [0.60.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.3...v0.60.4) (2026-10-11)
 
 ### Bug Fixes
