@@ -1,0 +1,3258 @@
+{
+  "version": "1.0.0",
+  "description": "Baofeng UV-5R channels + radio-wide settings (radio EEPROM addresses; Chirp image offset = radio + 8)",
+  "groups": [
+    {
+      "id": "basic",
+      "label": "Basic",
+      "icon": "i-lucide-sliders-horizontal",
+      "groups": [
+        {
+          "id": "receive",
+          "label": "Receive"
+        },
+        {
+          "id": "power",
+          "label": "Power"
+        },
+        {
+          "id": "audio",
+          "label": "Audio"
+        },
+        {
+          "id": "display",
+          "label": "Display"
+        }
+      ]
+    },
+    {
+      "id": "advanced",
+      "label": "Advanced",
+      "icon": "i-lucide-settings-2",
+      "groups": [
+        {
+          "id": "vfo",
+          "label": "VFO"
+        },
+        {
+          "id": "watch",
+          "label": "Dual Watch / Scan"
+        },
+        {
+          "id": "transmit",
+          "label": "Transmit"
+        },
+        {
+          "id": "tail",
+          "label": "Squelch Tail"
+        },
+        {
+          "id": "alerts",
+          "label": "Alerts"
+        },
+        {
+          "id": "menus",
+          "label": "Menus and Keys"
+        }
+      ]
+    },
+    {
+      "id": "workmode",
+      "label": "Work Mode",
+      "icon": "i-lucide-waypoints",
+      "groups": [
+        {
+          "id": "general",
+          "label": "General"
+        },
+        {
+          "id": "vfo-a",
+          "label": "VFO A"
+        },
+        {
+          "id": "vfo-b",
+          "label": "VFO B"
+        }
+      ]
+    },
+    {
+      "id": "other",
+      "label": "Other",
+      "icon": "i-lucide-ellipsis",
+      "groups": [
+        {
+          "id": "messages",
+          "label": "Messages"
+        },
+        {
+          "id": "limits",
+          "label": "Band Limits"
+        }
+      ]
+    },
+    {
+      "id": "dtmf",
+      "label": "DTMF",
+      "icon": "i-lucide-hash",
+      "groups": [
+        {
+          "id": "codes",
+          "label": "Codes"
+        },
+        {
+          "id": "timing",
+          "label": "Timing"
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "label": "Service",
+      "icon": "i-lucide-wrench",
+      "warning": {
+        "title": "Service calibration values",
+        "description": "Change only with appropriate test equipment."
+      },
+      "groups": [
+        {
+          "id": "vhf",
+          "label": "VHF Squelch"
+        },
+        {
+          "id": "uhf",
+          "label": "UHF Squelch"
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "id": "channels",
+      "seek": 0,
+      "count": 128,
+      "stride": 16,
+      "emptyWhen": {
+        "equals": 255
+      },
+      "clearEmpty": true,
+      "fields": [
+        {
+          "id": "rxfreq",
+          "type": "u8",
+          "value": {
+            "kind": "lbcd",
+            "length": 4,
+            "scale": 10
+          }
+        },
+        {
+          "id": "txfreq",
+          "type": "u8",
+          "value": {
+            "kind": "lbcd",
+            "length": 4,
+            "scale": 10
+          }
+        },
+        {
+          "id": "rxtone",
+          "type": "u16",
+          "value": {
+            "kind": "tone",
+            "values": [
+              23,
+              25,
+              26,
+              31,
+              32,
+              36,
+              43,
+              47,
+              51,
+              53,
+              54,
+              65,
+              71,
+              72,
+              73,
+              74,
+              114,
+              115,
+              116,
+              122,
+              125,
+              131,
+              132,
+              134,
+              143,
+              145,
+              152,
+              155,
+              156,
+              162,
+              165,
+              172,
+              174,
+              205,
+              212,
+              223,
+              225,
+              226,
+              243,
+              244,
+              245,
+              246,
+              251,
+              252,
+              255,
+              261,
+              263,
+              265,
+              266,
+              271,
+              274,
+              306,
+              311,
+              315,
+              325,
+              331,
+              332,
+              343,
+              346,
+              351,
+              356,
+              364,
+              365,
+              371,
+              411,
+              412,
+              413,
+              423,
+              431,
+              432,
+              445,
+              446,
+              452,
+              454,
+              455,
+              462,
+              464,
+              465,
+              466,
+              503,
+              506,
+              516,
+              523,
+              526,
+              532,
+              546,
+              565,
+              606,
+              612,
+              624,
+              627,
+              631,
+              632,
+              645,
+              654,
+              662,
+              664,
+              703,
+              712,
+              723,
+              731,
+              732,
+              734,
+              743,
+              754
+            ],
+            "ctcssMin": 600,
+            "reverseOffset": 105
+          }
+        },
+        {
+          "id": "txtone",
+          "type": "u16",
+          "value": {
+            "kind": "tone",
+            "values": [
+              23,
+              25,
+              26,
+              31,
+              32,
+              36,
+              43,
+              47,
+              51,
+              53,
+              54,
+              65,
+              71,
+              72,
+              73,
+              74,
+              114,
+              115,
+              116,
+              122,
+              125,
+              131,
+              132,
+              134,
+              143,
+              145,
+              152,
+              155,
+              156,
+              162,
+              165,
+              172,
+              174,
+              205,
+              212,
+              223,
+              225,
+              226,
+              243,
+              244,
+              245,
+              246,
+              251,
+              252,
+              255,
+              261,
+              263,
+              265,
+              266,
+              271,
+              274,
+              306,
+              311,
+              315,
+              325,
+              331,
+              332,
+              343,
+              346,
+              351,
+              356,
+              364,
+              365,
+              371,
+              411,
+              412,
+              413,
+              423,
+              431,
+              432,
+              445,
+              446,
+              452,
+              454,
+              455,
+              462,
+              464,
+              465,
+              466,
+              503,
+              506,
+              516,
+              523,
+              526,
+              532,
+              546,
+              565,
+              606,
+              612,
+              624,
+              627,
+              631,
+              632,
+              645,
+              654,
+              662,
+              664,
+              703,
+              712,
+              723,
+              731,
+              732,
+              734,
+              743,
+              754
+            ],
+            "ctcssMin": 600,
+            "reverseOffset": 105
+          }
+        },
+        {
+          "id": "_unused1",
+          "type": "bits",
+          "width": 3,
+          "reserved": true
+        },
+        {
+          "id": "isuhf",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "scode",
+          "type": "bits",
+          "width": 4,
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 15
+          },
+          "ui": {
+            "group": "channel",
+            "label": "S-CODE",
+            "widget": "integer",
+            "menu": {
+              "number": 17,
+              "code": "S-CODE"
+            },
+            "description": "Which stored PTT-ID code this memory channel sends. The codes themselves are edited under DTMF."
+          }
+        },
+        {
+          "id": "_unknown1",
+          "type": "bits",
+          "width": 7,
+          "reserved": true
+        },
+        {
+          "id": "_txtoneicon",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "_mailicon",
+          "type": "bits",
+          "width": 3,
+          "reserved": true
+        },
+        {
+          "id": "_unknown2",
+          "type": "bits",
+          "width": 3,
+          "reserved": true
+        },
+        {
+          "id": "lowpower",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 3
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Power",
+            "widget": "select",
+            "menu": {
+              "number": 2,
+              "code": "TXP"
+            },
+            "description": "Transmit power for this memory channel. High is full power. Low reduces power and battery use."
+          }
+        },
+        {
+          "id": "_unknown3",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "wide",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Mode",
+            "widget": "switch",
+            "menu": {
+              "number": 5,
+              "code": "WN"
+            },
+            "description": "FM bandwidth for this memory channel. Wide is the broader channel. Narrow is the tighter 12.5 kHz channel."
+          }
+        },
+        {
+          "id": "_unknown4",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "bcl",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "channel",
+            "label": "BCL",
+            "widget": "switch",
+            "menu": {
+              "number": 23,
+              "code": "BCL"
+            },
+            "description": "Busy channel lockout for this memory channel. When on, the radio will not transmit if it is already receiving a signal."
+          }
+        },
+        {
+          "id": "scan",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Scan",
+            "widget": "switch",
+            "description": "Includes this memory channel when you start a scan. Menu 18 (SC-REV) chooses whether scan resumes on a timer, when the carrier drops, or stops on the first signal."
+          }
+        },
+        {
+          "id": "pttid",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "BOT",
+              "EOT",
+              "Both"
+            ]
+          },
+          "ui": {
+            "group": "channel",
+            "label": "PTT-ID",
+            "widget": "select",
+            "menu": {
+              "number": 19,
+              "code": "PTT-ID"
+            },
+            "description": "When this memory channel sends its PTT-ID. Off sends nothing. BOT sends it when you press PTT, EOT when you release, and Both at both times."
+          }
+        }
+      ]
+    },
+    {
+      "id": "names",
+      "seek": "0x1000",
+      "count": 128,
+      "stride": 16,
+      "emptyWhen": {
+        "equals": 255
+      },
+      "clearEmpty": true,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          }
+        },
+        {
+          "id": "_pad",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 9
+          }
+        }
+      ]
+    },
+    {
+      "id": "pttid",
+      "seek": "0x0B00",
+      "count": 15,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "code",
+          "type": "u8",
+          "value": {
+            "kind": "dtmf",
+            "length": 5,
+            "charset": "0123456789 *#ABCD"
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "PTT ID Code",
+            "widget": "text",
+            "description": "DTMF digits sent as the PTT-ID for this code slot. A channel or VFO S-CODE setting chooses which slot is sent.",
+            "subgroup": "codes"
+          }
+        },
+        {
+          "id": "_pad",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "ani",
+      "seek": "0x0C80",
+      "fields": [
+        {
+          "id": "_code222",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "_unused222",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "_code333",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "_unused333",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "alarmcode",
+          "type": "u8",
+          "value": {
+            "kind": "dtmf",
+            "length": 3,
+            "charset": "0123456789 *#ABCD"
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "Alarm Code",
+            "widget": "text",
+            "description": "DTMF code transmitted when alarm mode is set to Code (menu 32, AL-MOD).",
+            "subgroup": "codes"
+          }
+        },
+        {
+          "id": "_unused119",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "_unknown1",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_code555",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "_unused555",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "_code666",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "_unused666",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "_code777",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "_unused777",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "_unknown2",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_code60606",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 5
+          }
+        },
+        {
+          "id": "_code70707",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 5
+          }
+        },
+        {
+          "id": "code",
+          "type": "u8",
+          "value": {
+            "kind": "dtmf",
+            "length": 5,
+            "charset": "0123456789"
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "ANI Code",
+            "widget": "text",
+            "description": "Automatic Number Identification sent with PTT-ID. The radio shows this code on menu 15. Digits only.",
+            "subgroup": "codes",
+            "menu": {
+              "number": 15,
+              "code": "ANI-ID"
+            }
+          }
+        },
+        {
+          "id": "_aniid_pad",
+          "type": "bits",
+          "width": 6,
+          "reserved": true
+        },
+        {
+          "id": "aniid",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "BOT",
+              "EOT",
+              "Both"
+            ]
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "ANI ID",
+            "widget": "select",
+            "description": "When the ANI code is sent. Off sends nothing. BOT sends it when you press PTT, EOT when you release, and Both at both times.",
+            "subgroup": "codes"
+          }
+        },
+        {
+          "id": "_unknown",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 2
+          }
+        },
+        {
+          "id": "dtmfon",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "50 ms",
+              "60 ms",
+              "70 ms",
+              "80 ms",
+              "90 ms",
+              "100 ms",
+              "110 ms",
+              "120 ms",
+              "130 ms",
+              "140 ms",
+              "150 ms",
+              "160 ms",
+              "170 ms",
+              "180 ms",
+              "190 ms",
+              "200 ms",
+              "210 ms",
+              "220 ms",
+              "230 ms",
+              "240 ms",
+              "250 ms",
+              "260 ms",
+              "270 ms",
+              "280 ms",
+              "290 ms",
+              "300 ms",
+              "310 ms",
+              "320 ms",
+              "330 ms",
+              "340 ms",
+              "350 ms",
+              "360 ms",
+              "370 ms",
+              "380 ms",
+              "390 ms",
+              "400 ms",
+              "410 ms",
+              "420 ms",
+              "430 ms",
+              "440 ms",
+              "450 ms",
+              "460 ms",
+              "470 ms",
+              "480 ms",
+              "490 ms",
+              "500 ms",
+              "510 ms",
+              "520 ms",
+              "530 ms",
+              "540 ms",
+              "550 ms",
+              "560 ms",
+              "570 ms",
+              "580 ms",
+              "590 ms",
+              "600 ms",
+              "610 ms",
+              "620 ms",
+              "630 ms",
+              "640 ms",
+              "650 ms",
+              "660 ms",
+              "670 ms",
+              "680 ms",
+              "690 ms",
+              "700 ms",
+              "710 ms",
+              "720 ms",
+              "730 ms",
+              "740 ms",
+              "750 ms",
+              "760 ms",
+              "770 ms",
+              "780 ms",
+              "790 ms",
+              "800 ms",
+              "810 ms",
+              "820 ms",
+              "830 ms",
+              "840 ms",
+              "850 ms",
+              "860 ms",
+              "870 ms",
+              "880 ms",
+              "890 ms",
+              "900 ms",
+              "910 ms",
+              "920 ms",
+              "930 ms",
+              "940 ms",
+              "950 ms",
+              "960 ms",
+              "970 ms",
+              "980 ms",
+              "990 ms",
+              "1000 ms",
+              "1010 ms",
+              "1020 ms",
+              "1030 ms",
+              "1040 ms",
+              "1050 ms",
+              "1060 ms",
+              "1070 ms",
+              "1080 ms",
+              "1090 ms",
+              "1100 ms",
+              "1110 ms",
+              "1120 ms",
+              "1130 ms",
+              "1140 ms",
+              "1150 ms",
+              "1160 ms",
+              "1170 ms",
+              "1180 ms",
+              "1190 ms",
+              "1200 ms",
+              "1210 ms",
+              "1220 ms",
+              "1230 ms",
+              "1240 ms",
+              "1250 ms",
+              "1260 ms",
+              "1270 ms",
+              "1280 ms",
+              "1290 ms",
+              "1300 ms",
+              "1310 ms",
+              "1320 ms",
+              "1330 ms",
+              "1340 ms",
+              "1350 ms",
+              "1360 ms",
+              "1370 ms",
+              "1380 ms",
+              "1390 ms",
+              "1400 ms",
+              "1410 ms",
+              "1420 ms",
+              "1430 ms",
+              "1440 ms",
+              "1450 ms",
+              "1460 ms",
+              "1470 ms",
+              "1480 ms",
+              "1490 ms",
+              "1500 ms",
+              "1510 ms",
+              "1520 ms",
+              "1530 ms",
+              "1540 ms",
+              "1550 ms",
+              "1560 ms",
+              "1570 ms",
+              "1580 ms",
+              "1590 ms",
+              "1600 ms",
+              "1610 ms",
+              "1620 ms",
+              "1630 ms",
+              "1640 ms",
+              "1650 ms",
+              "1660 ms",
+              "1670 ms",
+              "1680 ms",
+              "1690 ms",
+              "1700 ms",
+              "1710 ms",
+              "1720 ms",
+              "1730 ms",
+              "1740 ms",
+              "1750 ms",
+              "1760 ms",
+              "1770 ms",
+              "1780 ms",
+              "1790 ms",
+              "1800 ms",
+              "1810 ms",
+              "1820 ms",
+              "1830 ms",
+              "1840 ms",
+              "1850 ms",
+              "1860 ms",
+              "1870 ms",
+              "1880 ms",
+              "1890 ms",
+              "1900 ms",
+              "1910 ms",
+              "1920 ms",
+              "1930 ms",
+              "1940 ms",
+              "1950 ms",
+              "1960 ms",
+              "1970 ms",
+              "1980 ms",
+              "1990 ms",
+              "2000 ms"
+            ]
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "DTMF Speed (on)",
+            "widget": "select",
+            "description": "How long each DTMF tone is transmitted.",
+            "subgroup": "timing"
+          }
+        },
+        {
+          "id": "dtmfoff",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "50 ms",
+              "60 ms",
+              "70 ms",
+              "80 ms",
+              "90 ms",
+              "100 ms",
+              "110 ms",
+              "120 ms",
+              "130 ms",
+              "140 ms",
+              "150 ms",
+              "160 ms",
+              "170 ms",
+              "180 ms",
+              "190 ms",
+              "200 ms",
+              "210 ms",
+              "220 ms",
+              "230 ms",
+              "240 ms",
+              "250 ms",
+              "260 ms",
+              "270 ms",
+              "280 ms",
+              "290 ms",
+              "300 ms",
+              "310 ms",
+              "320 ms",
+              "330 ms",
+              "340 ms",
+              "350 ms",
+              "360 ms",
+              "370 ms",
+              "380 ms",
+              "390 ms",
+              "400 ms",
+              "410 ms",
+              "420 ms",
+              "430 ms",
+              "440 ms",
+              "450 ms",
+              "460 ms",
+              "470 ms",
+              "480 ms",
+              "490 ms",
+              "500 ms",
+              "510 ms",
+              "520 ms",
+              "530 ms",
+              "540 ms",
+              "550 ms",
+              "560 ms",
+              "570 ms",
+              "580 ms",
+              "590 ms",
+              "600 ms",
+              "610 ms",
+              "620 ms",
+              "630 ms",
+              "640 ms",
+              "650 ms",
+              "660 ms",
+              "670 ms",
+              "680 ms",
+              "690 ms",
+              "700 ms",
+              "710 ms",
+              "720 ms",
+              "730 ms",
+              "740 ms",
+              "750 ms",
+              "760 ms",
+              "770 ms",
+              "780 ms",
+              "790 ms",
+              "800 ms",
+              "810 ms",
+              "820 ms",
+              "830 ms",
+              "840 ms",
+              "850 ms",
+              "860 ms",
+              "870 ms",
+              "880 ms",
+              "890 ms",
+              "900 ms",
+              "910 ms",
+              "920 ms",
+              "930 ms",
+              "940 ms",
+              "950 ms",
+              "960 ms",
+              "970 ms",
+              "980 ms",
+              "990 ms",
+              "1000 ms",
+              "1010 ms",
+              "1020 ms",
+              "1030 ms",
+              "1040 ms",
+              "1050 ms",
+              "1060 ms",
+              "1070 ms",
+              "1080 ms",
+              "1090 ms",
+              "1100 ms",
+              "1110 ms",
+              "1120 ms",
+              "1130 ms",
+              "1140 ms",
+              "1150 ms",
+              "1160 ms",
+              "1170 ms",
+              "1180 ms",
+              "1190 ms",
+              "1200 ms",
+              "1210 ms",
+              "1220 ms",
+              "1230 ms",
+              "1240 ms",
+              "1250 ms",
+              "1260 ms",
+              "1270 ms",
+              "1280 ms",
+              "1290 ms",
+              "1300 ms",
+              "1310 ms",
+              "1320 ms",
+              "1330 ms",
+              "1340 ms",
+              "1350 ms",
+              "1360 ms",
+              "1370 ms",
+              "1380 ms",
+              "1390 ms",
+              "1400 ms",
+              "1410 ms",
+              "1420 ms",
+              "1430 ms",
+              "1440 ms",
+              "1450 ms",
+              "1460 ms",
+              "1470 ms",
+              "1480 ms",
+              "1490 ms",
+              "1500 ms",
+              "1510 ms",
+              "1520 ms",
+              "1530 ms",
+              "1540 ms",
+              "1550 ms",
+              "1560 ms",
+              "1570 ms",
+              "1580 ms",
+              "1590 ms",
+              "1600 ms",
+              "1610 ms",
+              "1620 ms",
+              "1630 ms",
+              "1640 ms",
+              "1650 ms",
+              "1660 ms",
+              "1670 ms",
+              "1680 ms",
+              "1690 ms",
+              "1700 ms",
+              "1710 ms",
+              "1720 ms",
+              "1730 ms",
+              "1740 ms",
+              "1750 ms",
+              "1760 ms",
+              "1770 ms",
+              "1780 ms",
+              "1790 ms",
+              "1800 ms",
+              "1810 ms",
+              "1820 ms",
+              "1830 ms",
+              "1840 ms",
+              "1850 ms",
+              "1860 ms",
+              "1870 ms",
+              "1880 ms",
+              "1890 ms",
+              "1900 ms",
+              "1910 ms",
+              "1920 ms",
+              "1930 ms",
+              "1940 ms",
+              "1950 ms",
+              "1960 ms",
+              "1970 ms",
+              "1980 ms",
+              "1990 ms",
+              "2000 ms"
+            ]
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "DTMF Speed (off)",
+            "widget": "select",
+            "description": "Silent gap between transmitted DTMF tones.",
+            "subgroup": "timing"
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "seek": "0x0E20",
+      "fields": [
+        {
+          "id": "squelch",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 9
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Carrier Squelch Level",
+            "widget": "integer",
+            "description": "How strong a received signal must be before the speaker opens. 0 leaves the squelch open, so you hear all noise. Higher numbers mute weaker signals.",
+            "subgroup": "receive",
+            "menu": {
+              "number": 0,
+              "code": "SQL"
+            }
+          }
+        },
+        {
+          "id": "step",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "2.5",
+              "5.0",
+              "6.25",
+              "10.0",
+              "12.5",
+              "25.0"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Frequency Step (kHz)",
+            "widget": "select",
+            "subgroup": "vfo",
+            "menu": {
+              "number": 1,
+              "code": "STEP"
+            },
+            "description": "Tuning step, in kHz, used when you turn the knob or press up and down in frequency mode."
+          }
+        },
+        {
+          "id": "_unknown1",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "save",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "1:1",
+              "1:2",
+              "1:3",
+              "1:4"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Battery Saver",
+            "widget": "select",
+            "description": "How long the receiver listens versus how long it sleeps. Off keeps it awake. 1:1 listens as long as it sleeps. 1:4 sleeps four times longer than it listens, which saves the most battery and can miss the start of a short call.",
+            "subgroup": "power",
+            "menu": {
+              "number": 3,
+              "code": "SAVE"
+            }
+          }
+        },
+        {
+          "id": "vox",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "OFF",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "VOX Sensitivity",
+            "widget": "select",
+            "description": "Transmits when the radio hears your voice, without the PTT key. Off disables it. 1 is the most sensitive; 10 needs a louder voice.",
+            "subgroup": "transmit",
+            "menu": {
+              "number": 4,
+              "code": "VOX"
+            }
+          }
+        },
+        {
+          "id": "_unknown2",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "abr",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 24
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Backlight Timeout",
+            "widget": "integer",
+            "description": "How long the display backlight stays on after a keypress, in seconds. 0 turns the backlight off. Some UV-5R firmware only offers a shorter list from the keypad.",
+            "subgroup": "display",
+            "menu": {
+              "number": 6,
+              "code": "ABR"
+            }
+          }
+        },
+        {
+          "id": "tdr",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Dual Watch",
+            "widget": "switch",
+            "description": "Dual watch. The radio checks both the A and B frequencies and opens the speaker for whichever one is busy.",
+            "subgroup": "watch",
+            "menu": {
+              "number": 7,
+              "code": "TDR"
+            }
+          }
+        },
+        {
+          "id": "beep",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Beep",
+            "widget": "switch",
+            "subgroup": "audio",
+            "menu": {
+              "number": 8,
+              "code": "BEEP"
+            },
+            "description": "Beeps when you press a key. Turn this off for a silent keypad."
+          }
+        },
+        {
+          "id": "timeout",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "15 sec",
+              "30 sec",
+              "45 sec",
+              "60 sec",
+              "75 sec",
+              "90 sec",
+              "105 sec",
+              "120 sec",
+              "135 sec",
+              "150 sec",
+              "165 sec",
+              "180 sec",
+              "195 sec",
+              "210 sec",
+              "225 sec",
+              "240 sec",
+              "255 sec",
+              "270 sec",
+              "285 sec",
+              "300 sec",
+              "315 sec",
+              "330 sec",
+              "345 sec",
+              "360 sec",
+              "375 sec",
+              "390 sec",
+              "405 sec",
+              "420 sec",
+              "435 sec",
+              "450 sec",
+              "465 sec",
+              "480 sec",
+              "495 sec",
+              "510 sec",
+              "525 sec",
+              "540 sec",
+              "555 sec",
+              "570 sec",
+              "585 sec",
+              "600 sec",
+              "Off (if supported by radio)"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Timeout Timer",
+            "widget": "select",
+            "description": "Stops a transmission that runs longer than this, so a stuck PTT cannot hold the channel. The radio then returns to receive.",
+            "subgroup": "power",
+            "menu": {
+              "number": 9,
+              "code": "TOT"
+            }
+          }
+        },
+        {
+          "id": "_unknown3",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 4
+          }
+        },
+        {
+          "id": "voice",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "English",
+              "Chinese"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Voice",
+            "widget": "select",
+            "subgroup": "alerts",
+            "menu": {
+              "number": 14,
+              "code": "VOICE"
+            },
+            "description": "Spoken prompts for keys and menus. Off is silent. English or Chinese speaks the selection."
+          }
+        },
+        {
+          "id": "_unknown4",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "dtmfst",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "OFF",
+              "DT-ST",
+              "ANI-ST",
+              "DT+ANI"
+            ]
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "DTMF Sidetone",
+            "widget": "select",
+            "description": "Which DTMF tones you hear in the speaker while transmitting. Off is silent. DT-ST plays keypad tones, ANI-ST plays the ANI or PTT-ID, and DT+ANI plays both.",
+            "subgroup": "timing",
+            "menu": {
+              "number": 16,
+              "code": "DTMFST"
+            }
+          }
+        },
+        {
+          "id": "_unknown5",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_unknown12",
+          "type": "bits",
+          "width": 6,
+          "reserved": true
+        },
+        {
+          "id": "screv",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "TO",
+              "CO",
+              "SE"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Scan Resume",
+            "widget": "select",
+            "subgroup": "watch",
+            "menu": {
+              "number": 18,
+              "code": "SC-REV"
+            },
+            "description": "What scan does after it stops on a signal. TO resumes after a few seconds. CO resumes when the carrier drops. SE stops and stays on the first signal."
+          }
+        },
+        {
+          "id": "pttid",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "BOT",
+              "EOT",
+              "Both"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "PTT ID",
+            "widget": "select",
+            "subgroup": "transmit",
+            "menu": {
+              "number": 19,
+              "code": "PTT-ID"
+            },
+            "description": "When the selected PTT-ID code is sent. Off sends nothing. BOT sends it when you press PTT, EOT when you release PTT, and Both at both times."
+          }
+        },
+        {
+          "id": "pttlt",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 50
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "PTT ID Delay",
+            "widget": "integer",
+            "description": "How long the radio waits after you press PTT before it sends the ANI or PTT-ID code.",
+            "subgroup": "timing",
+            "menu": {
+              "number": 20,
+              "code": "PTT-LT"
+            }
+          }
+        },
+        {
+          "id": "mdfa",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Channel",
+              "Name",
+              "Frequency"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Display Mode (A)",
+            "widget": "select",
+            "subgroup": "display",
+            "menu": {
+              "number": 21,
+              "code": "MDF-A"
+            },
+            "description": "What display line A shows for a memory channel: the channel number, the stored name, or the frequency."
+          }
+        },
+        {
+          "id": "mdfb",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Channel",
+              "Name",
+              "Frequency"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Display Mode (B)",
+            "widget": "select",
+            "subgroup": "display",
+            "menu": {
+              "number": 22,
+              "code": "MDF-B"
+            },
+            "description": "What display line B shows for a memory channel: the channel number, the stored name, or the frequency."
+          }
+        },
+        {
+          "id": "bcl",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Busy Channel Lockout",
+            "widget": "switch",
+            "subgroup": "transmit",
+            "menu": {
+              "number": 23,
+              "code": "BCL"
+            },
+            "description": "Busy channel lockout. When on, the radio will not transmit if it is already receiving a signal."
+          }
+        },
+        {
+          "id": "autolk",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Automatic Key Lock",
+            "widget": "switch",
+            "subgroup": "menus",
+            "menu": {
+              "number": 24,
+              "code": "AUTOLK"
+            },
+            "description": "Locks the keypad after a few seconds with no keypress. The PTT key still works. Hold # to unlock."
+          }
+        },
+        {
+          "id": "sftd",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "+",
+              "-"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Shift Direction",
+            "widget": "select",
+            "subgroup": "vfo",
+            "menu": {
+              "number": 25,
+              "code": "SFT-D"
+            },
+            "description": "Repeater shift for the VFO. Off transmits on the receive frequency. + transmits above it by the offset, and − transmits below it."
+          }
+        },
+        {
+          "id": "_unknown6",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 3
+          }
+        },
+        {
+          "id": "wtled",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "Blue",
+              "Orange",
+              "Purple"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Standby LED Color",
+            "widget": "select",
+            "subgroup": "display",
+            "menu": {
+              "number": 29,
+              "code": "WT-LED"
+            },
+            "description": "LED color while the radio is idle, not receiving or transmitting."
+          }
+        },
+        {
+          "id": "rxled",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "Blue",
+              "Orange",
+              "Purple"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "RX LED Color",
+            "widget": "select",
+            "subgroup": "display",
+            "menu": {
+              "number": 30,
+              "code": "RX-LED"
+            },
+            "description": "LED color while the radio is receiving a signal."
+          }
+        },
+        {
+          "id": "txled",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "Blue",
+              "Orange",
+              "Purple"
+            ]
+          },
+          "ui": {
+            "group": "basic",
+            "label": "TX LED Color",
+            "widget": "select",
+            "subgroup": "display",
+            "menu": {
+              "number": 31,
+              "code": "TX-LED"
+            },
+            "description": "LED color while the radio is transmitting."
+          }
+        },
+        {
+          "id": "almod",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Site",
+              "Tone",
+              "Code"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Alarm Mode",
+            "widget": "select",
+            "subgroup": "alerts",
+            "menu": {
+              "number": 32,
+              "code": "AL-MOD"
+            },
+            "description": "What the alarm does. Site sounds only in your speaker. Tone transmits an alarm tone. Code transmits the programmed alarm DTMF code."
+          }
+        },
+        {
+          "id": "band",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Band",
+            "widget": "switch",
+            "subgroup": "vfo",
+            "menu": {
+              "number": 33,
+              "code": "BAND"
+            },
+            "description": "Band for the VFO. The keypad menu offers VHF or UHF."
+          }
+        },
+        {
+          "id": "tdrab",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "A",
+              "B"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Dual Watch TX Priority",
+            "widget": "select",
+            "subgroup": "watch",
+            "menu": {
+              "number": 34,
+              "code": "TDR-AB"
+            },
+            "description": "Which display transmits while dual watch is on. Off uses the display you selected. A or B forces transmit on that line."
+          }
+        },
+        {
+          "id": "ste",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Squelch Tail Eliminate (HT to HT)",
+            "widget": "switch",
+            "subgroup": "tail",
+            "menu": {
+              "number": 35,
+              "code": "STE"
+            },
+            "description": "Squelch tail elimination between two handhelds. Removes the noise burst you hear when the other station releases PTT on a tone-coded channel."
+          }
+        },
+        {
+          "id": "rpste",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "OFF",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Squelch Tail Eliminate (repeater)",
+            "widget": "select",
+            "subgroup": "tail",
+            "menu": {
+              "number": 36,
+              "code": "RP-STE"
+            },
+            "description": "Squelch tail elimination for a repeater. Off leaves the noise burst when the repeater drops. Higher numbers hold your squelch closed longer."
+          }
+        },
+        {
+          "id": "rptrl",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "OFF",
+              "100 ms",
+              "200 ms",
+              "300 ms",
+              "400 ms",
+              "500 ms",
+              "600 ms",
+              "700 ms",
+              "800 ms",
+              "900 ms",
+              "1000 ms"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "STE Repeater Delay",
+            "widget": "select",
+            "subgroup": "tail",
+            "menu": {
+              "number": 37,
+              "code": "RPT-RL"
+            },
+            "description": "Delay before repeater squelch-tail elimination. Off disables the delay."
+          }
+        },
+        {
+          "id": "ponmsg",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Full",
+              "Message"
+            ]
+          },
+          "ui": {
+            "group": "other",
+            "label": "Power-On Message",
+            "widget": "select",
+            "description": "What you see at power-on. Full shows the normal startup screen. Message shows the two programmed lines.",
+            "subgroup": "messages",
+            "menu": {
+              "number": 38,
+              "code": "PONMSG"
+            }
+          }
+        },
+        {
+          "id": "roger",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "basic",
+            "label": "Roger Beep",
+            "widget": "switch",
+            "description": "Sends a short courtesy tone when you release PTT, so the other station can tell you are done.",
+            "subgroup": "audio",
+            "menu": {
+              "number": 39,
+              "code": "ROGER"
+            }
+          }
+        },
+        {
+          "id": "rogerrx",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "A",
+              "B"
+            ]
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Roger Beep (RX)",
+            "widget": "select",
+            "subgroup": "alerts",
+            "description": "Which display line indicates a received roger beep. This is not a numbered item on the stock UV-5R keypad menu."
+          }
+        },
+        {
+          "id": "_tdrch",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "displayab",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "A",
+              "B"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "Display",
+            "widget": "select",
+            "description": "Which display line the knob and keypad tune. A is the top line and B is the bottom line. The A/B key switches this.",
+            "subgroup": "general"
+          }
+        },
+        {
+          "id": "_unknown7",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "fmradio",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Broadcast FM Radio",
+            "widget": "switch",
+            "subgroup": "menus",
+            "description": "Turns the broadcast FM receiver on. On the radio this is the CALL key, not a numbered menu. A ham signal interrupts the broadcast."
+          }
+        },
+        {
+          "id": "alarm",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "Alarm Sound",
+            "widget": "switch",
+            "subgroup": "alerts",
+            "description": "Allows the alarm tone. Menu 32 (AL-MOD) chooses whether that alarm stays local or is transmitted."
+          }
+        },
+        {
+          "id": "_unknown8",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "reset",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "RESET Menu",
+            "widget": "switch",
+            "description": "Shows or hides keypad menu 40. Turn this off to keep a VFO or full reset from being started on the radio.",
+            "subgroup": "menus",
+            "menu": {
+              "number": 40,
+              "code": "RESET"
+            }
+          }
+        },
+        {
+          "id": "menu",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "advanced",
+            "label": "All Menus",
+            "widget": "switch",
+            "description": "When off, the keypad menu is locked so numbered settings cannot be changed from the radio.",
+            "subgroup": "menus"
+          }
+        },
+        {
+          "id": "_unknown9",
+          "type": "bits",
+          "width": 6,
+          "reserved": true
+        },
+        {
+          "id": "_singleptt",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "_vfomrlock",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "workmode",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Frequency",
+              "Channel"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO/MR Mode",
+            "widget": "select",
+            "description": "Mode restored at power-on. Frequency is VFO tuning. Channel is memory mode. The VFO/MR key switches this on the radio.",
+            "subgroup": "general"
+          }
+        },
+        {
+          "id": "keylock",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "Keypad Lock",
+            "widget": "switch",
+            "subgroup": "general",
+            "description": "Current keypad lock. Hold # on the radio to lock or unlock. Menu 24 (AUTOLK) can lock it automatically."
+          }
+        }
+      ]
+    },
+    {
+      "id": "wmchannel",
+      "seek": "0x0E76",
+      "fields": [
+        {
+          "id": "_unused1",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "mrcha",
+          "type": "bits",
+          "width": 7,
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 127
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "MR A Channel",
+            "widget": "integer",
+            "subgroup": "general",
+            "description": "Memory channel selected on display A in channel mode."
+          }
+        },
+        {
+          "id": "_unused2",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "mrchb",
+          "type": "bits",
+          "width": 7,
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 127
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "MR B Channel",
+            "widget": "integer",
+            "subgroup": "general",
+            "description": "Memory channel selected on display B in channel mode."
+          }
+        }
+      ]
+    },
+    {
+      "id": "vfoa",
+      "seek": "0x0F08",
+      "fields": [
+        {
+          "id": "freq",
+          "type": "u8",
+          "value": {
+            "kind": "digits",
+            "length": 8,
+            "scale": 10
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Frequency",
+            "widget": "number",
+            "description": "Receive frequency on display line A while the radio is in frequency mode, in Hz.",
+            "subgroup": "vfo-a"
+          }
+        },
+        {
+          "id": "offset",
+          "type": "u8",
+          "value": {
+            "kind": "digits",
+            "length": 6,
+            "scale": 1000
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Offset",
+            "widget": "number",
+            "description": "How far the transmit frequency sits from the receive frequency when shift is + or −, in Hz.",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 26,
+              "code": "OFFSET"
+            }
+          }
+        },
+        {
+          "id": "rxtone",
+          "type": "u16",
+          "reserved": true
+        },
+        {
+          "id": "txtone",
+          "type": "u16",
+          "reserved": true
+        },
+        {
+          "id": "_unused1",
+          "type": "bits",
+          "width": 7,
+          "reserved": true
+        },
+        {
+          "id": "band",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "_unknown3",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_unused2",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "sftd",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "+",
+              "-"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Shift",
+            "widget": "select",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 25,
+              "code": "SFT-D"
+            },
+            "description": "Repeater shift for VFO A. Off transmits on the receive frequency. + transmits above it, and − transmits below it."
+          }
+        },
+        {
+          "id": "scode",
+          "type": "bits",
+          "width": 4,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15",
+              "16"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A S-CODE",
+            "widget": "select",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 17,
+              "code": "S-CODE"
+            },
+            "description": "Which stored PTT-ID code VFO A sends. The codes themselves are edited under DTMF."
+          }
+        },
+        {
+          "id": "_unknown4",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_unused3",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "step",
+          "type": "bits",
+          "width": 3,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "2.5",
+              "5.0",
+              "6.25",
+              "10.0",
+              "12.5",
+              "20.0",
+              "25.0",
+              "50.0"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Tuning Step",
+            "widget": "select",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 1,
+              "code": "STEP"
+            },
+            "description": "Tuning step for VFO A, in kHz."
+          }
+        },
+        {
+          "id": "_unused4",
+          "type": "bits",
+          "width": 4,
+          "reserved": true
+        },
+        {
+          "id": "txpower",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "High",
+              "Low"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Power",
+            "widget": "select",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 2,
+              "code": "TXP"
+            },
+            "description": "Transmit power for VFO A. High is full power. Low reduces power and battery use."
+          }
+        },
+        {
+          "id": "widenarr",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Wide",
+              "Narrow"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO A Bandwidth",
+            "widget": "select",
+            "subgroup": "vfo-a",
+            "menu": {
+              "number": 5,
+              "code": "WN"
+            },
+            "description": "FM bandwidth for VFO A. Wide is the broader channel. Narrow is the tighter 12.5 kHz channel."
+          }
+        },
+        {
+          "id": "_unknown5",
+          "type": "bits",
+          "width": 4,
+          "reserved": true
+        },
+        {
+          "id": "_txpower3",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        }
+      ]
+    },
+    {
+      "id": "vfob",
+      "seek": "0x0F28",
+      "fields": [
+        {
+          "id": "freq",
+          "type": "u8",
+          "value": {
+            "kind": "digits",
+            "length": 8,
+            "scale": 10
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Frequency",
+            "widget": "number",
+            "subgroup": "vfo-b",
+            "description": "Receive frequency on display line B while the radio is in frequency mode, in Hz."
+          }
+        },
+        {
+          "id": "offset",
+          "type": "u8",
+          "value": {
+            "kind": "digits",
+            "length": 6,
+            "scale": 1000
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Offset",
+            "widget": "number",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 26,
+              "code": "OFFSET"
+            },
+            "description": "How far the transmit frequency sits from the receive frequency when shift is + or −, in Hz."
+          }
+        },
+        {
+          "id": "rxtone",
+          "type": "u16",
+          "reserved": true
+        },
+        {
+          "id": "txtone",
+          "type": "u16",
+          "reserved": true
+        },
+        {
+          "id": "_unused1",
+          "type": "bits",
+          "width": 7,
+          "reserved": true
+        },
+        {
+          "id": "band",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "_unknown3",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_unused2",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "sftd",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "+",
+              "-"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Shift",
+            "widget": "select",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 25,
+              "code": "SFT-D"
+            },
+            "description": "Repeater shift for VFO B. Off transmits on the receive frequency. + transmits above it, and − transmits below it."
+          }
+        },
+        {
+          "id": "scode",
+          "type": "bits",
+          "width": 4,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12",
+              "13",
+              "14",
+              "15",
+              "16"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B S-CODE",
+            "widget": "select",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 17,
+              "code": "S-CODE"
+            },
+            "description": "Which stored PTT-ID code VFO B sends. The codes themselves are edited under DTMF."
+          }
+        },
+        {
+          "id": "_unknown4",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "_unused3",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "step",
+          "type": "bits",
+          "width": 3,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "2.5",
+              "5.0",
+              "6.25",
+              "10.0",
+              "12.5",
+              "20.0",
+              "25.0",
+              "50.0"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Tuning Step",
+            "widget": "select",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 1,
+              "code": "STEP"
+            },
+            "description": "Tuning step for VFO B, in kHz."
+          }
+        },
+        {
+          "id": "_unused4",
+          "type": "bits",
+          "width": 4,
+          "reserved": true
+        },
+        {
+          "id": "txpower",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "High",
+              "Low"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Power",
+            "widget": "select",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 2,
+              "code": "TXP"
+            },
+            "description": "Transmit power for VFO B. High is full power. Low reduces power and battery use."
+          }
+        },
+        {
+          "id": "widenarr",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Wide",
+              "Narrow"
+            ]
+          },
+          "ui": {
+            "group": "workmode",
+            "label": "VFO B Bandwidth",
+            "widget": "select",
+            "subgroup": "vfo-b",
+            "menu": {
+              "number": 5,
+              "code": "WN"
+            },
+            "description": "FM bandwidth for VFO B. Wide is the broader channel. Narrow is the tighter 12.5 kHz channel."
+          }
+        },
+        {
+          "id": "_unknown5",
+          "type": "bits",
+          "width": 4,
+          "reserved": true
+        },
+        {
+          "id": "_txpower3",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        }
+      ]
+    },
+    {
+      "id": "sixpoweron_msg",
+      "seek": "0x1ED0",
+      "fields": [
+        {
+          "id": "line1",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "6+Power-On Message 1",
+            "widget": "text",
+            "writable": false,
+            "subgroup": "messages",
+            "description": "First power-on line used by some UV-5R firmware. Shown when menu 38 (PONMSG) is set to Message."
+          }
+        },
+        {
+          "id": "line2",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "6+Power-On Message 2",
+            "widget": "text",
+            "writable": false,
+            "subgroup": "messages",
+            "description": "Second power-on line used by some UV-5R firmware. Shown when menu 38 (PONMSG) is set to Message."
+          }
+        }
+      ]
+    },
+    {
+      "id": "poweron_msg",
+      "seek": "0x1EE0",
+      "fields": [
+        {
+          "id": "line1",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "Power-On Message 1",
+            "widget": "text",
+            "subgroup": "messages",
+            "description": "First line shown at power-on when menu 38 (PONMSG) is set to Message."
+          }
+        },
+        {
+          "id": "line2",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "Power-On Message 2",
+            "widget": "text",
+            "subgroup": "messages",
+            "description": "Second line shown at power-on when menu 38 (PONMSG) is set to Message."
+          }
+        }
+      ]
+    },
+    {
+      "id": "firmware_msg",
+      "seek": "0x1EF0",
+      "fields": [
+        {
+          "id": "line1",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "Firmware Message 1",
+            "widget": "text",
+            "writable": false,
+            "subgroup": "messages",
+            "description": "Firmware banner stored in the radio. The radio displays this; it cannot be edited here."
+          }
+        },
+        {
+          "id": "line2",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 7
+          },
+          "ui": {
+            "group": "other",
+            "label": "Firmware Message 2",
+            "widget": "text",
+            "writable": false,
+            "subgroup": "messages",
+            "description": "Second line of the firmware banner stored in the radio."
+          }
+        }
+      ]
+    },
+    {
+      "id": "squelch_new",
+      "seek": "0x1F60",
+      "fields": [
+        {
+          "id": "vhf_sql0",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 0",
+            "widget": "integer",
+            "description": "Factory threshold for carrier-squelch level 0 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment.",
+            "subgroup": "vhf"
+          }
+        },
+        {
+          "id": "vhf_sql1",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 1",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 1 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql2",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 2",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 2 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql3",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 3",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 3 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql4",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 4",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 4 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql5",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 5",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 5 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql6",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 6",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 6 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql7",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 7",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 7 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql8",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 8",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 8 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "vhf_sql9",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "VHF Squelch 9",
+            "widget": "integer",
+            "subgroup": "vhf",
+            "description": "Factory threshold for carrier-squelch level 9 on VHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "_unknown1",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 6
+          }
+        },
+        {
+          "id": "_unknown2",
+          "type": "u8",
+          "reserved": true,
+          "value": {
+            "kind": "ascii",
+            "length": 16
+          }
+        },
+        {
+          "id": "uhf_sql0",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 0",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 0 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql1",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 1",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 1 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql2",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 2",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 2 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql3",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 3",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 3 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql4",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 4",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 4 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql5",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 5",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 5 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql6",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 6",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 6 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql7",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 7",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 7 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql8",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 8",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 8 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        },
+        {
+          "id": "uhf_sql9",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 123
+          },
+          "ui": {
+            "group": "service",
+            "label": "UHF Squelch 9",
+            "widget": "integer",
+            "subgroup": "uhf",
+            "description": "Factory threshold for carrier-squelch level 9 on UHF. Menu 0 (SQL) selects which threshold is used. Change only with test equipment."
+          }
+        }
+      ]
+    },
+    {
+      "id": "limits_new",
+      "seek": "0x1FC0",
+      "fields": [
+        {
+          "id": "vhf_enable",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "other",
+            "label": "VHF TX Enabled",
+            "widget": "switch",
+            "subgroup": "limits",
+            "order": 1,
+            "description": "Allows transmit on VHF. This is not a keypad menu item."
+          }
+        },
+        {
+          "id": "vhf_lower",
+          "type": "u8",
+          "value": {
+            "kind": "bbcd",
+            "length": 2
+          },
+          "ui": {
+            "group": "other",
+            "label": "VHF Lower Limit (MHz)",
+            "widget": "integer",
+            "subgroup": "limits",
+            "order": 3,
+            "description": "Lowest VHF frequency the radio will transmit, in MHz."
+          }
+        },
+        {
+          "id": "vhf_upper",
+          "type": "u8",
+          "value": {
+            "kind": "bbcd",
+            "length": 2
+          },
+          "ui": {
+            "group": "other",
+            "label": "VHF Upper Limit (MHz)",
+            "widget": "integer",
+            "subgroup": "limits",
+            "order": 4,
+            "description": "Highest VHF frequency the radio will transmit, in MHz."
+          }
+        },
+        {
+          "id": "uhf_enable",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "other",
+            "label": "UHF TX Enabled",
+            "widget": "switch",
+            "subgroup": "limits",
+            "order": 2,
+            "description": "Allows transmit on UHF. This is not a keypad menu item."
+          }
+        },
+        {
+          "id": "uhf_lower",
+          "type": "u8",
+          "value": {
+            "kind": "bbcd",
+            "length": 2
+          },
+          "ui": {
+            "group": "other",
+            "label": "UHF Lower Limit (MHz)",
+            "widget": "integer",
+            "subgroup": "limits",
+            "order": 5,
+            "description": "Lowest UHF frequency the radio will transmit, in MHz."
+          }
+        },
+        {
+          "id": "uhf_upper",
+          "type": "u8",
+          "value": {
+            "kind": "bbcd",
+            "length": 2
+          },
+          "ui": {
+            "group": "other",
+            "label": "UHF Upper Limit (MHz)",
+            "widget": "integer",
+            "subgroup": "limits",
+            "order": 6,
+            "description": "Highest UHF frequency the radio will transmit, in MHz."
+          }
+        }
+      ]
+    }
+  ],
+  "channelBindings": {
+    "records": "channels",
+    "names": "names",
+    "nameField": "name",
+    "receiveFrequency": "rxfreq",
+    "transmitFrequency": "txfreq",
+    "receiveTone": "rxtone",
+    "transmitTone": "txtone"
+  }
+}
