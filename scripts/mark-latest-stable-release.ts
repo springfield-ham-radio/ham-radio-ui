@@ -1,12 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { stableReleaseToMarkLatest, type StableReleaseCandidate } from './latest-stable-release.ts';
+import {
+  parseGhReleaseList,
+  stableReleaseToMarkLatest,
+} from './latest-stable-release.ts';
 
-interface GitHubRelease {
-  id: number;
-  tag_name: string;
-  draft: boolean;
-  prerelease: boolean;
-}
+const GH_MAX_BUFFER = 10 * 1024 * 1024;
 
 const repository = process.env.GITHUB_REPOSITORY?.trim();
 
@@ -15,42 +13,38 @@ if (!repository) {
 }
 
 function gh(args: string[]): string {
-  return execFileSync('gh', args, { encoding: 'utf8' });
+  return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: GH_MAX_BUFFER });
 }
 
-function listReleases(): StableReleaseCandidate[] {
-  // `--slurp` wraps every page, including a single page, in an outer array.
-  const raw = gh(['api', '--paginate', '--slurp', `repos/${repository}/releases?per_page=100`]);
-  const pages = JSON.parse(raw) as GitHubRelease[][];
+function listReleases() {
+  const raw = gh([
+    'release',
+    'list',
+    '--json',
+    'tagName,isDraft,isPrerelease',
+    '--limit',
+    '100',
+    '-R',
+    repository,
+  ]);
 
-  return pages.flat().map((release) => ({
-    id: release.id,
-    tagName: release.tag_name,
-    draft: release.draft,
-    prerelease: release.prerelease,
-  }));
+  return parseGhReleaseList(raw);
 }
 
 function currentLatestTag(): string | undefined {
-  try {
-    const raw = gh(['api', `repos/${repository}/releases/latest`]);
-    const parsed = JSON.parse(raw) as { tag_name?: string };
+  const raw = gh([
+    'release',
+    'list',
+    '--json',
+    'tagName,isLatest',
+    '--limit',
+    '100',
+    '-R',
+    repository,
+  ]);
+  const releases = JSON.parse(raw) as Array<{ tagName: string; isLatest: boolean }>;
 
-    return parsed.tag_name;
-  } catch (error) {
-    if (isNotFound(error)) {
-      return undefined;
-    }
-
-    throw error;
-  }
-}
-
-function isNotFound(error: unknown): boolean {
-  const stderr = typeof error === 'object' && error !== null && 'stderr' in error ? String(error.stderr) : '';
-  const message = error instanceof Error ? error.message : '';
-
-  return stderr.includes('404') || message.includes('404');
+  return releases.find((release) => release.isLatest)?.tagName;
 }
 
 const target = stableReleaseToMarkLatest(listReleases(), currentLatestTag());
@@ -58,13 +52,6 @@ const target = stableReleaseToMarkLatest(listReleases(), currentLatestTag());
 if (!target) {
   console.log('Newest stable release is already marked latest');
 } else {
-  gh([
-    'api',
-    '--method',
-    'PATCH',
-    `repos/${repository}/releases/${target.id}`,
-    '--raw-field',
-    'make_latest=true',
-  ]);
+  gh(['release', 'edit', target.tagName, '--latest', '-R', repository]);
   console.log(`Marked ${target.tagName} as the latest release`);
 }

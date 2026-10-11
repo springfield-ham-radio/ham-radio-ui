@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { stableReleaseToMarkLatest, type StableReleaseCandidate } from '../../scripts/latest-stable-release.ts';
+import {
+  parseGhReleaseList,
+  stableReleaseToMarkLatest,
+  type StableReleaseCandidate,
+} from '../../scripts/latest-stable-release.ts';
 
 function release(tagName: string, overrides: Partial<StableReleaseCandidate> = {}): StableReleaseCandidate {
   return {
@@ -43,5 +47,19 @@ describe('stable release to mark latest', () => {
 
   it('should return nothing when no stable release exists', () => {
     expect(stableReleaseToMarkLatest([release('v0.1.0-beta.1', { prerelease: true })], undefined)).toBeUndefined();
+  });
+
+  it('should map gh release list JSON into stable release candidates', () => {
+    const json = JSON.stringify([
+      { tagName: 'v0.60.2', isDraft: false, isPrerelease: false },
+      { tagName: 'v0.61.0-beta.1', isDraft: false, isPrerelease: true },
+      { tagName: 'v0.62.0', isDraft: true, isPrerelease: false },
+    ]);
+
+    expect(parseGhReleaseList(json)).toEqual([
+      release('v0.60.2', { id: 0 }),
+      release('v0.61.0-beta.1', { id: 0, prerelease: true }),
+      release('v0.62.0', { id: 0, draft: true }),
+    ]);
   });
 });
