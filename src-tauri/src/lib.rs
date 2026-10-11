@@ -7,7 +7,9 @@ mod zoom;
 use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
+use tauri_plugin_window_state::StateFlags;
 
 fn find_check_in_items<R: tauri::Runtime>(
     items: &[MenuItemKind<R>],
@@ -540,6 +542,17 @@ CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        // Do not persist VISIBLE: a saved hidden state would keep the window hidden forever.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -613,6 +626,13 @@ CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
                         .build(),
                 )?;
             }
+
+            let main_window = app
+                .get_webview_window("main")
+                .ok_or("main window not found")?;
+            main_window.show()?;
+            main_window.set_focus()?;
+            // Windows created at runtime must also be built hidden and shown after build().
 
             Ok(())
         })

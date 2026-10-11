@@ -13,10 +13,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "HamBench",
         "width": 1512,
         "height": 982,
         "center": true,
+        "visible": false,
         "resizable": true,
         "fullscreen": false
       }
