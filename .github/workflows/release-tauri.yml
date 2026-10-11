@@ -13,15 +13,23 @@ on:
         description: Git tag to rebuild (e.g. v0.1.0)
         required: true
         type: string
-  release:
-    types: [published]
 
 permissions:
   contents: write
 
+# One queue for workflow_call (CI) and workflow_dispatch (manual rebuild).
+# There is no release: published trigger: semantic-release already publishes
+# the GitHub Release, and CI calls this workflow with that tag. A release
+# event would start a second build of the same tag.
+#
+# The group stays a fixed name. On workflow_call, github.workflow is the
+# caller ("CI") and github.ref is the branch, so ${{ github.workflow }}-${{ github.ref }}
+# or release-${{ github.ref }} matches a group ci.yml still holds. GitHub then
+# cancels the run as a deadlock. One group across tags also keeps an older
+# build from uploading at the same time as a newer one.
 concurrency:
-  group: release-tauri-${{ inputs.tag || github.event.release.tag_name }}
-  cancel-in-progress: true
+  group: release-tauri
+  cancel-in-progress: false
 
 jobs:
   sniffer-linux-arm64:
@@ -76,7 +84,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ inputs.tag }}
           token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/checkout@v7
@@ -149,11 +157,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ steps.updater_signing.outputs.private_key }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.updater_signing.outputs.private_key_password }}
         with:
-          tagName: ${{ inputs.tag || github.event.release.tag_name }}
-          releaseName: HamBench ${{ inputs.tag || github.event.release.tag_name }}
+          tagName: ${{ inputs.tag }}
+          releaseName: HamBench ${{ inputs.tag }}
           releaseBody: See the assets to download this version and install.
           releaseDraft: false
-          prerelease: ${{ contains(inputs.tag || github.event.release.tag_name, '-') }}
+          prerelease: ${{ contains(inputs.tag, '-') }}
           args: ${{ matrix.args }}
 
   rename-downloads:
@@ -178,5 +186,16 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/rename-release-installers.ts
+
+      # tauri-action updates the release without make_latest, and the API
+      # default marks that release as latest. Point releases/latest at the
+      # highest stable version so an older build cannot leave
+      # releases/latest/download/latest.json on the older tag.
+      - name: Point releases/latest at the newest stable release
+        if: always() && steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/mark-latest-stable-release.ts
