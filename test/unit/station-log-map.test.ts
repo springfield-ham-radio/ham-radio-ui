@@ -153,6 +153,13 @@ describe('stationMapPins', () => {
 
     expect(pins.map((pin) => pin.nickname)).toEqual(['Cabin', 'Portable']);
   });
+
+  it('treats Null Island as unlocated but keeps a single zero axis', () => {
+    expect(stationMapPins([{ id: 'null', nickname: 'Null', latitude: 0, longitude: 0 }])).toHaveLength(0);
+    expect(stationMapPins([{ id: 'equator', nickname: 'Equator', latitude: 0, longitude: -72.5 }])).toEqual([
+      { id: 'equator', nickname: 'Equator', gridsquare: undefined, latitude: 0, longitude: -72.5 },
+    ]);
+  });
 });
 
 describe('stationMapFeatureCollection', () => {

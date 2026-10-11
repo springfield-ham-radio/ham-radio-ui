@@ -7,6 +7,7 @@ import {
   toneSelectItems,
   toneToKey,
 } from '~/utils/channel-edit';
+import { parseLinkedNode } from '~/utils/linked-nodes';
 import { createBlankRadioChannel, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 
 const props = defineProps<{
@@ -24,6 +25,20 @@ const emit = defineEmits<{
       use?: RepeaterUse;
       onAir?: boolean;
       callsign?: string;
+      allstarNode?: string;
+      echolinkNode?: string;
+      irlpNode?: string;
+      wiresNode?: string;
+      allstar?: boolean;
+      echolink?: boolean;
+      irlp?: boolean;
+      wires?: boolean;
+      city?: string;
+      county?: string;
+      state?: string;
+      country?: string;
+      landmark?: string;
+      modes?: string;
       id?: SavedChannel['id'];
     },
   ];
@@ -41,6 +56,20 @@ const notes = ref('');
 const isRepeater = ref(false);
 const repeaterUse = shallowRef<RepeaterUse>('open');
 const onAir = shallowRef(true);
+const allstarOn = ref(false);
+const echolinkOn = ref(false);
+const irlpOn = ref(false);
+const wiresOn = ref(false);
+const allstarNode = ref('');
+const echolinkNode = ref('');
+const irlpNode = ref('');
+const wiresNode = ref('');
+const city = ref('');
+const county = ref('');
+const state = ref('');
+const country = ref('');
+const landmark = ref('');
+const modes = ref('');
 const receiveError = ref<string | undefined>();
 const transmitError = ref<string | undefined>();
 const isSaving = ref(false);
@@ -80,6 +109,20 @@ watch(
     isRepeater.value = props.channel?.kind === 'repeater';
     repeaterUse.value = props.channel?.use ?? 'open';
     onAir.value = props.channel?.onAir ?? true;
+    allstarNode.value = props.channel?.allstarNode ?? '';
+    echolinkNode.value = props.channel?.echolinkNode ?? '';
+    irlpNode.value = props.channel?.irlpNode ?? '';
+    wiresNode.value = props.channel?.wiresNode ?? '';
+    allstarOn.value = Boolean(props.channel?.allstar || props.channel?.allstarNode);
+    echolinkOn.value = Boolean(props.channel?.echolink || props.channel?.echolinkNode);
+    irlpOn.value = Boolean(props.channel?.irlp || props.channel?.irlpNode);
+    wiresOn.value = Boolean(props.channel?.wires || props.channel?.wiresNode);
+    city.value = props.channel?.city ?? '';
+    county.value = props.channel?.county ?? '';
+    state.value = props.channel?.state ?? '';
+    country.value = props.channel?.country ?? '';
+    landmark.value = props.channel?.landmark ?? '';
+    modes.value = props.channel?.modes ?? '';
     receiveError.value = undefined;
     transmitError.value = undefined;
     isSaving.value = false;
@@ -88,6 +131,73 @@ watch(
 
 function close(): void {
   emit('update:open', false);
+}
+
+function onToggleLinked(system: 'allstar' | 'echolink' | 'irlp' | 'wires', enabled: boolean | 'indeterminate'): void {
+  if (enabled) {
+    return;
+  }
+
+  if (system === 'allstar') {
+    allstarNode.value = '';
+  } else if (system === 'echolink') {
+    echolinkNode.value = '';
+  } else if (system === 'irlp') {
+    irlpNode.value = '';
+  } else {
+    wiresNode.value = '';
+  }
+}
+
+function linkedEditorPayload(): {
+  allstar?: boolean;
+  echolink?: boolean;
+  irlp?: boolean;
+  wires?: boolean;
+  allstarNode?: string;
+  echolinkNode?: string;
+  irlpNode?: string;
+  wiresNode?: string;
+} {
+  if (!isRepeater.value) {
+    return {};
+  }
+
+  const allstarNodeValue = parseLinkedNode(allstarNode.value);
+  const echolinkNodeValue = parseLinkedNode(echolinkNode.value);
+  const irlpNodeValue = parseLinkedNode(irlpNode.value);
+  const wiresNodeValue = parseLinkedNode(wiresNode.value);
+  const allstar = allstarOn.value || Boolean(allstarNodeValue);
+  const echolink = echolinkOn.value || Boolean(echolinkNodeValue);
+  const irlp = irlpOn.value || Boolean(irlpNodeValue);
+  const wires = wiresOn.value || Boolean(wiresNodeValue);
+
+  return {
+    allstar,
+    echolink,
+    irlp,
+    wires,
+    allstarNode: allstar ? allstarNodeValue : undefined,
+    echolinkNode: echolink ? echolinkNodeValue : undefined,
+    irlpNode: irlp ? irlpNodeValue : undefined,
+    wiresNode: wires ? wiresNodeValue : undefined,
+  };
+}
+
+function onLinkedNodeInput(system: 'allstar' | 'echolink' | 'irlp' | 'wires', value: string): void {
+  if (!parseLinkedNode(value)) {
+    return;
+  }
+
+  if (system === 'allstar') {
+    allstarOn.value = true;
+  } else if (system === 'echolink') {
+    echolinkOn.value = true;
+  } else if (system === 'irlp') {
+    irlpOn.value = true;
+  } else {
+    wiresOn.value = true;
+  }
 }
 
 async function save(): Promise<void> {
@@ -121,6 +231,13 @@ async function save(): Promise<void> {
       use: isRepeater.value ? repeaterUse.value : undefined,
       onAir: isRepeater.value ? onAir.value : undefined,
       callsign: isRepeater.value ? callsign.value.trim() || undefined : undefined,
+      city: isRepeater.value ? city.value.trim() || undefined : undefined,
+      county: isRepeater.value ? county.value.trim() || undefined : undefined,
+      state: isRepeater.value ? state.value.trim() || undefined : undefined,
+      country: isRepeater.value ? country.value.trim() || undefined : undefined,
+      landmark: isRepeater.value ? landmark.value.trim() || undefined : undefined,
+      modes: isRepeater.value ? modes.value.trim() || undefined : undefined,
+      ...linkedEditorPayload(),
       id: props.channel?.id,
     });
   } finally {
@@ -188,6 +305,57 @@ async function save(): Promise<void> {
           </UFormField>
 
           <USwitch v-model="onAir" label="On-air" description="Turn this off when the repeater is off the air." />
+
+          <div class="space-y-3">
+            <p class="text-xs text-muted">
+              Location and modes come from the repeater record. A re-import refreshes them and leaves your name and notes.
+            </p>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <UFormField label="City">
+                <UInput v-model="city" class="w-full" placeholder="Austin" />
+              </UFormField>
+              <UFormField label="State">
+                <UInput v-model="state" class="w-full" placeholder="Texas" />
+              </UFormField>
+              <UFormField label="County">
+                <UInput v-model="county" class="w-full" placeholder="Travis" />
+              </UFormField>
+              <UFormField label="Country">
+                <UInput v-model="country" class="w-full" placeholder="United States" />
+              </UFormField>
+            </div>
+            <UFormField label="Landmark">
+              <UInput v-model="landmark" class="w-full" placeholder="West Peak" />
+            </UFormField>
+            <UFormField label="Modes">
+              <UInput v-model="modes" class="w-full" placeholder="FM" />
+            </UFormField>
+            <p v-if="channel?.lastUpdate" class="text-xs text-muted">Last update {{ channel.lastUpdate }}</p>
+          </div>
+
+          <div class="space-y-3">
+            <p class="text-xs text-muted">
+              Turn a linked system on when this repeater uses it. A node number turns that system on. Blank or 0 clears the number.
+            </p>
+            <div class="space-y-3">
+              <div class="flex items-center gap-3">
+                <UCheckbox v-model="allstarOn" label="AllStar" class="w-28 shrink-0" @update:model-value="onToggleLinked('allstar', $event)" />
+                <UInput v-model="allstarNode" class="min-w-0 flex-1 tabular-nums" placeholder="Node" @update:model-value="onLinkedNodeInput('allstar', $event)" />
+              </div>
+              <div class="flex items-center gap-3">
+                <UCheckbox v-model="echolinkOn" label="EchoLink" class="w-28 shrink-0" @update:model-value="onToggleLinked('echolink', $event)" />
+                <UInput v-model="echolinkNode" class="min-w-0 flex-1 tabular-nums" placeholder="Node" @update:model-value="onLinkedNodeInput('echolink', $event)" />
+              </div>
+              <div class="flex items-center gap-3">
+                <UCheckbox v-model="irlpOn" label="IRLP" class="w-28 shrink-0" @update:model-value="onToggleLinked('irlp', $event)" />
+                <UInput v-model="irlpNode" class="min-w-0 flex-1 tabular-nums" placeholder="Node" @update:model-value="onLinkedNodeInput('irlp', $event)" />
+              </div>
+              <div class="flex items-center gap-3">
+                <UCheckbox v-model="wiresOn" label="WIRES" class="w-28 shrink-0" @update:model-value="onToggleLinked('wires', $event)" />
+                <UInput v-model="wiresNode" class="min-w-0 flex-1 tabular-nums" placeholder="Node" @update:model-value="onLinkedNodeInput('wires', $event)" />
+              </div>
+            </div>
+          </div>
         </template>
       </div>
     </template>

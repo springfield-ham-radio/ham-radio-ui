@@ -10,13 +10,11 @@ import {
 import {
   dmsInputFromDecimal,
   emptyDmsInput,
-  latLonToMaidenhead,
-  maidenheadToLatLon,
-  normalizeMaidenhead,
   parseDmsInput,
   type DmsInput,
   type DmsParseResult,
-} from '~/utils/maidenhead';
+} from '~/utils/location-format';
+import { latLonToMaidenhead, maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
 
 const props = defineProps<{
   open: boolean;
