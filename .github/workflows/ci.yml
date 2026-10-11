@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded pull requests cancel. A push to main or beta runs to completion
+  # so semantic-release and the installer build are not dropped mid-release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -41,6 +43,15 @@ jobs:
   release:
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
+    # Same group as tauri, per ref, and never cancelled. The next release on
+    # this ref waits until the previous installer build finishes, including
+    # the step that points releases/latest at the highest stable version.
+    # The group name release-tauri belongs to the called workflow. The tauri
+    # job holds this group while that workflow runs, so reusing the name
+    # deadlocks.
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.released.outputs.tag }}
@@ -77,6 +88,9 @@ jobs:
   tauri:
     needs: release
     if: needs.release.outputs.tag != ''
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     uses: ./.github/workflows/release-tauri.yml
     with:
       tag: ${{ needs.release.outputs.tag }}
