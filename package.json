@@ -34,7 +34,7 @@
   "dependencies": {
     "@nuxt/ui": "4.11.3",
     "@springfield/ham-radio-api": "^18.0.1",
-    "@springfield/ham-radio-driver": "^3.5.1",
+    "@springfield/ham-radio-driver": "^3.5.4",
     "@springfield/ham-radio-registry": "^1.7.3",
     "@springfield/ham-radio-utils": "^4.15.1",
     "@tauri-apps/api": "^2.12.1",
