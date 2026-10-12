@@ -12,7 +12,7 @@ import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
 
-const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview } = useRadio();
+const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview, transferInFlight } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
@@ -188,7 +188,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     confirm-label="Write"
     confirm-color="warning"
     :confirm-icon="writeEntry.icon"
-    :confirm-loading="reading"
+    :confirm-loading="reading || transferInFlight"
     warning-title="This replaces the radio's memory"
     :warning-description="warningDescription"
     :default-port="saved?.serialPort"

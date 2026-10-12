@@ -1,3 +1,9 @@
+## [0.61.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.0...v0.61.1) (2026-10-11)
+
+### Bug Fixes
+
+* **serial:** implement TauriNodeSerialPort.update for clone baud switches ([#106](https://github.com/springfield-ham-radio/ham-radio-ui/issues/106)) ([548910f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/548910fcc02bcae6a829fbbb5768c74d9233af69)), closes [#105](https://github.com/springfield-ham-radio/ham-radio-ui/issues/105)
+
 ## [0.61.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.5...v0.61.0) (2026-10-11)
 
 ### Features
