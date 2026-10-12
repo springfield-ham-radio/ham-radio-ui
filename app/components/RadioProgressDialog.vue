@@ -1,6 +1,17 @@
 <script setup lang="ts">
-const { progressOpen, progressKind, progress, progressError, progressStartedAt, serialLog, cancelTransfer, saveSerialLog } =
-  useRadio();
+const {
+  progressOpen,
+  progressKind,
+  progress,
+  progressError,
+  progressStartedAt,
+  progressSerialLog,
+  cancelTransfer,
+  saveProgressSerialLog,
+  continueWriteWithoutBackupFromDialog,
+  dismissBackupFailureProgress,
+  onProgressDialogClosed,
+} = useRadio();
 
 const now = ref(Date.now());
 
@@ -8,10 +19,14 @@ let tickTimer: ReturnType<typeof setInterval> | undefined;
 
 watch(
   progressOpen,
-  (open) => {
+  (open, wasOpen) => {
     if (tickTimer) {
       clearInterval(tickTimer);
       tickTimer = undefined;
+    }
+
+    if (!open && wasOpen) {
+      onProgressDialogClosed();
     }
 
     if (open && !progressError.value) {
@@ -63,6 +78,10 @@ const title = computed(() => progressCopy.value.title);
 const description = computed(() => progressCopy.value.description);
 const errorTitle = computed(() => progressCopy.value.errorTitle);
 
+const showBackupWithoutSaving = computed(
+  () => progressKind.value === 'backup' && Boolean(progressError.value),
+);
+
 const percentValue = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
 
 const remainingText = computed(() =>
@@ -93,6 +112,15 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
   const seconds = totalSeconds % 60;
   return seconds === 0 ? `about ${minutes}m left` : `about ${minutes}m ${seconds}s left`;
 }
+
+function closeProgress(): void {
+  if (showBackupWithoutSaving.value) {
+    dismissBackupFailureProgress();
+    return;
+  }
+
+  progressOpen.value = false;
+}
 </script>
 
 <template>
@@ -113,8 +141,8 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
         :title="errorTitle"
         :description="progressError"
       />
-      <p v-if="progressError && serialLog" class="mt-3 text-sm text-muted">
-        {{ serialLog.entryCount }} serial frame{{ serialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
+      <p v-if="progressError && progressSerialLog" class="mt-3 text-sm text-muted">
+        {{ progressSerialLog.entryCount }} serial frame{{ progressSerialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
       <div v-else class="flex flex-col gap-3">
         <!--
@@ -140,21 +168,34 @@ function formatTimeRemaining(fraction: number, startedAt: number | null, current
     </template>
 
     <template #footer="{ close: dismiss }">
-      <div class="flex w-full justify-end gap-2">
+      <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton
-          v-if="progressError && serialLog"
+          v-if="progressError && progressSerialLog"
           color="neutral"
           variant="outline"
           label="Save serial log"
           icon="i-lucide-file-text"
-          @click="saveSerialLog"
+          @click="saveProgressSerialLog"
+        />
+        <UButton
+          v-if="showBackupWithoutSaving"
+          color="warning"
+          variant="outline"
+          label="Write without backup"
+          icon="i-lucide-triangle-alert"
+          @click="continueWriteWithoutBackupFromDialog"
         />
         <UButton
           v-if="progressError"
           color="neutral"
           variant="outline"
           label="Close"
-          @click="dismiss"
+          @click="
+            () => {
+              closeProgress();
+              dismiss();
+            }
+          "
         />
         <UButton v-else color="neutral" variant="outline" label="Cancel" @click="cancelTransfer" />
       </div>

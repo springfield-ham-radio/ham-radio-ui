@@ -1,15 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SendReceiveOperation } from '@springfield/ham-radio-driver/dist/utils/protocol-operations.js';
 import { createLoggingSerialPort, SerialLogger } from '@springfield/ham-radio-driver/dist/utils/serial-logger.js';
 import type { ProtocolContext } from '@springfield/ham-radio-driver/dist/protocol-context.js';
 import { TauriNodeSerialPort } from '../../app/utils/tauri-node-serial-port.ts';
+import { resetSerialPathCloseTracking } from '../../app/utils/serial-port-path-close.ts';
 
 const tauriInstances: MockTauriSerialPort[] = [];
+const openCalls: string[] = [];
+let closeDelayMs = 0;
 
 class MockTauriSerialPort {
   isOpen = false;
-  options = { path: '/dev/test', baudRate: 9600 };
+  options: { path: string; baudRate: number };
+
+  constructor(path = '/dev/test', baudRate = 9600) {
+    this.options = { path, baudRate };
+  }
+
   open = vi.fn(async () => {
+    openCalls.push(this.options.path);
     this.isOpen = true;
   });
   setBaudRate = vi.fn(async (baudRate: number) => {
@@ -21,6 +30,11 @@ class MockTauriSerialPort {
   clearBuffer = vi.fn(async () => undefined);
   writeBinary = vi.fn(async () => 0);
   close = vi.fn(async () => {
+    if (closeDelayMs > 0) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, closeDelayMs);
+      });
+    }
     this.isOpen = false;
   });
 }
@@ -31,21 +45,23 @@ vi.mock('tauri-plugin-serialplugin-api', () => ({
   FlowControl: { Hardware: 'hardware', None: 'none' },
   Parity: { Odd: 'odd', Even: 'even', None: 'none' },
   StopBits: { One: 1, Two: 2 },
-  SerialPort: vi.fn(function MockSerialPort() {
-    const instance = new MockTauriSerialPort();
+  SerialPort: vi.fn(function MockSerialPort(options: { path: string; baudRate: number }) {
+    const instance = new MockTauriSerialPort(options.path, options.baudRate);
     tauriInstances.push(instance);
     return instance;
   }),
 }));
 
-async function openAdapterPort(options?: { dtr?: boolean; rts?: boolean }): Promise<{
+async function openAdapterPort(options?: { path?: string; dtr?: boolean; rts?: boolean }): Promise<{
   port: TauriNodeSerialPort;
   tauri: MockTauriSerialPort;
 }> {
   vi.useFakeTimers();
   tauriInstances.length = 0;
+  openCalls.length = 0;
+  closeDelayMs = 0;
   const port = new TauriNodeSerialPort({
-    path: '/dev/test',
+    path: options?.path ?? '/dev/test',
     baudRate: 9600,
     dtr: options?.dtr ?? true,
     rts: options?.rts ?? true,
@@ -75,6 +91,9 @@ describe('TauriNodeSerialPort.update', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     tauriInstances.length = 0;
+    openCalls.length = 0;
+    closeDelayMs = 0;
+    resetSerialPathCloseTracking();
   });
 
   it('should set baud rate and re-assert DTR/RTS without open-path delays', async () => {
@@ -122,6 +141,9 @@ describe('ham-radio-driver setBaudRate with TauriNodeSerialPort', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     tauriInstances.length = 0;
+    openCalls.length = 0;
+    closeDelayMs = 0;
+    resetSerialPathCloseTracking();
   });
 
   it('should run SendReceiveOperation setBaudRate and log the switch', async () => {
@@ -169,5 +191,38 @@ describe('ham-radio-driver setBaudRate with TauriNodeSerialPort', () => {
 
     expect(tauri.setBaudRate).toHaveBeenCalledWith(57600);
     serialLogger.close();
+  });
+});
+
+describe('TauriNodeSerialPort path close ordering', () => {
+  beforeEach(() => {
+    resetSerialPathCloseTracking();
+    tauriInstances.length = 0;
+    openCalls.length = 0;
+    closeDelayMs = 50;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetSerialPathCloseTracking();
+    closeDelayMs = 0;
+  });
+
+  it('waits for an in-flight close before opening the same path again', async () => {
+    const path = '/dev/cu.usbserial-test';
+
+    const first = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(first.isOpen).toBe(true));
+
+    first.close();
+    const second = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(openCalls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(closeDelayMs + 400);
+    await vi.waitFor(() => expect(openCalls).toHaveLength(2));
+    await vi.waitFor(() => expect(second.isOpen).toBe(true));
   });
 });
