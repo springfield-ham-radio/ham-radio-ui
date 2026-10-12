@@ -661,7 +661,6 @@ export function moveProgrammedChannel(
     return { channels, previousToNext: new Map() };
   }
 
-  const source = channels[sourceIndex]!;
   const occupiedAfterRemoval = occupiedChannelSlots(channels, fromNumber);
 
   if (!occupiedAfterRemoval.has(toNumber)) {

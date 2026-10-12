@@ -1,3 +1,15 @@
+## [0.61.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.1...v0.61.2) (2026-10-12)
+
+### Bug Fixes
+
+* TH-F6 write port race and serial log on failure ([#108](https://github.com/springfield-ham-radio/ham-radio-ui/issues/108), [#107](https://github.com/springfield-ham-radio/ham-radio-ui/issues/107)) ([#109](https://github.com/springfield-ham-radio/ham-radio-ui/issues/109)) ([5c0d2bc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5c0d2bcebe01c2b2a39ae9dca60475e70469fcd0))
+
+## [0.61.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.0...v0.61.1) (2026-10-11)
+
+### Bug Fixes
+
+* **serial:** implement TauriNodeSerialPort.update for clone baud switches ([#106](https://github.com/springfield-ham-radio/ham-radio-ui/issues/106)) ([548910f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/548910fcc02bcae6a829fbbb5768c74d9233af69)), closes [#105](https://github.com/springfield-ham-radio/ham-radio-ui/issues/105)
+
 ## [0.61.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.5...v0.61.0) (2026-10-11)
 
 ### Features

@@ -6,7 +6,7 @@ import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
 
-const { readFromRadio, readOpen, configurations } = useRadio();
+const { readFromRadio, readOpen, configurations, transferInFlight } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
@@ -61,6 +61,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
     title="Read from Radio"
     :description="description"
     confirm-label="Read"
+    :confirm-loading="transferInFlight"
     :confirm-icon="readEntry.icon"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
