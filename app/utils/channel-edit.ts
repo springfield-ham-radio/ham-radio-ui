@@ -515,16 +515,46 @@ function isVisibleProgrammedChannel(channel: RadioProgrammedChannel): boolean {
   return typeof channel.radioChannel !== 'string';
 }
 
+function occupiedChannelSlots(channels: RadioProgrammedChannel[], exceptChannelNumber?: number): Set<number> {
+  const occupied = new Set<number>();
+
+  for (const channel of channels) {
+    if (exceptChannelNumber !== undefined && channel.channelNumber === exceptChannelNumber) {
+      continue;
+    }
+
+    occupied.add(channel.channelNumber);
+  }
+
+  return occupied;
+}
+
+function firstEmptySlotBetween(prev: number, next: number, occupied: Set<number>): number | undefined {
+  for (let slot = prev + 1; slot < next; slot += 1) {
+    if (slot >= 0 && !occupied.has(slot)) {
+      return slot;
+    }
+  }
+
+  return undefined;
+}
+
+function sortProgrammedChannels(channels: RadioProgrammedChannel[]): RadioProgrammedChannel[] {
+  return [...channels].sort((left, right) => left.channelNumber - right.channelNumber);
+}
+
 /**
  * Move one occupied row in the Channels table.
  *
- * Occupied slot numbers stay put so gaps are preserved; only the channel data
- * is permuted into the new order. Unresolved records are left in their slots.
+ * When {@link capacity} is set and the drop sits in a gap between neighbors, the
+ * dragged channel takes the first empty slot in that gap. Otherwise occupied slot
+ * numbers are permuted into the new order. Unresolved records are left in their slots.
  */
 export function reorderProgrammedChannels(
   channels: RadioProgrammedChannel[],
   fromIndex: number,
   toIndex: number,
+  capacity?: number,
 ): ChannelReorder {
   const visible = channels
     .filter(isVisibleProgrammedChannel)
@@ -541,7 +571,6 @@ export function reorderProgrammedChannels(
     return { channels, previousToNext: new Map() };
   }
 
-  const slotNumbers = visible.map((channel) => channel.channelNumber);
   const reordered = [...visible];
   const [moved] = reordered.splice(fromIndex, 1);
 
@@ -551,6 +580,38 @@ export function reorderProgrammedChannels(
 
   reordered.splice(toIndex, 0, moved);
 
+  const movedIndex = reordered.indexOf(moved);
+  const previousNeighbor = movedIndex > 0 ? reordered[movedIndex - 1]!.channelNumber : -1;
+  let nextNeighbor: number | undefined;
+
+  if (movedIndex < reordered.length - 1) {
+    nextNeighbor = reordered[movedIndex + 1]!.channelNumber;
+  } else if (capacity !== undefined && capacity > 0) {
+    nextNeighbor = capacity;
+  }
+
+  if (nextNeighbor !== undefined) {
+    const occupied = occupiedChannelSlots(channels, moved.channelNumber);
+    const gapSlot = firstEmptySlotBetween(previousNeighbor, nextNeighbor, occupied);
+
+    if (gapSlot !== undefined) {
+      if (gapSlot === moved.channelNumber) {
+        return { channels, previousToNext: new Map() };
+      }
+
+      const previousToNext = new Map<number, number>([[moved.channelNumber, gapSlot]]);
+      const nextVisible = reordered.map((channel) =>
+        channel === moved ? { ...channel, channelNumber: gapSlot } : channel,
+      );
+
+      return {
+        channels: sortProgrammedChannels([...nextVisible, ...hidden]),
+        previousToNext,
+      };
+    }
+  }
+
+  const slotNumbers = visible.map((channel) => channel.channelNumber);
   const previousToNext = new Map<number, number>();
   const nextVisible = reordered.map((channel, index) => {
     const nextNumber = slotNumbers[index]!;
@@ -562,7 +623,72 @@ export function reorderProgrammedChannels(
   });
 
   return {
-    channels: [...nextVisible, ...hidden].sort((left, right) => left.channelNumber - right.channelNumber),
+    channels: sortProgrammedChannels([...nextVisible, ...hidden]),
+    previousToNext,
+  };
+}
+
+/**
+ * Move or swap one programmed channel to a specific memory slot.
+ */
+export function moveProgrammedChannel(
+  channels: RadioProgrammedChannel[],
+  fromNumber: number,
+  toNumber: number,
+  capacity: number,
+): ChannelReorder {
+  if (
+    fromNumber === toNumber ||
+    !Number.isInteger(fromNumber) ||
+    !Number.isInteger(toNumber) ||
+    fromNumber < 0 ||
+    toNumber < 0 ||
+    fromNumber >= capacity ||
+    toNumber >= capacity
+  ) {
+    return { channels, previousToNext: new Map() };
+  }
+
+  const sourceIndex = channels.findIndex((channel) => channel.channelNumber === fromNumber);
+
+  if (sourceIndex === -1) {
+    return { channels, previousToNext: new Map() };
+  }
+
+  const targetIndex = channels.findIndex((channel) => channel.channelNumber === toNumber);
+  const source = channels[sourceIndex]!;
+
+  if (targetIndex === -1) {
+    const previousToNext = new Map<number, number>([[fromNumber, toNumber]]);
+    const nextChannels = channels.map((channel, index) =>
+      index === sourceIndex ? { ...channel, channelNumber: toNumber } : channel,
+    );
+
+    return {
+      channels: sortProgrammedChannels(nextChannels),
+      previousToNext,
+    };
+  }
+
+  const target = channels[targetIndex]!;
+  const previousToNext = new Map<number, number>([
+    [fromNumber, toNumber],
+    [toNumber, fromNumber],
+  ]);
+  const nextChannels = channels.map((channel, index) => {
+    if (index === sourceIndex) {
+      return { ...source, channelNumber: toNumber };
+    }
+
+    if (index === targetIndex) {
+      return { ...target, channelNumber: fromNumber };
+    }
+
+    return channel;
+  });
+
+  return {
+    channels: sortProgrammedChannels(nextChannels),
     previousToNext,
   };
 }

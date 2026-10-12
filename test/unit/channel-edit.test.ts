@@ -35,6 +35,7 @@ import {
   parseFrequencyMHz,
   defaultRepeaterOffsetHz,
   patchFromDuplex,
+  moveProgrammedChannel,
   reorderProgrammedChannels,
   serializeChannelFieldValue,
   toneToKey,
@@ -254,6 +255,171 @@ describe('reorderProgrammedChannels', () => {
       1: 'ALPHA',
       3: 'SKIP',
     });
+  });
+
+  it('drops into a gap at the first empty slot when capacity is set', () => {
+    const original = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(3, 'CH3'),
+      namedChannel(4, 'CH4'),
+      namedChannel(5, 'CH5'),
+      namedChannel(10, 'CH10'),
+      namedChannel(11, 'CH11'),
+      namedChannel(12, 'CH12'),
+      namedChannel(13, 'WX'),
+    ];
+    const result = reorderProgrammedChannels(original, 9, 6, 128);
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'CH0',
+      1: 'CH1',
+      2: 'CH2',
+      3: 'CH3',
+      4: 'CH4',
+      5: 'CH5',
+      6: 'WX',
+      10: 'CH10',
+      11: 'CH11',
+      12: 'CH12',
+    });
+    expect(result.previousToNext.size).toBe(1);
+    expect(result.previousToNext.get(13)).toBe(6);
+    expect(namesBySlot(original)).toEqual({
+      0: 'CH0',
+      1: 'CH1',
+      2: 'CH2',
+      3: 'CH3',
+      4: 'CH4',
+      5: 'CH5',
+      10: 'CH10',
+      11: 'CH11',
+      12: 'CH12',
+      13: 'WX',
+    });
+  });
+
+  it('still permutes when there is no empty slot between new neighbors', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(5, 'CHARLIE')],
+      2,
+      0,
+      8,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'CHARLIE',
+      1: 'ALPHA',
+      5: 'BRAVO',
+    });
+  });
+
+  it('fills the trailing gap when dropped at the end with capacity', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(2, 'CHARLIE')],
+      0,
+      2,
+      8,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      1: 'BRAVO',
+      2: 'CHARLIE',
+      3: 'ALPHA',
+    });
+    expect(result.previousToNext.get(0)).toBe(3);
+  });
+
+  it('skips hidden records when choosing the first empty slot in a gap', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 1,
+      radioChannel: 'SKIP',
+    };
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(5, 'BRAVO'), namedChannel(8, 'CHARLIE'), unresolved],
+      2,
+      1,
+      16,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'ALPHA',
+      1: 'SKIP',
+      2: 'CHARLIE',
+      5: 'BRAVO',
+    });
+    expect(result.previousToNext.get(8)).toBe(2);
+  });
+});
+
+describe('moveProgrammedChannel', () => {
+  function namedChannel(channelNumber: number, name: string): RadioProgrammedChannel {
+    return programmedChannel({
+      channelNumber,
+      radioChannel: {
+        name,
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_520_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      },
+    });
+  }
+
+  it('moves a channel into an empty slot', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(5, 'BRAVO')];
+    const result = moveProgrammedChannel(original, 5, 3, 8);
+
+    expect(result.channels.map((channel) => channel.channelNumber)).toEqual([0, 3]);
+    expect(result.previousToNext.get(5)).toBe(3);
+    expect(result.channels).not.toBe(original);
+    expect(original.map((channel) => channel.channelNumber)).toEqual([0, 5]);
+  });
+
+  it('swaps two occupied slots', () => {
+    const result = moveProgrammedChannel(
+      [namedChannel(0, 'ALPHA'), namedChannel(3, 'BRAVO')],
+      0,
+      3,
+      8,
+    );
+
+    expect(result.previousToNext.get(0)).toBe(3);
+    expect(result.previousToNext.get(3)).toBe(0);
+    expect(
+      Object.fromEntries(
+        result.channels.map((channel) => {
+          const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+          return [channel.channelNumber, name];
+        }),
+      ),
+    ).toEqual({
+      0: 'BRAVO',
+      3: 'ALPHA',
+    });
+  });
+
+  it('swaps with an unresolved record at the target slot', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 2,
+      radioChannel: 'SKIP',
+    };
+    const result = moveProgrammedChannel([namedChannel(0, 'ALPHA'), unresolved], 0, 2, 8);
+
+    expect(result.previousToNext.get(0)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(0);
+    expect(result.channels.find((channel) => channel.channelNumber === 0)?.radioChannel).toBe('SKIP');
+    expect(result.channels.find((channel) => channel.channelNumber === 2)?.radioChannel).toMatchObject({ name: 'ALPHA' });
+  });
+
+  it('rejects out-of-range destinations and same-number no-ops', () => {
+    const original = [namedChannel(1, 'ALPHA')];
+
+    expect(moveProgrammedChannel(original, 1, 1, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 1, -1, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 1, 8, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 9, 2, 8).channels).toBe(original);
   });
 });
 

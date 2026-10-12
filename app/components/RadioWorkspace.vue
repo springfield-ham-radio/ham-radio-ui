@@ -39,6 +39,7 @@ const {
   updateChannel,
   addChannel,
   reorderChannels,
+  moveChannel,
   removeChannels,
   saveSerialLog,
   savedRadio,
@@ -499,6 +500,17 @@ async function applyChannelReorder(fromIndex: number, toIndex: number): Promise<
   }
 }
 
+async function onChannelMove(toNumber: number): Promise<void> {
+  const previous = editingChannelNumber.value;
+
+  if (previous === undefined) {
+    return;
+  }
+
+  const mapping = await moveChannel(previous, toNumber);
+  editingChannelNumber.value = mapping.get(previous) ?? previous;
+}
+
 const channelTableRoot = ref<HTMLElement | null>(null);
 const channelTableTbody = shallowRef<HTMLElement | null>(null);
 
@@ -933,7 +945,9 @@ async function onSaveSerialLog(): Promise<void> {
             </UTable>
           </div>
           <p class="mt-2 shrink-0 text-xs text-muted">
-            Drag the handle to move a channel into another occupied memory slot. Empty slots stay empty. Select
+            Drag the handle to reorder channels or drop into a gap to take the first empty slot in that gap; dropping
+            between adjacent occupied slots reorders those memory positions. Open a channel to set its memory slot
+            directly (an empty slot moves it, an occupied slot swaps the two). Select
             channels to save them to the library or remove them from this radio. Shift-click selects a range, and
             Command-click adds or removes one channel. Add a channel after the last programmed memory slot (wrapping to
             the first free slot when the end is full), or choose Add from library to copy saved channels into unused
@@ -1020,6 +1034,7 @@ async function onSaveSerialLog(): Promise<void> {
       :privilege="radioPrivilege"
       @update:channel="onChannelPatch"
       @create="onCreateChannel"
+      @move="onChannelMove"
     />
     <UModal
       v-model:open="removeOpen"

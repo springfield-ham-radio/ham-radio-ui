@@ -17,6 +17,7 @@ import {
   channelSlotsAfterLastOccupied,
   channelCapacity,
   channelNameMaxLength,
+  moveProgrammedChannel,
   reorderProgrammedChannels,
   type ChannelPatch,
 } from '~/utils/channel-edit';
@@ -1134,7 +1135,12 @@ export function useRadio() {
       return new Map();
     }
 
-    const result = reorderProgrammedChannels(program.value.channels, fromIndex, toIndex);
+    const result = reorderProgrammedChannels(
+      program.value.channels,
+      fromIndex,
+      toIndex,
+      channelCapacity(settingsMemoryMap.value),
+    );
 
     if (result.previousToNext.size === 0) {
       return result.previousToNext;
@@ -1143,6 +1149,37 @@ export function useRadio() {
     persistProgram({
       ...program.value,
       channels: result.channels,
+    });
+
+    return result.previousToNext;
+  }
+
+  async function moveChannel(fromNumber: number, toNumber: number): Promise<Map<number, number>> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      return new Map();
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+    const result = moveProgrammedChannel(program.value.channels, fromNumber, toNumber, capacity);
+
+    if (result.previousToNext.size === 0) {
+      return result.previousToNext;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: result.channels,
+    });
+
+    const swapped = result.previousToNext.size === 2;
+
+    toast.add({
+      title: swapped ? 'Channels swapped' : 'Channel moved',
+      description: swapped
+        ? `Memory slots ${fromNumber} and ${toNumber} were swapped.`
+        : `Memory slot ${fromNumber} is now memory slot ${toNumber}.`,
+      color: 'success',
+      icon: swapped ? 'i-lucide-arrow-left-right' : 'i-lucide-arrow-right',
     });
 
     return result.previousToNext;
@@ -1533,6 +1570,7 @@ export function useRadio() {
     addChannel,
     addChannels,
     reorderChannels,
+    moveChannel,
     removeChannels,
     cancelTransfer,
     saveSerialLog,
