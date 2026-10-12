@@ -19,6 +19,7 @@ import { MockLogLayer } from 'loglayer';
 import {
   applyChannelPatch,
   availableChannelNumbers,
+  channelSlotsAfterLastOccupied,
   channelCapacity,
   channelFieldEditor,
   channelNameMaxLength,
@@ -147,21 +148,26 @@ describe('channelCapacity', () => {
   });
 });
 
-describe('nextAvailableChannelNumber', () => {
-  it('returns unused slots in order', () => {
+describe('availableChannelNumbers', () => {
+  it('returns unused slots in ascending index order', () => {
     expect(availableChannelNumbers([0, 1, 3], 8)).toEqual([2, 4, 5, 6, 7]);
     expect(availableChannelNumbers([], 3)).toEqual([0, 1, 2]);
     expect(availableChannelNumbers([0, 1], 2)).toEqual([]);
   });
+});
 
-  it('returns the lowest unused slot', () => {
-    expect(nextAvailableChannelNumber([0, 1, 3], 8)).toBe(2);
+describe('channelSlotsAfterLastOccupied', () => {
+  it('fills slots after the highest occupied index before wrapping', () => {
+    expect(channelSlotsAfterLastOccupied([0, 1, 3], 8)).toEqual([4, 5, 6, 7, 2]);
+    expect(nextAvailableChannelNumber([0, 1, 3], 8)).toBe(4);
+    expect(nextAvailableChannelNumber([0, 1, 7], 8)).toBe(2);
     expect(nextAvailableChannelNumber([], 8)).toBe(0);
+    expect(nextAvailableChannelNumber([0, 1, 2, 3, 4, 5, 6, 7], 8)).toBe(undefined);
+    expect(nextAvailableChannelNumber([], 0)).toBe(undefined);
   });
 
-  it('returns undefined when every slot is occupied', () => {
-    expect(nextAvailableChannelNumber([0, 1], 2)).toBe(undefined);
-    expect(nextAvailableChannelNumber([], 0)).toBe(undefined);
+  it('assigns multiple library rows across the tail and wrapped holes', () => {
+    expect(channelSlotsAfterLastOccupied([0, 5], 8, 3)).toEqual([6, 7, 1]);
   });
 });
 
@@ -473,6 +479,18 @@ describe('describeLibrarySlotAssignment', () => {
         slotNumbers: [],
       }),
     ).toBe('There are no unused memory slots on Mobile.');
+  });
+
+  it('lists wrapped slot assignments without implying a backwards range', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 3,
+        slotNumbers: [6, 7, 1, 2, 3, 4],
+      }),
+    ).toBe(
+      'Add 3 channels to Mobile in unused memory slots 6 to 7 and 1? Write to the radio to apply the change on the device.',
+    );
   });
 });
 
