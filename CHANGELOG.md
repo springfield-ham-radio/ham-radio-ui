@@ -1,3 +1,10 @@
+## [0.61.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.2...v0.61.3) (2026-10-12)
+
+### Bug Fixes
+
+* channel add order and per-card drag reorder (Fixes [#103](https://github.com/springfield-ham-radio/ham-radio-ui/issues/103)) ([#104](https://github.com/springfield-ham-radio/ham-radio-ui/issues/104)) ([0b7e1a7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0b7e1a753707b188944247994c3d975639b2d81a))
+* **deps:** bump ham-radio-driver to 3.5.4 for TH-F6 writes ([#112](https://github.com/springfield-ham-radio/ham-radio-ui/issues/112)) ([0ccb49f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0ccb49fcb37a27f09062fbb8c513fd9146f5d37f))
+
 ## [0.61.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.1...v0.61.2) (2026-10-12)
 
 ### Bug Fixes
