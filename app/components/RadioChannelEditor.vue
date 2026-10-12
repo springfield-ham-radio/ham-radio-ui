@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'update:open': [open: boolean];
   'update:channel': [patch: ChannelPatch];
   create: [channel: RadioProgrammedChannel];
+  move: [toNumber: number];
 }>();
 
 const { getTransmitPrivilegeWarning } = useOperatorLicense();
@@ -106,17 +107,29 @@ const title = computed(() => {
 const slideoverOpen = computed({
   get: () => props.open,
   set: (value: boolean) => {
+    if (!value && props.open) {
+      commitSlotNumber();
+    }
+
     emit('update:open', value);
   },
 });
 
-const slotError = computed(() => {
-  if (!isCreate.value) {
-    return undefined;
-  }
-
+const slotRangeError = computed(() => {
   if (!Number.isInteger(slotNumber.value) || slotNumber.value < 0 || slotNumber.value >= capacity.value) {
     return capacity.value > 0 ? `Enter a memory slot from 0 to ${capacity.value - 1}` : 'This radio has no memory slots';
+  }
+
+  return undefined;
+});
+
+const slotError = computed(() => {
+  if (!isCreate.value) {
+    return slotRangeError.value;
+  }
+
+  if (slotRangeError.value) {
+    return slotRangeError.value;
   }
 
   if (occupiedSlots.value.has(slotNumber.value)) {
@@ -125,6 +138,20 @@ const slotError = computed(() => {
 
   return undefined;
 });
+
+const slotHint = computed(() => {
+  if (capacity.value <= 0) {
+    return undefined;
+  }
+
+  if (isCreate.value) {
+    return `0 to ${capacity.value - 1}`;
+  }
+
+  return `0 to ${capacity.value - 1}. An empty slot moves this channel. An occupied slot inserts here and shifts later slots until the first gap (or is refused if memory is full).`;
+});
+
+const pendingSlotMove = ref<number | undefined>();
 
 const canCreate = computed(() => isCreate.value && slotError.value === undefined && capacity.value > 0);
 
@@ -158,6 +185,8 @@ watch(
       return;
     }
 
+    pendingSlotMove.value = undefined;
+    slotNumber.value = props.channel.channelNumber;
     name.value = props.channel.radioChannel.name ?? '';
     receiveMHz.value = formatFrequencyMHz(props.channel.radioChannel.receiveFrequency);
     transmitMHz.value = formatFrequencyMHz(props.channel.radioChannel.transmitFrequency);
@@ -193,6 +222,7 @@ function patchCurrent(patch: ChannelPatch): void {
 }
 
 function closeEditor(dismiss?: unknown): void {
+  commitSlotNumber();
   emit('update:open', false);
 
   if (typeof dismiss === 'function') {
@@ -201,15 +231,42 @@ function closeEditor(dismiss?: unknown): void {
 }
 
 function updateSlotNumber(value: number | undefined | null): void {
-  if (value === undefined || value === null || !draftChannel.value) {
+  if (value === undefined || value === null) {
     return;
   }
 
   slotNumber.value = value;
-  draftChannel.value = {
-    ...draftChannel.value,
-    channelNumber: value,
-  };
+
+  if (pendingSlotMove.value !== undefined && value !== pendingSlotMove.value) {
+    pendingSlotMove.value = undefined;
+  }
+
+  if (isCreate.value && draftChannel.value) {
+    draftChannel.value = {
+      ...draftChannel.value,
+      channelNumber: value,
+    };
+  }
+}
+
+function commitSlotNumber(): void {
+  if (isCreate.value || props.channel === undefined) {
+    return;
+  }
+
+  if (slotRangeError.value) {
+    slotNumber.value = props.channel.channelNumber;
+    return;
+  }
+
+  const destination = slotNumber.value;
+
+  if (destination === props.channel.channelNumber || destination === pendingSlotMove.value) {
+    return;
+  }
+
+  pendingSlotMove.value = destination;
+  emit('move', destination);
 }
 
 function commitName(): void {
@@ -422,10 +479,9 @@ function submitCreate(): void {
         />
 
         <UFormField
-          v-if="isCreate"
           label="Memory slot"
           :error="slotError"
-          :hint="capacity > 0 ? `0 to ${capacity - 1}` : undefined"
+          :hint="slotHint"
         >
           <UInputNumber
             :model-value="slotNumber"
@@ -433,6 +489,8 @@ function submitCreate(): void {
             :max="Math.max(capacity - 1, 0)"
             class="w-full"
             @update:model-value="updateSlotNumber"
+            @blur="commitSlotNumber"
+            @keydown.enter="commitSlotNumber"
           />
         </UFormField>
 

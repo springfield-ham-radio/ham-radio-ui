@@ -17,6 +17,7 @@ import {
   channelSlotsAfterLastOccupied,
   channelCapacity,
   channelNameMaxLength,
+  moveProgrammedChannel,
   reorderProgrammedChannels,
   type ChannelPatch,
 } from '~/utils/channel-edit';
@@ -1247,7 +1248,12 @@ export function useRadio() {
       return new Map();
     }
 
-    const result = reorderProgrammedChannels(program.value.channels, fromIndex, toIndex);
+    const result = reorderProgrammedChannels(
+      program.value.channels,
+      fromIndex,
+      toIndex,
+      channelCapacity(settingsMemoryMap.value),
+    );
 
     if (result.previousToNext.size === 0) {
       return result.previousToNext;
@@ -1256,6 +1262,52 @@ export function useRadio() {
     persistProgram({
       ...program.value,
       channels: result.channels,
+    });
+
+    return result.previousToNext;
+  }
+
+  async function moveChannel(fromNumber: number, toNumber: number): Promise<Map<number, number>> {
+    if (!program.value || !memory.value || !activeRadioId.value) {
+      return new Map();
+    }
+
+    const capacity = channelCapacity(settingsMemoryMap.value);
+    const result = moveProgrammedChannel(program.value.channels, fromNumber, toNumber, capacity);
+
+    if (result.refused) {
+      toast.add({
+        title: 'Cannot move channel',
+        description: result.refused,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+
+      return new Map();
+    }
+
+    if (result.previousToNext.size === 0) {
+      return result.previousToNext;
+    }
+
+    persistProgram({
+      ...program.value,
+      channels: result.channels,
+    });
+
+    const shiftedSlots = [...result.previousToNext.entries()]
+      .filter(([previous]) => previous !== fromNumber)
+      .map(([previous, next]) => `${previous}→${next}`)
+      .join(', ');
+
+    toast.add({
+      title: result.previousToNext.size > 1 ? 'Channel moved; others shifted' : 'Channel moved',
+      description:
+        result.previousToNext.size > 1
+          ? `Memory slot ${fromNumber} is now slot ${toNumber}. Shifted: ${shiftedSlots}.`
+          : `Memory slot ${fromNumber} is now memory slot ${toNumber}.`,
+      color: 'success',
+      icon: 'i-lucide-arrow-right',
     });
 
     return result.previousToNext;
@@ -1674,6 +1726,7 @@ export function useRadio() {
     addChannel,
     addChannels,
     reorderChannels,
+    moveChannel,
     removeChannels,
     cancelTransfer,
     saveSerialLog,

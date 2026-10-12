@@ -14,7 +14,7 @@ import type { ChannelRow } from '~/composables/useRadio';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
-import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
+import { applyMacRowSelection, pruneRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
 import { assignLibraryChannelsToSlots, channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber } from '~/utils/channel-edit';
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
@@ -39,6 +39,7 @@ const {
   updateChannel,
   addChannel,
   reorderChannels,
+  moveChannel,
   removeChannels,
   saveSerialLog,
   savedRadio,
@@ -225,6 +226,10 @@ const displayChannels = computed<DisplayChannelRow[]>(() => {
     };
   });
 });
+
+const displayChannelSlotKey = computed(() =>
+  displayChannels.value.map((channel) => channel.channelNumber).join(','),
+);
 
 const rowSelection = ref<Record<string, boolean>>({});
 const selectionAnchorId = shallowRef<string | undefined>();
@@ -495,6 +500,17 @@ async function applyChannelReorder(fromIndex: number, toIndex: number): Promise<
   }
 }
 
+async function onChannelMove(toNumber: number): Promise<void> {
+  const previous = editingChannelNumber.value;
+
+  if (previous === undefined) {
+    return;
+  }
+
+  const mapping = await moveChannel(previous, toNumber);
+  editingChannelNumber.value = mapping.get(previous) ?? previous;
+}
+
 const channelTableRoot = ref<HTMLElement | null>(null);
 const channelTableTbody = shallowRef<HTMLElement | null>(null);
 
@@ -526,6 +542,11 @@ const { start: startChannelSortable, stop: stopChannelSortable } = useSortable(c
   onEnd() {
     window.setTimeout(() => {
       isReorderingChannels.value = false;
+      stopChannelSortable();
+      void nextTick().then(() => {
+        syncChannelTableSortableTarget();
+        startChannelSortable();
+      });
     }, 0);
   },
 });
@@ -535,8 +556,24 @@ function syncChannelTableSortableTarget(): void {
 }
 
 watch(
-  () => [activeRadioId.value, displayChannels.value.length, channelTableRoot.value] as const,
+  () => displayChannelSlotKey.value,
+  (slotKey) => {
+    const visibleIds = slotKey.length > 0 ? slotKey.split(',') : [];
+    const pruned = pruneRowSelection(rowSelection.value, visibleIds);
+
+    if (JSON.stringify(pruned) !== JSON.stringify(rowSelection.value)) {
+      rowSelection.value = pruned;
+    }
+  },
+);
+
+watch(
+  () => [activeRadioId.value, displayChannelSlotKey.value, channelTableRoot.value] as const,
   async () => {
+    if (isReorderingChannels.value) {
+      return;
+    }
+
     stopChannelSortable();
     await nextTick();
     syncChannelTableSortableTarget();
@@ -579,7 +616,7 @@ function requestRemoveSelected(): void {
   removeOpen.value = true;
 }
 
-function confirmRemove(): void {
+async function confirmRemove(): Promise<void> {
   const numbers = pendingRemoveNumbers.value;
 
   if (editingChannelNumber.value !== undefined && numbers.includes(editingChannelNumber.value)) {
@@ -587,10 +624,16 @@ function confirmRemove(): void {
     editingChannelNumber.value = undefined;
   }
 
-  void removeChannels(numbers);
-  clearRowSelection();
+  stopChannelSortable();
   removeOpen.value = false;
   pendingRemoveNumbers.value = [];
+
+  await removeChannels(numbers);
+  clearRowSelection();
+
+  await nextTick();
+  syncChannelTableSortableTarget();
+  startChannelSortable();
 }
 
 function portableChannelFromMemory(channelNumber: number): RadioChannel | undefined {
@@ -835,6 +878,7 @@ async function onSaveSerialLog(): Promise<void> {
           </div>
           <div ref="channelTableRoot" class="min-h-0 flex-1 overflow-hidden">
             <UTable
+              :key="displayChannelSlotKey"
               v-model:row-selection="rowSelection"
               :data="displayChannels"
               :columns="columns"
@@ -901,7 +945,9 @@ async function onSaveSerialLog(): Promise<void> {
             </UTable>
           </div>
           <p class="mt-2 shrink-0 text-xs text-muted">
-            Drag the handle to move a channel into another occupied memory slot. Empty slots stay empty. Select
+            Drag the handle to reorder channels or drop into a gap to take the first empty slot in that gap; dropping
+            between adjacent occupied slots reorders those memory positions. Open a channel to set its memory slot
+            directly (an empty slot moves it; an occupied slot inserts and shifts later slots to the first gap). Select
             channels to save them to the library or remove them from this radio. Shift-click selects a range, and
             Command-click adds or removes one channel. Add a channel after the last programmed memory slot (wrapping to
             the first free slot when the end is full), or choose Add from library to copy saved channels into unused
@@ -988,6 +1034,7 @@ async function onSaveSerialLog(): Promise<void> {
       :privilege="radioPrivilege"
       @update:channel="onChannelPatch"
       @create="onCreateChannel"
+      @move="onChannelMove"
     />
     <UModal
       v-model:open="removeOpen"
