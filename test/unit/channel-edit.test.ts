@@ -14,7 +14,7 @@ import {
   RadioToneType,
 } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
+import { createMemoryMapCodec, structInstanceAddress } from '@springfield/ham-radio-utils';
 import { MockLogLayer } from 'loglayer';
 import {
   applyChannelPatch,
@@ -818,5 +818,39 @@ describe('channel edit codec round-trip', () => {
     const afterRemove = codec.decode(cleared);
 
     expect(afterRemove.channels).toEqual([]);
+  });
+
+  it('writes an empty slot marker when memory slot 6 is removed', () => {
+    const { codec, memoryMap, modelId } = uv5rCodec();
+    const channelsStruct = memoryMap.structs.find((struct) => struct.id === memoryMap.channelBindings?.records);
+
+    expect(channelsStruct).toBeDefined();
+
+    const created = createProgrammedChannel({
+      channelNumber: 6,
+      memoryMap,
+      source: {
+        name: 'WX1',
+        receiveFrequency: Frequency(162_550_000),
+        transmitFrequency: Frequency(162_550_000),
+      },
+    });
+
+    const encoded = codec.encode(
+      { channels: [created], settings: {} },
+      { contents: new Uint8Array(8192).fill(0xff), radioModel: modelId },
+    );
+    const decoded = codec.decode(encoded);
+
+    expect(decoded.channels.map((channel) => channel.channelNumber)).toEqual([6]);
+
+    const cleared = codec.encode({ ...decoded, channels: [] }, encoded);
+    const afterRemove = codec.decode(cleared);
+
+    expect(afterRemove.channels).toEqual([]);
+
+    const radioAddress = structInstanceAddress(channelsStruct!, 6);
+    const bufferOffset = radioAddress;
+    expect(cleared.contents[bufferOffset]).toBe(0xff);
   });
 });

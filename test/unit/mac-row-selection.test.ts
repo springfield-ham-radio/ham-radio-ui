@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { applyMacRowSelection, type MacRowSelectionState } from '../../app/utils/mac-row-selection.ts';
+import {
+  applyMacRowSelection,
+  pruneRowSelection,
+  type MacRowSelectionState,
+} from '../../app/utils/mac-row-selection.ts';
 
 const orderedIds = ['1', '2', '3', '4', '5', '6'];
 
@@ -98,5 +102,15 @@ describe('applyMacRowSelection', () => {
     });
 
     expect(next).toEqual(selection(['4'], '4'));
+  });
+});
+
+describe('pruneRowSelection', () => {
+  it('drops selection for rows that are no longer visible', () => {
+    expect(pruneRowSelection({ '6': true, '10': true }, ['0', '10'])).toEqual({ '10': true });
+  });
+
+  it('returns an empty record when nothing is selected', () => {
+    expect(pruneRowSelection({}, ['0', '1'])).toEqual({});
   });
 });

@@ -14,7 +14,7 @@ import type { ChannelRow } from '~/composables/useRadio';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
-import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
+import { applyMacRowSelection, pruneRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
 import { assignLibraryChannelsToSlots, channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber } from '~/utils/channel-edit';
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
@@ -225,6 +225,10 @@ const displayChannels = computed<DisplayChannelRow[]>(() => {
     };
   });
 });
+
+const displayChannelSlotKey = computed(() =>
+  displayChannels.value.map((channel) => channel.channelNumber).join(','),
+);
 
 const rowSelection = ref<Record<string, boolean>>({});
 const selectionAnchorId = shallowRef<string | undefined>();
@@ -526,6 +530,11 @@ const { start: startChannelSortable, stop: stopChannelSortable } = useSortable(c
   onEnd() {
     window.setTimeout(() => {
       isReorderingChannels.value = false;
+      stopChannelSortable();
+      void nextTick().then(() => {
+        syncChannelTableSortableTarget();
+        startChannelSortable();
+      });
     }, 0);
   },
 });
@@ -535,8 +544,24 @@ function syncChannelTableSortableTarget(): void {
 }
 
 watch(
-  () => [activeRadioId.value, displayChannels.value.length, channelTableRoot.value] as const,
+  () => displayChannelSlotKey.value,
+  (slotKey) => {
+    const visibleIds = slotKey.length > 0 ? slotKey.split(',') : [];
+    const pruned = pruneRowSelection(rowSelection.value, visibleIds);
+
+    if (JSON.stringify(pruned) !== JSON.stringify(rowSelection.value)) {
+      rowSelection.value = pruned;
+    }
+  },
+);
+
+watch(
+  () => [activeRadioId.value, displayChannelSlotKey.value, channelTableRoot.value] as const,
   async () => {
+    if (isReorderingChannels.value) {
+      return;
+    }
+
     stopChannelSortable();
     await nextTick();
     syncChannelTableSortableTarget();
@@ -579,7 +604,7 @@ function requestRemoveSelected(): void {
   removeOpen.value = true;
 }
 
-function confirmRemove(): void {
+async function confirmRemove(): Promise<void> {
   const numbers = pendingRemoveNumbers.value;
 
   if (editingChannelNumber.value !== undefined && numbers.includes(editingChannelNumber.value)) {
@@ -587,10 +612,16 @@ function confirmRemove(): void {
     editingChannelNumber.value = undefined;
   }
 
-  void removeChannels(numbers);
-  clearRowSelection();
+  stopChannelSortable();
   removeOpen.value = false;
   pendingRemoveNumbers.value = [];
+
+  await removeChannels(numbers);
+  clearRowSelection();
+
+  await nextTick();
+  syncChannelTableSortableTarget();
+  startChannelSortable();
 }
 
 function portableChannelFromMemory(channelNumber: number): RadioChannel | undefined {
@@ -835,6 +866,7 @@ async function onSaveSerialLog(): Promise<void> {
           </div>
           <div ref="channelTableRoot" class="min-h-0 flex-1 overflow-hidden">
             <UTable
+              :key="displayChannelSlotKey"
               v-model:row-selection="rowSelection"
               :data="displayChannels"
               :columns="columns"
