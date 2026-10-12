@@ -1,3 +1,9 @@
+## [0.61.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.3...v0.61.4) (2026-10-12)
+
+### Bug Fixes
+
+* clear removed channel rows and place gap drops in empty slots (Fixes [#113](https://github.com/springfield-ham-radio/ham-radio-ui/issues/113)) ([#114](https://github.com/springfield-ham-radio/ham-radio-ui/issues/114)) ([f2fec03](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f2fec038fecb0de81abc618e46ecfe83b9721fc8)), closes [#103](https://github.com/springfield-ham-radio/ham-radio-ui/issues/103)
+
 ## [0.61.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.2...v0.61.3) (2026-10-12)
 
 ### Bug Fixes
