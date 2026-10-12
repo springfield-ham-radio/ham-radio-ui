@@ -148,7 +148,7 @@ const slotHint = computed(() => {
     return `0 to ${capacity.value - 1}`;
   }
 
-  return `0 to ${capacity.value - 1}. An empty slot moves this channel. An occupied slot swaps the two.`;
+  return `0 to ${capacity.value - 1}. An empty slot moves this channel. An occupied slot inserts here and shifts later slots until the first gap (or is refused if memory is full).`;
 });
 
 const pendingSlotMove = ref<number | undefined>();

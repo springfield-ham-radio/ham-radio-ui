@@ -1162,6 +1162,17 @@ export function useRadio() {
     const capacity = channelCapacity(settingsMemoryMap.value);
     const result = moveProgrammedChannel(program.value.channels, fromNumber, toNumber, capacity);
 
+    if (result.refused) {
+      toast.add({
+        title: 'Cannot move channel',
+        description: result.refused,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+
+      return new Map();
+    }
+
     if (result.previousToNext.size === 0) {
       return result.previousToNext;
     }
@@ -1171,15 +1182,19 @@ export function useRadio() {
       channels: result.channels,
     });
 
-    const swapped = result.previousToNext.size === 2;
+    const shiftedSlots = [...result.previousToNext.entries()]
+      .filter(([previous]) => previous !== fromNumber)
+      .map(([previous, next]) => `${previous}→${next}`)
+      .join(', ');
 
     toast.add({
-      title: swapped ? 'Channels swapped' : 'Channel moved',
-      description: swapped
-        ? `Memory slots ${fromNumber} and ${toNumber} were swapped.`
-        : `Memory slot ${fromNumber} is now memory slot ${toNumber}.`,
+      title: result.previousToNext.size > 1 ? 'Channel moved; others shifted' : 'Channel moved',
+      description:
+        result.previousToNext.size > 1
+          ? `Memory slot ${fromNumber} is now slot ${toNumber}. Shifted: ${shiftedSlots}.`
+          : `Memory slot ${fromNumber} is now memory slot ${toNumber}.`,
       color: 'success',
-      icon: swapped ? 'i-lucide-arrow-left-right' : 'i-lucide-arrow-right',
+      icon: 'i-lucide-arrow-right',
     });
 
     return result.previousToNext;

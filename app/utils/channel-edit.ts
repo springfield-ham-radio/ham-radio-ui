@@ -509,6 +509,8 @@ export interface ChannelReorder {
   channels: RadioProgrammedChannel[];
   /** Previous memory slot → slot after the move, for visible (decoded) channels. */
   previousToNext: Map<number, number>;
+  /** Set when the move cannot complete (for example, no free slot to absorb a shift). */
+  refused?: string;
 }
 
 function isVisibleProgrammedChannel(channel: RadioProgrammedChannel): boolean {
@@ -629,7 +631,11 @@ export function reorderProgrammedChannels(
 }
 
 /**
- * Move or swap one programmed channel to a specific memory slot.
+ * Move one programmed channel to a specific memory slot.
+ *
+ * When the destination is occupied, the channel is inserted there and occupied
+ * slots after it shift up by one until the ripple lands in the first empty slot.
+ * If no empty slot exists before {@link capacity}, the move is refused.
  */
 export function moveProgrammedChannel(
   channels: RadioProgrammedChannel[],
@@ -655,10 +661,10 @@ export function moveProgrammedChannel(
     return { channels, previousToNext: new Map() };
   }
 
-  const targetIndex = channels.findIndex((channel) => channel.channelNumber === toNumber);
   const source = channels[sourceIndex]!;
+  const occupiedAfterRemoval = occupiedChannelSlots(channels, fromNumber);
 
-  if (targetIndex === -1) {
+  if (!occupiedAfterRemoval.has(toNumber)) {
     const previousToNext = new Map<number, number>([[fromNumber, toNumber]]);
     const nextChannels = channels.map((channel, index) =>
       index === sourceIndex ? { ...channel, channelNumber: toNumber } : channel,
@@ -670,21 +676,49 @@ export function moveProgrammedChannel(
     };
   }
 
-  const target = channels[targetIndex]!;
-  const previousToNext = new Map<number, number>([
-    [fromNumber, toNumber],
-    [toNumber, fromNumber],
-  ]);
-  const nextChannels = channels.map((channel, index) => {
-    if (index === sourceIndex) {
-      return { ...source, channelNumber: toNumber };
+  const slotToChannel = new Map<number, RadioProgrammedChannel>();
+
+  for (const channel of channels) {
+    if (channel.channelNumber === fromNumber) {
+      continue;
     }
 
-    if (index === targetIndex) {
-      return { ...target, channelNumber: fromNumber };
+    slotToChannel.set(channel.channelNumber, channel);
+  }
+
+  const previousToNext = new Map<number, number>();
+  let slot = toNumber;
+  let movingFrom = fromNumber;
+
+  while (true) {
+    const displaced = slotToChannel.get(slot);
+    previousToNext.set(movingFrom, slot);
+
+    if (displaced === undefined) {
+      break;
     }
 
-    return channel;
+    slotToChannel.delete(slot);
+    movingFrom = displaced.channelNumber;
+    slot += 1;
+
+    if (slot >= capacity) {
+      return {
+        channels,
+        previousToNext: new Map(),
+        refused: `No free memory slot after ${toNumber}. Clear a slot or choose another destination.`,
+      };
+    }
+  }
+
+  const nextChannels = channels.map((channel) => {
+    const nextNumber = previousToNext.get(channel.channelNumber);
+
+    if (nextNumber === undefined) {
+      return channel;
+    }
+
+    return { ...channel, channelNumber: nextNumber };
   });
 
   return {

@@ -947,7 +947,7 @@ async function onSaveSerialLog(): Promise<void> {
           <p class="mt-2 shrink-0 text-xs text-muted">
             Drag the handle to reorder channels or drop into a gap to take the first empty slot in that gap; dropping
             between adjacent occupied slots reorders those memory positions. Open a channel to set its memory slot
-            directly (an empty slot moves it, an occupied slot swaps the two). Select
+            directly (an empty slot moves it; an occupied slot inserts and shifts later slots to the first gap). Select
             channels to save them to the library or remove them from this radio. Shift-click selects a range, and
             Command-click adds or removes one channel. Add a channel after the last programmed memory slot (wrapping to
             the first free slot when the end is full), or choose Add from library to copy saved channels into unused

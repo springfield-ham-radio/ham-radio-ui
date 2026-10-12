@@ -377,7 +377,7 @@ describe('moveProgrammedChannel', () => {
     expect(original.map((channel) => channel.channelNumber)).toEqual([0, 5]);
   });
 
-  it('swaps two occupied slots', () => {
+  it('inserts at an occupied slot and shifts the occupant into the next empty slot', () => {
     const result = moveProgrammedChannel(
       [namedChannel(0, 'ALPHA'), namedChannel(3, 'BRAVO')],
       0,
@@ -386,7 +386,7 @@ describe('moveProgrammedChannel', () => {
     );
 
     expect(result.previousToNext.get(0)).toBe(3);
-    expect(result.previousToNext.get(3)).toBe(0);
+    expect(result.previousToNext.get(3)).toBe(4);
     expect(
       Object.fromEntries(
         result.channels.map((channel) => {
@@ -395,12 +395,66 @@ describe('moveProgrammedChannel', () => {
         }),
       ),
     ).toEqual({
-      0: 'BRAVO',
       3: 'ALPHA',
+      4: 'BRAVO',
     });
   });
 
-  it('swaps with an unresolved record at the target slot', () => {
+  it('shifts a contiguous block across several slots until a gap', () => {
+    const channels = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(10, 'CH10'),
+    ];
+    const result = moveProgrammedChannel(channels, 10, 1, 16);
+
+    expect(result.refused).toBeUndefined();
+    expect(result.previousToNext.get(10)).toBe(1);
+    expect(result.previousToNext.get(1)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(3);
+    expect(
+      Object.fromEntries(
+        result.channels.map((channel) => {
+          const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+          return [channel.channelNumber, name];
+        }),
+      ),
+    ).toEqual({
+      0: 'CH0',
+      1: 'CH10',
+      2: 'CH1',
+      3: 'CH2',
+    });
+  });
+
+  it('stops shifting at the first gap without moving channels beyond it', () => {
+    const channels = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(4, 'CH4'),
+    ];
+    const result = moveProgrammedChannel(channels, 4, 0, 8);
+
+    expect(result.previousToNext.get(4)).toBe(0);
+    expect(result.previousToNext.get(0)).toBe(1);
+    expect(result.previousToNext.get(1)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(3);
+    expect(result.channels.find((channel) => channel.channelNumber === 0)?.radioChannel).toMatchObject({ name: 'CH4' });
+    expect(result.channels.find((channel) => channel.channelNumber === 3)?.radioChannel).toMatchObject({ name: 'CH2' });
+  });
+
+  it('refuses when no empty slot exists after the insertion point', () => {
+    const channels = [namedChannel(0, 'A'), namedChannel(1, 'B'), namedChannel(2, 'C')];
+    const result = moveProgrammedChannel(channels, 0, 2, 3);
+
+    expect(result.refused).toMatch(/no free memory slot/i);
+    expect(result.previousToNext.size).toBe(0);
+    expect(result.channels).toBe(channels);
+  });
+
+  it('shifts an unresolved record at the target slot', () => {
     const unresolved: RadioProgrammedChannel = {
       channelNumber: 2,
       radioChannel: 'SKIP',
@@ -408,9 +462,9 @@ describe('moveProgrammedChannel', () => {
     const result = moveProgrammedChannel([namedChannel(0, 'ALPHA'), unresolved], 0, 2, 8);
 
     expect(result.previousToNext.get(0)).toBe(2);
-    expect(result.previousToNext.get(2)).toBe(0);
-    expect(result.channels.find((channel) => channel.channelNumber === 0)?.radioChannel).toBe('SKIP');
+    expect(result.previousToNext.get(2)).toBe(3);
     expect(result.channels.find((channel) => channel.channelNumber === 2)?.radioChannel).toMatchObject({ name: 'ALPHA' });
+    expect(result.channels.find((channel) => channel.channelNumber === 3)?.radioChannel).toBe('SKIP');
   });
 
   it('rejects out-of-range destinations and same-number no-ops', () => {
