@@ -7,6 +7,7 @@ import {
   officialCatalogFailureFromCause,
   type OfficialModuleCatalogFailure,
   installOfficialModule,
+  switchAllToVerifiedModules,
   switchToVerifiedModule,
   installPickedLocalModuleFile,
   isModuleInstallPath,
@@ -208,30 +209,40 @@ async function switchAllToVerified(): Promise<void> {
   busyKey.value = 'switch-all';
 
   try {
-    for (const item of targets) {
-      if (item.catalogEntry) {
-        await switchToVerifiedModule(item.catalogEntry);
-      }
+    const entries = targets.flatMap((item) => (item.catalogEntry ? [item.catalogEntry] : []));
+    const result = await switchAllToVerifiedModules(entries);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+
+    if (result.failures.length === 0) {
+      toast.add({
+        title: 'Switched to verified drivers',
+        description: `${result.switchedIds.length} radios now use the official catalog.`,
+        color: 'success',
+        icon: 'i-lucide-check',
+      });
+      return;
     }
 
-    await refreshCatalogState();
-    await refreshInstalledRadios();
+    const failedNames = result.failures.map((failure) => failure.id).join(', ');
+    const detail = result.failures[0]?.message ?? 'Switch failed';
+
+    if (result.switchedIds.length === 0) {
+      toast.add({
+        title: 'Could not switch to verified drivers',
+        description: detail,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return;
+    }
+
     toast.add({
-      title: 'Switched to verified drivers',
-      description: `${targets.length} radios now use the official catalog.`,
-      color: 'success',
-      icon: 'i-lucide-check',
-    });
-  } catch (cause) {
-    const message = cause instanceof Error ? cause.message : 'Switch failed';
-    toast.add({
-      title: 'Could not switch every driver',
-      description: message,
-      color: 'error',
+      title: 'Some drivers stayed on the local file',
+      description: `Switched ${result.switchedIds.length}. ${failedNames} stayed unverified: ${detail}`,
+      color: 'warning',
       icon: 'i-lucide-circle-alert',
     });
-    await refreshCatalogState();
-    await refreshInstalledRadios();
   } finally {
     busyKey.value = undefined;
   }

@@ -73,6 +73,8 @@ describe('radio catalog hydrate', () => {
       replaceUserCatalog: true,
     });
     expect(replaced.source).toBe('installed');
+    expect(replaced.modelId).toBe('baofeng-uv5r');
     expect(replaced.sourcePath).toContain('baofeng-uv5r');
+    expect(replaced.createdAt).toBe(kept.createdAt);
   });
 });

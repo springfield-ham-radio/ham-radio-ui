@@ -18,6 +18,9 @@ pub struct InstalledRadioModule {
     pub version: String,
     pub install_path: String,
     pub config_paths: Vec<String>,
+    /// True when this install moved an existing directory aside. Commit deletes that
+    /// backup; rollback puts it back. The old tree stays until the catalog update finishes.
+    pub replaced_previous: bool,
 }
 
 fn is_allowed_download_url(url: &str) -> Result<(), String> {
@@ -138,9 +141,34 @@ fn is_safe_zip_entry(name: &str) -> bool {
     name.ends_with(".json")
 }
 
+fn previous_install_backup(install_path: &Path) -> Result<PathBuf, String> {
+    let parent = install_path
+        .parent()
+        .ok_or_else(|| "Module install path has no parent".to_string())?;
+    let name = install_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Module install path has no directory name".to_string())?;
+
+    Ok(parent.join(format!(".{name}.previous")))
+}
+
+fn incoming_install_dir(install_path: &Path) -> Result<PathBuf, String> {
+    let parent = install_path
+        .parent()
+        .ok_or_else(|| "Module install path has no parent".to_string())?;
+    let name = install_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Module install path has no directory name".to_string())?;
+
+    Ok(parent.join(format!(".{name}.incoming")))
+}
+
+/// Extract a verified zip into `destination` without removing an existing tree first.
 fn extract_json_zip(zip_bytes: &[u8], destination: &Path) -> Result<Vec<String>, String> {
     if destination.exists() {
-        fs::remove_dir_all(destination).map_err(|error| error.to_string())?;
+        return Err("Module staging directory already exists".into());
     }
 
     fs::create_dir_all(destination).map_err(|error| error.to_string())?;
@@ -158,6 +186,7 @@ fn extract_json_zip(zip_bytes: &[u8], destination: &Path) -> Result<Vec<String>,
         }
 
         if !is_safe_zip_entry(&name) {
+            let _ = fs::remove_dir_all(destination);
             return Err(format!(
                 "Refusing to extract non-JSON or unsafe path from module zip: {name}"
             ));
@@ -180,10 +209,78 @@ fn extract_json_zip(zip_bytes: &[u8], destination: &Path) -> Result<Vec<String>,
     }
 
     if extracted.is_empty() {
+        let _ = fs::remove_dir_all(destination);
         return Err("Module zip did not contain any JSON files".into());
     }
 
     Ok(extracted)
+}
+
+/// Install a zip that has already passed integrity checks.
+/// An existing directory is renamed aside and left in place until commit or rollback.
+fn install_verified_tree(install_path: &Path, zip_bytes: &[u8]) -> Result<bool, String> {
+    let staging = incoming_install_dir(install_path)?;
+    let backup = previous_install_backup(install_path)?;
+
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(|error| error.to_string())?;
+    }
+
+    if !install_path.exists() && backup.exists() {
+        fs::rename(&backup, install_path).map_err(|error| error.to_string())?;
+    }
+
+    if let Err(error) = extract_json_zip(zip_bytes, &staging) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error);
+    }
+
+    if backup.exists() {
+        fs::remove_dir_all(&backup).map_err(|error| error.to_string())?;
+    }
+
+    let had_previous = install_path.exists();
+
+    if had_previous {
+        if let Err(error) = fs::rename(install_path, &backup) {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(error.to_string());
+        }
+    }
+
+    if let Err(error) = fs::rename(&staging, install_path) {
+        if had_previous {
+            let _ = fs::rename(&backup, install_path);
+        }
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error.to_string());
+    }
+
+    Ok(had_previous)
+}
+
+fn commit_replaced_install(install_path: &Path) -> Result<(), String> {
+    let backup = previous_install_backup(install_path)?;
+
+    if backup.exists() {
+        fs::remove_dir_all(&backup).map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn rollback_replaced_install(install_path: &Path) -> Result<(), String> {
+    let backup = previous_install_backup(install_path)?;
+
+    if install_path.exists() {
+        fs::remove_dir_all(install_path).map_err(|error| error.to_string())?;
+    }
+
+    if backup.exists() {
+        fs::rename(&backup, install_path).map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
 }
 
 fn list_config_paths(install_path: &Path) -> Result<Vec<String>, String> {
@@ -293,16 +390,16 @@ fn finalize_install(
     }
 
     let install_path = install_directory(app, module_id, version)?;
-
-    if let Err(error) = extract_json_zip(zip_bytes, &install_path) {
-        let _ = fs::remove_dir_all(&install_path);
-        return Err(error);
-    }
+    let replaced_previous = install_verified_tree(&install_path, zip_bytes)?;
 
     let config_paths = match list_config_paths(&install_path) {
         Ok(paths) => paths,
         Err(error) => {
-            let _ = fs::remove_dir_all(&install_path);
+            if replaced_previous {
+                let _ = rollback_replaced_install(&install_path);
+            } else {
+                let _ = fs::remove_dir_all(&install_path);
+            }
             return Err(error);
         }
     };
@@ -312,7 +409,28 @@ fn finalize_install(
         version: version.to_string(),
         install_path: install_path.to_string_lossy().to_string(),
         config_paths,
+        replaced_previous,
     })
+}
+
+#[tauri::command]
+pub fn commit_radio_module_replace(
+    app: AppHandle,
+    module_id: String,
+    version: String,
+) -> Result<(), String> {
+    let install_path = install_directory(&app, &module_id, &version)?;
+    commit_replaced_install(&install_path)
+}
+
+#[tauri::command]
+pub fn rollback_radio_module_replace(
+    app: AppHandle,
+    module_id: String,
+    version: String,
+) -> Result<(), String> {
+    let install_path = install_directory(&app, &module_id, &version)?;
+    rollback_replaced_install(&install_path)
 }
 
 #[tauri::command]
@@ -402,7 +520,11 @@ pub fn uninstall_radio_module(
 
 #[cfg(test)]
 mod tests {
-    use super::{config_json_count_in_zip, is_direct_configs_json, safe_install_segment};
+    use super::{
+        commit_replaced_install, config_json_count_in_zip, install_verified_tree, is_direct_configs_json,
+        previous_install_backup, rollback_replaced_install, safe_install_segment,
+    };
+    use std::fs;
     use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
@@ -458,5 +580,56 @@ mod tests {
 
         let escaped = zip_with(&[("configs/../secrets.json", "{}")]);
         assert!(config_json_count_in_zip(&escaped).is_err());
+    }
+
+    #[test]
+    fn keeps_the_previous_tree_until_commit_and_restores_it_on_rollback() {
+        let root = std::env::temp_dir().join(format!(
+            "ham-module-switch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let destination = root.join("baofeng-uv5r").join("3.7.0");
+        fs::create_dir_all(destination.join("configs")).expect("old config dir");
+        fs::write(destination.join("configs/old.json"), b"{\"old\":true}").expect("old config");
+
+        let rejected = zip_with(&[("configs/../secrets.json", "{}")]);
+        let rejected_error = install_verified_tree(&destination, &rejected).expect_err("unsafe zip");
+        assert!(rejected_error.contains("unsafe"));
+        assert_eq!(
+            fs::read_to_string(destination.join("configs/old.json")).expect("old still present"),
+            "{\"old\":true}"
+        );
+
+        let verified = zip_with(&[("configs/baofeng-uv5r.json", "{\"new\":true}")]);
+        assert!(install_verified_tree(&destination, &verified).expect("install"));
+        assert_eq!(
+            fs::read_to_string(destination.join("configs/baofeng-uv5r.json")).expect("new config"),
+            "{\"new\":true}"
+        );
+        let backup = previous_install_backup(&destination).expect("backup path");
+        assert_eq!(
+            fs::read_to_string(backup.join("configs/old.json")).expect("backup"),
+            "{\"old\":true}"
+        );
+
+        rollback_replaced_install(&destination).expect("rollback");
+        assert_eq!(
+            fs::read_to_string(destination.join("configs/old.json")).expect("restored"),
+            "{\"old\":true}"
+        );
+        assert!(!destination.join("configs/baofeng-uv5r.json").exists());
+
+        fs::create_dir_all(destination.join("configs")).expect("recreate");
+        fs::write(destination.join("configs/old.json"), b"{\"old\":true}").expect("old again");
+        assert!(install_verified_tree(&destination, &verified).expect("second install"));
+        commit_replaced_install(&destination).expect("commit");
+        assert!(!previous_install_backup(&destination).expect("backup").exists());
+        assert!(destination.join("configs/baofeng-uv5r.json").exists());
+
+        let _ = fs::remove_dir_all(&root);
     }
 }
