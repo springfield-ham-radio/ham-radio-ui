@@ -113,14 +113,19 @@ function recordToRadioId(record: RadioCatalogRecord): RadioId {
 export async function upsertRadioCatalogRecord(
   radio: RegistryRadio,
   source: RadioCatalogSource,
-  options: { sourcePath?: string; contentHash?: string } = {},
+  options: { sourcePath?: string; contentHash?: string; replaceUserCatalog?: boolean } = {},
 ): Promise<RadioCatalogRecord> {
   const contentHash = options.contentHash ?? hashRadioConfig(radio);
   const metadata = extractCatalogMetadata(radio, source, contentHash);
   const now = Date.now();
   const existing = await getRadioCatalogRecord(metadata.modelId);
 
-  if (existing && (source === 'bundled' || source === 'installed') && existing.source === 'user') {
+  if (
+    existing &&
+    (source === 'bundled' || source === 'installed') &&
+    existing.source === 'user' &&
+    !options.replaceUserCatalog
+  ) {
     return existing;
   }
 

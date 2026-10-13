@@ -7,6 +7,8 @@ import {
   officialCatalogFailureFromCause,
   type OfficialModuleCatalogFailure,
   installOfficialModule,
+  switchAllToVerifiedModules,
+  switchToVerifiedModule,
   installPickedLocalModuleFile,
   isModuleInstallPath,
   parseModuleInstallPath,
@@ -17,6 +19,7 @@ import {
   buildInstalledRadioListItems,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
+  installedRadiosEligibleForVerifiedSwitch,
   radioDisplayName,
   type AvailableRadioModelItem,
   type InstalledRadioListItem,
@@ -36,12 +39,14 @@ const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
 const localWarningOpen = ref(false);
 const pendingLocalFile = ref<{ path: string; kind: 'zip' | 'json' } | undefined>();
 
-const installedGroups = computed(() =>
-  groupInstalledRadiosByManufacturer(buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value)),
+const installedListItems = computed(() =>
+  buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value),
 );
+const installedGroups = computed(() => groupInstalledRadiosByManufacturer(installedListItems.value));
 const availableGroups = computed(() =>
   buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
 );
+const switchToVerifiedTargets = computed(() => installedRadiosEligibleForVerifiedSwitch(installedListItems.value));
 
 const removeConfirmMessage = computed(() => {
   const record = pendingRemoveRecord.value;
@@ -142,6 +147,100 @@ async function installRadio(radio: AvailableRadioModelItem): Promise<void> {
       title: 'Could not install radio',
       description: message,
       color: 'error',
+      icon: 'i-lucide-circle-alert',
+    });
+  } finally {
+    busyKey.value = undefined;
+  }
+}
+
+async function switchCatalogEntryToVerified(entry: RadioModuleCatalogEntry): Promise<void> {
+  if (!requireDesktopApp()) {
+    return;
+  }
+
+  busyKey.value = `switch:${entry.id}`;
+
+  try {
+    await switchToVerifiedModule(entry);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+    const record = catalogRecords.value.find((row) => row.modelId === entry.id);
+    toast.add({
+      title: 'Switched to verified driver',
+      description: record
+        ? radioDisplayName(record.manufacturer, record.name)
+        : entry.name,
+      color: 'success',
+      icon: 'i-lucide-check',
+    });
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Switch failed';
+    toast.add({
+      title: 'Could not switch to verified driver',
+      description: message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert',
+    });
+  } finally {
+    busyKey.value = undefined;
+  }
+}
+
+async function switchRadioToVerified(item: InstalledRadioListItem): Promise<void> {
+  if (!item.catalogEntry) {
+    return;
+  }
+
+  await switchCatalogEntryToVerified(item.catalogEntry);
+}
+
+async function switchAllToVerified(): Promise<void> {
+  if (!requireDesktopApp()) {
+    return;
+  }
+
+  const targets = switchToVerifiedTargets.value;
+
+  if (targets.length < 2) {
+    return;
+  }
+
+  busyKey.value = 'switch-all';
+
+  try {
+    const entries = targets.flatMap((item) => (item.catalogEntry ? [item.catalogEntry] : []));
+    const result = await switchAllToVerifiedModules(entries);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+
+    if (result.failures.length === 0) {
+      toast.add({
+        title: 'Switched to verified drivers',
+        description: `${result.switchedIds.length} radios now use the official catalog.`,
+        color: 'success',
+        icon: 'i-lucide-check',
+      });
+      return;
+    }
+
+    const failedNames = result.failures.map((failure) => failure.id).join(', ');
+    const detail = result.failures[0]?.message ?? 'Switch failed';
+
+    if (result.switchedIds.length === 0) {
+      toast.add({
+        title: 'Could not switch to verified drivers',
+        description: detail,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return;
+    }
+
+    toast.add({
+      title: 'Some drivers stayed on the local file',
+      description: `Switched ${result.switchedIds.length}. ${failedNames} stayed unverified: ${detail}`,
+      color: 'warning',
       icon: 'i-lucide-circle-alert',
     });
   } finally {
@@ -315,16 +414,29 @@ onMounted(() => {
               catalog version is available. Local files are Unverified and are not updated from the catalog.
             </p>
           </div>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-refresh-cw"
-            size="xs"
-            aria-label="Refresh radio catalog"
-            :loading="catalogLoading"
-            :disabled="anyBusy"
-            @click="reload"
-          />
+          <div class="flex shrink-0 items-center gap-2">
+            <UButton
+              v-if="switchToVerifiedTargets.length >= 2"
+              label="Switch all to verified"
+              color="primary"
+              variant="outline"
+              size="xs"
+              icon="i-lucide-shield-check"
+              :loading="busyKey === 'switch-all'"
+              :disabled="anyBusy"
+              @click="switchAllToVerified"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-refresh-cw"
+              size="xs"
+              aria-label="Refresh radio catalog"
+              :loading="catalogLoading"
+              :disabled="anyBusy"
+              @click="reload"
+            />
+          </div>
         </div>
 
         <ul v-if="installedGroups.length > 0" class="divide-y divide-default rounded-lg bg-muted">
@@ -385,6 +497,32 @@ onMounted(() => {
                     :disabled="anyBusy"
                     @click="updateRadio(item)"
                   />
+                  <UButton
+                    v-if="item.canSwitchToVerified && item.catalogEntry"
+                    label="Switch to verified"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    :loading="isBusy(`switch:${item.catalogEntry.id}`)"
+                    :disabled="anyBusy"
+                    @click="switchRadioToVerified(item)"
+                  />
+                  <UTooltip
+                    v-else-if="item.record.source === 'user' && item.catalogEntry && !item.canSwitchToVerified"
+                    :text="item.switchBlockedReason"
+                  >
+                    <span class="inline-flex">
+                      <UButton
+                        label="Switch to verified"
+                        color="primary"
+                        variant="subtle"
+                        size="xs"
+                        icon="i-lucide-shield-check"
+                        disabled
+                      />
+                    </span>
+                  </UTooltip>
                   <UBadge
                     :label="sourceBadge(item.record).label"
                     :color="sourceBadge(item.record).color"
@@ -456,9 +594,36 @@ onMounted(() => {
                   <p class="truncate text-xs text-muted">v{{ radio.entry.version }}</p>
                 </div>
                 <UBadge
-                  v-if="radio.installed"
+                  v-if="radio.installedOfficially"
                   label="Installed"
                   color="success"
+                  variant="subtle"
+                  size="sm"
+                />
+                <div
+                  v-else-if="radio.installedUnverified && radio.canSwitchToVerified"
+                  class="flex items-center gap-2"
+                >
+                  <UBadge
+                    label="Local file installed"
+                    color="warning"
+                    variant="subtle"
+                    size="sm"
+                  />
+                  <UButton
+                    label="Switch to verified"
+                    color="primary"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    :loading="isBusy(`switch:${radio.entry.id}`)"
+                    :disabled="anyBusy"
+                    @click="switchCatalogEntryToVerified(radio.entry)"
+                  />
+                </div>
+                <UBadge
+                  v-else-if="radio.installedUnverified"
+                  label="Local file installed"
+                  color="warning"
                   variant="subtle"
                   size="sm"
                 />

@@ -9,6 +9,7 @@ import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import {
   deleteRadioCatalogRecord,
   deleteRadioCatalogRecordsUnderDirectories,
+  getRadioCatalogRecord,
   listRadioCatalogRecords,
   type RadioCatalogRecord,
   upsertRadioCatalogRecord,
@@ -30,6 +31,18 @@ export interface InstalledRadioModuleResult {
   version: string;
   installPath: string;
   configPaths: string[];
+  /** The download replaced an existing directory. That backup stays until commit. */
+  replacedPrevious?: boolean;
+}
+
+export interface SwitchAllToVerifiedFailure {
+  id: string;
+  message: string;
+}
+
+export interface SwitchAllToVerifiedResult {
+  switchedIds: string[];
+  failures: SwitchAllToVerifiedFailure[];
 }
 
 export interface InstallModuleRadiosResult {
@@ -163,6 +176,7 @@ async function hydrateConfigsIntoCatalog(
   source: RadioCatalogSource,
   sourcePath?: string,
   expectedModelId?: string,
+  replaceUserCatalog = false,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
@@ -177,6 +191,7 @@ async function hydrateConfigsIntoCatalog(
 
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
+      replaceUserCatalog,
     });
     radios.push(radio);
   }
@@ -187,7 +202,10 @@ async function hydrateConfigsIntoCatalog(
 /**
  * Download an official catalog radio module, verify integrity, and upsert the config as `installed`.
  */
-export async function installOfficialModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+export async function installOfficialModule(
+  entry: RadioModuleCatalogEntry,
+  options: { replaceUserCatalog?: boolean } = {},
+): Promise<InstallModuleRadiosResult> {
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
   }
@@ -202,13 +220,18 @@ export async function installOfficialModule(entry: RadioModuleCatalogEntry): Pro
     version: entry.version,
   });
 
+  let catalogUpdated = false;
+
   try {
     const radios = await hydrateConfigsIntoCatalog(
       installed.configPaths,
       'installed',
       installed.installPath,
       entry.id,
+      options.replaceUserCatalog ?? false,
     );
+    catalogUpdated = true;
+    await settleReplacedInstall(installed, true);
 
     return {
       moduleId: installed.moduleId,
@@ -217,12 +240,123 @@ export async function installOfficialModule(entry: RadioModuleCatalogEntry): Pro
       source: 'installed',
     };
   } catch (cause) {
-    await invoke('uninstall_radio_module', {
-      moduleId: entry.id,
-      version: entry.version,
-    }).catch(() => undefined);
+    if (!catalogUpdated) {
+      await settleReplacedInstall(installed, false);
+    }
     throw cause;
   }
+}
+
+/**
+ * Delete the backup of a replaced install, or put that backup back when hydration failed.
+ * A brand-new directory is removed on failure so a bad install does not stay on disk.
+ */
+async function settleReplacedInstall(installed: InstalledRadioModuleResult, keepNewCopy: boolean): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+
+  if (installed.replacedPrevious) {
+    await invoke(keepNewCopy ? 'commit_radio_module_replace' : 'rollback_radio_module_replace', {
+      moduleId: installed.moduleId,
+      version: installed.version,
+    }).catch(() => undefined);
+    return;
+  }
+
+  if (!keepNewCopy) {
+    await invoke('uninstall_radio_module', {
+      moduleId: installed.moduleId,
+      version: installed.version,
+    }).catch(() => undefined);
+  }
+}
+
+/**
+ * Older unverified module directory to delete after a verified install is in the catalog.
+ * Same id and version is the directory the new zip just replaced; that backup is committed
+ * separately and must not be uninstalled or the verified copy would be deleted.
+ */
+export function previousModuleDirectoryToRemove(
+  previousSourcePath: string | undefined,
+  installedModuleId: string,
+  installedVersion: string,
+): { moduleId: string; version: string } | undefined {
+  const parsed = previousSourcePath ? parseModuleInstallPath(previousSourcePath) : undefined;
+
+  if (!parsed) {
+    return undefined;
+  }
+
+  if (parsed.moduleId === installedModuleId && parsed.version === installedVersion) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+async function removeUnverifiedModuleDirectory(
+  sourcePath: string | undefined,
+  installedModuleId: string,
+  installedVersion: string,
+): Promise<void> {
+  const parsed = previousModuleDirectoryToRemove(sourcePath, installedModuleId, installedVersion);
+
+  if (!parsed) {
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('uninstall_radio_module', {
+    moduleId: parsed.moduleId,
+    version: parsed.version,
+  }).catch(() => undefined);
+}
+
+/**
+ * Replace an unverified local driver with the official catalog module for the same model id.
+ * A failed download leaves the local catalog row unchanged.
+ */
+export async function switchToVerifiedModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+  if (!isTauriRuntime()) {
+    throw new Error('Installing radio modules requires the Tauri desktop app.');
+  }
+
+  const existing = await getRadioCatalogRecord(entry.id);
+
+  if (!existing || existing.source !== 'user') {
+    throw new Error(`No unverified local driver is installed for ${entry.id}`);
+  }
+
+  const previousSourcePath = existing.sourcePath;
+  const result = await installOfficialModule(entry, { replaceUserCatalog: true });
+  await removeUnverifiedModuleDirectory(previousSourcePath, result.moduleId, result.version);
+
+  return result;
+}
+
+/**
+ * Switch each catalog entry to the verified module.
+ * A failure leaves that radio on its local driver and does not stop the rest.
+ */
+export async function switchAllToVerifiedModules(
+  entries: RadioModuleCatalogEntry[],
+  switchOne: (entry: RadioModuleCatalogEntry) => Promise<unknown> = switchToVerifiedModule,
+): Promise<SwitchAllToVerifiedResult> {
+  const switchedIds: string[] = [];
+  const failures: SwitchAllToVerifiedFailure[] = [];
+
+  for (const entry of entries) {
+    try {
+      await switchOne(entry);
+      switchedIds.push(entry.id);
+    } catch (cause) {
+      failures.push({
+        id: entry.id,
+        message: cause instanceof Error ? cause.message : 'Switch failed',
+      });
+    }
+  }
+
+  return { switchedIds, failures };
 }
 
 /**
@@ -245,14 +379,25 @@ export async function installLocalModuleZip(
     integrity: null,
   });
 
-  const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'user', installed.installPath);
+  let catalogUpdated = false;
 
-  return {
-    moduleId: installed.moduleId,
-    version: installed.version,
-    radios,
-    source: 'user',
-  };
+  try {
+    const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'user', installed.installPath);
+    catalogUpdated = true;
+    await settleReplacedInstall(installed, true);
+
+    return {
+      moduleId: installed.moduleId,
+      version: installed.version,
+      radios,
+      source: 'user',
+    };
+  } catch (cause) {
+    if (!catalogUpdated) {
+      await settleReplacedInstall(installed, false);
+    }
+    throw cause;
+  }
 }
 
 /**

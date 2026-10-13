@@ -14,6 +14,8 @@ import {
   OfficialModuleCatalogError,
   officialCatalogFailureFromCause,
   parseModuleInstallPath,
+  previousModuleDirectoryToRemove,
+  switchAllToVerifiedModules,
 } from '../../app/utils/radio-module-install.ts';
 
 describe('radio module install helpers', () => {
@@ -164,5 +166,43 @@ describe('radio module install helpers', () => {
     expect(
       catalogConfigMatchesPath('configs/kenwood-th-f6.json', '/tmp/radio-modules/kenwood-th-d74/1.11.1/configs/kenwood-th-d74.json'),
     ).toBe(false);
+  });
+
+  it('should not uninstall the verified directory when it replaced the same version', () => {
+    const sameVersion =
+      '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/baofeng-uv5r/3.7.0';
+
+    expect(previousModuleDirectoryToRemove(sameVersion, 'baofeng-uv5r', '3.7.0')).toBeUndefined();
+    expect(previousModuleDirectoryToRemove('/tmp/uv5r.json', 'baofeng-uv5r', '3.7.0')).toBeUndefined();
+    expect(
+      previousModuleDirectoryToRemove(
+        '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/baofeng-uv5r/3.0.0',
+        'baofeng-uv5r',
+        '3.7.0',
+      ),
+    ).toEqual({ moduleId: 'baofeng-uv5r', version: '3.0.0' });
+  });
+
+  it('should keep switching the remaining radios when one download fails', async () => {
+    const entries = [
+      { id: 'kenwood-th-d74' },
+      { id: 'baofeng-uv5r' },
+      { id: 'kenwood-th-f6' },
+    ] as Parameters<typeof switchAllToVerifiedModules>[0];
+    const attempted: string[] = [];
+
+    const result = await switchAllToVerifiedModules(entries, async (entry) => {
+      attempted.push(entry.id);
+
+      if (entry.id === 'baofeng-uv5r') {
+        throw new Error('Failed to download radio module: HTTP 503');
+      }
+    });
+
+    expect(attempted).toEqual(['kenwood-th-d74', 'baofeng-uv5r', 'kenwood-th-f6']);
+    expect(result.switchedIds).toEqual(['kenwood-th-d74', 'kenwood-th-f6']);
+    expect(result.failures).toEqual([
+      { id: 'baofeng-uv5r', message: 'Failed to download radio module: HTTP 503' },
+    ]);
   });
 });
