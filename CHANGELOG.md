@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.0.0...v1.1.0) (2026-10-13)
+
+### Features
+
+* switch unverified drivers to verified catalog versions ([#119](https://github.com/springfield-ham-radio/ham-radio-ui/issues/119)) ([6bfe69e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6bfe69eb95df4e6f0badd2ec536a920badacc371))
+
 ## [1.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.4...v1.0.0) (2026-10-13)
 
 ### ⚠ BREAKING CHANGES
