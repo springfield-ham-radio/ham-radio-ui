@@ -11,6 +11,8 @@ export interface InstalledRadioListItem {
   updateAvailable: boolean;
   canUpdate: boolean;
   updateBlockedReason?: string;
+  canSwitchToVerified: boolean;
+  switchBlockedReason?: string;
 }
 
 export interface InstalledManufacturerGroup {
@@ -22,9 +24,13 @@ export interface AvailableRadioModelItem {
   modelId: string;
   name: string;
   entry: RadioModuleCatalogEntry;
-  installed: boolean;
+  /** True when an official catalog install is present (not a local unverified file). */
+  installedOfficially: boolean;
+  installedUnverified: boolean;
   canInstall: boolean;
   installBlockedReason?: string;
+  canSwitchToVerified: boolean;
+  switchBlockedReason?: string;
 }
 
 export interface AvailableManufacturerGroup {
@@ -147,6 +153,22 @@ function moduleCompatible(entry: RadioModuleCatalogEntry): boolean {
   return isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, entry.minApiVersion);
 }
 
+/** Local file / zip install marked Unverified in the UI. */
+export function isUnverifiedDriverRecord(record: RadioCatalogRecord): boolean {
+  return record.source === 'user';
+}
+
+/** Official or bundled driver install. */
+export function isVerifiedDriverRecord(record: RadioCatalogRecord): boolean {
+  return record.source === 'installed' || record.source === 'bundled';
+}
+
+export function installedRadiosEligibleForVerifiedSwitch(
+  items: InstalledRadioListItem[],
+): InstalledRadioListItem[] {
+  return items.filter((item) => item.canSwitchToVerified && item.catalogEntry);
+}
+
 /**
  * Installed radios with catalog update state.
  */
@@ -162,6 +184,7 @@ export function buildInstalledRadioListItems(
       catalogEntry !== undefined &&
       compareSemver(catalogEntry.version, installedVersion) > 0;
     const compatible = catalogEntry ? moduleCompatible(catalogEntry) : true;
+    const canSwitchToVerified = isUnverifiedDriverRecord(record) && catalogEntry !== undefined && compatible;
 
     return {
       record,
@@ -169,6 +192,10 @@ export function buildInstalledRadioListItems(
       updateAvailable: newer,
       canUpdate: newer && compatible,
       ...(newer && !compatible ? { updateBlockedReason: APP_UPDATE_REQUIRED } : {}),
+      canSwitchToVerified,
+      ...(isUnverifiedDriverRecord(record) && catalogEntry && !compatible
+        ? { switchBlockedReason: APP_UPDATE_REQUIRED }
+        : {}),
     };
   });
 }
@@ -213,8 +240,13 @@ export function buildAvailableManufacturerGroups(
     .map(([manufacturer, entries]) => {
       const radios = entries.map((entry) => {
         const installedRecord = records.find((record) => record.modelId === entry.id);
-        const installed = installedRecord !== undefined;
+        const installedOfficially =
+          installedRecord !== undefined && isVerifiedDriverRecord(installedRecord);
+        const installedUnverified =
+          installedRecord !== undefined && isUnverifiedDriverRecord(installedRecord);
         const compatible = moduleCompatible(entry);
+        const canSwitchToVerified = installedUnverified && compatible;
+        const canInstall = installedRecord === undefined && compatible;
 
         return {
           modelId: entry.id,
@@ -222,21 +254,25 @@ export function buildAvailableManufacturerGroups(
             ? radioDisplayName(installedRecord.manufacturer, installedRecord.name)
             : radioDisplayName(entry.manufacturer, entry.name),
           entry,
-          installed,
-          canInstall: !installed && compatible,
-          ...(!installed && !compatible ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
+          installedOfficially,
+          installedUnverified,
+          canInstall,
+          canSwitchToVerified,
+          ...(canInstall && !compatible ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
+          ...(installedUnverified && !compatible ? { switchBlockedReason: APP_UPDATE_REQUIRED } : {}),
         };
       });
 
-      const hasUninstalled = radios.some((radio) => !radio.installed);
       const hasInstallable = radios.some((radio) => radio.canInstall);
 
       return {
         manufacturer,
         radios,
         canInstall: hasInstallable,
-        ...(hasUninstalled && !hasInstallable ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
+        ...(radios.some((radio) => !radio.installedOfficially && !radio.canInstall && !radio.canSwitchToVerified)
+          ? { installBlockedReason: APP_UPDATE_REQUIRED }
+          : {}),
       };
     })
-    .filter((group) => group.radios.some((radio) => !radio.installed));
+    .filter((group) => group.radios.some((radio) => !radio.installedOfficially));
 }

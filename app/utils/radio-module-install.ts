@@ -9,6 +9,7 @@ import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import {
   deleteRadioCatalogRecord,
   deleteRadioCatalogRecordsUnderDirectories,
+  getRadioCatalogRecord,
   listRadioCatalogRecords,
   type RadioCatalogRecord,
   upsertRadioCatalogRecord,
@@ -163,6 +164,7 @@ async function hydrateConfigsIntoCatalog(
   source: RadioCatalogSource,
   sourcePath?: string,
   expectedModelId?: string,
+  replaceUserCatalog = false,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
@@ -177,6 +179,7 @@ async function hydrateConfigsIntoCatalog(
 
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
+      replaceUserCatalog,
     });
     radios.push(radio);
   }
@@ -187,7 +190,10 @@ async function hydrateConfigsIntoCatalog(
 /**
  * Download an official catalog radio module, verify integrity, and upsert the config as `installed`.
  */
-export async function installOfficialModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+export async function installOfficialModule(
+  entry: RadioModuleCatalogEntry,
+  options: { replaceUserCatalog?: boolean } = {},
+): Promise<InstallModuleRadiosResult> {
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
   }
@@ -208,6 +214,7 @@ export async function installOfficialModule(entry: RadioModuleCatalogEntry): Pro
       'installed',
       installed.installPath,
       entry.id,
+      options.replaceUserCatalog ?? false,
     );
 
     return {
@@ -223,6 +230,46 @@ export async function installOfficialModule(entry: RadioModuleCatalogEntry): Pro
     }).catch(() => undefined);
     throw cause;
   }
+}
+
+async function removeUnverifiedModuleDirectory(sourcePath: string | undefined): Promise<void> {
+  if (!sourcePath || !isModuleInstallPath(sourcePath)) {
+    return;
+  }
+
+  const parsed = parseModuleInstallPath(sourcePath);
+
+  if (!parsed) {
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('uninstall_radio_module', {
+    moduleId: parsed.moduleId,
+    version: parsed.version,
+  }).catch(() => undefined);
+}
+
+/**
+ * Replace an unverified local driver with the official catalog module for the same model id.
+ * A failed download leaves the local catalog row unchanged.
+ */
+export async function switchToVerifiedModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+  if (!isTauriRuntime()) {
+    throw new Error('Installing radio modules requires the Tauri desktop app.');
+  }
+
+  const existing = await getRadioCatalogRecord(entry.id);
+
+  if (!existing || existing.source !== 'user') {
+    throw new Error(`No unverified local driver is installed for ${entry.id}`);
+  }
+
+  const previousSourcePath = existing.sourcePath;
+  const result = await installOfficialModule(entry, { replaceUserCatalog: true });
+  await removeUnverifiedModuleDirectory(previousSourcePath);
+
+  return result;
 }
 
 /**

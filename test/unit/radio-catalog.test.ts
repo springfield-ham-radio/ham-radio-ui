@@ -52,4 +52,27 @@ describe('radio catalog hydrate', () => {
 
     expect(records.some((record) => record.modelId === 'baofeng-uv5r')).toBe(true);
   });
+
+  it('should replace a user catalog row when switching to a verified install', async () => {
+    const config = readJson('configs/baofeng-uv5r.json');
+    const documentsByRef = {
+      '../src/shared/schemas/settings-schema.json': readJson('src/shared/schemas/settings-schema.json'),
+      '../src/shared/schemas/channel-schema.json': readJson('src/shared/schemas/channel-schema.json'),
+      '../src/shared/memory-maps/uv5r-settings.json': readJson('src/shared/memory-maps/uv5r-settings.json'),
+    };
+    const radio = hydrateRadioConfig(config, documentsByRef);
+
+    await upsertRadioCatalogRecord(radio, 'user', { sourcePath: '/tmp/uv5r.json' });
+    const kept = await upsertRadioCatalogRecord(radio, 'installed', {
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
+    });
+    expect(kept.source).toBe('user');
+
+    const replaced = await upsertRadioCatalogRecord(radio, 'installed', {
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
+      replaceUserCatalog: true,
+    });
+    expect(replaced.source).toBe('installed');
+    expect(replaced.sourcePath).toContain('baofeng-uv5r');
+  });
 });

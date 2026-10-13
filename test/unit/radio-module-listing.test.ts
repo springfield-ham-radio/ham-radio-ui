@@ -261,12 +261,49 @@ describe('radio module listing', () => {
       'kenwood-th-f6',
       'kenwood-tm-d710a',
     ]);
-    expect(kenwood?.radios.find((radio) => radio.modelId === 'kenwood-th-d74')?.installed).toBe(true);
+    const thD74 = kenwood?.radios.find((radio) => radio.modelId === 'kenwood-th-d74');
+    expect(thD74?.installedUnverified).toBe(true);
+    expect(thD74?.installedOfficially).toBe(false);
+    expect(thD74?.canSwitchToVerified).toBe(true);
     expect(kenwood?.radios.find((radio) => radio.modelId === 'kenwood-th-f6')?.canInstall).toBe(true);
     expect(kenwood?.canInstall).toBe(true);
   });
 
-  it('should hide a manufacturer from available when every catalog radio is installed', () => {
+  it('should keep an unverified Baofeng UV-5R visible in available drivers with a switch action', () => {
+    const local = record({
+      modelId: 'baofeng-uv5r',
+      name: 'Baofeng UV-5R',
+      manufacturer: 'Baofeng',
+      version: '3.0.0',
+      source: 'user',
+      sourcePath: '/tmp/uv5r.json',
+    });
+    const available = buildAvailableManufacturerGroups([local], catalog);
+    const baofeng = available.find((group) => group.manufacturer === 'Baofeng');
+
+    expect(baofeng).toBeDefined();
+    expect(baofeng?.radios).toHaveLength(1);
+    expect(baofeng?.radios[0]?.installedUnverified).toBe(true);
+    expect(baofeng?.radios[0]?.installedOfficially).toBe(false);
+    expect(baofeng?.radios[0]?.canSwitchToVerified).toBe(true);
+  });
+
+  it('should offer switch to verified on installed unverified rows that match the catalog', () => {
+    const local = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.0.0',
+      source: 'user',
+      sourcePath: '/tmp/th-d74.json',
+    });
+    const items = buildInstalledRadioListItems([local], catalog);
+
+    expect(items[0]?.canSwitchToVerified).toBe(true);
+    expect(items[0]?.canUpdate).toBe(false);
+  });
+
+  it('should hide a manufacturer from available when every catalog radio is installed officially', () => {
     const installed = record({
       modelId: 'baofeng-uv5r',
       name: 'UV-5R',
