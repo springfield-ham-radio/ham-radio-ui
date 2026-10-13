@@ -113,14 +113,19 @@ function recordToRadioId(record: RadioCatalogRecord): RadioId {
 export async function upsertRadioCatalogRecord(
   radio: RegistryRadio,
   source: RadioCatalogSource,
-  options: { sourcePath?: string; contentHash?: string } = {},
+  options: { sourcePath?: string; contentHash?: string; replaceUserCatalog?: boolean } = {},
 ): Promise<RadioCatalogRecord> {
   const contentHash = options.contentHash ?? hashRadioConfig(radio);
   const metadata = extractCatalogMetadata(radio, source, contentHash);
   const now = Date.now();
   const existing = await getRadioCatalogRecord(metadata.modelId);
 
-  if (existing && (source === 'bundled' || source === 'installed') && existing.source === 'user') {
+  if (
+    existing &&
+    (source === 'bundled' || source === 'installed') &&
+    existing.source === 'user' &&
+    !options.replaceUserCatalog
+  ) {
     return existing;
   }
 
@@ -272,6 +277,59 @@ export async function deleteRadioCatalogRecordsBySourcePath(sourcePath: string):
 
   const database = await getRadioCatalogDatabase();
   await database.execute('DELETE FROM radio_models WHERE source_path = $1', [sourcePath]);
+}
+
+/**
+ * True when `sourcePath` is the directory or a file inside it.
+ * Comparison ignores trailing slashes and uses `/` so Windows paths match.
+ */
+export function isPathUnderDirectory(sourcePath: string, directory: string): boolean {
+  const path = sourcePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const root = directory.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  if (path.length === 0 || root.length === 0) {
+    return false;
+  }
+
+  return path === root || path.startsWith(`${root}/`);
+}
+
+/** Delete catalog rows whose source path is inside one of the given directories. */
+export async function deleteRadioCatalogRecordsUnderDirectories(directories: string[]): Promise<void> {
+  const roots = directories.filter((directory) => directory.trim().length > 0);
+
+  if (roots.length === 0) {
+    return;
+  }
+
+  const matches = (sourcePath: string | undefined): boolean => {
+    if (!sourcePath) {
+      return false;
+    }
+
+    return roots.some((directory) => isPathUnderDirectory(sourcePath, directory));
+  };
+
+  if (!isTauriRuntime()) {
+    for (const [modelId, record] of memoryCatalog.entries()) {
+      if (matches(record.sourcePath)) {
+        memoryCatalog.delete(modelId);
+      }
+    }
+
+    return;
+  }
+
+  const database = await getRadioCatalogDatabase();
+  const rows = await database.select<Pick<RadioModelRow, 'model_id' | 'source_path'>[]>(
+    `SELECT model_id, source_path FROM radio_models WHERE source_path IS NOT NULL`,
+  );
+
+  for (const row of rows) {
+    if (matches(row.source_path ?? undefined)) {
+      await database.execute('DELETE FROM radio_models WHERE model_id = $1', [row.model_id]);
+    }
+  }
 }
 
 export async function getRadioCatalogRecord(modelId: string): Promise<RadioCatalogRecord | undefined> {

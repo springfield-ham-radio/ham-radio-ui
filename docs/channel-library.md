@@ -46,13 +46,13 @@ Trip groups use the same **Distance from** control. Filter by band, **Open use**
 
 1. On the Radio page, open the radio and load its memory (open a memory file or read from the radio).
 2. On **Channels**, select one or more rows.
-3. Choose **Add to radio**, then pick the radio. HamBench fills unused slots on that radio in order.
+3. Choose **Add to radio**, then pick the radio. HamBench fills unused slots after the last programmed channel, then wraps to earlier free slots when the end of memory is full.
 4. Use **Write** on that radio's card to program the device.
 
-On the Radio page, **Add from library** copies saved channels into unused slots on that card. Select them in the order they should be programmed.
+On the Radio page, **Add from library** copies saved channels into unused slots on that card in the same order. Select them in the order they should be programmed.
 
 ## Replace a memory slot
 
 On the Radio page, open a memory channel and choose **Replace from library**. The picker shows the same group tabs as the Channels page. That copies the saved channel’s name, frequencies, and tones into the open slot. The slot number stays the same, and radio-specific settings such as power and mode stay as they are.
 
-**Add from library** on the same page fills unused slots instead. Those new slots take this radio’s default power, mode, and scan settings.
+**Add from library** on the same page fills unused slots after the last programmed channel instead. Those new slots take this radio’s default power, mode, and scan settings.
