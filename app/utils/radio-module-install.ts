@@ -8,7 +8,7 @@ import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-rad
 import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import {
   deleteRadioCatalogRecord,
-  deleteRadioCatalogRecordsForLegacyManufacturerModules,
+  deleteRadioCatalogRecordsUnderDirectories,
   listRadioCatalogRecords,
   type RadioCatalogRecord,
   upsertRadioCatalogRecord,
@@ -67,6 +67,7 @@ async function hydrateConfigsIntoCatalog(
   configPaths: string[],
   source: RadioCatalogSource,
   sourcePath?: string,
+  expectedModelId?: string,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
@@ -74,6 +75,10 @@ async function hydrateConfigsIntoCatalog(
   for (const configPath of configPaths) {
     const text = await invoke<string>('load_text_file', { path: configPath });
     const radio = await loadRadioConfigFromFile(configPath, text);
+
+    if (expectedModelId && String(radio.id.model) !== expectedModelId) {
+      throw new Error(`Module ${expectedModelId} contains radio ${String(radio.id.model)}`);
+    }
 
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
@@ -102,14 +107,27 @@ export async function installOfficialModule(entry: RadioModuleCatalogEntry): Pro
     version: entry.version,
   });
 
-  const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'installed', installed.installPath);
+  try {
+    const radios = await hydrateConfigsIntoCatalog(
+      installed.configPaths,
+      'installed',
+      installed.installPath,
+      entry.id,
+    );
 
-  return {
-    moduleId: installed.moduleId,
-    version: installed.version,
-    radios,
-    source: 'installed',
-  };
+    return {
+      moduleId: installed.moduleId,
+      version: installed.version,
+      radios,
+      source: 'installed',
+    };
+  } catch (cause) {
+    await invoke('uninstall_radio_module', {
+      moduleId: entry.id,
+      version: entry.version,
+    }).catch(() => undefined);
+    throw cause;
+  }
 }
 
 /**
@@ -315,8 +333,10 @@ export async function reloadUserJsonCatalogRecords(): Promise<void> {
 }
 
 /**
- * One-time cutover: remove bundled manufacturer module directories and catalog rows.
- * Does not reinstall drivers; saved radios and user JSON stay.
+ * Cutover for the retired manufacturer bundles. Safe to call on every launch:
+ * missing directories are a no-op, and only catalog rows under those two
+ * app-data directories are removed. Saved radios, channels, the log, and user
+ * JSON outside those directories stay. Nothing is downloaded.
  */
 export async function migrateLegacyManufacturerRadioModules(): Promise<void> {
   if (!isTauriRuntime()) {
@@ -324,8 +344,8 @@ export async function migrateLegacyManufacturerRadioModules(): Promise<void> {
   }
 
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('migrate_legacy_manufacturer_radio_modules');
-  await deleteRadioCatalogRecordsForLegacyManufacturerModules();
+  const legacyDirectories = await invoke<string[]>('migrate_legacy_manufacturer_radio_modules');
+  await deleteRadioCatalogRecordsUnderDirectories(legacyDirectories);
 }
 
 /**

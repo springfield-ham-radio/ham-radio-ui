@@ -274,21 +274,40 @@ export async function deleteRadioCatalogRecordsBySourcePath(sourcePath: string):
   await database.execute('DELETE FROM radio_models WHERE source_path = $1', [sourcePath]);
 }
 
-const LEGACY_MANUFACTURER_MODULE_PATTERN = /[/\\]radio-modules[/\\](kenwood|baofeng)([/\\]|$)/i;
+/**
+ * True when `sourcePath` is the directory or a file inside it.
+ * Comparison ignores trailing slashes and uses `/` so Windows paths match.
+ */
+export function isPathUnderDirectory(sourcePath: string, directory: string): boolean {
+  const path = sourcePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const root = directory.replace(/\\/g, '/').replace(/\/+$/, '');
 
-function isLegacyManufacturerModuleSourcePath(sourcePath: string | undefined): boolean {
-  if (!sourcePath) {
+  if (path.length === 0 || root.length === 0) {
     return false;
   }
 
-  return LEGACY_MANUFACTURER_MODULE_PATTERN.test(sourcePath);
+  return path === root || path.startsWith(`${root}/`);
 }
 
-/** Delete official rows that pointed at pre-ADR-0009 `radio-modules/kenwood` or `baofeng` trees. */
-export async function deleteRadioCatalogRecordsForLegacyManufacturerModules(): Promise<void> {
+/** Delete catalog rows whose source path is inside one of the given directories. */
+export async function deleteRadioCatalogRecordsUnderDirectories(directories: string[]): Promise<void> {
+  const roots = directories.filter((directory) => directory.trim().length > 0);
+
+  if (roots.length === 0) {
+    return;
+  }
+
+  const matches = (sourcePath: string | undefined): boolean => {
+    if (!sourcePath) {
+      return false;
+    }
+
+    return roots.some((directory) => isPathUnderDirectory(sourcePath, directory));
+  };
+
   if (!isTauriRuntime()) {
     for (const [modelId, record] of memoryCatalog.entries()) {
-      if (isLegacyManufacturerModuleSourcePath(record.sourcePath)) {
+      if (matches(record.sourcePath)) {
         memoryCatalog.delete(modelId);
       }
     }
@@ -302,7 +321,7 @@ export async function deleteRadioCatalogRecordsForLegacyManufacturerModules(): P
   );
 
   for (const row of rows) {
-    if (isLegacyManufacturerModuleSourcePath(row.source_path)) {
+    if (matches(row.source_path ?? undefined)) {
       await database.execute('DELETE FROM radio_models WHERE model_id = $1', [row.model_id]);
     }
   }

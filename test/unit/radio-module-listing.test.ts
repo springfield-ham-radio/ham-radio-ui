@@ -140,6 +140,43 @@ describe('radio module listing', () => {
     expect(items[0]?.catalogEntry?.version).toBe('3.7.0');
   });
 
+  it('should offer an update for one Kenwood radio without updating its siblings', () => {
+    const installed = [
+      record({
+        modelId: 'kenwood-th-f6',
+        name: 'TH-F6',
+        manufacturer: 'Kenwood',
+        version: '1.10.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/kenwood-th-f6/1.10.0',
+      }),
+      record({
+        modelId: 'kenwood-th-d74',
+        name: 'TH-D74',
+        manufacturer: 'Kenwood',
+        version: '1.11.1',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.1',
+      }),
+      record({
+        modelId: 'kenwood-tm-d710a',
+        name: 'TM-D710A',
+        manufacturer: 'Kenwood',
+        version: '1.11.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/kenwood-tm-d710a/1.11.0',
+      }),
+    ];
+    const items = buildInstalledRadioListItems(installed, catalog);
+    const byId = Object.fromEntries(items.map((item) => [item.record.modelId, item]));
+
+    expect(byId['kenwood-th-f6']?.updateAvailable).toBe(true);
+    expect(byId['kenwood-th-f6']?.canUpdate).toBe(true);
+    expect(byId['kenwood-th-f6']?.catalogEntry?.minApiVersion).toBe('18.0.1');
+    expect(byId['kenwood-th-d74']?.updateAvailable).toBe(false);
+    expect(byId['kenwood-tm-d710a']?.updateAvailable).toBe(false);
+  });
+
   it('should not flag an update when the installed directory version matches the catalog', () => {
     const installed = record({
       modelId: 'baofeng-uv5r',

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
+import { isPathUnderDirectory } from '../../app/utils/radio-catalog-db.ts';
 import {
   APP_HAM_RADIO_API_VERSION,
   catalogConfigMatchesPath,
@@ -74,6 +75,27 @@ describe('radio module install helpers', () => {
         'C:\\Users\\me\\AppData\\Roaming\\com.springfield.ham-radio\\radio-modules\\kenwood-th-f6\\1.11.0',
       ),
     ).toEqual({ moduleId: 'kenwood-th-f6', version: '1.11.0' });
+  });
+
+  it('should only treat paths inside the retired app-data directories as legacy rows', () => {
+    const kenwoodBundle =
+      '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood';
+    const baofengBundle =
+      'C:\\Users\\me\\AppData\\Roaming\\com.springfield.ham-radio\\radio-modules\\baofeng';
+
+    expect(isPathUnderDirectory(`${kenwoodBundle}/1.11.2`, kenwoodBundle)).toBe(true);
+    expect(isPathUnderDirectory(`${kenwoodBundle}/1.11.2/configs/kenwood-th-d74.json`, kenwoodBundle)).toBe(true);
+    expect(isPathUnderDirectory(`${baofengBundle}\\3.7.2`, baofengBundle)).toBe(true);
+    expect(
+      isPathUnderDirectory(
+        '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0',
+        kenwoodBundle,
+      ),
+    ).toBe(false);
+    expect(isPathUnderDirectory('/Users/me/Development/radio-module-kenwood/configs/kenwood-th-f6.json', kenwoodBundle)).toBe(
+      false,
+    );
+    expect(isPathUnderDirectory('/Users/me/Documents/my-radio.json', kenwoodBundle)).toBe(false);
   });
 
   it('should flag legacy manufacturer bundle install paths', () => {

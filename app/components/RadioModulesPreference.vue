@@ -7,6 +7,7 @@ import {
   installOfficialModule,
   installPickedLocalModuleFile,
   isModuleInstallPath,
+  parseModuleInstallPath,
   pickLocalModuleFile,
 } from '~/utils/radio-module-install';
 import {
@@ -156,9 +157,23 @@ async function updateRadio(item: InstalledRadioListItem): Promise<void> {
   }
 
   busyKey.value = item.catalogEntry.id;
+  const previous = item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath) : undefined;
 
   try {
     await installOfficialModule(item.catalogEntry);
+
+    if (
+      previous &&
+      previous.moduleId === item.catalogEntry.id &&
+      previous.version !== item.catalogEntry.version
+    ) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('uninstall_radio_module', {
+        moduleId: previous.moduleId,
+        version: previous.version,
+      }).catch(() => undefined);
+    }
+
     await refreshCatalogState();
     await refreshInstalledRadios();
     toast.add({
