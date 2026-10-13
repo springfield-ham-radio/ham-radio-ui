@@ -39,20 +39,115 @@ export interface InstallModuleRadiosResult {
   source: RadioCatalogSource;
 }
 
+export type OfficialModuleCatalogFailureKind = 'network' | 'incompatible';
+
+export interface OfficialModuleCatalogFailure {
+  kind: OfficialModuleCatalogFailureKind;
+  title: string;
+  detail: string;
+  guidance: string;
+}
+
+export const OFFICIAL_CATALOG_NETWORK_TITLE = 'Could not reach the official catalog';
+
+export const OFFICIAL_CATALOG_INCOMPATIBLE_TITLE =
+  'Official catalog is not compatible with this version of HamBench';
+
+const OFFICIAL_CATALOG_NETWORK_GUIDANCE =
+  'Connect to the internet and retry, or install a driver from a local file.';
+
+const OFFICIAL_CATALOG_INCOMPATIBLE_GUIDANCE =
+  'Update HamBench to the latest version, or install a driver from a local file.';
+
+export class OfficialModuleCatalogError extends Error {
+  readonly kind: OfficialModuleCatalogFailureKind;
+
+  constructor(kind: OfficialModuleCatalogFailureKind, message: string) {
+    super(message);
+    this.name = 'OfficialModuleCatalogError';
+    this.kind = kind;
+  }
+}
+
+function isCatalogParseFailureMessage(message: string): boolean {
+  return (
+    message.startsWith('Failed to parse module catalog:') || message.startsWith('Invalid module catalog:')
+  );
+}
+
+/**
+ * Map a failed catalog load to UI copy for network vs parse/validation failures.
+ */
+export function officialCatalogFailureFromCause(cause: unknown): OfficialModuleCatalogFailure {
+  if (cause instanceof OfficialModuleCatalogError) {
+    if (cause.kind === 'incompatible') {
+      return {
+        kind: 'incompatible',
+        title: OFFICIAL_CATALOG_INCOMPATIBLE_TITLE,
+        detail: cause.message,
+        guidance: OFFICIAL_CATALOG_INCOMPATIBLE_GUIDANCE,
+      };
+    }
+
+    return {
+      kind: 'network',
+      title: OFFICIAL_CATALOG_NETWORK_TITLE,
+      detail: cause.message,
+      guidance: OFFICIAL_CATALOG_NETWORK_GUIDANCE,
+    };
+  }
+
+  const message = cause instanceof Error ? cause.message : 'Failed to load official catalog';
+
+  if (isCatalogParseFailureMessage(message)) {
+    return {
+      kind: 'incompatible',
+      title: OFFICIAL_CATALOG_INCOMPATIBLE_TITLE,
+      detail: message,
+      guidance: OFFICIAL_CATALOG_INCOMPATIBLE_GUIDANCE,
+    };
+  }
+
+  return {
+    kind: 'network',
+    title: OFFICIAL_CATALOG_NETWORK_TITLE,
+    detail: message,
+    guidance: OFFICIAL_CATALOG_NETWORK_GUIDANCE,
+  };
+}
+
 /**
  * Fetch and validate the official module catalog.
  */
 export async function fetchOfficialModuleCatalog(
   catalogUrl: string = OFFICIAL_MODULE_CATALOG_URL,
 ): Promise<RadioModuleCatalog> {
-  const response = await fetch(catalogUrl);
+  try {
+    const response = await fetch(catalogUrl);
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch radio module catalog (HTTP ${response.status})`);
+    if (!response.ok) {
+      throw new OfficialModuleCatalogError(
+        'network',
+        `Failed to fetch radio module catalog (HTTP ${response.status})`,
+      );
+    }
+
+    const text = await response.text();
+
+    try {
+      return parseModuleCatalog(text);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Invalid module catalog';
+      throw new OfficialModuleCatalogError('incompatible', message);
+    }
+  } catch (cause) {
+    if (cause instanceof OfficialModuleCatalogError) {
+      throw cause;
+    }
+
+    const message = cause instanceof Error ? cause.message : 'Failed to fetch radio module catalog';
+    throw new OfficialModuleCatalogError('network', message);
   }
-
-  const text = await response.text();
-  return parseModuleCatalog(text);
 }
 
 function assertApiCompatible(entry: RadioModuleCatalogEntry): void {

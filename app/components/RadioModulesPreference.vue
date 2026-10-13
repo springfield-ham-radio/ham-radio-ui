@@ -4,6 +4,8 @@ import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import {
   fetchOfficialModuleCatalog,
+  officialCatalogFailureFromCause,
+  type OfficialModuleCatalogFailure,
   installOfficialModule,
   installPickedLocalModuleFile,
   isModuleInstallPath,
@@ -26,7 +28,7 @@ const { refreshCatalogState, uninstallRadio, configurations } = useRadio();
 
 const catalogRecords = ref<RadioCatalogRecord[]>([]);
 const catalogEntries = ref<RadioModuleCatalogEntry[]>([]);
-const catalogError = ref<string | null>(null);
+const catalogFailure = ref<OfficialModuleCatalogFailure | null>(null);
 const catalogLoading = ref(false);
 const busyKey = ref<string | undefined>();
 const removeConfirmOpen = ref(false);
@@ -83,14 +85,14 @@ async function refreshInstalledRadios(): Promise<void> {
 
 async function loadOfficialCatalog(): Promise<void> {
   catalogLoading.value = true;
-  catalogError.value = null;
+  catalogFailure.value = null;
 
   try {
     const catalog = await fetchOfficialModuleCatalog();
     catalogEntries.value = catalog.modules;
   } catch (cause) {
     catalogEntries.value = [];
-    catalogError.value = cause instanceof Error ? cause.message : 'Failed to load official catalog';
+    catalogFailure.value = officialCatalogFailureFromCause(cause);
   } finally {
     catalogLoading.value = false;
   }
@@ -422,10 +424,10 @@ onMounted(() => {
           Loading official catalog…
         </div>
 
-        <div v-else-if="catalogError" class="rounded-lg bg-muted px-3 py-3 text-sm">
-          <p class="font-medium text-highlighted">Could not reach the official catalog</p>
-          <p class="mt-1 text-muted">{{ catalogError }}</p>
-          <p class="mt-2 text-muted">Connect to the internet and retry, or install a module from a local file.</p>
+        <div v-else-if="catalogFailure" class="rounded-lg bg-muted px-3 py-3 text-sm">
+          <p class="font-medium text-highlighted">{{ catalogFailure.title }}</p>
+          <p class="mt-1 text-muted">{{ catalogFailure.detail }}</p>
+          <p class="mt-2 text-muted">{{ catalogFailure.guidance }}</p>
           <UButton class="mt-3" size="sm" color="neutral" variant="outline" label="Retry" @click="loadOfficialCatalog" />
         </div>
 

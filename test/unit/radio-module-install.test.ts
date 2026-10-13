@@ -1,13 +1,18 @@
 import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
 import { isPathUnderDirectory } from '../../app/utils/radio-catalog-db.ts';
 import {
   APP_HAM_RADIO_API_VERSION,
   catalogConfigMatchesPath,
+  fetchOfficialModuleCatalog,
   isLegacyManufacturerModulePath,
   isModuleInstallPath,
   isUserJsonCatalogSourcePath,
+  OFFICIAL_CATALOG_INCOMPATIBLE_TITLE,
+  OFFICIAL_CATALOG_NETWORK_TITLE,
+  OfficialModuleCatalogError,
+  officialCatalogFailureFromCause,
   parseModuleInstallPath,
 } from '../../app/utils/radio-module-install.ts';
 
@@ -112,6 +117,41 @@ describe('radio module install helpers', () => {
     ).toBe(true);
     expect(isUserJsonCatalogSourcePath('installed', '/Users/me/radio-modules/kenwood-th-f6/1.11.0')).toBe(false);
     expect(isUserJsonCatalogSourcePath('user', '/Users/me/radio-modules/kenwood/1.1.0')).toBe(false);
+  });
+
+  it('should distinguish network failures from incompatible catalog documents', async () => {
+    const network = officialCatalogFailureFromCause(
+      new OfficialModuleCatalogError('network', 'Failed to fetch radio module catalog (HTTP 503)'),
+    );
+    expect(network.kind).toBe('network');
+    expect(network.title).toBe(OFFICIAL_CATALOG_NETWORK_TITLE);
+    expect(network.guidance).toContain('Connect to the internet');
+
+    const incompatible = officialCatalogFailureFromCause(
+      new OfficialModuleCatalogError(
+        'incompatible',
+        'Invalid module catalog: Unsupported schemaVersion 1: this registry accepts only schema version 3.',
+      ),
+    );
+    expect(incompatible.kind).toBe('incompatible');
+    expect(incompatible.title).toBe(OFFICIAL_CATALOG_INCOMPATIBLE_TITLE);
+    expect(incompatible.guidance).toContain('Update HamBench');
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          schemaVersion: 1,
+          modules: [],
+        }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchOfficialModuleCatalog('https://example.test/catalog.json')).rejects.toMatchObject({
+      kind: 'incompatible',
+    });
+
+    vi.unstubAllGlobals();
   });
 
   it('should match a catalog config path to an extracted file', () => {
