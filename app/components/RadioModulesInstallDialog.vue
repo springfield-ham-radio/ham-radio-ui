@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
-import { catalogRadioDisplayNames } from '~/utils/radio-module-listing';
+import { radioDisplayName } from '~/utils/radio-module-listing';
 import {
   fetchOfficialModuleCatalog,
   installOfficialModule,
@@ -41,8 +41,8 @@ const canDismiss = computed(() => !props.required || configurations.value.length
 const selectableItems = computed(() =>
   catalogEntries.value.map((entry) => ({
     id: entry.id,
-    label: `${entry.manufacturer} — ${entry.description || entry.package}`,
-    description: `v${entry.version} · ${catalogRadioDisplayNames(entry)}`,
+    label: radioDisplayName(entry.manufacturer, entry.name),
+    description: `v${entry.version} · ${entry.id}`,
     entry,
   })),
 );

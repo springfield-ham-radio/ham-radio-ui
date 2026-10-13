@@ -15,9 +15,8 @@ import {
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   radioDisplayName,
-  type AvailableManufacturerGroup,
   type AvailableRadioModelItem,
-  type InstalledManufacturerGroup,
+  type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -49,13 +48,6 @@ const removeConfirmMessage = computed(() => {
   }
 
   if (record.sourcePath && (record.source === 'installed' || isModuleInstallPath(record.sourcePath))) {
-    const related = catalogRecords.value.filter((candidate) => candidate.sourcePath === record.sourcePath);
-    const names = related.map((candidate) => `${candidate.manufacturer} ${candidate.name}`).join(', ');
-
-    if (related.length > 1) {
-      return `Remove the installed module and delete ${names} from your catalog? This also removes the module files from this computer.`;
-    }
-
     return `Remove ${record.manufacturer} ${record.name} from your catalog? This also deletes the installed module files from this computer.`;
   }
 
@@ -121,18 +113,15 @@ function requireDesktopApp(): boolean {
   return false;
 }
 
-async function installRadio(group: AvailableManufacturerGroup, radio: AvailableRadioModelItem): Promise<void> {
+async function installRadio(radio: AvailableRadioModelItem): Promise<void> {
   if (!requireDesktopApp()) {
     return;
   }
 
-  busyKey.value = `${group.entry.id}:${radio.modelId}`;
+  busyKey.value = radio.entry.id;
 
   try {
-    const result = await installOfficialModule(group.entry, {
-      catalogModelId: radio.modelId,
-      catalogConfig: radio.config,
-    });
+    const result = await installOfficialModule(radio.entry);
     await refreshCatalogState();
     await refreshInstalledRadios();
     const installedNames = result.radios
@@ -157,8 +146,8 @@ async function installRadio(group: AvailableManufacturerGroup, radio: AvailableR
   }
 }
 
-async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
-  if (!group.catalogEntry) {
+async function updateRadio(item: InstalledRadioListItem): Promise<void> {
+  if (!item.catalogEntry) {
     return;
   }
 
@@ -166,15 +155,15 @@ async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
     return;
   }
 
-  busyKey.value = group.catalogEntry.id;
+  busyKey.value = item.catalogEntry.id;
 
   try {
-    await installOfficialModule(group.catalogEntry);
+    await installOfficialModule(item.catalogEntry);
     await refreshCatalogState();
     await refreshInstalledRadios();
     toast.add({
       title: 'Radio updated',
-      description: `${group.manufacturer} drivers were updated.`,
+      description: radioDisplayName(item.record.manufacturer, item.record.name),
       color: 'success',
       icon: 'i-lucide-check',
     });
@@ -331,41 +320,13 @@ onMounted(() => {
               <div class="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
                 <UIcon name="i-lucide-radio" class="size-4 text-highlighted" />
                 <span
-                  v-if="group.updateAvailable"
+                  v-if="group.radios.some((radio) => radio.updateAvailable)"
                   class="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-info ring-2 ring-muted"
                   aria-label="Update available"
                 />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ group.manufacturer }}</p>
-              </div>
-              <div class="flex shrink-0 items-center gap-2">
-                <UTooltip
-                  v-if="group.updateAvailable && !group.canUpdate"
-                  :text="group.updateBlockedReason"
-                >
-                  <span class="inline-flex">
-                    <UButton
-                      label="Update"
-                      color="primary"
-                      variant="subtle"
-                      size="xs"
-                      icon="i-lucide-download"
-                      disabled
-                    />
-                  </span>
-                </UTooltip>
-                <UButton
-                  v-else-if="group.canUpdate && group.catalogEntry"
-                  label="Update"
-                  color="primary"
-                  variant="subtle"
-                  size="xs"
-                  icon="i-lucide-download"
-                  :loading="isBusy(group.catalogEntry.id)"
-                  :disabled="anyBusy"
-                  @click="updateGroup(group)"
-                />
               </div>
             </div>
             <ul class="mt-1">
@@ -381,6 +342,32 @@ onMounted(() => {
                   <p class="truncate text-xs text-muted">{{ installedDriverVersionLabel(item.record) }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
+                  <UTooltip
+                    v-if="item.updateAvailable && !item.canUpdate"
+                    :text="item.updateBlockedReason"
+                  >
+                    <span class="inline-flex">
+                      <UButton
+                        label="Update"
+                        color="primary"
+                        variant="subtle"
+                        size="xs"
+                        icon="i-lucide-download"
+                        disabled
+                      />
+                    </span>
+                  </UTooltip>
+                  <UButton
+                    v-else-if="item.canUpdate && item.catalogEntry"
+                    label="Update"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-download"
+                    :loading="isBusy(item.catalogEntry.id)"
+                    :disabled="anyBusy"
+                    @click="updateRadio(item)"
+                  />
                   <UBadge
                     :label="sourceBadge(item.record).label"
                     :color="sourceBadge(item.record).color"
@@ -430,7 +417,7 @@ onMounted(() => {
         <ul v-else-if="availableGroups.length > 0" class="divide-y divide-default rounded-lg bg-muted">
           <li
             v-for="group in availableGroups"
-            :key="group.entry.id"
+            :key="group.manufacturer"
             class="px-3 py-2.5"
           >
             <div class="flex items-center gap-3">
@@ -439,7 +426,6 @@ onMounted(() => {
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ group.manufacturer }}</p>
-                <p class="truncate text-xs text-muted">v{{ group.entry.version }}</p>
               </div>
             </div>
             <ul class="mt-1">
@@ -448,7 +434,10 @@ onMounted(() => {
                 :key="radio.modelId"
                 class="flex items-center gap-3 py-1.5 pl-12"
               >
-                <p class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ radio.name }}</p>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm text-highlighted">{{ radio.name }}</p>
+                  <p class="truncate text-xs text-muted">v{{ radio.entry.version }}</p>
+                </div>
                 <UBadge
                   v-if="radio.installed"
                   label="Installed"
@@ -473,9 +462,9 @@ onMounted(() => {
                   color="primary"
                   size="xs"
                   icon="i-lucide-download"
-                  :loading="isBusy(`${group.entry.id}:${radio.modelId}`)"
+                  :loading="isBusy(radio.entry.id)"
                   :disabled="anyBusy"
-                  @click="installRadio(group, radio)"
+                  @click="installRadio(radio)"
                 />
               </li>
             </ul>

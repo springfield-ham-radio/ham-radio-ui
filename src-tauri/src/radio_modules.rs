@@ -158,11 +158,62 @@ fn list_config_paths(install_path: &Path) -> Result<Vec<String>, String> {
 
     paths.sort();
 
-    if paths.is_empty() {
-        return Err("Installed module has no config JSON files".into());
+    if paths.len() != 1 {
+        return Err(format!(
+            "Installed module must contain exactly one config JSON file under configs/, found {}",
+            paths.len()
+        ));
     }
 
     Ok(paths)
+}
+
+fn config_json_count_in_zip(zip_bytes: &[u8]) -> Result<usize, String> {
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|error| error.to_string())?;
+    let mut count = 0usize;
+
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let name = entry.name();
+
+        if name.ends_with('/') {
+            continue;
+        }
+
+        if !is_safe_zip_entry(name) {
+            continue;
+        }
+
+        let path = Path::new(name);
+
+        if path
+            .components()
+            .any(|component| component.as_os_str() == "configs")
+            && path.extension().and_then(|ext| ext.to_str()) == Some("json")
+        {
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
+const LEGACY_MANUFACTURER_MODULE_IDS: &[&str] = &["kenwood", "baofeng"];
+
+#[tauri::command]
+pub fn migrate_legacy_manufacturer_radio_modules(app: AppHandle) -> Result<(), String> {
+    let root = radio_modules_root(&app)?;
+
+    for module_id in LEGACY_MANUFACTURER_MODULE_IDS {
+        let legacy_dir = root.join(module_id);
+
+        if legacy_dir.is_dir() {
+            fs::remove_dir_all(&legacy_dir).map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(())
 }
 
 fn finalize_install(
@@ -181,6 +232,14 @@ fn finalize_install(
                 "Module integrity mismatch: expected sha256:{expected}, got sha256:{actual}"
             ));
         }
+    }
+
+    let config_count = config_json_count_in_zip(zip_bytes)?;
+
+    if config_count != 1 {
+        return Err(format!(
+            "Module zip must contain exactly one configs/*.json file, found {config_count}"
+        ));
     }
 
     let install_path = install_directory(app, module_id, version)?;

@@ -1,11 +1,7 @@
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import { compareSemver, isApiVersionCompatible } from '@springfield/ham-radio-registry';
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
-import {
-  APP_HAM_RADIO_API_VERSION,
-  catalogModelMatchesId,
-  parseModuleInstallPath,
-} from '~/utils/radio-module-install';
+import { APP_HAM_RADIO_API_VERSION, parseModuleInstallPath } from '~/utils/radio-module-install';
 
 const APP_UPDATE_REQUIRED = 'This radio module requires a newer version of HamBench.';
 
@@ -20,22 +16,12 @@ export interface InstalledRadioListItem {
 export interface InstalledManufacturerGroup {
   manufacturer: string;
   radios: InstalledRadioListItem[];
-  updateAvailable: boolean;
-  canUpdate: boolean;
-  catalogEntry?: RadioModuleCatalogEntry;
-  updateBlockedReason?: string;
-}
-
-export interface CatalogRadioRef {
-  modelId: string;
-  name: string;
-  config?: string;
 }
 
 export interface AvailableRadioModelItem {
   modelId: string;
   name: string;
-  config?: string;
+  entry: RadioModuleCatalogEntry;
   installed: boolean;
   canInstall: boolean;
   installBlockedReason?: string;
@@ -43,24 +29,9 @@ export interface AvailableRadioModelItem {
 
 export interface AvailableManufacturerGroup {
   manufacturer: string;
-  entry: RadioModuleCatalogEntry;
   radios: AvailableRadioModelItem[];
   canInstall: boolean;
   installBlockedReason?: string;
-}
-
-/**
- * Strip npm scope and `radio-module-` so catalog ids match install paths.
- */
-export function normalizeCatalogModuleId(value: string): string {
-  let id = value.trim().toLowerCase();
-  id = id.replace(/^@[^/]+\//, '');
-
-  if (id.startsWith('radio-module-')) {
-    return id.slice('radio-module-'.length);
-  }
-
-  return id;
 }
 
 /**
@@ -97,37 +68,8 @@ export function radioMenuLabel(manufacturer: string, name: string): string {
   return `${prefix} ${trimmedName}`;
 }
 
-type CatalogEntryWithRadios = RadioModuleCatalogEntry & {
-  radios?: CatalogRadioRef[];
-};
-
 /**
- * Radios advertised for a module: zip configs when present, otherwise legacy ids.
- */
-export function radiosOnCatalogEntry(entry: RadioModuleCatalogEntry): CatalogRadioRef[] {
-  const radios = (entry as CatalogEntryWithRadios).radios;
-
-  if (Array.isArray(radios) && radios.length > 0) {
-    return radios;
-  }
-
-  return entry.supportedRadios.map((modelId) => ({
-    modelId,
-    name: formatCatalogRadioName(modelId, entry.manufacturer),
-  }));
-}
-
-/**
- * Child labels for a manufacturer group, from catalog radio names.
- */
-export function catalogRadioDisplayNames(entry: RadioModuleCatalogEntry): string {
-  return radiosOnCatalogEntry(entry)
-    .map((radio) => radioDisplayName(entry.manufacturer, radio.name))
-    .join(', ');
-}
-
-/**
- * Human-readable catalog radio name from a supportedRadios id such as `uv5r-plus`.
+ * Human-readable model id when only a slug is available (local zips, tests).
  */
 export function formatCatalogRadioName(modelId: string, manufacturer?: string): string {
   let id = modelId.trim();
@@ -171,39 +113,6 @@ function formatModelIdPart(part: string): string {
 }
 
 /**
- * True when a catalog `supportedRadios` id refers to this installed row.
- * Catalogs use short ids (`uv5r`); configs use prefixed ids (`baofeng-uv5r`).
- */
-export function catalogModelMatchesRecord(catalogModelId: string, record: RadioCatalogRecord): boolean {
-  return catalogModelMatchesId(catalogModelId, record.modelId, record.manufacturer);
-}
-
-function configModuleId(record: RadioCatalogRecord): string | undefined {
-  const moduleId = record.config.metadata?.moduleId;
-
-  if (typeof moduleId !== 'string' || moduleId.length === 0) {
-    return undefined;
-  }
-
-  return normalizeCatalogModuleId(moduleId);
-}
-
-/**
- * Catalog module id for an installed radio, from the install directory or config metadata.
- */
-export function catalogModuleIdForRecord(record: RadioCatalogRecord): string | undefined {
-  if (record.sourcePath) {
-    const parsed = parseModuleInstallPath(record.sourcePath);
-
-    if (parsed) {
-      return normalizeCatalogModuleId(parsed.moduleId);
-    }
-  }
-
-  return configModuleId(record);
-}
-
-/**
  * Zip version used to decide whether the official catalog has a newer download.
  * Installed rows show the radio config version instead.
  */
@@ -231,45 +140,15 @@ export function catalogEntryForInstalledRadio(
   record: RadioCatalogRecord,
   catalog: RadioModuleCatalogEntry[],
 ): RadioModuleCatalogEntry | undefined {
-  const moduleId = catalogModuleIdForRecord(record);
-
-  if (moduleId) {
-    const byId = catalog.find((entry) => {
-      return (
-        normalizeCatalogModuleId(entry.id) === moduleId ||
-        normalizeCatalogModuleId(entry.package) === moduleId
-      );
-    });
-
-    if (byId) {
-      return byId;
-    }
-  }
-
-  return catalog.find((entry) =>
-    radiosOnCatalogEntry(entry).some((radio) => catalogModelMatchesRecord(radio.modelId, record)),
-  );
+  return catalog.find((entry) => entry.id === record.modelId);
 }
 
 function moduleCompatible(entry: RadioModuleCatalogEntry): boolean {
   return isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, entry.minApiVersion);
 }
 
-function findInstalledRecordForCatalogModel(
-  catalogModelId: string,
-  manufacturer: string,
-  records: RadioCatalogRecord[],
-): RadioCatalogRecord | undefined {
-  return records.find((record) => {
-    return (
-      record.manufacturer.toLowerCase() === manufacturer.toLowerCase() &&
-      catalogModelMatchesRecord(catalogModelId, record)
-    );
-  });
-}
-
 /**
- * Installed radios with catalog update state, in catalog order.
+ * Installed radios with catalog update state.
  */
 export function buildInstalledRadioListItems(
   records: RadioCatalogRecord[],
@@ -308,21 +187,10 @@ export function groupInstalledRadiosByManufacturer(
     groups.set(item.record.manufacturer, radios);
   }
 
-  return [...groups.entries()].map(([manufacturer, radios]) => {
-    const updateAvailable = radios.some((item) => item.updateAvailable);
-    const canUpdate = radios.some((item) => item.canUpdate);
-    const catalogEntry = radios.find((item) => item.catalogEntry)?.catalogEntry;
-    const updateBlockedReason = radios.find((item) => item.updateBlockedReason)?.updateBlockedReason;
-
-    return {
-      manufacturer,
-      radios,
-      updateAvailable,
-      canUpdate,
-      ...(catalogEntry ? { catalogEntry } : {}),
-      ...(updateBlockedReason ? { updateBlockedReason } : {}),
-    };
-  });
+  return [...groups.entries()].map(([manufacturer, radios]) => ({
+    manufacturer,
+    radios,
+  }));
 }
 
 /**
@@ -333,19 +201,27 @@ export function buildAvailableManufacturerGroups(
   records: RadioCatalogRecord[],
   catalog: RadioModuleCatalogEntry[],
 ): AvailableManufacturerGroup[] {
-  return catalog
-    .map((entry) => {
-      const compatible = moduleCompatible(entry);
-      const radios = radiosOnCatalogEntry(entry).map((radio) => {
-        const installedRecord = findInstalledRecordForCatalogModel(radio.modelId, entry.manufacturer, records);
+  const byManufacturer = new Map<string, RadioModuleCatalogEntry[]>();
+
+  for (const entry of catalog) {
+    const radios = byManufacturer.get(entry.manufacturer) ?? [];
+    radios.push(entry);
+    byManufacturer.set(entry.manufacturer, radios);
+  }
+
+  return [...byManufacturer.entries()]
+    .map(([manufacturer, entries]) => {
+      const radios = entries.map((entry) => {
+        const installedRecord = records.find((record) => record.modelId === entry.id);
         const installed = installedRecord !== undefined;
+        const compatible = moduleCompatible(entry);
 
         return {
-          modelId: radio.modelId,
+          modelId: entry.id,
           name: installedRecord
             ? radioDisplayName(installedRecord.manufacturer, installedRecord.name)
-            : radioDisplayName(entry.manufacturer, radio.name),
-          ...(radio.config ? { config: radio.config } : {}),
+            : radioDisplayName(entry.manufacturer, entry.name),
+          entry,
           installed,
           canInstall: !installed && compatible,
           ...(!installed && !compatible ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
@@ -353,13 +229,13 @@ export function buildAvailableManufacturerGroups(
       });
 
       const hasUninstalled = radios.some((radio) => !radio.installed);
+      const hasInstallable = radios.some((radio) => radio.canInstall);
 
       return {
-        manufacturer: entry.manufacturer,
-        entry,
+        manufacturer,
         radios,
-        canInstall: compatible && hasUninstalled,
-        ...(compatible || !hasUninstalled ? {} : { installBlockedReason: APP_UPDATE_REQUIRED }),
+        canInstall: hasInstallable,
+        ...(hasUninstalled && !hasInstallable ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
       };
     })
     .filter((group) => group.radios.some((radio) => !radio.installed));

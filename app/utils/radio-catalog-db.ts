@@ -274,6 +274,40 @@ export async function deleteRadioCatalogRecordsBySourcePath(sourcePath: string):
   await database.execute('DELETE FROM radio_models WHERE source_path = $1', [sourcePath]);
 }
 
+const LEGACY_MANUFACTURER_MODULE_PATTERN = /[/\\]radio-modules[/\\](kenwood|baofeng)([/\\]|$)/i;
+
+function isLegacyManufacturerModuleSourcePath(sourcePath: string | undefined): boolean {
+  if (!sourcePath) {
+    return false;
+  }
+
+  return LEGACY_MANUFACTURER_MODULE_PATTERN.test(sourcePath);
+}
+
+/** Delete official rows that pointed at pre-ADR-0009 `radio-modules/kenwood` or `baofeng` trees. */
+export async function deleteRadioCatalogRecordsForLegacyManufacturerModules(): Promise<void> {
+  if (!isTauriRuntime()) {
+    for (const [modelId, record] of memoryCatalog.entries()) {
+      if (isLegacyManufacturerModuleSourcePath(record.sourcePath)) {
+        memoryCatalog.delete(modelId);
+      }
+    }
+
+    return;
+  }
+
+  const database = await getRadioCatalogDatabase();
+  const rows = await database.select<Pick<RadioModelRow, 'model_id' | 'source_path'>[]>(
+    `SELECT model_id, source_path FROM radio_models WHERE source_path IS NOT NULL`,
+  );
+
+  for (const row of rows) {
+    if (isLegacyManufacturerModuleSourcePath(row.source_path)) {
+      await database.execute('DELETE FROM radio_models WHERE model_id = $1', [row.model_id]);
+    }
+  }
+}
+
 export async function getRadioCatalogRecord(modelId: string): Promise<RadioCatalogRecord | undefined> {
   if (!isTauriRuntime()) {
     return memoryCatalog.get(modelId);

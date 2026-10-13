@@ -8,7 +8,7 @@ import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-rad
 import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import {
   deleteRadioCatalogRecord,
-  deleteRadioCatalogRecordsBySourcePath,
+  deleteRadioCatalogRecordsForLegacyManufacturerModules,
   listRadioCatalogRecords,
   type RadioCatalogRecord,
   upsertRadioCatalogRecord,
@@ -22,6 +22,8 @@ export const OFFICIAL_MODULE_CATALOG_URL =
 
 /** Installed @springfield/ham-radio-api version. Catalog minApiVersion is compared against this. */
 export const APP_HAM_RADIO_API_VERSION: string = hamRadioApiPackage.version;
+
+const LEGACY_MANUFACTURER_MODULE_IDS = new Set(['kenwood', 'baofeng']);
 
 export interface InstalledRadioModuleResult {
   moduleId: string;
@@ -65,27 +67,13 @@ async function hydrateConfigsIntoCatalog(
   configPaths: string[],
   source: RadioCatalogSource,
   sourcePath?: string,
-  catalogModelId?: string,
-  catalogConfig?: string,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
 
   for (const configPath of configPaths) {
-    if (catalogConfig && !catalogConfigMatchesPath(catalogConfig, configPath)) {
-      continue;
-    }
-
     const text = await invoke<string>('load_text_file', { path: configPath });
     const radio = await loadRadioConfigFromFile(configPath, text);
-
-    if (
-      !catalogConfig &&
-      catalogModelId &&
-      !catalogModelMatchesId(catalogModelId, radio.id.model, radio.id.manufacturer)
-    ) {
-      continue;
-    }
 
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
@@ -93,21 +81,13 @@ async function hydrateConfigsIntoCatalog(
     radios.push(radio);
   }
 
-  if ((catalogModelId || catalogConfig) && radios.length === 0) {
-    throw new Error(`That module does not include radio ${catalogModelId || catalogConfig}`);
-  }
-
   return radios;
 }
 
 /**
- * Download an official catalog module, verify integrity, and upsert radios as `installed`.
- * Pass `catalogModelId` / `catalogConfig` to add only that radio from the zip.
+ * Download an official catalog radio module, verify integrity, and upsert the config as `installed`.
  */
-export async function installOfficialModule(
-  entry: RadioModuleCatalogEntry,
-  options: { catalogModelId?: string; catalogConfig?: string } = {},
-): Promise<InstallModuleRadiosResult> {
+export async function installOfficialModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
   }
@@ -122,13 +102,7 @@ export async function installOfficialModule(
     version: entry.version,
   });
 
-  const radios = await hydrateConfigsIntoCatalog(
-    installed.configPaths,
-    'installed',
-    installed.installPath,
-    options.catalogModelId,
-    options.catalogConfig,
-  );
+  const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'installed', installed.installPath);
 
   return {
     moduleId: installed.moduleId,
@@ -182,7 +156,7 @@ export async function installLocalConfigJson(path: string): Promise<InstallModul
   await upsertRadioCatalogRecord(radio, 'user', { sourcePath: path });
 
   return {
-    moduleId: radio.metadata?.moduleId || radio.id.manufacturer.toLowerCase(),
+    moduleId: radio.metadata?.moduleId || radio.id.model.toLowerCase(),
     version: radio.version || '0.0.0',
     radios: [radio],
     source: 'user',
@@ -269,30 +243,6 @@ export function catalogConfigMatchesPath(catalogConfig: string, configPath: stri
   return actual === wanted || actual.endsWith(`/${wanted}`) || basename(actual) === basename(wanted);
 }
 
-/**
- * True when a catalog radio id refers to this radio.
- * Legacy catalogs used short ids (`uv5r`); configs use prefixed ids (`baofeng-uv5r`).
- */
-export function catalogModelMatchesId(
-  catalogModelId: string,
-  modelId: string,
-  manufacturer: string,
-): boolean {
-  const catalogId = catalogModelId.toLowerCase();
-  const normalizedModelId = modelId.toLowerCase();
-
-  if (normalizedModelId === catalogId) {
-    return true;
-  }
-
-  if (normalizedModelId.endsWith(`-${catalogId}`)) {
-    return true;
-  }
-
-  const manufacturerSlug = manufacturer.toLowerCase().replace(/\s+/g, '-');
-  return normalizedModelId === `${manufacturerSlug}-${catalogId}`;
-}
-
 const MODULE_INSTALL_PATH_PATTERN = /\/radio-modules\/([^/]+)\/([^/]+)\/?$/;
 
 /** True when `sourcePath` points at an extracted module directory under app data. */
@@ -313,6 +263,17 @@ export function parseModuleInstallPath(
     moduleId: match[1]!,
     version: match[2]!,
   };
+}
+
+/** True when the install directory used the pre-ADR-0009 manufacturer bundle layout. */
+export function isLegacyManufacturerModulePath(sourcePath: string): boolean {
+  const parsed = parseModuleInstallPath(sourcePath);
+
+  if (!parsed) {
+    return false;
+  }
+
+  return LEGACY_MANUFACTURER_MODULE_IDS.has(parsed.moduleId);
 }
 
 /**
@@ -353,12 +314,22 @@ export async function reloadUserJsonCatalogRecords(): Promise<void> {
   }
 }
 
-function usesModuleInstallDirectory(record: RadioCatalogRecord): boolean {
-  return record.source === 'installed' || (record.sourcePath !== undefined && isModuleInstallPath(record.sourcePath));
+/**
+ * One-time cutover: remove bundled manufacturer module directories and catalog rows.
+ * Does not reinstall drivers; saved radios and user JSON stay.
+ */
+export async function migrateLegacyManufacturerRadioModules(): Promise<void> {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('migrate_legacy_manufacturer_radio_modules');
+  await deleteRadioCatalogRecordsForLegacyManufacturerModules();
 }
 
 /**
- * Remove a radio (or whole installed module) from the catalog and filesystem.
+ * Remove one radio from the catalog and its install directory when applicable.
  * Returns the model ids removed from the catalog.
  */
 export async function uninstallRadioCatalogRecord(record: RadioCatalogRecord): Promise<string[]> {
@@ -366,13 +337,7 @@ export async function uninstallRadioCatalogRecord(record: RadioCatalogRecord): P
     throw new Error('Removing radio modules requires the Tauri desktop app.');
   }
 
-  const allRecords = await listRadioCatalogRecords();
-  const recordsToRemove =
-    record.sourcePath && usesModuleInstallDirectory(record)
-      ? allRecords.filter((candidate) => candidate.sourcePath === record.sourcePath)
-      : [record];
-
-  if (record.sourcePath && usesModuleInstallDirectory(record)) {
+  if (record.sourcePath && (record.source === 'installed' || isModuleInstallPath(record.sourcePath))) {
     const parsed = parseModuleInstallPath(record.sourcePath);
 
     if (parsed) {
@@ -382,11 +347,9 @@ export async function uninstallRadioCatalogRecord(record: RadioCatalogRecord): P
         version: parsed.version,
       });
     }
-
-    await deleteRadioCatalogRecordsBySourcePath(record.sourcePath);
-  } else {
-    await deleteRadioCatalogRecord(record.modelId);
   }
 
-  return recordsToRemove.map((candidate) => candidate.modelId);
+  await deleteRadioCatalogRecord(record.modelId);
+
+  return [record.modelId];
 }

@@ -34,7 +34,11 @@ import {
   memoryMapFromConfig,
   type RadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
-import { reloadUserJsonCatalogRecords, uninstallRadioCatalogRecord } from '~/utils/radio-module-install';
+import {
+  migrateLegacyManufacturerRadioModules,
+  reloadUserJsonCatalogRecords,
+  uninstallRadioCatalogRecord,
+} from '~/utils/radio-module-install';
 import {
   defaultMemoryFileName,
   memoryFileDisplayName,
@@ -410,6 +414,7 @@ export function useRadio() {
     error.value = null;
 
     try {
+      await migrateLegacyManufacturerRadioModules();
       await refreshCatalogState();
 
       if (configurations.value.length === 0) {
@@ -450,14 +455,9 @@ export function useRadio() {
         modulesInstallRequired.value = true;
       }
 
-      const description =
-        removedModelIds.length === 1
-          ? record.name
-          : `${removedModelIds.length} radios removed`;
-
       toast.add({
         title: 'Radio removed',
-        description,
+        description: record.name,
         color: 'success',
         icon: 'i-lucide-check',
       });

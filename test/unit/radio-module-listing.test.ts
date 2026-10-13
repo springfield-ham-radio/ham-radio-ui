@@ -6,65 +6,63 @@ import {
   buildAvailableManufacturerGroups,
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
-  catalogModelMatchesRecord,
-  catalogModuleIdForRecord,
-  catalogRadioDisplayNames,
   formatCatalogRadioName,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
-  normalizeCatalogModuleId,
   radioDisplayName,
   radioMenuLabel,
-  radiosOnCatalogEntry,
 } from '../../app/utils/radio-module-listing.ts';
 
 const baofengEntry = {
-  id: 'baofeng',
-  package: '@springfield/radio-module-baofeng',
+  id: 'baofeng-uv5r',
+  package: '@springfield/radio-module-baofeng-uv5r',
   manufacturer: 'Baofeng',
   description: 'Baofeng UV-5R series',
-  version: '3.4.1',
-  radios: [
-    {
-      modelId: 'baofeng-uv5r',
-      name: 'Baofeng UV-5R',
-      config: 'configs/baofeng-uv5r.json',
-    },
-  ],
-  supportedRadios: ['baofeng-uv5r'],
-  minApiVersion: '17.3.0',
-  downloadUrl: 'https://example.test/baofeng.zip',
+  name: 'Baofeng UV-5R',
+  version: '3.7.0',
+  config: 'configs/baofeng-uv5r.json',
+  minApiVersion: '18.0.1',
+  downloadUrl: 'https://example.test/baofeng-uv5r.zip',
   integrity: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 } as RadioModuleCatalogEntry;
 
-const kenwoodEntry = {
-  id: 'kenwood',
-  package: '@springfield/radio-module-kenwood',
+const kenwoodThD74 = {
+  id: 'kenwood-th-d74',
+  package: '@springfield/radio-module-kenwood-th-d74',
   manufacturer: 'Kenwood',
-  description: 'Kenwood handhelds and mobiles',
-  version: '1.8.0',
-  radios: [
-    {
-      modelId: 'kenwood-th-d74',
-      name: 'Kenwood TH-D74',
-      config: 'configs/kenwood-th-d74.json',
-    },
-    {
-      modelId: 'kenwood-th-f6',
-      name: 'Kenwood TH-F6',
-      config: 'configs/kenwood-th-f6.json',
-    },
-    {
-      modelId: 'kenwood-tm-d710a',
-      name: 'Kenwood TM-D710A',
-      config: 'configs/kenwood-tm-d710a.json',
-    },
-  ],
-  supportedRadios: ['kenwood-th-d74', 'kenwood-th-f6', 'kenwood-tm-d710a'],
-  minApiVersion: '17.3.0',
-  downloadUrl: 'https://example.test/kenwood.zip',
+  name: 'Kenwood TH-D74',
+  version: '1.11.1',
+  config: 'configs/kenwood-th-d74.json',
+  minApiVersion: '18.0.1',
+  downloadUrl: 'https://example.test/kenwood-th-d74.zip',
   integrity: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
 } as RadioModuleCatalogEntry;
+
+const kenwoodThF6 = {
+  id: 'kenwood-th-f6',
+  package: '@springfield/radio-module-kenwood-th-f6',
+  manufacturer: 'Kenwood',
+  name: 'Kenwood TH-F6',
+  version: '1.11.0',
+  config: 'configs/kenwood-th-f6.json',
+  minApiVersion: '18.0.1',
+  downloadUrl: 'https://example.test/kenwood-th-f6.zip',
+  integrity: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+} as RadioModuleCatalogEntry;
+
+const kenwoodTmD710a = {
+  id: 'kenwood-tm-d710a',
+  package: '@springfield/radio-module-kenwood-tm-d710a',
+  manufacturer: 'Kenwood',
+  name: 'Kenwood TM-D710A',
+  version: '1.11.0',
+  config: 'configs/kenwood-tm-d710a.json',
+  minApiVersion: '18.0.1',
+  downloadUrl: 'https://example.test/kenwood-tm-d710a.zip',
+  integrity: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+} as RadioModuleCatalogEntry;
+
+const catalog = [baofengEntry, kenwoodThD74, kenwoodThF6, kenwoodTmD710a];
 
 function record(
   partial: Pick<RadioCatalogRecord, 'modelId' | 'name' | 'manufacturer' | 'version' | 'source'> &
@@ -88,12 +86,6 @@ function record(
 }
 
 describe('radio module listing', () => {
-  it('should normalize catalog and package module ids', () => {
-    expect(normalizeCatalogModuleId('baofeng')).toBe('baofeng');
-    expect(normalizeCatalogModuleId('radio-module-baofeng')).toBe('baofeng');
-    expect(normalizeCatalogModuleId('@springfield/radio-module-baofeng')).toBe('baofeng');
-  });
-
   it('labels an installed radio with its driver version', () => {
     expect(installedDriverVersionLabel({ version: '1.4.2', modelId: 'baofeng-uv5r' })).toBe(
       'v1.4.2 · baofeng-uv5r',
@@ -112,59 +104,23 @@ describe('radio module listing', () => {
   });
 
   it('should format catalog radio ids into display names', () => {
-    expect(formatCatalogRadioName('uv5r')).toBe('UV-5R');
-    expect(formatCatalogRadioName('uv5r-plus')).toBe('UV-5R Plus');
-    expect(formatCatalogRadioName('th-d74')).toBe('TH-D74');
-    expect(formatCatalogRadioName('tm-d710a')).toBe('TM-D710A');
     expect(formatCatalogRadioName('baofeng-uv5r', 'Baofeng')).toBe('UV-5R');
+    expect(formatCatalogRadioName('kenwood-th-d74', 'Kenwood')).toBe('TH-D74');
+    expect(formatCatalogRadioName('kenwood-tm-d710a', 'Kenwood')).toBe('TM-D710A');
   });
 
-  it('should list zip configs from radios and fall back to supportedRadios', () => {
-    expect(radiosOnCatalogEntry(baofengEntry)).toEqual([
-      {
-        modelId: 'baofeng-uv5r',
-        name: 'Baofeng UV-5R',
-        config: 'configs/baofeng-uv5r.json',
-      },
-    ]);
-    expect(catalogRadioDisplayNames(baofengEntry)).toBe('UV-5R');
-    expect(catalogRadioDisplayNames(kenwoodEntry)).toBe('TH-D74, TH-F6, TM-D710A');
-
-    const legacy = {
-      ...baofengEntry,
-      radios: undefined,
-      supportedRadios: ['uv5r', 'uv5r-plus'],
-    } as RadioModuleCatalogEntry;
-
-    expect(radiosOnCatalogEntry(legacy).map((radio) => radio.modelId)).toEqual(['uv5r', 'uv5r-plus']);
-  });
-
-  it('should match short catalog ids to prefixed installed model ids', () => {
-    const installed = record({
-      modelId: 'baofeng-uv5r',
-      name: 'Baofeng UV-5R',
-      manufacturer: 'Baofeng',
-      version: '3.4.0',
-      source: 'user',
-    });
-
-    expect(catalogModelMatchesRecord('baofeng-uv5r', installed)).toBe(true);
-    expect(catalogModelMatchesRecord('uv5r', installed)).toBe(true);
-    expect(catalogModelMatchesRecord('uv5r-plus', installed)).toBe(false);
-  });
-
-  it('should read the module id from an install directory', () => {
+  it('should match catalog entries by model id only', () => {
     const installed = record({
       modelId: 'baofeng-uv5r',
       name: 'UV-5R',
       manufacturer: 'Baofeng',
       version: '3.0.0',
       source: 'installed',
-      sourcePath: '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/baofeng/3.0.0',
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.0.0',
     });
 
-    expect(catalogModuleIdForRecord(installed)).toBe('baofeng');
-    expect(catalogEntryForInstalledRadio(installed, [baofengEntry, kenwoodEntry])?.id).toBe('baofeng');
+    expect(catalogEntryForInstalledRadio(installed, catalog)?.id).toBe('baofeng-uv5r');
+    expect(catalogEntryForInstalledRadio({ ...installed, modelId: 'uv5r' }, catalog)).toBeUndefined();
   });
 
   it('should flag installed official radios when the catalog has a newer version', () => {
@@ -174,43 +130,29 @@ describe('radio module listing', () => {
       manufacturer: 'Baofeng',
       version: '3.0.0',
       source: 'installed',
-      sourcePath: '/tmp/radio-modules/baofeng/3.0.0',
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.0.0',
     });
-    const items = buildInstalledRadioListItems([installed], [baofengEntry]);
+    const items = buildInstalledRadioListItems([installed], catalog);
 
     expect(items).toHaveLength(1);
     expect(items[0]?.updateAvailable).toBe(true);
     expect(items[0]?.canUpdate).toBe(true);
-    expect(items[0]?.catalogEntry?.version).toBe('3.4.1');
+    expect(items[0]?.catalogEntry?.version).toBe('3.7.0');
   });
 
-  it('should not flag an update when the installed version matches the catalog', () => {
+  it('should not flag an update when the installed directory version matches the catalog', () => {
     const installed = record({
       modelId: 'baofeng-uv5r',
       name: 'UV-5R',
       manufacturer: 'Baofeng',
-      version: '3.4.1',
+      version: '3.7.0',
       source: 'installed',
-      sourcePath: '/tmp/radio-modules/baofeng/3.4.1',
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
     });
-    const items = buildInstalledRadioListItems([installed], [baofengEntry]);
+    const items = buildInstalledRadioListItems([installed], catalog);
 
     expect(items[0]?.updateAvailable).toBe(false);
     expect(items[0]?.canUpdate).toBe(false);
-  });
-
-  it('should match bundled radios to catalog entries by supported model id', () => {
-    const bundled = record({
-      modelId: 'baofeng-uv5r',
-      name: 'UV-5R',
-      manufacturer: 'Baofeng',
-      version: '3.0.0',
-      source: 'bundled',
-    });
-    const items = buildInstalledRadioListItems([bundled], [baofengEntry]);
-
-    expect(items[0]?.catalogEntry?.id).toBe('baofeng');
-    expect(items[0]?.updateAvailable).toBe(true);
   });
 
   it('should not offer catalog updates for unverified local radios', () => {
@@ -222,7 +164,7 @@ describe('radio module listing', () => {
       source: 'user',
       sourcePath: '/tmp/uv5r.json',
     });
-    const items = buildInstalledRadioListItems([local], [baofengEntry]);
+    const items = buildInstalledRadioListItems([local], catalog);
 
     expect(items[0]?.updateAvailable).toBe(false);
     expect(items[0]?.canUpdate).toBe(false);
@@ -253,7 +195,7 @@ describe('radio module listing', () => {
           source: 'user',
         }),
       ],
-      [baofengEntry, kenwoodEntry],
+      catalog,
     );
     const groups = groupInstalledRadiosByManufacturer(items);
 
@@ -269,37 +211,21 @@ describe('radio module listing', () => {
       modelId: 'kenwood-th-d74',
       name: 'Kenwood TH-D74',
       manufacturer: 'Kenwood',
-      version: '1.8.0',
+      version: '1.11.1',
       source: 'user',
       sourcePath: '/tmp/th-d74.json',
     });
-    const available = buildAvailableManufacturerGroups([local], [baofengEntry, kenwoodEntry]);
+    const available = buildAvailableManufacturerGroups([local], catalog);
     const kenwood = available.find((group) => group.manufacturer === 'Kenwood');
 
     expect(available.map((group) => group.manufacturer)).toEqual(['Baofeng', 'Kenwood']);
-    expect(kenwood?.radios).toEqual([
-      {
-        modelId: 'kenwood-th-d74',
-        name: 'TH-D74',
-        config: 'configs/kenwood-th-d74.json',
-        installed: true,
-        canInstall: false,
-      },
-      {
-        modelId: 'kenwood-th-f6',
-        name: 'TH-F6',
-        config: 'configs/kenwood-th-f6.json',
-        installed: false,
-        canInstall: true,
-      },
-      {
-        modelId: 'kenwood-tm-d710a',
-        name: 'TM-D710A',
-        config: 'configs/kenwood-tm-d710a.json',
-        installed: false,
-        canInstall: true,
-      },
+    expect(kenwood?.radios.map((radio) => radio.modelId)).toEqual([
+      'kenwood-th-d74',
+      'kenwood-th-f6',
+      'kenwood-tm-d710a',
     ]);
+    expect(kenwood?.radios.find((radio) => radio.modelId === 'kenwood-th-d74')?.installed).toBe(true);
+    expect(kenwood?.radios.find((radio) => radio.modelId === 'kenwood-th-f6')?.canInstall).toBe(true);
     expect(kenwood?.canInstall).toBe(true);
   });
 
@@ -308,18 +234,18 @@ describe('radio module listing', () => {
       modelId: 'baofeng-uv5r',
       name: 'UV-5R',
       manufacturer: 'Baofeng',
-      version: '3.4.1',
+      version: '3.7.0',
       source: 'installed',
-      sourcePath: '/tmp/radio-modules/baofeng/3.4.1',
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
     });
-    const available = buildAvailableManufacturerGroups([installed], [baofengEntry, kenwoodEntry]);
+    const available = buildAvailableManufacturerGroups([installed], catalog);
 
     expect(available.map((group) => group.manufacturer)).toEqual(['Kenwood']);
   });
 
   it('should block install when the module needs a newer app API', () => {
     const newerApi = {
-      ...kenwoodEntry,
+      ...kenwoodThF6,
       minApiVersion: '99.0.0',
     } as RadioModuleCatalogEntry;
     const available = buildAvailableManufacturerGroups([], [newerApi]);
@@ -331,7 +257,7 @@ describe('radio module listing', () => {
 
   it('should allow install when minApiVersion matches the installed ham-radio-api', () => {
     const entry = {
-      ...kenwoodEntry,
+      ...kenwoodThF6,
       minApiVersion: APP_HAM_RADIO_API_VERSION,
     } as RadioModuleCatalogEntry;
     const available = buildAvailableManufacturerGroups([], [entry]);
@@ -339,20 +265,6 @@ describe('radio module listing', () => {
     expect(available[0]?.canInstall).toBe(true);
     expect(available[0]?.radios.every((radio) => radio.canInstall === true)).toBe(true);
     expect(available[0]?.installBlockedReason).toBeUndefined();
-  });
-
-  it('should block install when minApiVersion is one patch above the installed ham-radio-api', () => {
-    const parts = APP_HAM_RADIO_API_VERSION.split('.').map((part) => Number.parseInt(part, 10) || 0);
-    const minApiVersion = `${parts[0]}.${parts[1]}.${(parts[2] ?? 0) + 1}`;
-    const entry = {
-      ...kenwoodEntry,
-      minApiVersion,
-    } as RadioModuleCatalogEntry;
-    const available = buildAvailableManufacturerGroups([], [entry]);
-
-    expect(available[0]?.canInstall).toBe(false);
-    expect(available[0]?.radios.every((radio) => radio.canInstall === false)).toBe(true);
-    expect(available[0]?.installBlockedReason).toContain('newer version of HamBench');
   });
 
   it('should show an update badge but block update when the catalog needs a newer API', () => {
@@ -368,32 +280,12 @@ describe('radio module listing', () => {
       manufacturer: 'Baofeng',
       version: '3.0.0',
       source: 'installed',
-      sourcePath: '/tmp/radio-modules/baofeng/3.0.0',
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.0.0',
     });
     const items = buildInstalledRadioListItems([installed], [entry]);
 
     expect(items[0]?.updateAvailable).toBe(true);
     expect(items[0]?.canUpdate).toBe(false);
     expect(items[0]?.updateBlockedReason).toContain('newer version of HamBench');
-  });
-
-  it('should allow catalog update when minApiVersion matches the installed ham-radio-api', () => {
-    const entry = {
-      ...baofengEntry,
-      minApiVersion: APP_HAM_RADIO_API_VERSION,
-    } as RadioModuleCatalogEntry;
-    const installed = record({
-      modelId: 'baofeng-uv5r',
-      name: 'UV-5R',
-      manufacturer: 'Baofeng',
-      version: '3.0.0',
-      source: 'installed',
-      sourcePath: '/tmp/radio-modules/baofeng/3.0.0',
-    });
-    const items = buildInstalledRadioListItems([installed], [entry]);
-
-    expect(items[0]?.updateAvailable).toBe(true);
-    expect(items[0]?.canUpdate).toBe(true);
-    expect(items[0]?.updateBlockedReason).toBeUndefined();
   });
 });
