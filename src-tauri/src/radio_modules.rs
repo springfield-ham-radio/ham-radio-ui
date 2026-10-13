@@ -104,7 +104,10 @@ fn extract_json_zip(zip_bytes: &[u8], destination: &Path) -> Result<Vec<String>,
 
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|error| error.to_string())?
+            .into_owned();
 
         if name.ends_with('/') {
             continue;
