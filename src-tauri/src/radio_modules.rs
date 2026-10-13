@@ -62,16 +62,63 @@ fn radio_modules_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data.join("radio-modules"))
 }
 
-fn install_directory(app: &AppHandle, module_id: &str, version: &str) -> Result<PathBuf, String> {
-    if module_id.trim().is_empty() || version.trim().is_empty() {
+fn safe_install_segment(value: &str) -> Result<(), String> {
+    if value.is_empty() || value != value.trim() {
         return Err("module_id and version are required".into());
     }
 
-    if module_id.contains("..") || version.contains("..") || module_id.contains('/') || version.contains('/') {
+    if value.contains(['/', '\\', ':', '\0']) || value.contains("..") {
         return Err("Invalid module_id or version".into());
     }
 
-    Ok(radio_modules_root(app)?.join(module_id).join(version))
+    let path = Path::new(value);
+    let mut components = path.components();
+
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(segment)), None) if segment.to_str() == Some(value) => Ok(()),
+        _ => Err("Invalid module_id or version".into()),
+    }
+}
+
+fn install_directory(app: &AppHandle, module_id: &str, version: &str) -> Result<PathBuf, String> {
+    safe_install_segment(module_id)?;
+    safe_install_segment(version)?;
+
+    let root = radio_modules_root(app)?;
+    let install_path = root.join(module_id).join(version);
+
+    if !install_path.starts_with(&root) {
+        return Err("Invalid module_id or version".into());
+    }
+
+    Ok(install_path)
+}
+
+/// `configs/<file>.json` at the zip root, not a nested JSON file and not another `configs` directory.
+fn is_direct_configs_json(name: &str) -> bool {
+    if !is_safe_zip_entry(name) {
+        return false;
+    }
+
+    let path = Path::new(name);
+    let parts: Vec<_> = path
+        .components()
+        .filter(|component| !matches!(component, Component::CurDir))
+        .collect();
+
+    if parts.len() != 2 {
+        return false;
+    }
+
+    match (parts.first(), parts.get(1)) {
+        (Some(Component::Normal(directory)), Some(Component::Normal(file))) => {
+            directory.to_str() == Some("configs")
+                && file
+                    .to_str()
+                    .is_some_and(|name| name.to_ascii_lowercase().ends_with(".json"))
+        }
+        _ => false,
+    }
 }
 
 fn is_safe_zip_entry(name: &str) -> bool {
@@ -151,18 +198,72 @@ fn list_config_paths(install_path: &Path) -> Result<Vec<String>, String> {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
 
-        if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+        if path.is_file()
+            && path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
             paths.push(path.to_string_lossy().to_string());
         }
     }
 
     paths.sort();
 
-    if paths.is_empty() {
-        return Err("Installed module has no config JSON files".into());
+    if paths.len() != 1 {
+        return Err(format!(
+            "Installed module must contain exactly one config JSON file under configs/, found {}",
+            paths.len()
+        ));
     }
 
     Ok(paths)
+}
+
+fn config_json_count_in_zip(zip_bytes: &[u8]) -> Result<usize, String> {
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|error| error.to_string())?;
+    let mut count = 0usize;
+
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let name = entry.name();
+
+        if name.ends_with('/') {
+            continue;
+        }
+
+        if !is_safe_zip_entry(name) {
+            return Err(format!(
+                "Refusing to extract non-JSON or unsafe path from module zip: {name}"
+            ));
+        }
+
+        if is_direct_configs_json(name) {
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
+const LEGACY_MANUFACTURER_MODULE_IDS: &[&str] = &["kenwood", "baofeng"];
+
+#[tauri::command]
+pub fn migrate_legacy_manufacturer_radio_modules(app: AppHandle) -> Result<Vec<String>, String> {
+    let root = radio_modules_root(&app)?;
+    let mut legacy_directories = Vec::new();
+
+    for module_id in LEGACY_MANUFACTURER_MODULE_IDS {
+        let legacy_dir = root.join(module_id);
+        legacy_directories.push(legacy_dir.to_string_lossy().to_string());
+
+        if legacy_dir.is_dir() {
+            fs::remove_dir_all(&legacy_dir).map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(legacy_directories)
 }
 
 fn finalize_install(
@@ -183,9 +284,28 @@ fn finalize_install(
         }
     }
 
+    let config_count = config_json_count_in_zip(zip_bytes)?;
+
+    if config_count != 1 {
+        return Err(format!(
+            "Module zip must contain exactly one configs/*.json file, found {config_count}"
+        ));
+    }
+
     let install_path = install_directory(app, module_id, version)?;
-    extract_json_zip(zip_bytes, &install_path)?;
-    let config_paths = list_config_paths(&install_path)?;
+
+    if let Err(error) = extract_json_zip(zip_bytes, &install_path) {
+        let _ = fs::remove_dir_all(&install_path);
+        return Err(error);
+    }
+
+    let config_paths = match list_config_paths(&install_path) {
+        Ok(paths) => paths,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&install_path);
+            return Err(error);
+        }
+    };
 
     Ok(InstalledRadioModule {
         module_id: module_id.to_string(),
@@ -278,4 +398,65 @@ pub fn uninstall_radio_module(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{config_json_count_in_zip, is_direct_configs_json, safe_install_segment};
+    use std::io::{Cursor, Write};
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    fn zip_with(files: &[(&str, &str)]) -> Vec<u8> {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut archive = ZipWriter::new(&mut cursor);
+            let options = SimpleFileOptions::default();
+
+            for (name, body) in files {
+                archive.start_file(*name, options).expect("start zip entry");
+                archive.write_all(body.as_bytes()).expect("write zip entry");
+            }
+
+            archive.finish().expect("finish zip");
+        }
+
+        cursor.into_inner()
+    }
+
+    #[test]
+    fn rejects_install_segments_that_leave_the_module_directory() {
+        assert!(safe_install_segment("kenwood-th-f6").is_ok());
+        assert!(safe_install_segment("1.11.0").is_ok());
+        assert!(safe_install_segment("..").is_err());
+        assert!(safe_install_segment("../secrets").is_err());
+        assert!(safe_install_segment("kenwood/th-f6").is_err());
+        assert!(safe_install_segment("kenwood\\th-f6").is_err());
+        assert!(safe_install_segment("C:kenwood").is_err());
+        assert!(safe_install_segment(".").is_err());
+        assert!(safe_install_segment("").is_err());
+        assert!(safe_install_segment(" 1.11.0").is_err());
+    }
+
+    #[test]
+    fn counts_only_a_direct_configs_json() {
+        assert!(is_direct_configs_json("configs/kenwood-th-f6.json"));
+        assert!(!is_direct_configs_json("configs/nested/kenwood-th-f6.json"));
+        assert!(!is_direct_configs_json("src/shared/schemas/channel-schema.json"));
+
+        let one = zip_with(&[
+            ("configs/kenwood-th-f6.json", "{}"),
+            ("src/shared/schemas/channel-schema.json", "{}"),
+        ]);
+        assert_eq!(config_json_count_in_zip(&one).expect("one config"), 1);
+
+        let two = zip_with(&[("configs/a.json", "{}"), ("configs/b.json", "{}")]);
+        assert_eq!(config_json_count_in_zip(&two).expect("two configs"), 2);
+
+        let none = zip_with(&[("src/shared/schemas/channel-schema.json", "{}")]);
+        assert_eq!(config_json_count_in_zip(&none).expect("no config"), 0);
+
+        let escaped = zip_with(&[("configs/../secrets.json", "{}")]);
+        assert!(config_json_count_in_zip(&escaped).is_err());
+    }
 }

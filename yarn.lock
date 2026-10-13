@@ -3356,14 +3356,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-registry@npm:^1.7.3":
-  version: 1.7.3
-  resolution: "@springfield/ham-radio-registry@npm:1.7.3"
+"@springfield/ham-radio-registry@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "@springfield/ham-radio-registry@npm:2.0.0"
   dependencies:
     "@springfield/ham-radio-api": "npm:^18.0.1"
     "@springfield/ham-radio-utils": "npm:^4.15.1"
     loglayer: "npm:^9.4.0"
-  checksum: 10c0/276ea9a6b103cd23e01ce9ba64f01741d32fe18db39b14732c43b0cf383aeb1e1897dbd63f1b17d987c264c66c997c07870b0e0ffd222be6d67c8a444d53d289
+  checksum: 10c0/17229e36d5894b59ba64a080924f906b6701696550e42125740da01be819d855bcc69a56b604447ae9b101ef7916d31787e76e16519ff28854d8c1c2c6691112
   languageName: node
   linkType: hard
 
@@ -3380,7 +3380,7 @@ __metadata:
     "@semantic-release/npm": "npm:13.2.0"
     "@springfield/ham-radio-api": "npm:^18.0.1"
     "@springfield/ham-radio-driver": "npm:^3.5.4"
-    "@springfield/ham-radio-registry": "npm:^1.7.3"
+    "@springfield/ham-radio-registry": "npm:^2.0.0"
     "@springfield/ham-radio-utils": "npm:^4.15.1"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
     "@tauri-apps/api": "npm:^2.12.1"
