@@ -110,9 +110,12 @@ fn is_direct_configs_json(name: &str) -> bool {
         return false;
     }
 
-    match (&parts[0], &parts[1]) {
-        (Component::Normal(directory), Component::Normal(file)) => {
-            directory == "configs" && file.to_string_lossy().to_ascii_lowercase().ends_with(".json")
+    match (parts.first(), parts.get(1)) {
+        (Some(Component::Normal(directory)), Some(Component::Normal(file))) => {
+            directory.to_str() == Some("configs")
+                && file
+                    .to_str()
+                    .is_some_and(|name| name.to_ascii_lowercase().ends_with(".json"))
         }
         _ => false,
     }
@@ -453,7 +456,7 @@ mod tests {
         let none = zip_with(&[("src/shared/schemas/channel-schema.json", "{}")]);
         assert_eq!(config_json_count_in_zip(&none).expect("no config"), 0);
 
-        let unsafe = zip_with(&[("configs/../secrets.json", "{}")]);
-        assert!(config_json_count_in_zip(&unsafe).is_err());
+        let escaped = zip_with(&[("configs/../secrets.json", "{}")]);
+        assert!(config_json_count_in_zip(&escaped).is_err());
     }
 }
