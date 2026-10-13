@@ -1,3 +1,13 @@
+## [1.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.4...v1.0.0) (2026-10-13)
+
+### ⚠ BREAKING CHANGES
+
+* requires catalog schema v3; legacy bundled kenwood/baofeng modules are removed on first launch and must be reinstalled per radio. Implements ADR 0009. Fixes #116.
+
+### Features
+
+* per-radio radio modules ([#117](https://github.com/springfield-ham-radio/ham-radio-ui/issues/117)) ([c226cd0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c226cd01117232007f78eca7a68b16e2163a3f95))
+
 ## [0.61.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.3...v0.61.4) (2026-10-12)
 
 ### Bug Fixes
