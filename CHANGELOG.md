@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.1.0...v1.1.1) (2026-10-14)
+
+### Bug Fixes
+
+* **deps:** bump zip from 8.6.0 to 9.0.0 in /src-tauri ([#110](https://github.com/springfield-ham-radio/ham-radio-ui/issues/110)) ([0413c42](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0413c42ca6191059ce3fe300325087ec8383481c))
+
 ## [1.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.0.0...v1.1.0) (2026-10-13)
 
 ### Features
