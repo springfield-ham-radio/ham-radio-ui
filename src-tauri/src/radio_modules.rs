@@ -32,7 +32,7 @@ fn is_allowed_download_url(url: &str) -> Result<(), String> {
 
     let host = parsed.host_str().ok_or_else(|| "Download URL is missing a host".to_string())?;
 
-    if ALLOWED_DOWNLOAD_HOSTS.iter().any(|allowed| *allowed == host) {
+    if ALLOWED_DOWNLOAD_HOSTS.contains(&host) {
         Ok(())
     } else {
         Err(format!("Download host is not allowlisted: {host}"))
@@ -327,19 +327,21 @@ fn config_json_count_in_zip(zip_bytes: &[u8]) -> Result<usize, String> {
 
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(|error| error.to_string())?;
-        let name = entry.name();
+        let name = entry
+            .name()
+            .map_err(|error| error.to_string())?;
 
         if name.ends_with('/') {
             continue;
         }
 
-        if !is_safe_zip_entry(name) {
+        if !is_safe_zip_entry(&name) {
             return Err(format!(
                 "Refusing to extract non-JSON or unsafe path from module zip: {name}"
             ));
         }
 
-        if is_direct_configs_json(name) {
+        if is_direct_configs_json(&name) {
             count += 1;
         }
     }
