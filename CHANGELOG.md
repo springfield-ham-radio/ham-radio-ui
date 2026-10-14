@@ -1,3 +1,50 @@
+## [1.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.1.0...v1.1.1) (2026-10-14)
+
+### Bug Fixes
+
+* **deps:** bump zip from 8.6.0 to 9.0.0 in /src-tauri ([#110](https://github.com/springfield-ham-radio/ham-radio-ui/issues/110)) ([0413c42](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0413c42ca6191059ce3fe300325087ec8383481c))
+
+## [1.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.0.0...v1.1.0) (2026-10-13)
+
+### Features
+
+* switch unverified drivers to verified catalog versions ([#119](https://github.com/springfield-ham-radio/ham-radio-ui/issues/119)) ([6bfe69e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6bfe69eb95df4e6f0badd2ec536a920badacc371))
+
+## [1.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.4...v1.0.0) (2026-10-13)
+
+### ⚠ BREAKING CHANGES
+
+* requires catalog schema v3; legacy bundled kenwood/baofeng modules are removed on first launch and must be reinstalled per radio. Implements ADR 0009. Fixes #116.
+
+### Features
+
+* per-radio radio modules ([#117](https://github.com/springfield-ham-radio/ham-radio-ui/issues/117)) ([c226cd0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c226cd01117232007f78eca7a68b16e2163a3f95))
+
+## [0.61.4](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.3...v0.61.4) (2026-10-12)
+
+### Bug Fixes
+
+* clear removed channel rows and place gap drops in empty slots (Fixes [#113](https://github.com/springfield-ham-radio/ham-radio-ui/issues/113)) ([#114](https://github.com/springfield-ham-radio/ham-radio-ui/issues/114)) ([f2fec03](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f2fec038fecb0de81abc618e46ecfe83b9721fc8)), closes [#103](https://github.com/springfield-ham-radio/ham-radio-ui/issues/103)
+
+## [0.61.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.2...v0.61.3) (2026-10-12)
+
+### Bug Fixes
+
+* channel add order and per-card drag reorder (Fixes [#103](https://github.com/springfield-ham-radio/ham-radio-ui/issues/103)) ([#104](https://github.com/springfield-ham-radio/ham-radio-ui/issues/104)) ([0b7e1a7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0b7e1a753707b188944247994c3d975639b2d81a))
+* **deps:** bump ham-radio-driver to 3.5.4 for TH-F6 writes ([#112](https://github.com/springfield-ham-radio/ham-radio-ui/issues/112)) ([0ccb49f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0ccb49fcb37a27f09062fbb8c513fd9146f5d37f))
+
+## [0.61.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.1...v0.61.2) (2026-10-12)
+
+### Bug Fixes
+
+* TH-F6 write port race and serial log on failure ([#108](https://github.com/springfield-ham-radio/ham-radio-ui/issues/108), [#107](https://github.com/springfield-ham-radio/ham-radio-ui/issues/107)) ([#109](https://github.com/springfield-ham-radio/ham-radio-ui/issues/109)) ([5c0d2bc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5c0d2bcebe01c2b2a39ae9dca60475e70469fcd0))
+
+## [0.61.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.61.0...v0.61.1) (2026-10-11)
+
+### Bug Fixes
+
+* **serial:** implement TauriNodeSerialPort.update for clone baud switches ([#106](https://github.com/springfield-ham-radio/ham-radio-ui/issues/106)) ([548910f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/548910fcc02bcae6a829fbbb5768c74d9233af69)), closes [#105](https://github.com/springfield-ham-radio/ham-radio-ui/issues/105)
+
 ## [0.61.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v0.60.5...v0.61.0) (2026-10-11)
 
 ### Features

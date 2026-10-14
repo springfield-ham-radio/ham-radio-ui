@@ -4,9 +4,14 @@ import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import {
   fetchOfficialModuleCatalog,
+  officialCatalogFailureFromCause,
+  type OfficialModuleCatalogFailure,
   installOfficialModule,
+  switchAllToVerifiedModules,
+  switchToVerifiedModule,
   installPickedLocalModuleFile,
   isModuleInstallPath,
+  parseModuleInstallPath,
   pickLocalModuleFile,
 } from '~/utils/radio-module-install';
 import {
@@ -14,10 +19,10 @@ import {
   buildInstalledRadioListItems,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
+  installedRadiosEligibleForVerifiedSwitch,
   radioDisplayName,
-  type AvailableManufacturerGroup,
   type AvailableRadioModelItem,
-  type InstalledManufacturerGroup,
+  type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -26,7 +31,7 @@ const { refreshCatalogState, uninstallRadio, configurations } = useRadio();
 
 const catalogRecords = ref<RadioCatalogRecord[]>([]);
 const catalogEntries = ref<RadioModuleCatalogEntry[]>([]);
-const catalogError = ref<string | null>(null);
+const catalogFailure = ref<OfficialModuleCatalogFailure | null>(null);
 const catalogLoading = ref(false);
 const busyKey = ref<string | undefined>();
 const removeConfirmOpen = ref(false);
@@ -34,12 +39,14 @@ const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
 const localWarningOpen = ref(false);
 const pendingLocalFile = ref<{ path: string; kind: 'zip' | 'json' } | undefined>();
 
-const installedGroups = computed(() =>
-  groupInstalledRadiosByManufacturer(buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value)),
+const installedListItems = computed(() =>
+  buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value),
 );
+const installedGroups = computed(() => groupInstalledRadiosByManufacturer(installedListItems.value));
 const availableGroups = computed(() =>
   buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
 );
+const switchToVerifiedTargets = computed(() => installedRadiosEligibleForVerifiedSwitch(installedListItems.value));
 
 const removeConfirmMessage = computed(() => {
   const record = pendingRemoveRecord.value;
@@ -49,13 +56,6 @@ const removeConfirmMessage = computed(() => {
   }
 
   if (record.sourcePath && (record.source === 'installed' || isModuleInstallPath(record.sourcePath))) {
-    const related = catalogRecords.value.filter((candidate) => candidate.sourcePath === record.sourcePath);
-    const names = related.map((candidate) => `${candidate.manufacturer} ${candidate.name}`).join(', ');
-
-    if (related.length > 1) {
-      return `Remove the installed module and delete ${names} from your catalog? This also removes the module files from this computer.`;
-    }
-
     return `Remove ${record.manufacturer} ${record.name} from your catalog? This also deletes the installed module files from this computer.`;
   }
 
@@ -90,14 +90,14 @@ async function refreshInstalledRadios(): Promise<void> {
 
 async function loadOfficialCatalog(): Promise<void> {
   catalogLoading.value = true;
-  catalogError.value = null;
+  catalogFailure.value = null;
 
   try {
     const catalog = await fetchOfficialModuleCatalog();
     catalogEntries.value = catalog.modules;
   } catch (cause) {
     catalogEntries.value = [];
-    catalogError.value = cause instanceof Error ? cause.message : 'Failed to load official catalog';
+    catalogFailure.value = officialCatalogFailureFromCause(cause);
   } finally {
     catalogLoading.value = false;
   }
@@ -121,18 +121,15 @@ function requireDesktopApp(): boolean {
   return false;
 }
 
-async function installRadio(group: AvailableManufacturerGroup, radio: AvailableRadioModelItem): Promise<void> {
+async function installRadio(radio: AvailableRadioModelItem): Promise<void> {
   if (!requireDesktopApp()) {
     return;
   }
 
-  busyKey.value = `${group.entry.id}:${radio.modelId}`;
+  busyKey.value = radio.entry.id;
 
   try {
-    const result = await installOfficialModule(group.entry, {
-      catalogModelId: radio.modelId,
-      catalogConfig: radio.config,
-    });
+    const result = await installOfficialModule(radio.entry);
     await refreshCatalogState();
     await refreshInstalledRadios();
     const installedNames = result.radios
@@ -157,8 +154,102 @@ async function installRadio(group: AvailableManufacturerGroup, radio: AvailableR
   }
 }
 
-async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
-  if (!group.catalogEntry) {
+async function switchCatalogEntryToVerified(entry: RadioModuleCatalogEntry): Promise<void> {
+  if (!requireDesktopApp()) {
+    return;
+  }
+
+  busyKey.value = `switch:${entry.id}`;
+
+  try {
+    await switchToVerifiedModule(entry);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+    const record = catalogRecords.value.find((row) => row.modelId === entry.id);
+    toast.add({
+      title: 'Switched to verified driver',
+      description: record
+        ? radioDisplayName(record.manufacturer, record.name)
+        : entry.name,
+      color: 'success',
+      icon: 'i-lucide-check',
+    });
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Switch failed';
+    toast.add({
+      title: 'Could not switch to verified driver',
+      description: message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert',
+    });
+  } finally {
+    busyKey.value = undefined;
+  }
+}
+
+async function switchRadioToVerified(item: InstalledRadioListItem): Promise<void> {
+  if (!item.catalogEntry) {
+    return;
+  }
+
+  await switchCatalogEntryToVerified(item.catalogEntry);
+}
+
+async function switchAllToVerified(): Promise<void> {
+  if (!requireDesktopApp()) {
+    return;
+  }
+
+  const targets = switchToVerifiedTargets.value;
+
+  if (targets.length < 2) {
+    return;
+  }
+
+  busyKey.value = 'switch-all';
+
+  try {
+    const entries = targets.flatMap((item) => (item.catalogEntry ? [item.catalogEntry] : []));
+    const result = await switchAllToVerifiedModules(entries);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+
+    if (result.failures.length === 0) {
+      toast.add({
+        title: 'Switched to verified drivers',
+        description: `${result.switchedIds.length} radios now use the official catalog.`,
+        color: 'success',
+        icon: 'i-lucide-check',
+      });
+      return;
+    }
+
+    const failedNames = result.failures.map((failure) => failure.id).join(', ');
+    const detail = result.failures[0]?.message ?? 'Switch failed';
+
+    if (result.switchedIds.length === 0) {
+      toast.add({
+        title: 'Could not switch to verified drivers',
+        description: detail,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return;
+    }
+
+    toast.add({
+      title: 'Some drivers stayed on the local file',
+      description: `Switched ${result.switchedIds.length}. ${failedNames} stayed unverified: ${detail}`,
+      color: 'warning',
+      icon: 'i-lucide-circle-alert',
+    });
+  } finally {
+    busyKey.value = undefined;
+  }
+}
+
+async function updateRadio(item: InstalledRadioListItem): Promise<void> {
+  if (!item.catalogEntry) {
     return;
   }
 
@@ -166,15 +257,29 @@ async function updateGroup(group: InstalledManufacturerGroup): Promise<void> {
     return;
   }
 
-  busyKey.value = group.catalogEntry.id;
+  busyKey.value = item.catalogEntry.id;
+  const previous = item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath) : undefined;
 
   try {
-    await installOfficialModule(group.catalogEntry);
+    await installOfficialModule(item.catalogEntry);
+
+    if (
+      previous &&
+      previous.moduleId === item.catalogEntry.id &&
+      previous.version !== item.catalogEntry.version
+    ) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('uninstall_radio_module', {
+        moduleId: previous.moduleId,
+        version: previous.version,
+      }).catch(() => undefined);
+    }
+
     await refreshCatalogState();
     await refreshInstalledRadios();
     toast.add({
       title: 'Radio updated',
-      description: `${group.manufacturer} drivers were updated.`,
+      description: radioDisplayName(item.record.manufacturer, item.record.name),
       color: 'success',
       icon: 'i-lucide-check',
     });
@@ -309,16 +414,29 @@ onMounted(() => {
               catalog version is available. Local files are Unverified and are not updated from the catalog.
             </p>
           </div>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-refresh-cw"
-            size="xs"
-            aria-label="Refresh radio catalog"
-            :loading="catalogLoading"
-            :disabled="anyBusy"
-            @click="reload"
-          />
+          <div class="flex shrink-0 items-center gap-2">
+            <UButton
+              v-if="switchToVerifiedTargets.length >= 2"
+              label="Switch all to verified"
+              color="primary"
+              variant="outline"
+              size="xs"
+              icon="i-lucide-shield-check"
+              :loading="busyKey === 'switch-all'"
+              :disabled="anyBusy"
+              @click="switchAllToVerified"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-refresh-cw"
+              size="xs"
+              aria-label="Refresh radio catalog"
+              :loading="catalogLoading"
+              :disabled="anyBusy"
+              @click="reload"
+            />
+          </div>
         </div>
 
         <ul v-if="installedGroups.length > 0" class="divide-y divide-default rounded-lg bg-muted">
@@ -331,41 +449,13 @@ onMounted(() => {
               <div class="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-default ring-1 ring-default">
                 <UIcon name="i-lucide-radio" class="size-4 text-highlighted" />
                 <span
-                  v-if="group.updateAvailable"
+                  v-if="group.radios.some((radio) => radio.updateAvailable)"
                   class="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-info ring-2 ring-muted"
                   aria-label="Update available"
                 />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ group.manufacturer }}</p>
-              </div>
-              <div class="flex shrink-0 items-center gap-2">
-                <UTooltip
-                  v-if="group.updateAvailable && !group.canUpdate"
-                  :text="group.updateBlockedReason"
-                >
-                  <span class="inline-flex">
-                    <UButton
-                      label="Update"
-                      color="primary"
-                      variant="subtle"
-                      size="xs"
-                      icon="i-lucide-download"
-                      disabled
-                    />
-                  </span>
-                </UTooltip>
-                <UButton
-                  v-else-if="group.canUpdate && group.catalogEntry"
-                  label="Update"
-                  color="primary"
-                  variant="subtle"
-                  size="xs"
-                  icon="i-lucide-download"
-                  :loading="isBusy(group.catalogEntry.id)"
-                  :disabled="anyBusy"
-                  @click="updateGroup(group)"
-                />
               </div>
             </div>
             <ul class="mt-1">
@@ -381,6 +471,58 @@ onMounted(() => {
                   <p class="truncate text-xs text-muted">{{ installedDriverVersionLabel(item.record) }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
+                  <UTooltip
+                    v-if="item.updateAvailable && !item.canUpdate"
+                    :text="item.updateBlockedReason"
+                  >
+                    <span class="inline-flex">
+                      <UButton
+                        label="Update"
+                        color="primary"
+                        variant="subtle"
+                        size="xs"
+                        icon="i-lucide-download"
+                        disabled
+                      />
+                    </span>
+                  </UTooltip>
+                  <UButton
+                    v-else-if="item.canUpdate && item.catalogEntry"
+                    label="Update"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-download"
+                    :loading="isBusy(item.catalogEntry.id)"
+                    :disabled="anyBusy"
+                    @click="updateRadio(item)"
+                  />
+                  <UButton
+                    v-if="item.canSwitchToVerified && item.catalogEntry"
+                    label="Switch to verified"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    :loading="isBusy(`switch:${item.catalogEntry.id}`)"
+                    :disabled="anyBusy"
+                    @click="switchRadioToVerified(item)"
+                  />
+                  <UTooltip
+                    v-else-if="item.record.source === 'user' && item.catalogEntry && !item.canSwitchToVerified"
+                    :text="item.switchBlockedReason"
+                  >
+                    <span class="inline-flex">
+                      <UButton
+                        label="Switch to verified"
+                        color="primary"
+                        variant="subtle"
+                        size="xs"
+                        icon="i-lucide-shield-check"
+                        disabled
+                      />
+                    </span>
+                  </UTooltip>
                   <UBadge
                     :label="sourceBadge(item.record).label"
                     :color="sourceBadge(item.record).color"
@@ -420,17 +562,17 @@ onMounted(() => {
           Loading official catalog…
         </div>
 
-        <div v-else-if="catalogError" class="rounded-lg bg-muted px-3 py-3 text-sm">
-          <p class="font-medium text-highlighted">Could not reach the official catalog</p>
-          <p class="mt-1 text-muted">{{ catalogError }}</p>
-          <p class="mt-2 text-muted">Connect to the internet and retry, or install a module from a local file.</p>
+        <div v-else-if="catalogFailure" class="rounded-lg bg-muted px-3 py-3 text-sm">
+          <p class="font-medium text-highlighted">{{ catalogFailure.title }}</p>
+          <p class="mt-1 text-muted">{{ catalogFailure.detail }}</p>
+          <p class="mt-2 text-muted">{{ catalogFailure.guidance }}</p>
           <UButton class="mt-3" size="sm" color="neutral" variant="outline" label="Retry" @click="loadOfficialCatalog" />
         </div>
 
         <ul v-else-if="availableGroups.length > 0" class="divide-y divide-default rounded-lg bg-muted">
           <li
             v-for="group in availableGroups"
-            :key="group.entry.id"
+            :key="group.manufacturer"
             class="px-3 py-2.5"
           >
             <div class="flex items-center gap-3">
@@ -439,7 +581,6 @@ onMounted(() => {
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ group.manufacturer }}</p>
-                <p class="truncate text-xs text-muted">v{{ group.entry.version }}</p>
               </div>
             </div>
             <ul class="mt-1">
@@ -448,11 +589,41 @@ onMounted(() => {
                 :key="radio.modelId"
                 class="flex items-center gap-3 py-1.5 pl-12"
               >
-                <p class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ radio.name }}</p>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm text-highlighted">{{ radio.name }}</p>
+                  <p class="truncate text-xs text-muted">v{{ radio.entry.version }}</p>
+                </div>
                 <UBadge
-                  v-if="radio.installed"
+                  v-if="radio.installedOfficially"
                   label="Installed"
                   color="success"
+                  variant="subtle"
+                  size="sm"
+                />
+                <div
+                  v-else-if="radio.installedUnverified && radio.canSwitchToVerified"
+                  class="flex items-center gap-2"
+                >
+                  <UBadge
+                    label="Local file installed"
+                    color="warning"
+                    variant="subtle"
+                    size="sm"
+                  />
+                  <UButton
+                    label="Switch to verified"
+                    color="primary"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    :loading="isBusy(`switch:${radio.entry.id}`)"
+                    :disabled="anyBusy"
+                    @click="switchCatalogEntryToVerified(radio.entry)"
+                  />
+                </div>
+                <UBadge
+                  v-else-if="radio.installedUnverified"
+                  label="Local file installed"
+                  color="warning"
                   variant="subtle"
                   size="sm"
                 />
@@ -473,9 +644,9 @@ onMounted(() => {
                   color="primary"
                   size="xs"
                   icon="i-lucide-download"
-                  :loading="isBusy(`${group.entry.id}:${radio.modelId}`)"
+                  :loading="isBusy(radio.entry.id)"
                   :disabled="anyBusy"
-                  @click="installRadio(group, radio)"
+                  @click="installRadio(radio)"
                 />
               </li>
             </ul>

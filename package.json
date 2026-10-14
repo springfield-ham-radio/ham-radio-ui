@@ -1,7 +1,7 @@
 {
   "name": "@springfield/ham-radio-ui",
   "productName": "HamBench",
-  "version": "0.61.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "description": "HamBench amateur radio management application",
@@ -34,8 +34,8 @@
   "dependencies": {
     "@nuxt/ui": "4.11.3",
     "@springfield/ham-radio-api": "^18.0.1",
-    "@springfield/ham-radio-driver": "^3.5.1",
-    "@springfield/ham-radio-registry": "^1.7.3",
+    "@springfield/ham-radio-driver": "^3.5.4",
+    "@springfield/ham-radio-registry": "^2.0.0",
     "@springfield/ham-radio-utils": "^4.15.1",
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-dialog": "^2.8.1",
@@ -55,7 +55,7 @@
     "vue-router": "^5.4.0"
   },
   "devDependencies": {
-    "@iconify-json/lucide": "^1.2.141",
+    "@iconify-json/lucide": "^1.2.142",
     "@semantic-release/changelog": "7.0.0",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",

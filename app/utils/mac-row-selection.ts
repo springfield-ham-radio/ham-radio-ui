@@ -90,3 +90,22 @@ function idsInRange(orderedIds: readonly string[], anchorId: string, clickedId: 
   const end = Math.max(anchorIndex, clickedIndex);
   return orderedIds.slice(start, end + 1);
 }
+
+/**
+ * Drop selection keys that are not in the current table row id list.
+ */
+export function pruneRowSelection(
+  selected: Record<string, boolean>,
+  visibleIds: readonly string[],
+): Record<string, boolean> {
+  const visible = new Set(visibleIds);
+  const pruned: Record<string, boolean> = {};
+
+  for (const [id, isSelected] of Object.entries(selected)) {
+    if (isSelected && visible.has(id)) {
+      pruned[id] = true;
+    }
+  }
+
+  return pruned;
+}

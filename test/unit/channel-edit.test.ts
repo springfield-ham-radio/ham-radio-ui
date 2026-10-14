@@ -14,11 +14,12 @@ import {
   RadioToneType,
 } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
+import { createMemoryMapCodec, structInstanceAddress } from '@springfield/ham-radio-utils';
 import { MockLogLayer } from 'loglayer';
 import {
   applyChannelPatch,
   availableChannelNumbers,
+  channelSlotsAfterLastOccupied,
   channelCapacity,
   channelFieldEditor,
   channelNameMaxLength,
@@ -34,6 +35,7 @@ import {
   parseFrequencyMHz,
   defaultRepeaterOffsetHz,
   patchFromDuplex,
+  moveProgrammedChannel,
   reorderProgrammedChannels,
   serializeChannelFieldValue,
   toneToKey,
@@ -147,21 +149,26 @@ describe('channelCapacity', () => {
   });
 });
 
-describe('nextAvailableChannelNumber', () => {
-  it('returns unused slots in order', () => {
+describe('availableChannelNumbers', () => {
+  it('returns unused slots in ascending index order', () => {
     expect(availableChannelNumbers([0, 1, 3], 8)).toEqual([2, 4, 5, 6, 7]);
     expect(availableChannelNumbers([], 3)).toEqual([0, 1, 2]);
     expect(availableChannelNumbers([0, 1], 2)).toEqual([]);
   });
+});
 
-  it('returns the lowest unused slot', () => {
-    expect(nextAvailableChannelNumber([0, 1, 3], 8)).toBe(2);
+describe('channelSlotsAfterLastOccupied', () => {
+  it('fills slots after the highest occupied index before wrapping', () => {
+    expect(channelSlotsAfterLastOccupied([0, 1, 3], 8)).toEqual([4, 5, 6, 7, 2]);
+    expect(nextAvailableChannelNumber([0, 1, 3], 8)).toBe(4);
+    expect(nextAvailableChannelNumber([0, 1, 7], 8)).toBe(2);
     expect(nextAvailableChannelNumber([], 8)).toBe(0);
+    expect(nextAvailableChannelNumber([0, 1, 2, 3, 4, 5, 6, 7], 8)).toBe(undefined);
+    expect(nextAvailableChannelNumber([], 0)).toBe(undefined);
   });
 
-  it('returns undefined when every slot is occupied', () => {
-    expect(nextAvailableChannelNumber([0, 1], 2)).toBe(undefined);
-    expect(nextAvailableChannelNumber([], 0)).toBe(undefined);
+  it('assigns multiple library rows across the tail and wrapped holes', () => {
+    expect(channelSlotsAfterLastOccupied([0, 5], 8, 3)).toEqual([6, 7, 1]);
   });
 });
 
@@ -248,6 +255,225 @@ describe('reorderProgrammedChannels', () => {
       1: 'ALPHA',
       3: 'SKIP',
     });
+  });
+
+  it('drops into a gap at the first empty slot when capacity is set', () => {
+    const original = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(3, 'CH3'),
+      namedChannel(4, 'CH4'),
+      namedChannel(5, 'CH5'),
+      namedChannel(10, 'CH10'),
+      namedChannel(11, 'CH11'),
+      namedChannel(12, 'CH12'),
+      namedChannel(13, 'WX'),
+    ];
+    const result = reorderProgrammedChannels(original, 9, 6, 128);
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'CH0',
+      1: 'CH1',
+      2: 'CH2',
+      3: 'CH3',
+      4: 'CH4',
+      5: 'CH5',
+      6: 'WX',
+      10: 'CH10',
+      11: 'CH11',
+      12: 'CH12',
+    });
+    expect(result.previousToNext.size).toBe(1);
+    expect(result.previousToNext.get(13)).toBe(6);
+    expect(namesBySlot(original)).toEqual({
+      0: 'CH0',
+      1: 'CH1',
+      2: 'CH2',
+      3: 'CH3',
+      4: 'CH4',
+      5: 'CH5',
+      10: 'CH10',
+      11: 'CH11',
+      12: 'CH12',
+      13: 'WX',
+    });
+  });
+
+  it('still permutes when there is no empty slot between new neighbors', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(5, 'CHARLIE')],
+      2,
+      0,
+      8,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'CHARLIE',
+      1: 'ALPHA',
+      5: 'BRAVO',
+    });
+  });
+
+  it('fills the trailing gap when dropped at the end with capacity', () => {
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(1, 'BRAVO'), namedChannel(2, 'CHARLIE')],
+      0,
+      2,
+      8,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      1: 'BRAVO',
+      2: 'CHARLIE',
+      3: 'ALPHA',
+    });
+    expect(result.previousToNext.get(0)).toBe(3);
+  });
+
+  it('skips hidden records when choosing the first empty slot in a gap', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 1,
+      radioChannel: 'SKIP',
+    };
+    const result = reorderProgrammedChannels(
+      [namedChannel(0, 'ALPHA'), namedChannel(5, 'BRAVO'), namedChannel(8, 'CHARLIE'), unresolved],
+      2,
+      1,
+      16,
+    );
+
+    expect(namesBySlot(result.channels)).toEqual({
+      0: 'ALPHA',
+      1: 'SKIP',
+      2: 'CHARLIE',
+      5: 'BRAVO',
+    });
+    expect(result.previousToNext.get(8)).toBe(2);
+  });
+});
+
+describe('moveProgrammedChannel', () => {
+  function namedChannel(channelNumber: number, name: string): RadioProgrammedChannel {
+    return programmedChannel({
+      channelNumber,
+      radioChannel: {
+        name,
+        receiveFrequency: Frequency(146_520_000),
+        transmitFrequency: Frequency(146_520_000),
+        receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+        transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+      },
+    });
+  }
+
+  it('moves a channel into an empty slot', () => {
+    const original = [namedChannel(0, 'ALPHA'), namedChannel(5, 'BRAVO')];
+    const result = moveProgrammedChannel(original, 5, 3, 8);
+
+    expect(result.channels.map((channel) => channel.channelNumber)).toEqual([0, 3]);
+    expect(result.previousToNext.get(5)).toBe(3);
+    expect(result.channels).not.toBe(original);
+    expect(original.map((channel) => channel.channelNumber)).toEqual([0, 5]);
+  });
+
+  it('inserts at an occupied slot and shifts the occupant into the next empty slot', () => {
+    const result = moveProgrammedChannel(
+      [namedChannel(0, 'ALPHA'), namedChannel(3, 'BRAVO')],
+      0,
+      3,
+      8,
+    );
+
+    expect(result.previousToNext.get(0)).toBe(3);
+    expect(result.previousToNext.get(3)).toBe(4);
+    expect(
+      Object.fromEntries(
+        result.channels.map((channel) => {
+          const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+          return [channel.channelNumber, name];
+        }),
+      ),
+    ).toEqual({
+      3: 'ALPHA',
+      4: 'BRAVO',
+    });
+  });
+
+  it('shifts a contiguous block across several slots until a gap', () => {
+    const channels = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(10, 'CH10'),
+    ];
+    const result = moveProgrammedChannel(channels, 10, 1, 16);
+
+    expect(result.refused).toBeUndefined();
+    expect(result.previousToNext.get(10)).toBe(1);
+    expect(result.previousToNext.get(1)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(3);
+    expect(
+      Object.fromEntries(
+        result.channels.map((channel) => {
+          const name = typeof channel.radioChannel === 'object' ? channel.radioChannel.name : channel.radioChannel;
+          return [channel.channelNumber, name];
+        }),
+      ),
+    ).toEqual({
+      0: 'CH0',
+      1: 'CH10',
+      2: 'CH1',
+      3: 'CH2',
+    });
+  });
+
+  it('stops shifting at the first gap without moving channels beyond it', () => {
+    const channels = [
+      namedChannel(0, 'CH0'),
+      namedChannel(1, 'CH1'),
+      namedChannel(2, 'CH2'),
+      namedChannel(4, 'CH4'),
+    ];
+    const result = moveProgrammedChannel(channels, 4, 0, 8);
+
+    expect(result.previousToNext.get(4)).toBe(0);
+    expect(result.previousToNext.get(0)).toBe(1);
+    expect(result.previousToNext.get(1)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(3);
+    expect(result.channels.find((channel) => channel.channelNumber === 0)?.radioChannel).toMatchObject({ name: 'CH4' });
+    expect(result.channels.find((channel) => channel.channelNumber === 3)?.radioChannel).toMatchObject({ name: 'CH2' });
+  });
+
+  it('refuses when no empty slot exists after the insertion point', () => {
+    const channels = [namedChannel(0, 'A'), namedChannel(1, 'B'), namedChannel(2, 'C')];
+    const result = moveProgrammedChannel(channels, 0, 2, 3);
+
+    expect(result.refused).toMatch(/no free memory slot/i);
+    expect(result.previousToNext.size).toBe(0);
+    expect(result.channels).toBe(channels);
+  });
+
+  it('shifts an unresolved record at the target slot', () => {
+    const unresolved: RadioProgrammedChannel = {
+      channelNumber: 2,
+      radioChannel: 'SKIP',
+    };
+    const result = moveProgrammedChannel([namedChannel(0, 'ALPHA'), unresolved], 0, 2, 8);
+
+    expect(result.previousToNext.get(0)).toBe(2);
+    expect(result.previousToNext.get(2)).toBe(3);
+    expect(result.channels.find((channel) => channel.channelNumber === 2)?.radioChannel).toMatchObject({ name: 'ALPHA' });
+    expect(result.channels.find((channel) => channel.channelNumber === 3)?.radioChannel).toBe('SKIP');
+  });
+
+  it('rejects out-of-range destinations and same-number no-ops', () => {
+    const original = [namedChannel(1, 'ALPHA')];
+
+    expect(moveProgrammedChannel(original, 1, 1, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 1, -1, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 1, 8, 8).channels).toBe(original);
+    expect(moveProgrammedChannel(original, 9, 2, 8).channels).toBe(original);
   });
 });
 
@@ -473,6 +699,18 @@ describe('describeLibrarySlotAssignment', () => {
         slotNumbers: [],
       }),
     ).toBe('There are no unused memory slots on Mobile.');
+  });
+
+  it('lists wrapped slot assignments without implying a backwards range', () => {
+    expect(
+      describeLibrarySlotAssignment({
+        radioName: 'Mobile',
+        sourceCount: 3,
+        slotNumbers: [6, 7, 1, 2, 3, 4],
+      }),
+    ).toBe(
+      'Add 3 channels to Mobile in unused memory slots 6 to 7 and 1? Write to the radio to apply the change on the device.',
+    );
   });
 });
 
@@ -800,5 +1038,39 @@ describe('channel edit codec round-trip', () => {
     const afterRemove = codec.decode(cleared);
 
     expect(afterRemove.channels).toEqual([]);
+  });
+
+  it('writes an empty slot marker when memory slot 6 is removed', () => {
+    const { codec, memoryMap, modelId } = uv5rCodec();
+    const channelsStruct = memoryMap.structs.find((struct) => struct.id === memoryMap.channelBindings?.records);
+
+    expect(channelsStruct).toBeDefined();
+
+    const created = createProgrammedChannel({
+      channelNumber: 6,
+      memoryMap,
+      source: {
+        name: 'WX1',
+        receiveFrequency: Frequency(162_550_000),
+        transmitFrequency: Frequency(162_550_000),
+      },
+    });
+
+    const encoded = codec.encode(
+      { channels: [created], settings: {} },
+      { contents: new Uint8Array(8192).fill(0xff), radioModel: modelId },
+    );
+    const decoded = codec.decode(encoded);
+
+    expect(decoded.channels.map((channel) => channel.channelNumber)).toEqual([6]);
+
+    const cleared = codec.encode({ ...decoded, channels: [] }, encoded);
+    const afterRemove = codec.decode(cleared);
+
+    expect(afterRemove.channels).toEqual([]);
+
+    const radioAddress = structInstanceAddress(channelsStruct!, 6);
+    const bufferOffset = radioAddress;
+    expect(cleared.contents[bufferOffset]).toBe(0xff);
   });
 });
