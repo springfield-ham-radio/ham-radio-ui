@@ -83,3 +83,60 @@ export function mapRepeaterUnlocatedMessage(unlocated: number, total: number): s
 
   return `${unlocated} of ${total} repeaters have no location.`;
 }
+
+/**
+ * Located ordinary channels in the selected stored groups, deduped by channel id.
+ */
+export function mapChannelRows(
+  channels: readonly SavedChannel[],
+  memberships: readonly ChannelGroupMembership[],
+  groups: readonly ChannelGroup[],
+  selection: MapPageGroupSelection,
+): SavedChannel[] {
+  const selectedGroupIds = resolveSelectedGroupIds(selection, groups);
+  const byId = new Map<string, SavedChannel>();
+
+  for (const groupId of selectedGroupIds) {
+    for (const channel of channelsInGroup(channels, memberships, groupId)) {
+      if (channel.kind !== 'channel') {
+        continue;
+      }
+
+      byId.set(String(channel.id), channel);
+    }
+  }
+
+  return [...byId.values()];
+}
+
+export function mapChannelFeatures(
+  channels: readonly SavedChannel[],
+  memberships: readonly ChannelGroupMembership[],
+  groups: readonly ChannelGroup[],
+  selection: MapPageGroupSelection,
+): ChannelMapFeatureCollection {
+  return channelMapFeatures(mapChannelRows(channels, memberships, groups, selection) as ChannelMapChannel[]);
+}
+
+export function mapChannelUnlocatedCount(
+  channels: readonly SavedChannel[],
+  memberships: readonly ChannelGroupMembership[],
+  groups: readonly ChannelGroup[],
+  selection: MapPageGroupSelection,
+): number {
+  return channelMapUnlocatedCount(
+    mapChannelRows(channels, memberships, groups, selection) as ChannelMapChannel[],
+  );
+}
+
+export function mapChannelUnlocatedMessage(unlocated: number, total: number): string | undefined {
+  if (unlocated <= 0 || total <= 0) {
+    return undefined;
+  }
+
+  if (unlocated === 1) {
+    return `1 of ${total} channels has no location.`;
+  }
+
+  return `${unlocated} of ${total} channels have no location.`;
+}

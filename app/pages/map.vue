@@ -16,6 +16,10 @@ import {
 } from '~/utils/channel-map';
 import { mapDevFixture } from '~/utils/map-dev-fixture';
 import {
+  mapChannelFeatures,
+  mapChannelRows,
+  mapChannelUnlocatedCount,
+  mapChannelUnlocatedMessage,
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
@@ -33,10 +37,26 @@ import type { SavedChannel } from '~/utils/saved-channels-db';
 
 useHead({ title: 'Map' });
 
-const MARKER_SOURCE_ID = 'map-repeaters';
-const CLUSTER_LAYER_ID = 'map-repeaters-clusters';
-const CLUSTER_COUNT_LAYER_ID = 'map-repeaters-cluster-count';
-const UNCLUSTERED_LAYER_ID = 'map-repeaters-unclustered';
+interface ClusterLayerIds {
+  sourceId: string;
+  clusterLayerId: string;
+  clusterCountLayerId: string;
+  unclusteredLayerId: string;
+}
+
+const REPEATER_LAYER_IDS: ClusterLayerIds = {
+  sourceId: 'map-repeaters',
+  clusterLayerId: 'map-repeaters-clusters',
+  clusterCountLayerId: 'map-repeaters-cluster-count',
+  unclusteredLayerId: 'map-repeaters-unclustered',
+};
+
+const CHANNEL_LAYER_IDS: ClusterLayerIds = {
+  sourceId: 'map-channels',
+  clusterLayerId: 'map-channels-clusters',
+  clusterCountLayerId: 'map-channels-cluster-count',
+  unclusteredLayerId: 'map-channels-unclustered',
+};
 
 const route = useRoute();
 const colorMode = useColorMode();
@@ -65,7 +85,7 @@ const repeaterRows = computed(() =>
   mapRepeaterChannels(channels.value, groupMemberships.value, groups.value, pageSettings.value.groupSelection),
 );
 
-const featureCollection = computed(() => {
+const repeaterFeatureCollection = computed(() => {
   if (!pageSettings.value.repeaters) {
     return { type: 'FeatureCollection' as const, features: [] };
   }
@@ -78,7 +98,24 @@ const featureCollection = computed(() => {
   );
 });
 
-const unlocatedCount = computed(() =>
+const channelRows = computed(() =>
+  mapChannelRows(channels.value, groupMemberships.value, groups.value, pageSettings.value.groupSelection),
+);
+
+const channelFeatureCollection = computed(() => {
+  if (!pageSettings.value.channels) {
+    return { type: 'FeatureCollection' as const, features: [] };
+  }
+
+  return mapChannelFeatures(
+    channels.value,
+    groupMemberships.value,
+    groups.value,
+    pageSettings.value.groupSelection,
+  );
+});
+
+const repeaterUnlocatedCount = computed(() =>
   mapRepeaterUnlocatedCount(
     channels.value,
     groupMemberships.value,
@@ -87,10 +124,32 @@ const unlocatedCount = computed(() =>
   ),
 );
 
-const unlocatedMessage = computed(() => mapRepeaterUnlocatedMessage(unlocatedCount.value, repeaterRows.value.length));
+const channelUnlocatedCount = computed(() =>
+  mapChannelUnlocatedCount(
+    channels.value,
+    groupMemberships.value,
+    groups.value,
+    pageSettings.value.groupSelection,
+  ),
+);
 
-const legend = computed(() =>
-  channelMapLegendBands(featureCollection.value.features).map((band) => ({
+const repeaterUnlocatedMessage = computed(() =>
+  mapRepeaterUnlocatedMessage(repeaterUnlocatedCount.value, repeaterRows.value.length),
+);
+
+const channelUnlocatedMessage = computed(() =>
+  mapChannelUnlocatedMessage(channelUnlocatedCount.value, channelRows.value.length),
+);
+
+const repeaterLegend = computed(() =>
+  channelMapLegendBands(repeaterFeatureCollection.value.features).map((band) => ({
+    band,
+    color: channelMapBandColor(band),
+  })),
+);
+
+const channelLegend = computed(() =>
+  channelMapLegendBands(channelFeatureCollection.value.features).map((band) => ({
     band,
     color: channelMapBandColor(band),
   })),
@@ -186,22 +245,25 @@ function scheduleCameraSave(instance: MapLibreMap): void {
   }, 300);
 }
 
-function ensureLayers(instance: MapLibreMap): void {
-  const showSymbols = !usingEmptyStyle.value;
-
-  if (!instance.getSource(MARKER_SOURCE_ID)) {
-    instance.addSource(MARKER_SOURCE_ID, {
+function ensureClusterLayers(
+  instance: MapLibreMap,
+  ids: ClusterLayerIds,
+  data: typeof repeaterFeatureCollection.value,
+  showSymbols: boolean,
+): void {
+  if (!instance.getSource(ids.sourceId)) {
+    instance.addSource(ids.sourceId, {
       type: 'geojson',
-      data: featureCollection.value,
+      data,
       cluster: true,
       clusterMaxZoom: 12,
       clusterRadius: 50,
     });
 
     instance.addLayer({
-      id: CLUSTER_LAYER_ID,
+      id: ids.clusterLayerId,
       type: 'circle',
-      source: MARKER_SOURCE_ID,
+      source: ids.sourceId,
       filter: ['has', 'point_count'],
       paint: {
         'circle-color': '#334155',
@@ -214,9 +276,9 @@ function ensureLayers(instance: MapLibreMap): void {
 
     if (showSymbols) {
       instance.addLayer({
-        id: CLUSTER_COUNT_LAYER_ID,
+        id: ids.clusterCountLayerId,
         type: 'symbol',
-        source: MARKER_SOURCE_ID,
+        source: ids.sourceId,
         filter: ['has', 'point_count'],
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
@@ -230,9 +292,9 @@ function ensureLayers(instance: MapLibreMap): void {
     }
 
     instance.addLayer({
-      id: UNCLUSTERED_LAYER_ID,
+      id: ids.unclusteredLayerId,
       type: 'circle',
-      source: MARKER_SOURCE_ID,
+      source: ids.sourceId,
       filter: ['!', ['has', 'point_count']],
       paint: {
         'circle-color': channelMapBandColorExpression(),
@@ -242,11 +304,11 @@ function ensureLayers(instance: MapLibreMap): void {
         'circle-opacity': 0.95,
       },
     });
-  } else if (showSymbols && !instance.getLayer(CLUSTER_COUNT_LAYER_ID)) {
+  } else if (showSymbols && !instance.getLayer(ids.clusterCountLayerId)) {
     instance.addLayer({
-      id: CLUSTER_COUNT_LAYER_ID,
+      id: ids.clusterCountLayerId,
       type: 'symbol',
-      source: MARKER_SOURCE_ID,
+      source: ids.sourceId,
       filter: ['has', 'point_count'],
       layout: {
         'text-field': ['get', 'point_count_abbreviated'],
@@ -257,23 +319,36 @@ function ensureLayers(instance: MapLibreMap): void {
         'text-color': '#f8fafc',
       },
     });
-  } else if (!showSymbols && instance.getLayer(CLUSTER_COUNT_LAYER_ID)) {
-    instance.removeLayer(CLUSTER_COUNT_LAYER_ID);
+  } else if (!showSymbols && instance.getLayer(ids.clusterCountLayerId)) {
+    instance.removeLayer(ids.clusterCountLayerId);
   }
+}
+
+function ensureLayers(instance: MapLibreMap): void {
+  const showSymbols = !usingEmptyStyle.value;
+
+  ensureClusterLayers(instance, REPEATER_LAYER_IDS, repeaterFeatureCollection.value, showSymbols);
+  ensureClusterLayers(instance, CHANNEL_LAYER_IDS, channelFeatureCollection.value, showSymbols);
 }
 
 function syncData(instance: MapLibreMap): void {
   ensureLayers(instance);
-  geoJsonSource(instance, MARKER_SOURCE_ID)?.setData(featureCollection.value);
+  geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)?.setData(repeaterFeatureCollection.value);
+  geoJsonSource(instance, CHANNEL_LAYER_IDS.sourceId)?.setData(channelFeatureCollection.value);
 }
 
 function fitVisible(instance: MapLibreMap): void {
-  if (!pageSettings.value.repeaters) {
+  const features = [
+    ...repeaterFeatureCollection.value.features,
+    ...channelFeatureCollection.value.features,
+  ];
+
+  if (features.length === 0) {
     instance.easeTo({ center: [0, 15], zoom: 1.2, duration: 300 });
     return;
   }
 
-  const bounds = channelMapBounds(featureCollection.value.features);
+  const bounds = channelMapBounds(features);
 
   if (!bounds) {
     instance.easeTo({ center: [0, 15], zoom: 1.2, duration: 300 });
@@ -295,7 +370,10 @@ function channelFromFeature(feature: MapGeoJSONFeature): SavedChannel | undefine
     return undefined;
   }
 
-  return repeaterRows.value.find((channel) => String(channel.id) === id);
+  return (
+    repeaterRows.value.find((channel) => String(channel.id) === id) ??
+    channelRows.value.find((channel) => String(channel.id) === id)
+  );
 }
 
 function setPopup(next: Popup | undefined): void {
@@ -304,14 +382,16 @@ function setPopup(next: Popup | undefined): void {
   mapCanvas.value?.registerPopup(popup);
 }
 
-function openRepeaterPopup(channel: SavedChannel, lngLat: LngLatLike): void {
+function openChannelPopup(channel: SavedChannel, lngLat: LngLatLike): void {
   const instance = mapInstance();
 
   if (!instance) {
     return;
   }
 
-  const feature = featureCollection.value.features.find((entry) => entry.properties.id === String(channel.id));
+  const feature =
+    repeaterFeatureCollection.value.features.find((entry) => entry.properties.id === String(channel.id)) ??
+    channelFeatureCollection.value.features.find((entry) => entry.properties.id === String(channel.id));
   const properties = feature?.properties;
 
   const root = document.createElement('div');
@@ -319,7 +399,7 @@ function openRepeaterPopup(channel: SavedChannel, lngLat: LngLatLike): void {
 
   const title = document.createElement('div');
   title.style.fontWeight = '600';
-  title.textContent = channel.callsign || channel.name || 'Repeater';
+  title.textContent = channel.callsign || channel.name || 'Channel';
   root.append(title);
 
   if (channel.callsign && channel.name) {
@@ -383,50 +463,52 @@ function bindPointer(instance: MapLibreMap): void {
     scheduleCameraSave(instance);
   });
 
-  instance.on('click', CLUSTER_LAYER_ID, (event) => {
-    void (async () => {
+  for (const ids of [REPEATER_LAYER_IDS, CHANNEL_LAYER_IDS]) {
+    instance.on('click', ids.clusterLayerId, (event) => {
+      void (async () => {
+        const feature = event.features?.[0];
+        const clusterId = Number(feature?.properties?.cluster_id);
+        const source = geoJsonSource(instance, ids.sourceId);
+
+        if (feature === undefined || !Number.isInteger(clusterId) || !source) {
+          return;
+        }
+
+        const coordinates = (feature.geometry as { coordinates?: [number, number] }).coordinates;
+
+        if (!coordinates) {
+          return;
+        }
+
+        try {
+          const zoom = await source.getClusterExpansionZoom(clusterId);
+          instance.easeTo({ center: coordinates, zoom });
+        } catch {
+          // Cluster went away between click and worker reply.
+        }
+      })();
+    });
+
+    instance.on('click', ids.unclusteredLayerId, (event) => {
       const feature = event.features?.[0];
-      const clusterId = Number(feature?.properties?.cluster_id);
-      const source = geoJsonSource(instance, MARKER_SOURCE_ID);
+      const channel = feature ? channelFromFeature(feature) : undefined;
 
-      if (feature === undefined || !Number.isInteger(clusterId) || !source) {
+      if (!channel || !feature) {
         return;
       }
 
-      const coordinates = (feature.geometry as { coordinates?: [number, number] }).coordinates;
+      openChannelPopup(channel, event.lngLat);
+    });
 
-      if (!coordinates) {
-        return;
-      }
+    for (const layerId of [ids.clusterLayerId, ids.unclusteredLayerId]) {
+      instance.on('mouseenter', layerId, () => {
+        instance.getCanvas().style.cursor = 'pointer';
+      });
 
-      try {
-        const zoom = await source.getClusterExpansionZoom(clusterId);
-        instance.easeTo({ center: coordinates, zoom });
-      } catch {
-        // Cluster went away between click and worker reply.
-      }
-    })();
-  });
-
-  instance.on('click', UNCLUSTERED_LAYER_ID, (event) => {
-    const feature = event.features?.[0];
-    const channel = feature ? channelFromFeature(feature) : undefined;
-
-    if (!channel || !feature) {
-      return;
+      instance.on('mouseleave', layerId, () => {
+        instance.getCanvas().style.cursor = '';
+      });
     }
-
-    openRepeaterPopup(channel, event.lngLat);
-  });
-
-  for (const layerId of [CLUSTER_LAYER_ID, UNCLUSTERED_LAYER_ID]) {
-    instance.on('mouseenter', layerId, () => {
-      instance.getCanvas().style.cursor = 'pointer';
-    });
-
-    instance.on('mouseleave', layerId, () => {
-      instance.getCanvas().style.cursor = '';
-    });
   }
 }
 
@@ -487,6 +569,14 @@ function onRepeatersToggle(enabled: boolean | 'indeterminate'): void {
   persistSettings();
 }
 
+function onChannelsToggle(enabled: boolean | 'indeterminate'): void {
+  pageSettings.value = {
+    ...pageSettings.value,
+    channels: enabled === true,
+  };
+  persistSettings();
+}
+
 function flushCameraSave(): void {
   if (!cameraSaveTimer) {
     return;
@@ -543,10 +633,10 @@ watch(styleUrl, (url) => {
   applyStyle(instance, url);
 });
 
-watch(featureCollection, () => {
+watch([repeaterFeatureCollection, channelFeatureCollection], () => {
   const instance = mapInstance();
 
-  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, MARKER_SOURCE_ID)) {
+  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)) {
     return;
   }
 
@@ -573,6 +663,11 @@ watch(usingEmptyStyle, () => {
           label="Repeaters"
           @update:model-value="onRepeatersToggle"
         />
+        <UCheckbox
+          :model-value="pageSettings.channels"
+          label="Channels"
+          @update:model-value="onChannelsToggle"
+        />
         <USelectMenu
           v-model="selectedGroupIds"
           :items="groupItems"
@@ -587,10 +682,11 @@ watch(usingEmptyStyle, () => {
         <UButton label="Fit" color="neutral" variant="outline" size="sm" icon="i-lucide-scan" @click="onFitClick" />
       </div>
 
-      <div v-if="legend.length > 0" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div v-if="repeaterLegend.length > 0" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="text-xs font-medium text-muted">Repeaters</span>
         <span
-          v-for="item in legend"
-          :key="item.band"
+          v-for="item in repeaterLegend"
+          :key="`repeater-${item.band}`"
           class="inline-flex items-center gap-1.5 text-xs text-muted"
         >
           <span class="map-page__swatch" :style="{ backgroundColor: item.color }" />
@@ -598,8 +694,24 @@ watch(usingEmptyStyle, () => {
         </span>
       </div>
 
-      <p v-if="unlocatedMessage" class="text-xs text-muted">
-        {{ unlocatedMessage }}
+      <div v-if="channelLegend.length > 0" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="text-xs font-medium text-muted">Channels</span>
+        <span
+          v-for="item in channelLegend"
+          :key="`channel-${item.band}`"
+          class="inline-flex items-center gap-1.5 text-xs text-muted"
+        >
+          <span class="map-page__swatch" :style="{ backgroundColor: item.color }" />
+          {{ item.band }}
+        </span>
+      </div>
+
+      <p v-if="repeaterUnlocatedMessage" class="text-xs text-muted">
+        {{ repeaterUnlocatedMessage }}
+      </p>
+
+      <p v-if="channelUnlocatedMessage" class="text-xs text-muted">
+        {{ channelUnlocatedMessage }}
       </p>
     </section>
 

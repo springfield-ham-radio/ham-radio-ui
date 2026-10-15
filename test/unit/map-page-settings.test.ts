@@ -25,7 +25,7 @@ describe('parseMapPageCamera', () => {
 });
 
 describe('parseMapPageSettings', () => {
-  it('defaults repeaters on, all stored groups, and no camera', () => {
+  it('defaults repeaters and channels on, all stored groups, and no camera', () => {
     expect(parseMapPageSettings(null)).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('{')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
@@ -34,6 +34,7 @@ describe('parseMapPageSettings', () => {
   it('round-trips camera and group selection', () => {
     const settings = {
       repeaters: true,
+      channels: false,
       groupSelection: ['group-a', 'group-b'],
       camera: { longitude: 10, latitude: 20, zoom: 4 },
     };
@@ -51,6 +52,7 @@ describe('parseMapPageSettings', () => {
       ),
     ).toEqual({
       repeaters: false,
+      channels: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -58,15 +60,25 @@ describe('parseMapPageSettings', () => {
   it('keeps an explicit empty group list', () => {
     const settings = {
       repeaters: true,
+      channels: true,
       groupSelection: [] as string[],
     };
 
     expect(parseMapPageSettings(serializeMapPageSettings(settings))).toEqual(settings);
   });
 
-  it('defaults repeaters on when the key is missing', () => {
+  it('defaults repeaters and channels on when the keys are missing', () => {
     expect(parseMapPageSettings(JSON.stringify({ groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
       repeaters: true,
+      channels: true,
+      groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
+    });
+  });
+
+  it('defaults channels on when only repeaters is stored', () => {
+    expect(parseMapPageSettings(JSON.stringify({ repeaters: false, groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
+      repeaters: false,
+      channels: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
