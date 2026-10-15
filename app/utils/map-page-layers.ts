@@ -85,7 +85,7 @@ export function mapRepeaterUnlocatedMessage(unlocated: number, total: number): s
 }
 
 /**
- * Located ordinary channels in the selected stored groups, deduped by channel id.
+ * Ordinary channels in the selected stored groups, including unlocated rows, deduped by channel id.
  */
 export function mapChannelRows(
   channels: readonly SavedChannel[],
