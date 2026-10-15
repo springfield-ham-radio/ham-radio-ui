@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.6.0...v1.7.0) (2026-10-15)
+
+### Features
+
+* draw trip lines on the Map tab ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#125](https://github.com/springfield-ham-radio/ham-radio-ui/issues/125)) ([2dd19b6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2dd19b6fb970f70720b115107b0e5d83c958550e))
+
 ## [1.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.5.0...v1.6.0) (2026-10-15)
 
 ### Features
