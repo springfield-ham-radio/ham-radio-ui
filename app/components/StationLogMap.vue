@@ -16,7 +16,7 @@ import {
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
-  stationLogMapStyleUrl,
+  resolveMapStyleUrl,
   stationMapFeatureCollection,
   stationMapPins,
   type StationMapPinInput,
@@ -38,11 +38,11 @@ const emit = defineEmits<{
 }>();
 
 const colorMode = useColorMode();
-const { mapStyle } = useAppearanceSettings();
+const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const mapCanvas = useTemplateRef('mapCanvas');
 const loadError = shallowRef<string | undefined>();
 
-const styleUrl = computed(() => stationLogMapStyleUrl(mapStyle.value, colorMode.value));
+const styleUrl = computed(() => resolveMapStyleUrl(mapStyle.value, colorMode.value, customMapStyleUrl.value));
 
 const points = computed(() => stationLogMapPoints(props.qsos));
 const pins = computed(() => stationMapPins(props.stations));

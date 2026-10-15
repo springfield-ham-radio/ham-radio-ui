@@ -44,6 +44,50 @@ export function stationLogMapStyleUrl(preference: StationLogMapStylePreference, 
   return OPENFREEMAP_STYLE_URLS[preference];
 }
 
+/**
+ * Accept only HTTPS MapLibre style URLs. Blank and non-URL values are ignored.
+ */
+export function parseCustomMapStyleUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (url.protocol !== 'https:') {
+      return undefined;
+    }
+
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Style URL passed to MapLibre. A valid custom HTTPS URL wins over the named OpenFreeMap style.
+ */
+export function resolveMapStyleUrl(
+  preference: StationLogMapStylePreference,
+  colorMode: string,
+  customUrl?: string,
+): string {
+  const custom = parseCustomMapStyleUrl(customUrl);
+
+  if (custom) {
+    return custom;
+  }
+
+  return stationLogMapStyleUrl(preference, colorMode);
+}
+
 export type QslMarkerStatus = 'none' | 'sent' | 'received' | 'both' | 'mixed';
 
 /** Distinct from the QSL marker colors. */

@@ -23,7 +23,7 @@ import {
   channelMapUnlocatedMessage,
   type ChannelMapChannel,
 } from '~/utils/channel-map';
-import { STATION_PIN_COLOR, stationLogMapStyleUrl } from '~/utils/station-log-map';
+import { STATION_PIN_COLOR, resolveMapStyleUrl } from '~/utils/station-log-map';
 import type { GeoPoint } from '~/utils/location-format';
 import type { DistanceUnit } from '~/utils/trip-channels';
 
@@ -53,12 +53,12 @@ const emit = defineEmits<{
 }>();
 
 const colorMode = useColorMode();
-const { mapStyle } = useAppearanceSettings();
+const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const mapCanvas = useTemplateRef('mapCanvas');
 const loadError = shallowRef<string | undefined>();
 const usingEmptyStyle = shallowRef(false);
 
-const styleUrl = computed(() => stationLogMapStyleUrl(mapStyle.value, colorMode.value));
+const styleUrl = computed(() => resolveMapStyleUrl(mapStyle.value, colorMode.value, customMapStyleUrl.value));
 
 const featureCollection = computed(() => channelMapFeatures(props.channels));
 const hoverCollection = computed(() =>
