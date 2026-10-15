@@ -1,5 +1,6 @@
 import {
   DEFAULT_STATION_LOG_MAP_STYLE,
+  parseCustomMapStyleUrl,
   parseStationLogMapStyle,
   type StationLogMapStylePreference,
 } from '~/utils/station-log-map';
@@ -18,6 +19,8 @@ export interface AppearanceSettings {
   settingsColumns: SettingsColumnCount;
   /** Station log basemap. `theme` follows light and dark appearance. */
   mapStyle: StationLogMapStylePreference;
+  /** Optional HTTPS MapLibre style JSON. Blank uses OpenFreeMap for `mapStyle`. */
+  customMapStyleUrl?: string;
 }
 
 /**
@@ -66,9 +69,12 @@ export function parseAppearanceSettings(raw: string | null): AppearanceSettings 
 
     const record = parsed as Record<string, unknown>;
 
+    const customMapStyleUrl = parseCustomMapStyleUrl(record.customMapStyleUrl);
+
     return {
       settingsColumns: parseSettingsColumnCount(record.settingsColumns),
       mapStyle: parseStationLogMapStyle(record.mapStyle),
+      ...(customMapStyleUrl ? { customMapStyleUrl } : {}),
     };
   } catch {
     return defaults;
@@ -76,9 +82,12 @@ export function parseAppearanceSettings(raw: string | null): AppearanceSettings 
 }
 
 export function serializeAppearanceSettings(settings: AppearanceSettings): string {
+  const customMapStyleUrl = parseCustomMapStyleUrl(settings.customMapStyleUrl);
+
   return JSON.stringify({
     settingsColumns: parseSettingsColumnCount(settings.settingsColumns),
     mapStyle: parseStationLogMapStyle(settings.mapStyle),
+    ...(customMapStyleUrl ? { customMapStyleUrl } : {}),
   });
 }
 

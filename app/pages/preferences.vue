@@ -52,10 +52,25 @@
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-highlighted">Map style</p>
                   <p class="text-xs text-muted">
-                    Basemap for the station log. Match theme uses Liberty in light mode and Dark in dark mode.
+                    Basemap for maps in the log, channel library, and Map tab. Match theme uses Liberty in light mode and
+                    Dark in dark mode.
                   </p>
                 </div>
                 <MapStyleSelect />
+              </div>
+              <div>
+                <label for="custom-map-style-url" class="text-sm font-medium text-highlighted">Custom style URL</label>
+                <p class="mt-1 text-xs text-muted">
+                  Optional HTTPS link to a MapLibre style JSON. Leave blank to use OpenFreeMap for the style above.
+                </p>
+                <UInput
+                  id="custom-map-style-url"
+                  v-model="customMapStyleUrlInput"
+                  class="mt-2"
+                  color="neutral"
+                  placeholder="https://…"
+                  @blur="commitCustomMapStyleUrl"
+                />
               </div>
               <MapStylePreview />
             </div>
@@ -354,6 +369,22 @@ import {
 } from '~/utils/sniffer-ssh';
 import { APP_NAME } from '~/utils/app-name';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+
+const { customMapStyleUrl, setCustomMapStyleUrl } = useAppearanceSettings();
+const customMapStyleUrlInput = ref('');
+
+onMounted(() => {
+  customMapStyleUrlInput.value = customMapStyleUrl.value ?? '';
+});
+
+watch(customMapStyleUrl, (url) => {
+  customMapStyleUrlInput.value = url ?? '';
+});
+
+function commitCustomMapStyleUrl(): void {
+  setCustomMapStyleUrl(customMapStyleUrlInput.value);
+  customMapStyleUrlInput.value = customMapStyleUrl.value ?? '';
+}
 
 useHead({
   title: 'Preferences',

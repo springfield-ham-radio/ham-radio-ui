@@ -60,6 +60,29 @@ describe('appearance settings', () => {
     expect(parseAppearanceSettings(serializeAppearanceSettings(settings))).toEqual(settings);
   });
 
+  it('should round-trip a custom map style URL and drop invalid values', () => {
+    const custom = 'https://example.com/maps/style.json';
+    const withCustom = {
+      settingsColumns: 2 as const,
+      mapStyle: 'theme' as const,
+      customMapStyleUrl: custom,
+    };
+
+    expect(parseAppearanceSettings(serializeAppearanceSettings(withCustom))).toEqual(withCustom);
+    expect(
+      parseAppearanceSettings(
+        JSON.stringify({
+          settingsColumns: 2,
+          mapStyle: 'theme',
+          customMapStyleUrl: 'http://insecure.example/style.json',
+        }),
+      ),
+    ).toEqual({
+      settingsColumns: 2,
+      mapStyle: 'theme',
+    });
+  });
+
   it('should keep a stored column count when the map style is missing or unknown', () => {
     expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 1 }))).toEqual({
       settingsColumns: 1,

@@ -10,18 +10,19 @@ HamBench already ships MapLibre GL for the station log map and the map-style pre
 
 ## Decision
 
-- **Renderer:** MapLibre GL (`maplibre-gl`, already in the app). Vue components own the map lifecycle (`new Map`, worker URL, `ResizeObserver`, style reload). Pure GeoJSON helpers live in `app/utils/channel-map.ts`.
-- **Basemap:** OpenFreeMap vector styles from `https://tiles.openfreemap.org`, selected through `useAppearanceSettings().mapStyle` and the app color mode (Liberty in light mode, Dark in dark mode). No API key.
-- **Attribution:** `AttributionControl` with `compact: false` stays visible on every map surface.
-- **Clustering:** Native GeoJSON source clustering (`cluster: true`, `clusterRadius` 50, `clusterMaxZoom` 12) for repeater markers.
-- **Offline / style failure:** Swap to an empty MapLibre style (background layer only), show “The map could not be loaded. Check your connection.”, and keep markers on the canvas. Do not add a second tile provider.
-- **CSP (future):** If content security policy is tightened, allow `connect-src` and `img-src` for `https://tiles.openfreemap.org` and `worker-src 'self' blob:` for the bundled MapLibre worker.
-- **Dependencies:** No new map packages. Reuse `stationLogMapStyleUrl` / OpenFreeMap URLs from `app/utils/station-log-map.ts`.
+- **Renderer:** MapLibre GL (`maplibre-gl`, already in the app). `MapCanvas.vue` owns the worker URL and `new Map`; consumers add sources and layers. Pure GeoJSON helpers live in `app/utils/channel-map.ts` and related modules.
+- **Basemap:** OpenFreeMap vector styles from `https://tiles.openfreemap.org`, selected through `useAppearanceSettings().mapStyle` and the app color mode (Liberty in light mode, Dark in dark mode). No API key. The public instance states no cap on interactive map views or tile requests; the service is as-is and may change without notice. Offline area downloads (not implemented here) are limited on OpenFreeMap to 3,000 tiles or 50 MB per download, at most four parallel requests, and a unique User-Agent identifying the app.
+- **Custom style URL:** Appearance settings may store an optional `customMapStyleUrl` in `ham-radio-appearance`. Only `https:` URLs are accepted (`parseCustomMapStyleUrl`). Blank or invalid values use the named OpenFreeMap style. `resolveMapStyleUrl` is the single function that turns preference, color mode, and custom URL into the string passed to MapLibre (`MapCanvas`, log map, Channels map, style preview).
+- **Licensing:** HamBench stays MIT. Map data is OpenStreetMap (ODbL). OpenFreeMap styles carry OpenMapTiles / OSM attribution; MapLibre’s `AttributionControl` with `compact: false` stays visible on every map surface so those credits remain on screen. Do not use OSM Foundation tile endpoints (`tile.openstreetmap.org`, `vector.openstreetmap.org`) for application traffic; their usage policy forbids heavy use, bulk download, and unreliable User-Agent / Referer in Tauri webviews.
+- **Clustering:** Native GeoJSON source clustering (`cluster: true`, `clusterRadius` 50, `clusterMaxZoom` 12) for repeater and contact markers where applicable.
+- **Offline / style failure:** Swap to an empty MapLibre style (background layer only) on surfaces with `offlineFallback`, show “The map could not be loaded. Check your connection.”, and keep markers on the canvas. Do not add a second tile provider as automatic fallback.
+- **CSP (future):** If content security policy is tightened, allow `connect-src` and `img-src` for `https://tiles.openfreemap.org` and `worker-src 'self' blob:` for the bundled MapLibre worker. A custom style host is operator-specific and is not on that list until added.
+- **Dependencies:** No new map packages. Named styles use `stationLogMapStyleUrl` / OpenFreeMap URLs from `app/utils/station-log-map.ts`.
 
 GeoPoint and unlocated rules remain in [0001-location-model.md](./0001-location-model.md); map code uses `locatedPoint` and `geoJsonFeature` at the GeoJSON boundary only.
 
 ## Consequences
 
-- Phase 2 can share the same basemap decision for a global Map tab; extracting a shared map shell component is deferred until after the Channels map ships.
-- Turn-by-turn routing and RF coverage are out of scope; trip lines (phase 2) are straight segments in distance order, not road geometry.
-- Operators need network access for the vector basemap; markers and range rings still render on the empty style when tiles are unavailable.
+- A top-level Map tab and the Channels collapsible map share `MapCanvas` and the same basemap resolution path.
+- Turn-by-turn routing and RF coverage are out of scope; trip lines are straight segments in distance order, not road geometry.
+- Operators need network access for the vector basemap unless they point **Custom style URL** at a style they host; markers and range rings still render on the empty style when tiles are unavailable.

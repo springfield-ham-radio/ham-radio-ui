@@ -5,7 +5,11 @@ import {
   writeAppearanceSettings,
   type SettingsColumnCount,
 } from '~/utils/appearance-settings';
-import { parseStationLogMapStyle, type StationLogMapStylePreference } from '~/utils/station-log-map';
+import {
+  parseCustomMapStyleUrl,
+  parseStationLogMapStyle,
+  type StationLogMapStylePreference,
+} from '~/utils/station-log-map';
 
 /**
  * Shared appearance preferences for layout that is not color mode.
@@ -22,6 +26,10 @@ export function useAppearanceSettings() {
     'appearance-map-style',
     () => readAppearanceSettings().mapStyle,
   );
+  const customMapStyleUrl = useState<string | undefined>(
+    'appearance-custom-map-style-url',
+    () => readAppearanceSettings().customMapStyleUrl,
+  );
 
   const settingsFieldsGridStyleValue = computed(() => settingsFieldsGridStyle(settingsColumns.value));
 
@@ -29,6 +37,7 @@ export function useAppearanceSettings() {
     writeAppearanceSettings({
       settingsColumns: settingsColumns.value,
       mapStyle: mapStyle.value,
+      customMapStyleUrl: customMapStyleUrl.value,
     });
   }
 
@@ -42,11 +51,18 @@ export function useAppearanceSettings() {
     persist();
   }
 
+  function setCustomMapStyleUrl(value: unknown): void {
+    customMapStyleUrl.value = parseCustomMapStyleUrl(value);
+    persist();
+  }
+
   return {
     settingsColumns,
     mapStyle,
+    customMapStyleUrl,
     settingsFieldsGridStyle: settingsFieldsGridStyleValue,
     setSettingsColumns,
     setMapStyle,
+    setCustomMapStyleUrl,
   };
 }

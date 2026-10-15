@@ -10,7 +10,7 @@ import {
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { CHANNEL_MAP_EMPTY_STYLE, mapCanvasUsesEmptyStyle } from '~/utils/map-canvas';
-import { stationLogMapStyleUrl } from '~/utils/station-log-map';
+import { resolveMapStyleUrl } from '~/utils/station-log-map';
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -35,7 +35,7 @@ const emit = defineEmits<{
 }>();
 
 const colorMode = useColorMode();
-const { mapStyle } = useAppearanceSettings();
+const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const container = useTemplateRef('container');
 const map = shallowRef<MapLibreMap | undefined>();
 
@@ -53,7 +53,7 @@ function initialStyle(): string | StyleSpecification {
     return CHANNEL_MAP_EMPTY_STYLE;
   }
 
-  return stationLogMapStyleUrl(mapStyle.value, colorMode.value);
+  return resolveMapStyleUrl(mapStyle.value, colorMode.value, customMapStyleUrl.value);
 }
 
 function swapToEmptyStyle(instance: MapLibreMap): void {

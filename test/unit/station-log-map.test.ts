@@ -7,6 +7,8 @@ import {
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
+  parseCustomMapStyleUrl,
+  resolveMapStyleUrl,
   stationLogMapStyleUrl,
   stationMapFeatureCollection,
   stationMapPins,
@@ -120,6 +122,38 @@ describe('stationLogMapStyleUrl', () => {
     expect(stationLogMapStyleUrl('theme', 'dark')).toBe('https://tiles.openfreemap.org/styles/dark');
     expect(stationLogMapStyleUrl('bright', 'dark')).toBe('https://tiles.openfreemap.org/styles/bright');
     expect(stationLogMapStyleUrl('fiord', 'light')).toBe('https://tiles.openfreemap.org/styles/fiord');
+  });
+});
+
+describe('parseCustomMapStyleUrl', () => {
+  it('accepts only non-empty https URLs', () => {
+    const custom = 'https://example.com/maps/style.json';
+
+    expect(parseCustomMapStyleUrl(custom)).toBe(custom);
+    expect(parseCustomMapStyleUrl(`  ${custom}  `)).toBe(custom);
+    expect(parseCustomMapStyleUrl('')).toBeUndefined();
+    expect(parseCustomMapStyleUrl('   ')).toBeUndefined();
+    expect(parseCustomMapStyleUrl('http://example.com/style.json')).toBeUndefined();
+    expect(parseCustomMapStyleUrl('pmtiles://example.com/planet.pmtiles')).toBeUndefined();
+    expect(parseCustomMapStyleUrl('/styles/local.json')).toBeUndefined();
+    expect(parseCustomMapStyleUrl('not-a-url')).toBeUndefined();
+  });
+});
+
+describe('resolveMapStyleUrl', () => {
+  const custom = 'https://tiles.example.com/style.json';
+
+  it('uses a valid custom URL instead of the named style', () => {
+    expect(resolveMapStyleUrl('dark', 'light', custom)).toBe(custom);
+    expect(resolveMapStyleUrl('theme', 'dark', custom)).toBe(custom);
+  });
+
+  it('falls back to the named OpenFreeMap style when custom is missing or invalid', () => {
+    expect(resolveMapStyleUrl('theme', 'light', undefined)).toBe('https://tiles.openfreemap.org/styles/liberty');
+    expect(resolveMapStyleUrl('theme', 'dark', '')).toBe('https://tiles.openfreemap.org/styles/dark');
+    expect(resolveMapStyleUrl('bright', 'dark', 'http://insecure.example/style.json')).toBe(
+      'https://tiles.openfreemap.org/styles/bright',
+    );
   });
 });
 
