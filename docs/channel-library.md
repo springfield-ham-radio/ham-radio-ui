@@ -32,7 +32,7 @@ Markers use band colors with a legend for the bands in view. Click a pin to high
 
 If tiles cannot load, the map keeps markers on a plain background and shows a connection warning. Basemap choice is documented in `docs/adr/0003-map-basemap.md`.
 
-The **Map** tab plots located repeaters from your stored library groups (not built-in Weather, FRS, or GMRS). Use the group picker to limit which folders appear. The collapsible map on this page is unchanged.
+The **Map** tab plots located repeaters and ordinary channels from your stored library groups (not built-in Weather, FRS, or GMRS). Turn **Repeaters** and **Channels** on or off independently. Use the group picker to limit which folders appear. The collapsible map on this page is unchanged.
 
 ## Distance
 

@@ -3,6 +3,9 @@ import { RadioChannelId } from '@springfield/ham-radio-api';
 import { CHANNEL_MAP_BAND_COLORS, CHANNEL_MAP_BAND_FALLBACK } from '../../app/utils/channel-map.ts';
 import { MAP_PAGE_ALL_STORED_GROUPS } from '../../app/utils/map-page-settings.ts';
 import {
+  mapChannelFeatures,
+  mapChannelRows,
+  mapChannelUnlocatedCount,
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
@@ -62,6 +65,18 @@ const unlocatedRepeater: SavedChannel = {
   updatedAt: 1,
 };
 
+const unlocatedOrdinary: SavedChannel = {
+  id: RadioChannelId('ordinary-null-island'),
+  kind: 'channel',
+  name: 'Unlocated simplex',
+  transmitFrequency: 146_520_000,
+  receiveFrequency: 146_520_000,
+  latitude: 0,
+  longitude: 0,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
 const equatorRepeater: SavedChannel = {
   id: RadioChannelId('repeater-equator'),
   kind: 'repeater',
@@ -74,12 +89,13 @@ const equatorRepeater: SavedChannel = {
   updatedAt: 1,
 };
 
-const channels = [locatedRepeater, ordinaryChannel, unlocatedRepeater, equatorRepeater];
+const channels = [locatedRepeater, ordinaryChannel, unlocatedOrdinary, unlocatedRepeater, equatorRepeater];
 
 const memberships: ChannelGroupMembership[] = [
   { groupId: groupA, channelId: locatedRepeater.id },
   { groupId: groupB, channelId: locatedRepeater.id },
   { groupId: groupA, channelId: ordinaryChannel.id },
+  { groupId: groupA, channelId: unlocatedOrdinary.id },
   { groupId: groupA, channelId: unlocatedRepeater.id },
   { groupId: groupA, channelId: equatorRepeater.id },
 ];
@@ -136,5 +152,27 @@ describe('mapRepeaterFeatures', () => {
     const feature = collection.features.find((entry) => entry.properties.id === String(equatorRepeater.id));
 
     expect(feature?.geometry.coordinates).toEqual([40, 0]);
+  });
+});
+
+describe('mapChannelFeatures', () => {
+  it('includes an ordinary located channel and omits repeaters', () => {
+    const collection = mapChannelFeatures(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS);
+
+    expect(collection.features.map((feature) => feature.properties.id)).toEqual([String(ordinaryChannel.id)]);
+    expect(collection.features[0]?.properties.band).toBe('70 Centimeter');
+  });
+
+  it('limits ordinary channels to an explicit group list', () => {
+    const rows = mapChannelRows(channels, memberships, groups, [groupB]);
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('omits (0, 0) from ordinary-channel features and counts it unlocated', () => {
+    const collection = mapChannelFeatures(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS);
+
+    expect(collection.features.map((feature) => feature.properties.id)).not.toContain(String(unlocatedOrdinary.id));
+    expect(mapChannelUnlocatedCount(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS)).toBe(1);
   });
 });
