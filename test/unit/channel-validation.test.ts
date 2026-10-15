@@ -246,6 +246,17 @@ describe('validateChannelForRadio', () => {
     expect(findings.some((finding) => finding.code === 'name-truncated')).toBe(true);
   });
 
+  it('accepts a DCS code in the UV-5R tone word table', () => {
+    const findings = validateChannelForRadio(
+      channel({
+        transmitTone: { tone: 23, type: RadioToneType.DCS },
+      }),
+      radio({ bands: ['2m', '70cm'], memoryMap: uv5rMemoryMap, channelSchema: uv5rSchema }),
+    );
+
+    expect(findings.some((finding) => finding.code === 'transmit-tone-not-encodable')).toBe(false);
+  });
+
   it('rejects tones the memory map cannot store', () => {
     const badDcs: RadioTone = { tone: 999, type: RadioToneType.DCS };
     const findings = validateChannelForRadio(
@@ -283,6 +294,40 @@ describe('validateChannelForRadio', () => {
     );
 
     expect(findings.some((finding) => finding.code === 'transmit-tone-not-encodable')).toBe(true);
+  });
+
+  it('accepts a DCS code stored in the Kenwood dtcs_code table', () => {
+    const findings = validateChannelForRadio(
+      channel({
+        transmitTone: { tone: 23, type: RadioToneType.DCS },
+        receiveTone: { tone: 23, type: RadioToneType.DCS },
+      }),
+      radio({ bands: ['2m', '1.25m', '70cm'], memoryMap: thF6NameMap, channelSchema: kenwoodSchema }),
+    );
+
+    expect(findings.some((finding) => finding.code.endsWith('tone-not-encodable'))).toBe(false);
+  });
+
+  it('rejects a DCS code missing from the Kenwood dtcs_code table', () => {
+    const findings = validateChannelForRadio(
+      channel({
+        transmitTone: { tone: 999, type: RadioToneType.DCS },
+      }),
+      radio({ bands: ['2m', '1.25m', '70cm'], memoryMap: thF6NameMap, channelSchema: kenwoodSchema }),
+    );
+
+    expect(findings.some((finding) => finding.code === 'transmit-tone-not-encodable')).toBe(true);
+  });
+
+  it('does not flag tones when the memory map is absent', () => {
+    const findings = validateChannelForRadio(
+      channel({
+        transmitTone: { tone: 23, type: RadioToneType.DCS },
+      }),
+      radio({ bands: ['2m', '70cm'] }),
+    );
+
+    expect(findings.some((finding) => finding.code.endsWith('tone-not-encodable'))).toBe(false);
   });
 
   it('does not warn on a standard 2 m split or on cross-band 146/446', () => {

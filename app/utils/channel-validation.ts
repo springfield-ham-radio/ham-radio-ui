@@ -200,6 +200,16 @@ function toneFieldKind(
   return fieldById(records, fieldId)?.value;
 }
 
+/**
+ * Kenwood stores DCS in a separate `dcs-index` field (`dtcs_code`).
+ * The receive/transmit tone bindings are CTCSS indexes only.
+ */
+function dcsIndexKind(memoryMap: RadioMemoryMap | undefined): RadioMemoryMapValueKind | undefined {
+  const records = structById(memoryMap, memoryMap?.channelBindings?.records);
+
+  return records?.fields.find((field) => !field.reserved && field.value?.kind === 'dcs-index')?.value;
+}
+
 function frequencyFieldKind(
   memoryMap: RadioMemoryMap | undefined,
   side: 'receiveFrequency' | 'transmitFrequency',
@@ -303,14 +313,22 @@ function isNoneTone(tone: RadioTone | undefined): boolean {
   return !tone || !tone.tone;
 }
 
-function toneEncodable(tone: RadioTone | undefined, kind: RadioMemoryMapValueKind | undefined): boolean {
-  if (!kind || isNoneTone(tone)) {
-    return true;
-  }
-
+function toneEncodable(
+  tone: RadioTone,
+  kind: RadioMemoryMapValueKind | undefined,
+  dcsKind: RadioMemoryMapValueKind | undefined,
+): boolean {
   const value = Number(tone.tone);
 
   if (!Number.isFinite(value)) {
+    return false;
+  }
+
+  if (tone.type === RadioToneType.DCS && dcsKind?.kind === 'dcs-index') {
+    return dcsKind.values.includes(value);
+  }
+
+  if (!kind) {
     return false;
   }
 
@@ -325,9 +343,9 @@ function toneEncodable(tone: RadioTone | undefined, kind: RadioMemoryMapValueKin
       return kind.values.includes(value);
     }
     case 'ctcss-index':
-      return kind.values.includes(value);
+      return tone.type === RadioToneType.CTCSS && kind.values.includes(value);
     case 'dcs-index':
-      return kind.values.includes(value);
+      return tone.type === RadioToneType.DCS && kind.values.includes(value);
     default:
       return true;
   }
@@ -494,26 +512,31 @@ export function validateChannelForRadio(
     }
   }
 
-  for (const side of ['receiveTone', 'transmitTone'] as const) {
-    const tone = side === 'receiveTone' ? channel.receiveTone : channel.transmitTone;
-    const kind = toneFieldKind(radio.memoryMap, side);
+  if (radio.memoryMap) {
+    const dcsKind = dcsIndexKind(radio.memoryMap);
 
-    if (!toneEncodable(tone, kind)) {
+    for (const side of ['receiveTone', 'transmitTone'] as const) {
+      const tone = side === 'receiveTone' ? channel.receiveTone : channel.transmitTone;
+
+      if (isNoneTone(tone)) {
+        continue;
+      }
+
+      const kind = toneFieldKind(radio.memoryMap, side);
       const code = side === 'receiveTone' ? 'receive-tone-not-encodable' : 'transmit-tone-not-encodable';
+      const usesSeparateDcs = tone.type === RadioToneType.DCS && dcsKind?.kind === 'dcs-index';
 
-      findings.push({
-        level: 'error',
-        field: side,
-        code,
-        message: 'This tone cannot be stored on the radio and may be cleared when programmed.',
-      });
-    } else if (kind === undefined && !isNoneTone(tone)) {
-      findings.push({
-        level: 'error',
-        field: side,
-        code: side === 'receiveTone' ? 'receive-tone-not-encodable' : 'transmit-tone-not-encodable',
-        message: 'This radio has no tone field for this side.',
-      });
+      if (!toneEncodable(tone, kind, dcsKind)) {
+        findings.push({
+          level: 'error',
+          field: side,
+          code,
+          message:
+            !kind && !usesSeparateDcs
+              ? 'This radio has no tone field for this side.'
+              : 'This tone cannot be stored on the radio and may be cleared when programmed.',
+        });
+      }
     }
   }
 
