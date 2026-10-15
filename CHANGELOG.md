@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.7.0...v1.8.0) (2026-10-15)
+
+### Features
+
+* validate channels against radio capabilities ([#61](https://github.com/springfield-ham-radio/ham-radio-ui/issues/61)) ([#126](https://github.com/springfield-ham-radio/ham-radio-ui/issues/126)) ([3fb66b5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3fb66b5233529e588336795ead72ff4ea00eda03))
+
 ## [1.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.6.0...v1.7.0) (2026-10-15)
 
 ### Features
