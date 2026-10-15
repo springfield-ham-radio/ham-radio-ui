@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import {
-  AttributionControl,
   LngLatBounds,
-  Map as MapLibreMap,
-  NavigationControl,
   Popup,
-  setWorkerUrl,
   type GeoJSONSource,
   type LngLatLike,
+  type Map as MapLibreMap,
 } from 'maplibre-gl';
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { formatStationLocation } from '~/utils/antenna-station';
 import type { StationLogQso } from '~/utils/station-log-db';
 import {
@@ -26,9 +21,6 @@ import {
   stationMapPins,
   type StationMapPinInput,
 } from '~/utils/station-log-map';
-
-// The desktop build bundles this module, so MapLibre cannot find the worker that ships beside the package.
-setWorkerUrl(maplibreWorkerUrl);
 
 const SOURCE_ID = 'station-log-contacts';
 const LAYER_ID = 'station-log-contacts';
@@ -47,8 +39,7 @@ const emit = defineEmits<{
 
 const colorMode = useColorMode();
 const { mapStyle } = useAppearanceSettings();
-const container = useTemplateRef('container');
-const map = shallowRef<MapLibreMap | undefined>();
+const mapCanvas = useTemplateRef('mapCanvas');
 const loadError = shallowRef<string | undefined>();
 
 const styleUrl = computed(() => stationLogMapStyleUrl(mapStyle.value, colorMode.value));
@@ -88,6 +79,10 @@ const legend = computed(() => {
 let popup: Popup | undefined;
 let listenersBound = false;
 let mapReady = false;
+
+function mapInstance(): MapLibreMap | undefined {
+  return mapCanvas.value?.map;
+}
 
 function geoJsonSource(instance: MapLibreMap, sourceId: string): GeoJSONSource | undefined {
   const source = instance.getSource(sourceId);
@@ -251,9 +246,15 @@ function syncMap(instance: MapLibreMap, fit: boolean): void {
   instance.fitBounds(bounds, { padding: 48, maxZoom: 5, duration: 300 });
 }
 
+function setPopup(next: Popup | undefined): void {
+  popup?.remove();
+  popup = next;
+  mapCanvas.value?.registerPopup(popup);
+}
+
 function openStations(ids: string[], lngLat: LngLatLike): void {
   const selected = pins.value.filter((pin) => ids.includes(pin.id));
-  const instance = map.value;
+  const instance = mapInstance();
 
   if (selected.length === 0 || !instance) {
     return;
@@ -273,11 +274,9 @@ function openStations(ids: string[], lngLat: LngLatLike): void {
     root.append(block);
   }
 
-  popup?.remove();
-  popup = new Popup({ closeButton: true, maxWidth: '260px' })
-    .setLngLat(lngLat)
-    .setDOMContent(root)
-    .addTo(instance);
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '260px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function stationIdsAt(event: { features?: { properties?: { id?: unknown } | null }[] }): string[] {
@@ -296,7 +295,7 @@ function stationIdsAt(event: { features?: { properties?: { id?: unknown } | null
 
 function openPoint(grid: string, lngLat: LngLatLike): void {
   const point = points.value.find((candidate) => candidate.grid === grid);
-  const instance = map.value;
+  const instance = mapInstance();
 
   if (!point || !instance) {
     return;
@@ -305,7 +304,7 @@ function openPoint(grid: string, lngLat: LngLatLike): void {
   const [only] = point.qsos;
 
   if (point.qsos.length === 1 && only) {
-    popup?.remove();
+    setPopup(undefined);
     emit('select', only);
     return;
   }
@@ -318,7 +317,7 @@ function openPoint(grid: string, lngLat: LngLatLike): void {
     button.type = 'button';
     button.textContent = `${qso.theirCallsign} · ${qslStatusLabel(qslMarkerStatus(qso))}`;
     button.addEventListener('click', () => {
-      popup?.remove();
+      setPopup(undefined);
       emit('select', qso);
     });
     button.style.display = 'block';
@@ -332,11 +331,9 @@ function openPoint(grid: string, lngLat: LngLatLike): void {
     root.append(button);
   }
 
-  popup?.remove();
-  popup = new Popup({ closeButton: true, maxWidth: '260px' })
-    .setLngLat(lngLat)
-    .setDOMContent(root)
-    .addTo(instance);
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '260px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function bindPointer(instance: MapLibreMap): void {
@@ -385,8 +382,14 @@ function bindPointer(instance: MapLibreMap): void {
   }
 }
 
+function onMapReady(instance: MapLibreMap): void {
+  mapReady = true;
+  syncMap(instance, true);
+  bindPointer(instance);
+}
+
 watch(styleUrl, (url) => {
-  const instance = map.value;
+  const instance = mapInstance();
 
   if (!instance || !mapReady) {
     return;
@@ -399,7 +402,7 @@ watch(styleUrl, (url) => {
 });
 
 watch([points, pins], () => {
-  const instance = map.value;
+  const instance = mapInstance();
 
   if (!instance?.isStyleLoaded() || !geoJsonSource(instance, SOURCE_ID)) {
     return;
@@ -407,65 +410,15 @@ watch([points, pins], () => {
 
   syncMap(instance, true);
 });
-
-onMounted(() => {
-  const element = container.value;
-
-  if (!element) {
-    return;
-  }
-
-  const instance = new MapLibreMap({
-    container: element,
-    style: styleUrl.value,
-    center: [0, 15],
-    zoom: 1.2,
-    attributionControl: false,
-    dragRotate: false,
-    pitchWithRotate: false,
-    touchPitch: false,
-  });
-
-  instance.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
-  instance.addControl(new AttributionControl({ compact: false }), 'bottom-right');
-
-  let didLoad = false;
-
-  instance.on('load', () => {
-    didLoad = true;
-    mapReady = true;
-    loadError.value = undefined;
-    syncMap(instance, true);
-    bindPointer(instance);
-  });
-
-  instance.on('error', () => {
-    if (!didLoad) {
-      loadError.value = 'The map could not be loaded. Check your connection.';
-    }
-  });
-
-  const observer = new ResizeObserver(() => {
-    instance.resize();
-  });
-  observer.observe(element);
-
-  map.value = instance;
-
-  onUnmounted(() => {
-    observer.disconnect();
-    popup?.remove();
-    instance.remove();
-    map.value = undefined;
-  });
-});
 </script>
 
 <template>
   <section class="station-log-map flex h-full min-h-0 w-full flex-col gap-2" aria-label="Contact map">
-    <div
-      ref="container"
+    <MapCanvas
+      ref="mapCanvas"
+      v-model:load-error="loadError"
       class="station-log-map__canvas min-h-0 w-full flex-1 overflow-hidden rounded-md border border-default"
+      @ready="onMapReady"
     />
 
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -499,10 +452,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.station-log-map__canvas :deep(.maplibregl-map img) {
-  max-width: none;
-}
-
 .station-log-map__swatch {
   width: 0.625rem;
   height: 0.625rem;

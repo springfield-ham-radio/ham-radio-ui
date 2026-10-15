@@ -82,20 +82,7 @@ export interface ChannelMapBounds {
   maxLatitude: number;
 }
 
-/** Background-only style when tiles are offline or fail to load. Markers still draw. */
-export const CHANNEL_MAP_EMPTY_STYLE = {
-  version: 8 as const,
-  sources: {},
-  layers: [
-    {
-      id: 'channel-map-background',
-      type: 'background' as const,
-      paint: {
-        'background-color': '#1e293b',
-      },
-    },
-  ],
-};
+export { CHANNEL_MAP_EMPTY_STYLE } from '~/utils/map-canvas';
 
 export function channelMapBandColor(band: string): string {
   const key = band.trim();
