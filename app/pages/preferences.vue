@@ -66,7 +66,7 @@
                 <UInput
                   id="custom-map-style-url"
                   v-model="customMapStyleUrlInput"
-                  class="mt-2"
+                  class="mt-2 w-full"
                   color="neutral"
                   placeholder="https://…"
                   @blur="commitCustomMapStyleUrl"
