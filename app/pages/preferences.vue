@@ -52,8 +52,8 @@
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-highlighted">Map style</p>
                   <p class="text-xs text-muted">
-                    Basemap for maps in the log, channel library, and Map tab. Match theme uses Liberty in light mode and
-                    Dark in dark mode.
+                    Basemap for the station log and the channel library. Match theme uses Liberty in light mode and Dark
+                    in dark mode.
                   </p>
                 </div>
                 <MapStyleSelect />
@@ -70,6 +70,7 @@
                   color="neutral"
                   placeholder="https://…"
                   @blur="commitCustomMapStyleUrl"
+                  @keydown.enter="commitCustomMapStyleUrl"
                 />
               </div>
               <MapStylePreview />
@@ -371,11 +372,7 @@ import { APP_NAME } from '~/utils/app-name';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { customMapStyleUrl, setCustomMapStyleUrl } = useAppearanceSettings();
-const customMapStyleUrlInput = ref('');
-
-onMounted(() => {
-  customMapStyleUrlInput.value = customMapStyleUrl.value ?? '';
-});
+const customMapStyleUrlInput = ref(customMapStyleUrl.value ?? '');
 
 watch(customMapStyleUrl, (url) => {
   customMapStyleUrlInput.value = url ?? '';

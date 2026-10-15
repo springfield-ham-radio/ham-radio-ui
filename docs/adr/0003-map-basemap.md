@@ -23,6 +23,6 @@ GeoPoint and unlocated rules remain in [0001-location-model.md](./0001-location-
 
 ## Consequences
 
-- A top-level Map tab and the Channels collapsible map share `MapCanvas` and the same basemap resolution path.
+- The station log map and the Channels map share `MapCanvas`. Both, and the style preview, resolve the basemap through `resolveMapStyleUrl`. A later Map tab should use that same path.
 - Turn-by-turn routing and RF coverage are out of scope; trip lines are straight segments in distance order, not road geometry.
 - Operators need network access for the vector basemap unless they point **Custom style URL** at a style they host; markers and range rings still render on the empty style when tiles are unavailable.
