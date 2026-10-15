@@ -420,12 +420,12 @@ describe('mapTripFeatures', () => {
     updatedAt: 1,
   };
 
-  const channels = [near, mid, far, unlocated];
+  const channels = [far, unlocated, near, mid];
   const memberships: ChannelGroupMembership[] = [
-    { groupId: tripGroupId, channelId: near.id },
-    { groupId: tripGroupId, channelId: mid.id },
     { groupId: tripGroupId, channelId: far.id },
     { groupId: tripGroupId, channelId: unlocated.id },
+    { groupId: tripGroupId, channelId: near.id },
+    { groupId: tripGroupId, channelId: mid.id },
   ];
 
   const start = { latitude: 30.27, longitude: -97.74 };
@@ -445,6 +445,12 @@ describe('mapTripFeatures', () => {
       [-97.72, 30.29],
       [-97.68, 30.32],
     ]);
+    expect(collection.features[0]?.geometry.coordinates).not.toContainEqual([0, 0]);
+  });
+
+  it('skips a trip that is not selected and a selected group that is not a trip', () => {
+    expect(mapTripFeatures(groups, channels, memberships, ['group-library'], start).features).toHaveLength(0);
+    expect(mapTripFeatures(groups, channels, memberships, [], start).features).toHaveLength(0);
   });
 
   it('omits a line without a start or with fewer than two located stops', () => {
