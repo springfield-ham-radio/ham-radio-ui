@@ -21,6 +21,7 @@ import {
   mapChannelUnlocatedCount,
   mapChannelUnlocatedMessage,
   MAP_QSO_GRID_CENTER_NOTE,
+  MAP_STATION_OTHER_PIN_COLOR,
   mapQsoFeatures,
   mapQsoUnmappedCount,
   mapQsoUnmappedMessage,
@@ -28,8 +29,14 @@ import {
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
   mapRepeaterUnlocatedMessage,
+  mapStationAntennas,
+  mapStationFeatures,
+  mapStationHomeUnlocatedMessage,
+  mapStationOtherUnlocatedMessage,
   storedLibraryGroups,
 } from '~/utils/map-page-layers';
+import { antennaTypeById } from '~/utils/antenna-types';
+import { formatStationLocation, type RadioStation } from '~/utils/antenna-station';
 import {
   MAP_PAGE_ALL_STORED_GROUPS,
   readMapPageSettings,
@@ -40,6 +47,7 @@ import {
   QSL_MARKER_COLOR,
   qslStatusLabel,
   resolveMapStyleUrl,
+  STATION_PIN_COLOR,
   stationLogMapPoints,
   type StationLogMapPoint,
 } from '~/utils/station-log-map';
@@ -77,11 +85,18 @@ const CONTACT_LAYER_IDS: ClusterLayerIds = {
   unclusteredLayerId: 'map-contacts-unclustered',
 };
 
+const STATION_SOURCE_ID = 'map-stations';
+const STATION_HOME_LAYER_ID = 'map-stations-home';
+const STATION_OTHER_LAYER_ID = 'map-stations-other';
+const STATION_HOME_PIN_IMAGE_ID = 'map-page-station-home-pin';
+const STATION_OTHER_PIN_IMAGE_ID = 'map-page-station-other-pin';
+
 const route = useRoute();
 const colorMode = useColorMode();
 const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const { channels: libraryChannels, groups: allGroups, memberships, refresh } = useSavedChannels();
 const { qsos: libraryQsos, refresh: refreshStationLog } = useStationLog();
+const { stations: libraryStations, antennas: libraryAntennas } = useStationAntennas();
 
 const useFixture = computed(() => import.meta.dev && route.query.fixture === 'map');
 
@@ -91,6 +106,8 @@ const channels = computed(() => fixture.value?.channels ?? libraryChannels.value
 const groups = computed(() => fixture.value?.groups ?? allGroups.value);
 const groupMemberships = computed(() => fixture.value?.memberships ?? memberships.value);
 const logQsos = computed(() => fixture.value?.qsos ?? libraryQsos.value);
+const mapStations = computed(() => fixture.value?.stations ?? libraryStations.value);
+const mapAntennas = computed(() => fixture.value?.antennas ?? libraryAntennas.value);
 
 const storedGroups = computed(() => storedLibraryGroups(groups.value));
 
@@ -161,6 +178,28 @@ const contactUnmappedCount = computed(() => mapQsoUnmappedCount(logQsos.value));
 const contactUnmappedMessage = computed(() =>
   mapQsoUnmappedMessage(contactUnmappedCount.value, logQsos.value.length),
 );
+
+const stationFeatureCollection = computed(() => {
+  if (!pageSettings.value.stations) {
+    return { type: 'FeatureCollection' as const, features: [] };
+  }
+
+  return mapStationFeatures(mapStations.value);
+});
+
+const stationById = computed(() => {
+  const byId = new Map<string, RadioStation>();
+
+  for (const station of mapStations.value) {
+    byId.set(station.id, station);
+  }
+
+  return byId;
+});
+
+const stationHomeUnlocatedMessage = computed(() => mapStationHomeUnlocatedMessage(mapStations.value));
+
+const stationOtherUnlocatedMessage = computed(() => mapStationOtherUnlocatedMessage(mapStations.value));
 
 const contactLegend = computed(() => {
   const items: { key: string; label: string; color: string }[] = [
@@ -244,6 +283,7 @@ const selectedGroupIds = computed({
 
 let popup: Popup | undefined;
 let listenersBound = false;
+let stationNicknamesShown: boolean | undefined;
 let mapReady = false;
 let suppressCameraSave = false;
 let cameraSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -321,6 +361,129 @@ function qslCircleColorExpression(): ['match', ...unknown[]] {
     QSL_MARKER_COLOR.mixed,
     QSL_MARKER_COLOR.none,
   ];
+}
+
+function stationPinImage(fillColor: string): ImageData | undefined {
+  const displayWidth = 18;
+  const displayHeight = 24;
+  const pixelRatio = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = displayWidth * pixelRatio;
+  canvas.height = displayHeight * pixelRatio;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return undefined;
+  }
+
+  context.scale(pixelRatio, pixelRatio);
+  context.beginPath();
+  context.moveTo(9, 22);
+  context.bezierCurveTo(9, 22, 2, 13, 2, 8);
+  context.arc(9, 8, 7, Math.PI, 0);
+  context.bezierCurveTo(16, 13, 9, 22, 9, 22);
+  context.closePath();
+  context.fillStyle = fillColor;
+  context.fill();
+  context.lineWidth = 1.25;
+  context.strokeStyle = '#ffffff';
+  context.stroke();
+  context.beginPath();
+  context.arc(9, 8, 2.4, 0, Math.PI * 2);
+  context.fillStyle = '#ffffff';
+  context.fill();
+
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function ensureStationPinImages(instance: MapLibreMap): void {
+  if (!instance.hasImage(STATION_HOME_PIN_IMAGE_ID)) {
+    const homeImage = stationPinImage(STATION_PIN_COLOR);
+
+    if (homeImage) {
+      instance.addImage(STATION_HOME_PIN_IMAGE_ID, homeImage, { pixelRatio: 2 });
+    }
+  }
+
+  if (!instance.hasImage(STATION_OTHER_PIN_IMAGE_ID)) {
+    const otherImage = stationPinImage(MAP_STATION_OTHER_PIN_COLOR);
+
+    if (otherImage) {
+      instance.addImage(STATION_OTHER_PIN_IMAGE_ID, otherImage, { pixelRatio: 2 });
+    }
+  }
+}
+
+function ensureOtherStationLayer(instance: MapLibreMap, showSymbols: boolean): void {
+  if (instance.getLayer(STATION_OTHER_LAYER_ID)) {
+    instance.removeLayer(STATION_OTHER_LAYER_ID);
+  }
+
+  instance.addLayer({
+    id: STATION_OTHER_LAYER_ID,
+    type: 'symbol',
+    source: STATION_SOURCE_ID,
+    filter: ['==', ['get', 'role'], 'station'],
+    layout: showSymbols
+      ? {
+          'icon-image': STATION_OTHER_PIN_IMAGE_ID,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'text-field': ['get', 'nickname'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.15],
+          'text-optional': true,
+        }
+      : {
+          'icon-image': STATION_OTHER_PIN_IMAGE_ID,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+        },
+    paint: showSymbols
+      ? {
+          'text-color': '#f8fafc',
+          'text-halo-color': '#0f172a',
+          'text-halo-width': 1.25,
+        }
+      : {},
+  });
+}
+
+function ensureStationLayers(instance: MapLibreMap, showSymbols: boolean): void {
+  ensureStationPinImages(instance);
+
+  if (!instance.getSource(STATION_SOURCE_ID)) {
+    stationNicknamesShown = undefined;
+    instance.addSource(STATION_SOURCE_ID, {
+      type: 'geojson',
+      data: stationFeatureCollection.value,
+    });
+  }
+
+  if (!instance.getLayer(STATION_HOME_LAYER_ID)) {
+    instance.addLayer({
+      id: STATION_HOME_LAYER_ID,
+      type: 'symbol',
+      source: STATION_SOURCE_ID,
+      filter: ['==', ['get', 'role'], 'home'],
+      layout: {
+        'icon-image': STATION_HOME_PIN_IMAGE_ID,
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+      },
+    });
+  }
+
+  if (!instance.getLayer(STATION_OTHER_LAYER_ID)) {
+    stationNicknamesShown = undefined;
+  }
+
+  if (stationNicknamesShown !== showSymbols) {
+    ensureOtherStationLayer(instance, showSymbols);
+    stationNicknamesShown = showSymbols;
+  }
 }
 
 function ensureContactClusterLayers(
@@ -488,6 +651,7 @@ function ensureLayers(instance: MapLibreMap): void {
   ensureClusterLayers(instance, REPEATER_LAYER_IDS, repeaterFeatureCollection.value, showSymbols);
   ensureClusterLayers(instance, CHANNEL_LAYER_IDS, channelFeatureCollection.value, showSymbols);
   ensureContactClusterLayers(instance, contactFeatureCollection.value, showSymbols);
+  ensureStationLayers(instance, showSymbols);
 }
 
 function syncData(instance: MapLibreMap): void {
@@ -495,6 +659,7 @@ function syncData(instance: MapLibreMap): void {
   geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)?.setData(repeaterFeatureCollection.value);
   geoJsonSource(instance, CHANNEL_LAYER_IDS.sourceId)?.setData(channelFeatureCollection.value);
   geoJsonSource(instance, CONTACT_LAYER_IDS.sourceId)?.setData(contactFeatureCollection.value);
+  geoJsonSource(instance, STATION_SOURCE_ID)?.setData(stationFeatureCollection.value);
 }
 
 function fitVisible(instance: MapLibreMap): void {
@@ -502,6 +667,7 @@ function fitVisible(instance: MapLibreMap): void {
     ...repeaterFeatureCollection.value.features,
     ...channelFeatureCollection.value.features,
     ...contactFeatureCollection.value.features,
+    ...stationFeatureCollection.value.features,
   ];
 
   if (features.length === 0) {
@@ -541,6 +707,53 @@ function setPopup(next: Popup | undefined): void {
   popup?.remove();
   popup = next;
   mapCanvas.value?.registerPopup(popup);
+}
+
+function openStationPopup(stationId: string, lngLat: LngLatLike): void {
+  const instance = mapInstance();
+  const station = stationById.value.get(stationId);
+
+  if (!instance || !station) {
+    return;
+  }
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '600';
+  title.textContent = station.nickname;
+  root.append(title);
+
+  const place = document.createElement('div');
+  place.textContent = formatStationLocation(station);
+  root.append(place);
+
+  const antennas = mapStationAntennas(station.id, mapAntennas.value);
+
+  if (antennas.length === 0) {
+    const empty = document.createElement('div');
+    empty.textContent = 'No antennas at this station.';
+    root.append(empty);
+  } else {
+    const list = document.createElement('ul');
+    list.style.margin = '0.35rem 0 0';
+    list.style.paddingLeft = '1.1rem';
+
+    for (const antenna of antennas) {
+      const type = antennaTypeById(antenna.typeId);
+      const label = antenna.nickname.trim() || type?.label || 'Antenna';
+      const item = document.createElement('li');
+      item.textContent = type ? `${label} · ${type.label}` : label;
+      list.append(item);
+    }
+
+    root.append(list);
+  }
+
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function openContactPopup(grid: string, lngLat: LngLatLike): void {
@@ -716,6 +929,14 @@ function bindPointer(instance: MapLibreMap): void {
       }
 
       if (ids.sourceId === CONTACT_LAYER_IDS.sourceId) {
+        const stationsHere = instance.queryRenderedFeatures(event.point, {
+          layers: [STATION_HOME_LAYER_ID, STATION_OTHER_LAYER_ID],
+        });
+
+        if (stationsHere.length > 0) {
+          return;
+        }
+
         const grid = feature.properties?.grid;
 
         if (typeof grid !== 'string') {
@@ -744,6 +965,26 @@ function bindPointer(instance: MapLibreMap): void {
         instance.getCanvas().style.cursor = '';
       });
     }
+  }
+
+  for (const layerId of [STATION_HOME_LAYER_ID, STATION_OTHER_LAYER_ID]) {
+    instance.on('click', layerId, (event) => {
+      const id = event.features?.[0]?.properties?.id;
+
+      if (typeof id !== 'string') {
+        return;
+      }
+
+      openStationPopup(id, event.lngLat);
+    });
+
+    instance.on('mouseenter', layerId, () => {
+      instance.getCanvas().style.cursor = 'pointer';
+    });
+
+    instance.on('mouseleave', layerId, () => {
+      instance.getCanvas().style.cursor = '';
+    });
   }
 }
 
@@ -820,6 +1061,14 @@ function onContactsToggle(enabled: boolean | 'indeterminate'): void {
   persistSettings();
 }
 
+function onStationsToggle(enabled: boolean | 'indeterminate'): void {
+  pageSettings.value = {
+    ...pageSettings.value,
+    stations: enabled === true,
+  };
+  persistSettings();
+}
+
 function flushCameraSave(): void {
   if (!cameraSaveTimer) {
     return;
@@ -880,7 +1129,7 @@ watch(styleUrl, (url) => {
   applyStyle(instance, url);
 });
 
-watch([repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection], () => {
+watch([repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection, stationFeatureCollection], () => {
   const instance = mapInstance();
 
   if (!instance?.isStyleLoaded() || !geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)) {
@@ -919,6 +1168,11 @@ watch(usingEmptyStyle, () => {
           :model-value="pageSettings.log"
           label="Contacts"
           @update:model-value="onContactsToggle"
+        />
+        <UCheckbox
+          :model-value="pageSettings.stations"
+          label="Stations"
+          @update:model-value="onStationsToggle"
         />
         <USelectMenu
           v-model="selectedGroupIds"
@@ -974,6 +1228,32 @@ watch(usingEmptyStyle, () => {
         {{ MAP_QSO_GRID_CENTER_NOTE }}
       </p>
 
+      <div v-if="pageSettings.stations" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="text-xs font-medium text-muted">Stations</span>
+        <span class="inline-flex items-center gap-1.5 text-xs text-muted">
+          <span
+            class="map-page__swatch map-page__swatch--pin"
+            :style="{ backgroundColor: STATION_PIN_COLOR }"
+          />
+          Home
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-xs text-muted">
+          <span
+            class="map-page__swatch map-page__swatch--pin"
+            :style="{ backgroundColor: MAP_STATION_OTHER_PIN_COLOR }"
+          />
+          Other stations
+        </span>
+      </div>
+
+      <p v-if="stationHomeUnlocatedMessage" class="text-xs text-muted">
+        {{ stationHomeUnlocatedMessage }}
+      </p>
+
+      <p v-if="stationOtherUnlocatedMessage" class="text-xs text-muted">
+        {{ stationOtherUnlocatedMessage }}
+      </p>
+
       <p v-if="repeaterUnlocatedMessage" class="text-xs text-muted">
         {{ repeaterUnlocatedMessage }}
       </p>
@@ -1020,5 +1300,12 @@ watch(usingEmptyStyle, () => {
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 9999px;
+}
+
+.map-page__swatch--pin {
+  width: 0.45rem;
+  height: 0.55rem;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
 }
 </style>

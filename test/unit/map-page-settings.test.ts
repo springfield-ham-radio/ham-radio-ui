@@ -25,7 +25,7 @@ describe('parseMapPageCamera', () => {
 });
 
 describe('parseMapPageSettings', () => {
-  it('defaults repeaters, channels, and contacts on, all stored groups, and no camera', () => {
+  it('defaults repeaters, channels, contacts, and stations on, all stored groups, and no camera', () => {
     expect(parseMapPageSettings(null)).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('{')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
@@ -36,6 +36,7 @@ describe('parseMapPageSettings', () => {
       repeaters: true,
       channels: false,
       log: true,
+      stations: false,
       groupSelection: ['group-a', 'group-b'],
       camera: { longitude: 10, latitude: 20, zoom: 4 },
     };
@@ -55,6 +56,7 @@ describe('parseMapPageSettings', () => {
       repeaters: false,
       channels: true,
       log: true,
+      stations: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -64,6 +66,7 @@ describe('parseMapPageSettings', () => {
       repeaters: true,
       channels: true,
       log: false,
+      stations: true,
       groupSelection: [] as string[],
     };
 
@@ -75,6 +78,7 @@ describe('parseMapPageSettings', () => {
       repeaters: true,
       channels: true,
       log: true,
+      stations: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -84,6 +88,7 @@ describe('parseMapPageSettings', () => {
       repeaters: false,
       channels: true,
       log: true,
+      stations: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -93,6 +98,17 @@ describe('parseMapPageSettings', () => {
       repeaters: true,
       channels: true,
       log: true,
+      stations: true,
+      groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
+    });
+  });
+
+  it('defaults stations on when the stations key is missing', () => {
+    expect(parseMapPageSettings(JSON.stringify({ repeaters: true, channels: true, log: true, groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
+      repeaters: true,
+      channels: true,
+      log: true,
+      stations: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });

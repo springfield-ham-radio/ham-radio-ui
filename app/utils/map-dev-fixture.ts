@@ -1,14 +1,15 @@
 import { RadioChannelId } from '@springfield/ham-radio-api';
 import type { ChannelGroup, ChannelGroupMembership } from '~/utils/channel-groups';
 import type { SavedChannel } from '~/utils/saved-channels-db';
-import { HOME_STATION_ID } from '~/utils/antenna-station';
-import type { RadioStation } from '~/utils/antenna-station';
+import { createStationAntenna, HOME_STATION_ID } from '~/utils/antenna-station';
+import type { RadioStation, StationAntenna } from '~/utils/antenna-station';
 import { createStationLogQso, type StationLogQso } from '~/utils/station-log-db';
 
 const now = 1_700_000_000_000;
 
 const fixtureGroupTrip = 'fixture-group-trip';
 const fixtureGroupLibrary = 'fixture-group-library';
+const fixtureStationGridOnly = 'fixture-station-grid';
 
 const fixtureRepeaterLocated: SavedChannel = {
   id: RadioChannelId('fixture-repeater-located'),
@@ -53,6 +54,7 @@ export interface MapDevFixture {
   groups: ChannelGroup[];
   memberships: ChannelGroupMembership[];
   stations: RadioStation[];
+  antennas: StationAntenna[];
   qsos: StationLogQso[];
 }
 
@@ -91,6 +93,27 @@ export function mapDevFixture(): MapDevFixture {
       createdAt: now,
       updatedAt: now,
     },
+    {
+      id: fixtureStationGridOnly,
+      nickname: 'Grid shack',
+      gridsquare: 'EM41',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+
+  const antennas: StationAntenna[] = [
+    createStationAntenna(
+      {
+        stationId: HOME_STATION_ID,
+        nickname: 'Fixture dipole',
+        typeId: 'dipole',
+        heightAglM: 10,
+        headingDeg: 90,
+        bands: ['20m'],
+      },
+      { now },
+    ),
   ];
 
   const qsos: StationLogQso[] = [
@@ -127,6 +150,7 @@ export function mapDevFixture(): MapDevFixture {
     groups,
     memberships,
     stations,
+    antennas,
     qsos,
   };
 }
