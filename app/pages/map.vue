@@ -20,6 +20,10 @@ import {
   mapChannelRows,
   mapChannelUnlocatedCount,
   mapChannelUnlocatedMessage,
+  MAP_QSO_GRID_CENTER_NOTE,
+  mapQsoFeatures,
+  mapQsoUnmappedCount,
+  mapQsoUnmappedMessage,
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
@@ -32,8 +36,16 @@ import {
   writeMapPageSettings,
   type MapPageSettings,
 } from '~/utils/map-page-settings';
-import { resolveMapStyleUrl } from '~/utils/station-log-map';
+import {
+  QSL_MARKER_COLOR,
+  qslStatusLabel,
+  resolveMapStyleUrl,
+  stationLogMapPoints,
+  type StationLogMapPoint,
+} from '~/utils/station-log-map';
 import type { SavedChannel } from '~/utils/saved-channels-db';
+
+const MAP_CONTACT_POPUP_MAX_CALLS = 20;
 
 useHead({ title: 'Map' });
 
@@ -58,10 +70,18 @@ const CHANNEL_LAYER_IDS: ClusterLayerIds = {
   unclusteredLayerId: 'map-channels-unclustered',
 };
 
+const CONTACT_LAYER_IDS: ClusterLayerIds = {
+  sourceId: 'map-contacts',
+  clusterLayerId: 'map-contacts-clusters',
+  clusterCountLayerId: 'map-contacts-cluster-count',
+  unclusteredLayerId: 'map-contacts-unclustered',
+};
+
 const route = useRoute();
 const colorMode = useColorMode();
 const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const { channels: libraryChannels, groups: allGroups, memberships, refresh } = useSavedChannels();
+const { qsos: libraryQsos, refresh: refreshStationLog } = useStationLog();
 
 const useFixture = computed(() => import.meta.dev && route.query.fixture === 'map');
 
@@ -70,6 +90,7 @@ const fixture = computed(() => (useFixture.value ? mapDevFixture() : undefined))
 const channels = computed(() => fixture.value?.channels ?? libraryChannels.value);
 const groups = computed(() => fixture.value?.groups ?? allGroups.value);
 const groupMemberships = computed(() => fixture.value?.memberships ?? memberships.value);
+const logQsos = computed(() => fixture.value?.qsos ?? libraryQsos.value);
 
 const storedGroups = computed(() => storedLibraryGroups(groups.value));
 
@@ -113,6 +134,47 @@ const channelFeatureCollection = computed(() => {
     groups.value,
     pageSettings.value.groupSelection,
   );
+});
+
+const contactFeatureCollection = computed(() => {
+  if (!pageSettings.value.log) {
+    return { type: 'FeatureCollection' as const, features: [] };
+  }
+
+  return mapQsoFeatures(logQsos.value);
+});
+
+const contactPoints = computed(() => stationLogMapPoints(logQsos.value));
+
+const contactPointByGrid = computed(() => {
+  const byGrid = new Map<string, StationLogMapPoint>();
+
+  for (const point of contactPoints.value) {
+    byGrid.set(point.grid, point);
+  }
+
+  return byGrid;
+});
+
+const contactUnmappedCount = computed(() => mapQsoUnmappedCount(logQsos.value));
+
+const contactUnmappedMessage = computed(() =>
+  mapQsoUnmappedMessage(contactUnmappedCount.value, logQsos.value.length),
+);
+
+const contactLegend = computed(() => {
+  const items: { key: string; label: string; color: string }[] = [
+    { key: 'none', label: 'No card', color: QSL_MARKER_COLOR.none },
+    { key: 'sent', label: 'Card sent', color: QSL_MARKER_COLOR.sent },
+    { key: 'received', label: 'Card received', color: QSL_MARKER_COLOR.received },
+    { key: 'both', label: 'Both', color: QSL_MARKER_COLOR.both },
+  ];
+
+  if (contactPoints.value.some((point) => point.status === 'mixed')) {
+    items.push({ key: 'mixed', label: 'Mixed', color: QSL_MARKER_COLOR.mixed });
+  }
+
+  return items;
 });
 
 const repeaterUnlocatedCount = computed(() =>
@@ -245,6 +307,102 @@ function scheduleCameraSave(instance: MapLibreMap): void {
   }, 300);
 }
 
+function qslCircleColorExpression(): ['match', ...unknown[]] {
+  return [
+    'match',
+    ['get', 'status'],
+    'sent',
+    QSL_MARKER_COLOR.sent,
+    'received',
+    QSL_MARKER_COLOR.received,
+    'both',
+    QSL_MARKER_COLOR.both,
+    'mixed',
+    QSL_MARKER_COLOR.mixed,
+    QSL_MARKER_COLOR.none,
+  ];
+}
+
+function ensureContactClusterLayers(
+  instance: MapLibreMap,
+  data: typeof contactFeatureCollection.value,
+  showSymbols: boolean,
+): void {
+  const ids = CONTACT_LAYER_IDS;
+
+  if (!instance.getSource(ids.sourceId)) {
+    instance.addSource(ids.sourceId, {
+      type: 'geojson',
+      data,
+      cluster: true,
+      clusterMaxZoom: 12,
+      clusterRadius: 50,
+    });
+
+    instance.addLayer({
+      id: ids.clusterLayerId,
+      type: 'circle',
+      source: ids.sourceId,
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': '#334155',
+        'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 25, 22],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.92,
+      },
+    });
+
+    if (showSymbols) {
+      instance.addLayer({
+        id: ids.clusterCountLayerId,
+        type: 'symbol',
+        source: ids.sourceId,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+        },
+        paint: {
+          'text-color': '#f8fafc',
+        },
+      });
+    }
+
+    instance.addLayer({
+      id: ids.unclusteredLayerId,
+      type: 'circle',
+      source: ids.sourceId,
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': qslCircleColorExpression(),
+        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.95,
+      },
+    });
+  } else if (showSymbols && !instance.getLayer(ids.clusterCountLayerId)) {
+    instance.addLayer({
+      id: ids.clusterCountLayerId,
+      type: 'symbol',
+      source: ids.sourceId,
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': '#f8fafc',
+      },
+    });
+  } else if (!showSymbols && instance.getLayer(ids.clusterCountLayerId)) {
+    instance.removeLayer(ids.clusterCountLayerId);
+  }
+}
+
 function ensureClusterLayers(
   instance: MapLibreMap,
   ids: ClusterLayerIds,
@@ -329,18 +487,21 @@ function ensureLayers(instance: MapLibreMap): void {
 
   ensureClusterLayers(instance, REPEATER_LAYER_IDS, repeaterFeatureCollection.value, showSymbols);
   ensureClusterLayers(instance, CHANNEL_LAYER_IDS, channelFeatureCollection.value, showSymbols);
+  ensureContactClusterLayers(instance, contactFeatureCollection.value, showSymbols);
 }
 
 function syncData(instance: MapLibreMap): void {
   ensureLayers(instance);
   geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)?.setData(repeaterFeatureCollection.value);
   geoJsonSource(instance, CHANNEL_LAYER_IDS.sourceId)?.setData(channelFeatureCollection.value);
+  geoJsonSource(instance, CONTACT_LAYER_IDS.sourceId)?.setData(contactFeatureCollection.value);
 }
 
 function fitVisible(instance: MapLibreMap): void {
   const features = [
     ...repeaterFeatureCollection.value.features,
     ...channelFeatureCollection.value.features,
+    ...contactFeatureCollection.value.features,
   ];
 
   if (features.length === 0) {
@@ -380,6 +541,64 @@ function setPopup(next: Popup | undefined): void {
   popup?.remove();
   popup = next;
   mapCanvas.value?.registerPopup(popup);
+}
+
+function openContactPopup(grid: string, lngLat: LngLatLike): void {
+  const instance = mapInstance();
+  const point = contactPointByGrid.value.get(grid);
+
+  if (!instance || !point) {
+    return;
+  }
+
+  const feature = contactFeatureCollection.value.features.find((entry) => entry.properties.grid === grid);
+  const precisionLabel = feature?.properties.precisionLabel ?? '';
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '600';
+  title.textContent = grid;
+  root.append(title);
+
+  if (precisionLabel) {
+    const precision = document.createElement('div');
+    precision.textContent = precisionLabel;
+    root.append(precision);
+  }
+
+  const status = document.createElement('div');
+  status.textContent = qslStatusLabel(point.status);
+  root.append(status);
+
+  const sorted = [...point.qsos].sort((left, right) =>
+    left.theirCallsign.localeCompare(right.theirCallsign),
+  );
+  const shown = sorted.slice(0, MAP_CONTACT_POPUP_MAX_CALLS);
+  const remaining = sorted.length - shown.length;
+
+  const list = document.createElement('ul');
+  list.style.margin = '0.35rem 0 0';
+  list.style.paddingLeft = '1.1rem';
+
+  for (const qso of shown) {
+    const item = document.createElement('li');
+    item.textContent = qso.theirCallsign;
+    list.append(item);
+  }
+
+  root.append(list);
+
+  if (remaining > 0) {
+    const more = document.createElement('div');
+    more.textContent = `and ${remaining} more`;
+    root.append(more);
+  }
+
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function openChannelPopup(channel: SavedChannel, lngLat: LngLatLike): void {
@@ -463,7 +682,7 @@ function bindPointer(instance: MapLibreMap): void {
     scheduleCameraSave(instance);
   });
 
-  for (const ids of [REPEATER_LAYER_IDS, CHANNEL_LAYER_IDS]) {
+  for (const ids of [REPEATER_LAYER_IDS, CHANNEL_LAYER_IDS, CONTACT_LAYER_IDS]) {
     instance.on('click', ids.clusterLayerId, (event) => {
       void (async () => {
         const feature = event.features?.[0];
@@ -491,9 +710,25 @@ function bindPointer(instance: MapLibreMap): void {
 
     instance.on('click', ids.unclusteredLayerId, (event) => {
       const feature = event.features?.[0];
-      const channel = feature ? channelFromFeature(feature) : undefined;
 
-      if (!channel || !feature) {
+      if (!feature) {
+        return;
+      }
+
+      if (ids.sourceId === CONTACT_LAYER_IDS.sourceId) {
+        const grid = feature.properties?.grid;
+
+        if (typeof grid !== 'string') {
+          return;
+        }
+
+        openContactPopup(grid, event.lngLat);
+        return;
+      }
+
+      const channel = channelFromFeature(feature);
+
+      if (!channel) {
         return;
       }
 
@@ -577,6 +812,14 @@ function onChannelsToggle(enabled: boolean | 'indeterminate'): void {
   persistSettings();
 }
 
+function onContactsToggle(enabled: boolean | 'indeterminate'): void {
+  pageSettings.value = {
+    ...pageSettings.value,
+    log: enabled === true,
+  };
+  persistSettings();
+}
+
 function flushCameraSave(): void {
   if (!cameraSaveTimer) {
     return;
@@ -610,13 +853,17 @@ onMounted(() => {
     return;
   }
 
-  if (libraryChannels.value.length > 0) {
-    return;
+  if (libraryChannels.value.length === 0) {
+    void refresh().catch(() => {
+      // Browser dev without Tauri: fixture or empty library is fine.
+    });
   }
 
-  void refresh().catch(() => {
-    // Browser dev without Tauri: fixture or empty library is fine.
-  });
+  if (libraryQsos.value.length === 0) {
+    void refreshStationLog().catch(() => {
+      // Browser dev without Tauri: empty log is fine.
+    });
+  }
 });
 
 onBeforeUnmount(() => {
@@ -633,7 +880,7 @@ watch(styleUrl, (url) => {
   applyStyle(instance, url);
 });
 
-watch([repeaterFeatureCollection, channelFeatureCollection], () => {
+watch([repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection], () => {
   const instance = mapInstance();
 
   if (!instance?.isStyleLoaded() || !geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)) {
@@ -667,6 +914,11 @@ watch(usingEmptyStyle, () => {
           :model-value="pageSettings.channels"
           label="Channels"
           @update:model-value="onChannelsToggle"
+        />
+        <UCheckbox
+          :model-value="pageSettings.log"
+          label="Contacts"
+          @update:model-value="onContactsToggle"
         />
         <USelectMenu
           v-model="selectedGroupIds"
@@ -706,12 +958,32 @@ watch(usingEmptyStyle, () => {
         </span>
       </div>
 
+      <div v-if="pageSettings.log && contactLegend.length > 0" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="text-xs font-medium text-muted">Contacts</span>
+        <span
+          v-for="item in contactLegend"
+          :key="`contact-${item.key}`"
+          class="inline-flex items-center gap-1.5 text-xs text-muted"
+        >
+          <span class="map-page__swatch" :style="{ backgroundColor: item.color }" />
+          {{ item.label }}
+        </span>
+      </div>
+
+      <p v-if="pageSettings.log" class="text-xs text-muted">
+        {{ MAP_QSO_GRID_CENTER_NOTE }}
+      </p>
+
       <p v-if="repeaterUnlocatedMessage" class="text-xs text-muted">
         {{ repeaterUnlocatedMessage }}
       </p>
 
       <p v-if="channelUnlocatedMessage" class="text-xs text-muted">
         {{ channelUnlocatedMessage }}
+      </p>
+
+      <p v-if="contactUnmappedMessage" class="text-xs text-muted">
+        {{ contactUnmappedMessage }}
       </p>
     </section>
 
