@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.3.0...v1.4.0) (2026-10-15)
+
+### Features
+
+* add an ordinary-channel layer to the Map tab ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#122](https://github.com/springfield-ham-radio/ham-radio-ui/issues/122)) ([ac14313](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ac143138f4e05cc8f2dc84516ace2ee4ab1860b9))
+
 ## [1.3.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.2.0...v1.3.0) (2026-10-15)
 
 ### Features
