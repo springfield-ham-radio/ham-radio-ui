@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.2.0...v1.3.0) (2026-10-15)
+
+### Features
+
+* add a Map tab that plots repeaters ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#121](https://github.com/springfield-ham-radio/ham-radio-ui/issues/121)) ([0819242](https://github.com/springfield-ham-radio/ham-radio-ui/commit/08192424663735360ee927fe4cf8aa4708e7ca66))
+
 ## [1.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.1.1...v1.2.0) (2026-10-15)
 
 ### Features
