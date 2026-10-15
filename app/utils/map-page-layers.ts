@@ -15,12 +15,8 @@ import {
 } from '~/utils/antenna-station';
 import { MAP_PAGE_ALL_STORED_GROUPS, type MapPageGroupSelection } from '~/utils/map-page-settings';
 import { coordinatesFromPair, type SavedChannel } from '~/utils/saved-channels-db';
-import {
-  defaultDistanceStartId,
-  orderTripChannels,
-  stationStartPoint,
-  TRIP_START_NONE,
-} from '~/utils/trip-channels';
+import { distanceKm } from '~/utils/location-format';
+import { defaultDistanceStartId, stationStartPoint, TRIP_START_NONE } from '~/utils/trip-channels';
 import {
   stationLogMapPoints,
   stationLogUnmappedCount,
@@ -365,28 +361,193 @@ export function mapChannelUnlocatedMessage(unlocated: number, total: number): st
   return `${unlocated} of ${total} channels have no location.`;
 }
 
-export const MAP_TRIP_LINE_CAPTION =
-  'Straight line through located stops in distance order. Not a driven route.';
+export const MAP_TRIP_LINE_CAPTION = 'Straight line through located stops. Not a driven route.';
+
+export const MAP_TRIP_FEATURE_LINE = 'trip-line';
+export const MAP_TRIP_FEATURE_STOP = 'trip-stop';
 
 const MAP_TRIP_LINE_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2'] as const;
 
-export interface MapPageTripFeatureProperties {
+export interface MapPageTripLineFeatureProperties {
+  featureType: typeof MAP_TRIP_FEATURE_LINE;
   groupId: string;
   groupName: string;
   straightLine: true;
   lineColor: string;
 }
 
+export interface MapPageTripStopFeatureProperties {
+  featureType: typeof MAP_TRIP_FEATURE_STOP;
+  groupId: string;
+  groupName: string;
+  channelId: string;
+  stopLabel: string;
+  stopCity?: string;
+  lineColor: string;
+}
+
+export type MapPageTripFeatureProperties = MapPageTripLineFeatureProperties | MapPageTripStopFeatureProperties;
+
 export interface MapPageTripFeatureCollection {
   type: 'FeatureCollection';
-  features: Array<{
-    type: 'Feature';
-    geometry: {
-      type: 'LineString';
-      coordinates: [number, number][];
-    };
-    properties: MapPageTripFeatureProperties;
-  }>;
+  features: Array<
+    | {
+        type: 'Feature';
+        geometry: {
+          type: 'LineString';
+          coordinates: [number, number][];
+        };
+        properties: MapPageTripLineFeatureProperties;
+      }
+    | {
+        type: 'Feature';
+        geometry: {
+          type: 'Point';
+          coordinates: [number, number];
+        };
+        properties: MapPageTripStopFeatureProperties;
+      }
+  >;
+}
+
+export interface MapTripLocatedStop<T = SavedChannel> {
+  channel: T;
+  coordinate: [number, number];
+}
+
+function mapTripStopCoordinateDistance(left: [number, number], right: [number, number]): number {
+  return distanceKm(
+    { latitude: left[1], longitude: left[0] },
+    { latitude: right[1], longitude: right[0] },
+  );
+}
+
+function mapTripStopPathLength<T extends { coordinate: [number, number] }>(stops: readonly T[]): number {
+  let lengthKm = 0;
+
+  for (let index = 1; index < stops.length; index += 1) {
+    lengthKm += mapTripStopCoordinateDistance(stops[index - 1].coordinate, stops[index].coordinate);
+  }
+
+  return lengthKm;
+}
+
+function mapTripNearestNeighborOrder<T extends { coordinate: [number, number] }>(
+  stops: readonly T[],
+  startIndex: number,
+): T[] {
+  const remaining = new Set(stops.map((_, index) => index));
+  const order: T[] = [];
+  let current = startIndex;
+
+  order.push(stops[current]);
+  remaining.delete(current);
+
+  while (remaining.size > 0) {
+    let bestIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    const from = stops[current].coordinate;
+
+    for (const index of remaining) {
+      const distance = mapTripStopCoordinateDistance(from, stops[index].coordinate);
+
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+
+    order.push(stops[bestIndex]);
+    remaining.delete(bestIndex);
+    current = bestIndex;
+  }
+
+  return order;
+}
+
+function mapTripTwoOptImprove<T extends { coordinate: [number, number] }>(order: readonly T[]): T[] {
+  let path = [...order];
+  let improved = true;
+
+  while (improved) {
+    improved = false;
+
+    for (let index = 0; index < path.length - 2; index += 1) {
+      for (let end = index + 2; end < path.length; end += 1) {
+        const candidate = [...path.slice(0, index + 1), ...path.slice(index + 1, end + 1).reverse(), ...path.slice(end + 1)];
+
+        if (mapTripStopPathLength(candidate) + 1e-9 < mapTripStopPathLength(path)) {
+          path = candidate;
+          improved = true;
+        }
+      }
+    }
+  }
+
+  return path;
+}
+
+function mapTripStopDistanceFromHome<T extends { coordinate: [number, number] }>(stop: T, home: GeoPoint): number {
+  return mapTripStopCoordinateDistance([home.longitude, home.latitude], stop.coordinate);
+}
+
+/**
+ * Chain located trip stops without doubling back: nearest-neighbor from an endpoint (farthest from Home), then 2-opt.
+ */
+export function orderTripMapStops<T extends { coordinate: [number, number] }>(
+  stops: readonly T[],
+  home: GeoPoint,
+): T[] {
+  if (stops.length <= 1) {
+    return [...stops];
+  }
+
+  let farthestIndex = 0;
+  let farthestDistance = -1;
+
+  for (let index = 0; index < stops.length; index += 1) {
+    const distance = mapTripStopDistanceFromHome(stops[index], home);
+
+    if (distance > farthestDistance) {
+      farthestDistance = distance;
+      farthestIndex = index;
+    }
+  }
+
+  let otherEndpoint = farthestIndex;
+  let longestSpan = -1;
+
+  for (let index = 0; index < stops.length; index += 1) {
+    const distance = mapTripStopCoordinateDistance(stops[farthestIndex].coordinate, stops[index].coordinate);
+
+    if (distance > longestSpan) {
+      longestSpan = distance;
+      otherEndpoint = index;
+    }
+  }
+
+  const startCandidates = new Set([farthestIndex, otherEndpoint]);
+  let bestOrder = stops;
+  let bestLength = Number.POSITIVE_INFINITY;
+
+  for (const startIndex of startCandidates) {
+    const candidate = mapTripTwoOptImprove(mapTripNearestNeighborOrder(stops, startIndex));
+    const length = mapTripStopPathLength(candidate);
+
+    if (length < bestLength) {
+      bestLength = length;
+      bestOrder = candidate;
+    }
+  }
+
+  return [...bestOrder];
+}
+
+export function mapTripStopLabel(channel: SavedChannel): { label: string; city?: string } {
+  const label = channel.callsign?.trim() || channel.name?.trim() || 'Channel';
+  const city = channel.city?.trim();
+
+  return city ? { label, city } : { label };
 }
 
 export function mapTripLineColor(groupId: string): string {
@@ -479,20 +640,23 @@ export function mapTripFeatures(
     }
 
     const members = channelsInGroup(channels, memberships, group.id);
-    const ordered = orderTripChannels(members, start, 'asc');
-    const coordinates: [number, number][] = [];
+    const locatedStops: MapTripLocatedStop[] = [];
 
-    for (const channel of ordered) {
+    for (const channel of members) {
       const coordinate = mapTripLocatedCoordinate(channel);
 
       if (coordinate) {
-        coordinates.push(coordinate);
+        locatedStops.push({ channel, coordinate });
       }
     }
 
-    if (coordinates.length < 2) {
+    if (locatedStops.length < 2) {
       continue;
     }
+
+    const orderedStops = orderTripMapStops(locatedStops, start);
+    const coordinates = orderedStops.map((stop) => stop.coordinate);
+    const lineColor = mapTripLineColor(group.id);
 
     features.push({
       type: 'Feature',
@@ -501,12 +665,34 @@ export function mapTripFeatures(
         coordinates,
       },
       properties: {
+        featureType: MAP_TRIP_FEATURE_LINE,
         groupId: group.id,
         groupName: group.name,
         straightLine: true,
-        lineColor: mapTripLineColor(group.id),
+        lineColor,
       },
     });
+
+    for (const stop of orderedStops) {
+      const { label, city } = mapTripStopLabel(stop.channel);
+
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: stop.coordinate,
+        },
+        properties: {
+          featureType: MAP_TRIP_FEATURE_STOP,
+          groupId: group.id,
+          groupName: group.name,
+          channelId: String(stop.channel.id),
+          stopLabel: label,
+          stopCity: city,
+          lineColor,
+        },
+      });
+    }
   }
 
   return {

@@ -98,6 +98,7 @@ const STATION_OTHER_PIN_IMAGE_ID = 'map-page-station-other-pin';
 
 const TRIP_SOURCE_ID = 'map-trips';
 const TRIP_LINE_LAYER_ID = 'map-trips-lines';
+const TRIP_STOP_LAYER_ID = 'map-trips-stops';
 const TRIP_LABEL_LAYER_ID = 'map-trips-labels';
 
 const route = useRoute();
@@ -544,6 +545,7 @@ function ensureTripLabelLayer(instance: MapLibreMap, showSymbols: boolean): void
     id: TRIP_LABEL_LAYER_ID,
     type: 'symbol',
     source: TRIP_SOURCE_ID,
+    filter: ['==', ['geometry-type'], 'LineString'],
     layout: {
       'symbol-placement': 'line',
       'text-field': ['get', 'groupName'],
@@ -573,11 +575,28 @@ function ensureTripLayers(instance: MapLibreMap, showSymbols: boolean): void {
       id: TRIP_LINE_LAYER_ID,
       type: 'line',
       source: TRIP_SOURCE_ID,
+      filter: ['==', ['geometry-type'], 'LineString'],
       paint: {
         'line-color': ['get', 'lineColor'],
         'line-width': 3,
         'line-dasharray': [2, 2],
         'line-opacity': 0.9,
+      },
+    });
+  }
+
+  if (!instance.getLayer(TRIP_STOP_LAYER_ID)) {
+    instance.addLayer({
+      id: TRIP_STOP_LAYER_ID,
+      type: 'circle',
+      source: TRIP_SOURCE_ID,
+      filter: ['==', ['geometry-type'], 'Point'],
+      paint: {
+        'circle-color': ['get', 'lineColor'],
+        'circle-radius': 5,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.95,
       },
     });
   }
@@ -789,8 +808,13 @@ function fitVisible(instance: MapLibreMap): void {
   }
 
   for (const feature of tripFeatureCollection.value.features) {
-    for (const coordinate of feature.geometry.coordinates) {
-      box.extend(coordinate);
+    if (feature.geometry.type === 'LineString') {
+      for (const coordinate of feature.geometry.coordinates) {
+        box.extend(coordinate);
+        hasExtent = true;
+      }
+    } else if (feature.geometry.type === 'Point') {
+      box.extend(feature.geometry.coordinates);
       hasExtent = true;
     }
   }
@@ -840,6 +864,32 @@ function openTripPopup(groupName: string, lngLat: LngLatLike): void {
   const caption = document.createElement('div');
   caption.textContent = MAP_TRIP_LINE_CAPTION;
   root.append(caption);
+
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
+}
+
+function openTripStopPopup(stopLabel: string, stopCity: string | undefined, lngLat: LngLatLike): void {
+  const instance = mapInstance();
+
+  if (!instance) {
+    return;
+  }
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '600';
+  title.textContent = stopLabel;
+  root.append(title);
+
+  if (stopCity) {
+    const city = document.createElement('div');
+    city.textContent = stopCity;
+    root.append(city);
+  }
 
   setPopup(
     new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
@@ -1139,6 +1189,26 @@ function bindPointer(instance: MapLibreMap): void {
   });
 
   instance.on('mouseleave', TRIP_LINE_LAYER_ID, () => {
+    instance.getCanvas().style.cursor = '';
+  });
+
+  instance.on('click', TRIP_STOP_LAYER_ID, (event) => {
+    const properties = event.features?.[0]?.properties;
+    const stopLabel = properties?.stopLabel;
+    const stopCity = properties?.stopCity;
+
+    if (typeof stopLabel !== 'string') {
+      return;
+    }
+
+    openTripStopPopup(stopLabel, typeof stopCity === 'string' ? stopCity : undefined, event.lngLat);
+  });
+
+  instance.on('mouseenter', TRIP_STOP_LAYER_ID, () => {
+    instance.getCanvas().style.cursor = 'pointer';
+  });
+
+  instance.on('mouseleave', TRIP_STOP_LAYER_ID, () => {
     instance.getCanvas().style.cursor = '';
   });
 }

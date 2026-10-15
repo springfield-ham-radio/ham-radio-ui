@@ -24,8 +24,10 @@ import {
   mapStationHomeUnlocated,
   mapStationOtherUnlocatedCount,
   mapTripFeatures,
+  orderTripMapStops,
   resolveSelectedGroupIds,
 } from '../../app/utils/map-page-layers.ts';
+import { orderTripChannels } from '../../app/utils/trip-channels.ts';
 import type { ChannelGroup, ChannelGroupMembership } from '../../app/utils/channel-groups.ts';
 import { maidenheadToLatLon } from '../../app/utils/maidenhead.ts';
 import { createStationLogQso, type StationLogQso } from '../../app/utils/station-log-db.ts';
@@ -430,22 +432,27 @@ describe('mapTripFeatures', () => {
 
   const start = { latitude: 30.27, longitude: -97.74 };
 
-  it('draws one dashed line through located stops in distance order', () => {
+  it('draws a dashed line and stop dots through located stops without distance sorting', () => {
     const collection = mapTripFeatures(groups, channels, memberships, [tripGroupId], start);
 
-    expect(collection.features).toHaveLength(1);
-    expect(collection.features[0]?.properties).toEqual({
+    const line = collection.features.find((feature) => feature.geometry.type === 'LineString');
+    const stops = collection.features.filter((feature) => feature.geometry.type === 'Point');
+
+    expect(line?.properties).toEqual({
+      featureType: 'trip-line',
       groupId: tripGroupId,
       groupName: 'Hill Country',
       straightLine: true,
       lineColor: expect.any(String),
     });
-    expect(collection.features[0]?.geometry.coordinates).toEqual([
-      [-97.745, 30.275],
-      [-97.72, 30.29],
+    expect(line?.geometry.coordinates).toEqual([
       [-97.68, 30.32],
+      [-97.72, 30.29],
+      [-97.745, 30.275],
     ]);
-    expect(collection.features[0]?.geometry.coordinates).not.toContainEqual([0, 0]);
+    expect(line?.geometry.coordinates).not.toContainEqual([0, 0]);
+    expect(stops).toHaveLength(3);
+    expect(stops.every((feature) => feature.properties.featureType === 'trip-stop')).toBe(true);
   });
 
   it('skips a trip that is not selected and a selected group that is not a trip', () => {
@@ -458,5 +465,93 @@ describe('mapTripFeatures', () => {
     expect(
       mapTripFeatures(groups, [near], [{ groupId: tripGroupId, channelId: near.id }], [tripGroupId], start).features,
     ).toHaveLength(0);
+  });
+});
+
+describe('orderTripMapStops', () => {
+  const austinHome = { latitude: 30.2672, longitude: -97.7431 };
+
+  const i35TexasStops = [
+    { key: 'san-antonio', coordinate: [-98.4936, 29.4241] as [number, number] },
+    { key: 'canyon-lake', coordinate: [-98.2625, 29.8754] as [number, number] },
+    { key: 'walburg', coordinate: [-97.6336, 30.8167] as [number, number] },
+    { key: 'belton-a', coordinate: [-97.4642, 31.056] as [number, number] },
+    { key: 'belton-b', coordinate: [-97.465, 31.057] as [number, number] },
+    { key: 'rosston', coordinate: [-97.8584, 33.4765] as [number, number] },
+    { key: 'denton', coordinate: [-97.1331, 33.2148] as [number, number] },
+    { key: 'dallas', coordinate: [-96.797, 32.7767] as [number, number] },
+  ];
+
+  function pathLength(coords: [number, number][]): number {
+    let sum = 0;
+
+    for (let index = 1; index < coords.length; index += 1) {
+      const left = coords[index - 1];
+      const right = coords[index];
+      const dLat = right[1] - left[1];
+      const dLng = right[0] - left[0];
+
+      sum += Math.hypot(dLat, dLng);
+    }
+
+    return sum;
+  }
+
+  function corridorProjection(coordinate: [number, number]): number {
+    const axisTo = i35TexasStops.find((stop) => stop.key === 'rosston')!.coordinate;
+    const vector = [axisTo[0] - austinHome.longitude, axisTo[1] - austinHome.latitude];
+    const length = Math.hypot(vector[0], vector[1]);
+
+    if (length === 0) {
+      return 0;
+    }
+
+    const unit = [vector[0] / length, vector[1] / length];
+
+    return (coordinate[0] - austinHome.longitude) * unit[0] + (coordinate[1] - austinHome.latitude) * unit[1];
+  }
+
+  function doesNotDoubleBack(coords: [number, number][]): boolean {
+    const projections = coords.map((coordinate) => corridorProjection(coordinate));
+    let increasing = true;
+    let decreasing = true;
+
+    for (let index = 1; index < projections.length; index += 1) {
+      if (projections[index] + 1e-6 < projections[index - 1]) {
+        increasing = false;
+      }
+
+      if (projections[index] - 1e-6 > projections[index - 1]) {
+        decreasing = false;
+      }
+    }
+
+    return increasing || decreasing;
+  }
+
+  it('orders the I-35 Texas corridor without doubling back', () => {
+    const ordered = orderTripMapStops(i35TexasStops, austinHome);
+    const orderedCoords = ordered.map((stop) => stop.coordinate);
+
+    expect(doesNotDoubleBack(orderedCoords)).toBe(true);
+
+    const distanceSorted = orderTripChannels(
+      i35TexasStops.map((stop) => ({
+        latitude: stop.coordinate[1],
+        longitude: stop.coordinate[0],
+        key: stop.key,
+      })),
+      austinHome,
+      'asc',
+    ).map((stop) => [stop.longitude!, stop.latitude!] as [number, number]);
+
+    expect(pathLength(orderedCoords)).toBeLessThan(pathLength(distanceSorted));
+
+    const walburgIndex = ordered.findIndex((stop) => stop.key === 'walburg');
+    const beltonIndices = ordered
+      .map((stop, index) => (stop.key.startsWith('belton') ? index : -1))
+      .filter((index) => index >= 0);
+
+    expect(beltonIndices.every((index) => Math.abs(index - walburgIndex) <= 2)).toBe(true);
   });
 });
