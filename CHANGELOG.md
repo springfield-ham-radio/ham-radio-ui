@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.1.1...v1.2.0) (2026-10-15)
+
+### Features
+
+* allow a custom MapLibre style URL for the basemap ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#120](https://github.com/springfield-ham-radio/ham-radio-ui/issues/120)) ([cc5ef2c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/cc5ef2c46bed1a846fcce84024515e7992c601fc))
+
 ## [1.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.1.0...v1.1.1) (2026-10-14)
 
 ### Bug Fixes
