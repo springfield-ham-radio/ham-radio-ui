@@ -65,6 +65,7 @@ import { createTauriRadioImageBackupStore, loadRadioImageBackup } from '~/utils/
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
+import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import { type SerialLogOperation } from '~/utils/serial-log-file';
 import {
@@ -126,6 +127,10 @@ export interface RadioAddTarget {
   ready: boolean;
   freeSlotNumbers: number[];
   settingsMemoryMap?: RadioMemoryMap;
+  /** Transmit band tokens from the loaded radio module (`2m`, `70cm`, …). */
+  bands?: readonly string[];
+  /** Hydrated channel schema for validation when `bands` is missing or incomplete. */
+  channelSchema?: unknown;
 }
 
 /** Model, port, and optional baud for a guest read with no card open. */
@@ -201,6 +206,9 @@ export function useRadio() {
       const session = sessions.value[card.id];
       const ready = Boolean(session?.program && session.memory && session.activeRadioId);
       const occupied = session?.program?.channels.map((channel) => channel.channelNumber) ?? [];
+      const activeConfig = session?.activeRadioId
+        ? configurations.value.find((config) => config.id.model === session.activeRadioId!.model)
+        : undefined;
 
       return [
         {
@@ -212,6 +220,8 @@ export function useRadio() {
             ? channelSlotsAfterLastOccupied(occupied, channelCapacity(session?.settingsMemoryMap))
             : [],
           settingsMemoryMap: session?.settingsMemoryMap,
+          bands: activeConfig?.bands,
+          channelSchema: channelSchemaFromSettingsSchema(activeConfig?.settingsSchema),
         },
       ];
     }),
