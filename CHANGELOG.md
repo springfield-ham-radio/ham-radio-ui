@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.4.0...v1.5.0) (2026-10-15)
+
+### Features
+
+* plot station-log contacts on the Map tab ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#123](https://github.com/springfield-ham-radio/ham-radio-ui/issues/123)) ([7c35fa6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7c35fa6ea7c2501167e72003cd7ac30e12953687))
+
 ## [1.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.3.0...v1.4.0) (2026-10-15)
 
 ### Features
