@@ -37,6 +37,14 @@ export interface MapPageQsoFeatureCollection {
   }>;
 }
 
+const MAP_QSO_FIELD_PRECISION = 'field center · about 20° × 10°';
+const MAP_QSO_SQUARE_PRECISION = 'square center · about 2° × 1°';
+const MAP_QSO_SUBSQUARE_PRECISION = 'subsquare center · about 5′ × 2.5′';
+
+/** Standing note under the contact legend. Lists the three cell spans. */
+export const MAP_QSO_GRID_CENTER_NOTE =
+  `Contacts are plotted at the center of each Maidenhead grid: ${MAP_QSO_FIELD_PRECISION}, ${MAP_QSO_SQUARE_PRECISION}, ${MAP_QSO_SUBSQUARE_PRECISION}.`;
+
 /**
  * Phrase for a popup when the marker sits at a Maidenhead cell center.
  */
@@ -48,14 +56,14 @@ export function mapQsoPrecisionLabel(grid: string): string {
   }
 
   if (normalized.length === 2) {
-    return 'field center';
+    return MAP_QSO_FIELD_PRECISION;
   }
 
   if (normalized.length === 4) {
-    return 'square center';
+    return MAP_QSO_SQUARE_PRECISION;
   }
 
-  return 'subsquare center';
+  return MAP_QSO_SUBSQUARE_PRECISION;
 }
 
 /**

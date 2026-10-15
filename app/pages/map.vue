@@ -20,6 +20,7 @@ import {
   mapChannelRows,
   mapChannelUnlocatedCount,
   mapChannelUnlocatedMessage,
+  MAP_QSO_GRID_CENTER_NOTE,
   mapQsoFeatures,
   mapQsoUnmappedCount,
   mapQsoUnmappedMessage,
@@ -37,7 +38,6 @@ import {
 } from '~/utils/map-page-settings';
 import {
   QSL_MARKER_COLOR,
-  qslMarkerStatus,
   qslStatusLabel,
   resolveMapStyleUrl,
   stationLogMapPoints,
@@ -46,9 +46,6 @@ import {
 import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const MAP_CONTACT_POPUP_MAX_CALLS = 20;
-
-const MAP_CONTACT_GRID_CENTER_NOTE =
-  'Contacts use Maidenhead grid centers until optional per-contact coordinates land (#81).';
 
 useHead({ title: 'Map' });
 
@@ -567,7 +564,7 @@ function openContactPopup(grid: string, lngLat: LngLatLike): void {
 
   if (precisionLabel) {
     const precision = document.createElement('div');
-    precision.textContent = `Marker at the ${precisionLabel} of grid ${grid}.`;
+    precision.textContent = precisionLabel;
     root.append(precision);
   }
 
@@ -587,7 +584,7 @@ function openContactPopup(grid: string, lngLat: LngLatLike): void {
 
   for (const qso of shown) {
     const item = document.createElement('li');
-    item.textContent = `${qso.theirCallsign} · ${qslStatusLabel(qslMarkerStatus(qso))}`;
+    item.textContent = qso.theirCallsign;
     list.append(item);
   }
 
@@ -595,7 +592,7 @@ function openContactPopup(grid: string, lngLat: LngLatLike): void {
 
   if (remaining > 0) {
     const more = document.createElement('div');
-    more.textContent = `+ ${remaining} more contacts`;
+    more.textContent = `and ${remaining} more`;
     root.append(more);
   }
 
@@ -974,7 +971,7 @@ watch(usingEmptyStyle, () => {
       </div>
 
       <p v-if="pageSettings.log" class="text-xs text-muted">
-        {{ MAP_CONTACT_GRID_CENTER_NOTE }}
+        {{ MAP_QSO_GRID_CENTER_NOTE }}
       </p>
 
       <p v-if="repeaterUnlocatedMessage" class="text-xs text-muted">
