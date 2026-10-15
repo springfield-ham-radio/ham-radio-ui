@@ -16,6 +16,7 @@ export interface MapPageSettings {
   channels: boolean;
   log: boolean;
   stations: boolean;
+  trips: boolean;
   groupSelection: MapPageGroupSelection;
   camera?: MapPageCamera;
 }
@@ -25,6 +26,7 @@ export const DEFAULT_MAP_PAGE_SETTINGS: MapPageSettings = {
   channels: true,
   log: true,
   stations: true,
+  trips: true,
   groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
 };
 
@@ -85,6 +87,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       channels?: unknown;
       log?: unknown;
       stations?: unknown;
+      trips?: unknown;
       groupSelection?: unknown;
       groupIds?: unknown;
       camera?: unknown;
@@ -98,6 +101,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       channels: record.channels !== false,
       log: record.log !== false,
       stations: record.stations !== false,
+      trips: record.trips !== false,
       groupSelection,
       ...(camera ? { camera } : {}),
     };
@@ -115,6 +119,7 @@ export function serializeMapPageSettings(settings: MapPageSettings): string {
     channels: settings.channels === true,
     log: settings.log === true,
     stations: settings.stations === true,
+    trips: settings.trips === true,
     groupSelection,
     ...(camera ? { camera } : {}),
   });

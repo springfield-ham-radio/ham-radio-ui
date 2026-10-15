@@ -25,7 +25,7 @@ describe('parseMapPageCamera', () => {
 });
 
 describe('parseMapPageSettings', () => {
-  it('defaults repeaters, channels, contacts, and stations on, all stored groups, and no camera', () => {
+  it('defaults repeaters, channels, contacts, stations, and trips on, all stored groups, and no camera', () => {
     expect(parseMapPageSettings(null)).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('{')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
@@ -37,6 +37,7 @@ describe('parseMapPageSettings', () => {
       channels: false,
       log: true,
       stations: false,
+      trips: false,
       groupSelection: ['group-a', 'group-b'],
       camera: { longitude: 10, latitude: 20, zoom: 4 },
     };
@@ -57,6 +58,7 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: true,
       stations: true,
+      trips: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -67,6 +69,7 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: false,
       stations: true,
+      trips: true,
       groupSelection: [] as string[],
     };
 
@@ -79,6 +82,7 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: true,
       stations: true,
+      trips: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -89,6 +93,7 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: true,
       stations: true,
+      trips: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -99,6 +104,7 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: true,
       stations: true,
+      trips: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -109,6 +115,28 @@ describe('parseMapPageSettings', () => {
       channels: true,
       log: true,
       stations: true,
+      trips: true,
+      groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
+    });
+  });
+
+  it('defaults trips on when the trips key is missing', () => {
+    expect(
+      parseMapPageSettings(
+        JSON.stringify({
+          repeaters: true,
+          channels: true,
+          log: true,
+          stations: true,
+          groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
+        }),
+      ),
+    ).toEqual({
+      repeaters: true,
+      channels: true,
+      log: true,
+      stations: true,
+      trips: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });

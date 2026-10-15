@@ -33,6 +33,11 @@ import {
   mapStationFeatures,
   mapStationHomeUnlocatedMessage,
   mapStationOtherUnlocatedMessage,
+  MAP_TRIP_LINE_CAPTION,
+  mapTripDistanceStart,
+  mapTripFeatures,
+  mapTripHasSelectedTripGroups,
+  mapTripNeedsStartMessage,
   storedLibraryGroups,
 } from '~/utils/map-page-layers';
 import { antennaTypeById } from '~/utils/antenna-types';
@@ -91,12 +96,16 @@ const STATION_OTHER_LAYER_ID = 'map-stations-other';
 const STATION_HOME_PIN_IMAGE_ID = 'map-page-station-home-pin';
 const STATION_OTHER_PIN_IMAGE_ID = 'map-page-station-other-pin';
 
+const TRIP_SOURCE_ID = 'map-trips';
+const TRIP_LINE_LAYER_ID = 'map-trips-lines';
+const TRIP_LABEL_LAYER_ID = 'map-trips-labels';
+
 const route = useRoute();
 const colorMode = useColorMode();
 const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const { channels: libraryChannels, groups: allGroups, memberships, refresh } = useSavedChannels();
 const { qsos: libraryQsos, refresh: refreshStationLog } = useStationLog();
-const { stations: libraryStations, antennas: libraryAntennas } = useStationAntennas();
+const { stations: libraryStations, antennas: libraryAntennas, selectedStationId } = useStationAntennas();
 
 const useFixture = computed(() => import.meta.dev && route.query.fixture === 'map');
 
@@ -201,6 +210,41 @@ const stationHomeUnlocatedMessage = computed(() => mapStationHomeUnlocatedMessag
 
 const stationOtherUnlocatedMessage = computed(() => mapStationOtherUnlocatedMessage(mapStations.value));
 
+const tripDistanceStart = computed(() => mapTripDistanceStart(mapStations.value, selectedStationId.value));
+
+const tripFeatureCollection = computed(() => {
+  if (!pageSettings.value.trips) {
+    return { type: 'FeatureCollection' as const, features: [] };
+  }
+
+  return mapTripFeatures(
+    groups.value,
+    channels.value,
+    groupMemberships.value,
+    pageSettings.value.groupSelection,
+    tripDistanceStart.value,
+  );
+});
+
+const tripNeedsStartMessage = computed(() => {
+  if (!pageSettings.value.trips) {
+    return undefined;
+  }
+
+  return mapTripNeedsStartMessage(
+    mapStations.value,
+    groups.value,
+    pageSettings.value.groupSelection,
+    selectedStationId.value,
+  );
+});
+
+const showTripCaption = computed(
+  () =>
+    pageSettings.value.trips &&
+    mapTripHasSelectedTripGroups(groups.value, pageSettings.value.groupSelection),
+);
+
 const contactLegend = computed(() => {
   const items: { key: string; label: string; color: string }[] = [
     { key: 'none', label: 'No card', color: QSL_MARKER_COLOR.none },
@@ -284,6 +328,7 @@ const selectedGroupIds = computed({
 let popup: Popup | undefined;
 let listenersBound = false;
 let stationNicknamesShown: boolean | undefined;
+let tripLabelsShown: boolean | undefined;
 let mapReady = false;
 let suppressCameraSave = false;
 let cameraSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -486,6 +531,67 @@ function ensureStationLayers(instance: MapLibreMap, showSymbols: boolean): void 
   }
 }
 
+function ensureTripLabelLayer(instance: MapLibreMap, showSymbols: boolean): void {
+  if (instance.getLayer(TRIP_LABEL_LAYER_ID)) {
+    instance.removeLayer(TRIP_LABEL_LAYER_ID);
+  }
+
+  if (!showSymbols) {
+    return;
+  }
+
+  instance.addLayer({
+    id: TRIP_LABEL_LAYER_ID,
+    type: 'symbol',
+    source: TRIP_SOURCE_ID,
+    layout: {
+      'symbol-placement': 'line',
+      'text-field': ['get', 'groupName'],
+      'text-font': ['Noto Sans Regular'],
+      'text-size': 12,
+      'text-optional': true,
+    },
+    paint: {
+      'text-color': '#f8fafc',
+      'text-halo-color': '#0f172a',
+      'text-halo-width': 1.25,
+    },
+  });
+}
+
+function ensureTripLayers(instance: MapLibreMap, showSymbols: boolean): void {
+  if (!instance.getSource(TRIP_SOURCE_ID)) {
+    tripLabelsShown = undefined;
+    instance.addSource(TRIP_SOURCE_ID, {
+      type: 'geojson',
+      data: tripFeatureCollection.value,
+    });
+  }
+
+  if (!instance.getLayer(TRIP_LINE_LAYER_ID)) {
+    instance.addLayer({
+      id: TRIP_LINE_LAYER_ID,
+      type: 'line',
+      source: TRIP_SOURCE_ID,
+      paint: {
+        'line-color': ['get', 'lineColor'],
+        'line-width': 3,
+        'line-dasharray': [2, 2],
+        'line-opacity': 0.9,
+      },
+    });
+  }
+
+  if (!instance.getLayer(TRIP_LABEL_LAYER_ID)) {
+    tripLabelsShown = undefined;
+  }
+
+  if (tripLabelsShown !== showSymbols) {
+    ensureTripLabelLayer(instance, showSymbols);
+    tripLabelsShown = showSymbols;
+  }
+}
+
 function ensureContactClusterLayers(
   instance: MapLibreMap,
   data: typeof contactFeatureCollection.value,
@@ -652,6 +758,7 @@ function ensureLayers(instance: MapLibreMap): void {
   ensureClusterLayers(instance, CHANNEL_LAYER_IDS, channelFeatureCollection.value, showSymbols);
   ensureContactClusterLayers(instance, contactFeatureCollection.value, showSymbols);
   ensureStationLayers(instance, showSymbols);
+  ensureTripLayers(instance, showSymbols);
 }
 
 function syncData(instance: MapLibreMap): void {
@@ -660,32 +767,38 @@ function syncData(instance: MapLibreMap): void {
   geoJsonSource(instance, CHANNEL_LAYER_IDS.sourceId)?.setData(channelFeatureCollection.value);
   geoJsonSource(instance, CONTACT_LAYER_IDS.sourceId)?.setData(contactFeatureCollection.value);
   geoJsonSource(instance, STATION_SOURCE_ID)?.setData(stationFeatureCollection.value);
+  geoJsonSource(instance, TRIP_SOURCE_ID)?.setData(tripFeatureCollection.value);
 }
 
 function fitVisible(instance: MapLibreMap): void {
-  const features = [
+  const pointFeatures = [
     ...repeaterFeatureCollection.value.features,
     ...channelFeatureCollection.value.features,
     ...contactFeatureCollection.value.features,
     ...stationFeatureCollection.value.features,
   ];
 
-  if (features.length === 0) {
+  const bounds = channelMapBounds(pointFeatures);
+  const box = new LngLatBounds();
+  let hasExtent = false;
+
+  if (bounds) {
+    box.extend([bounds.minLongitude, bounds.minLatitude]);
+    box.extend([bounds.maxLongitude, bounds.maxLatitude]);
+    hasExtent = true;
+  }
+
+  for (const feature of tripFeatureCollection.value.features) {
+    for (const coordinate of feature.geometry.coordinates) {
+      box.extend(coordinate);
+      hasExtent = true;
+    }
+  }
+
+  if (!hasExtent) {
     instance.easeTo({ center: [0, 15], zoom: 1.2, duration: 300 });
     return;
   }
-
-  const bounds = channelMapBounds(features);
-
-  if (!bounds) {
-    instance.easeTo({ center: [0, 15], zoom: 1.2, duration: 300 });
-    return;
-  }
-
-  const box = new LngLatBounds(
-    [bounds.minLongitude, bounds.minLatitude],
-    [bounds.maxLongitude, bounds.maxLatitude],
-  );
 
   instance.fitBounds(box, { padding: 48, maxZoom: 11, duration: 300 });
 }
@@ -707,6 +820,30 @@ function setPopup(next: Popup | undefined): void {
   popup?.remove();
   popup = next;
   mapCanvas.value?.registerPopup(popup);
+}
+
+function openTripPopup(groupName: string, lngLat: LngLatLike): void {
+  const instance = mapInstance();
+
+  if (!instance) {
+    return;
+  }
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '600';
+  title.textContent = groupName;
+  root.append(title);
+
+  const caption = document.createElement('div');
+  caption.textContent = MAP_TRIP_LINE_CAPTION;
+  root.append(caption);
+
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
 }
 
 function openStationPopup(stationId: string, lngLat: LngLatLike): void {
@@ -986,6 +1123,24 @@ function bindPointer(instance: MapLibreMap): void {
       instance.getCanvas().style.cursor = '';
     });
   }
+
+  instance.on('click', TRIP_LINE_LAYER_ID, (event) => {
+    const groupName = event.features?.[0]?.properties?.groupName;
+
+    if (typeof groupName !== 'string') {
+      return;
+    }
+
+    openTripPopup(groupName, event.lngLat);
+  });
+
+  instance.on('mouseenter', TRIP_LINE_LAYER_ID, () => {
+    instance.getCanvas().style.cursor = 'pointer';
+  });
+
+  instance.on('mouseleave', TRIP_LINE_LAYER_ID, () => {
+    instance.getCanvas().style.cursor = '';
+  });
 }
 
 function onMapReady(instance: MapLibreMap): void {
@@ -1069,6 +1224,14 @@ function onStationsToggle(enabled: boolean | 'indeterminate'): void {
   persistSettings();
 }
 
+function onTripsToggle(enabled: boolean | 'indeterminate'): void {
+  pageSettings.value = {
+    ...pageSettings.value,
+    trips: enabled === true,
+  };
+  persistSettings();
+}
+
 function flushCameraSave(): void {
   if (!cameraSaveTimer) {
     return;
@@ -1129,7 +1292,9 @@ watch(styleUrl, (url) => {
   applyStyle(instance, url);
 });
 
-watch([repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection, stationFeatureCollection], () => {
+watch(
+  [repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection, stationFeatureCollection, tripFeatureCollection],
+  () => {
   const instance = mapInstance();
 
   if (!instance?.isStyleLoaded() || !geoJsonSource(instance, REPEATER_LAYER_IDS.sourceId)) {
@@ -1137,7 +1302,8 @@ watch([repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollec
   }
 
   syncData(instance);
-});
+  },
+);
 
 watch(usingEmptyStyle, () => {
   const instance = mapInstance();
@@ -1173,6 +1339,11 @@ watch(usingEmptyStyle, () => {
           :model-value="pageSettings.stations"
           label="Stations"
           @update:model-value="onStationsToggle"
+        />
+        <UCheckbox
+          :model-value="pageSettings.trips"
+          label="Trips"
+          @update:model-value="onTripsToggle"
         />
         <USelectMenu
           v-model="selectedGroupIds"
@@ -1252,6 +1423,14 @@ watch(usingEmptyStyle, () => {
 
       <p v-if="stationOtherUnlocatedMessage" class="text-xs text-muted">
         {{ stationOtherUnlocatedMessage }}
+      </p>
+
+      <p v-if="showTripCaption" class="text-xs text-muted">
+        {{ MAP_TRIP_LINE_CAPTION }}
+      </p>
+
+      <p v-if="tripNeedsStartMessage" class="text-xs text-muted">
+        {{ tripNeedsStartMessage }}
       </p>
 
       <p v-if="repeaterUnlocatedMessage" class="text-xs text-muted">

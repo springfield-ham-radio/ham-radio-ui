@@ -49,6 +49,58 @@ const fixtureOrdinaryChannel: SavedChannel = {
   updatedAt: now,
 };
 
+const fixtureTripStopNear: SavedChannel = {
+  id: RadioChannelId('fixture-trip-near'),
+  kind: 'repeater',
+  name: 'Fixture trip near',
+  callsign: 'W5NEA',
+  transmitFrequency: 146_520_000,
+  receiveFrequency: 146_520_000,
+  latitude: 30.275,
+  longitude: -97.745,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const fixtureTripStopMid: SavedChannel = {
+  id: RadioChannelId('fixture-trip-mid'),
+  kind: 'repeater',
+  name: 'Fixture trip mid',
+  callsign: 'W5MID',
+  transmitFrequency: 146_520_000,
+  receiveFrequency: 146_520_000,
+  latitude: 30.29,
+  longitude: -97.72,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const fixtureTripStopFar: SavedChannel = {
+  id: RadioChannelId('fixture-trip-far'),
+  kind: 'repeater',
+  name: 'Fixture trip far',
+  callsign: 'W5FAR',
+  transmitFrequency: 146_520_000,
+  receiveFrequency: 146_520_000,
+  latitude: 30.32,
+  longitude: -97.68,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const fixtureTripStopUnlocated: SavedChannel = {
+  id: RadioChannelId('fixture-trip-unlocated'),
+  kind: 'repeater',
+  name: 'Fixture trip unlocated',
+  callsign: 'N0TRP',
+  transmitFrequency: 146_520_000,
+  receiveFrequency: 146_520_000,
+  latitude: 0,
+  longitude: 0,
+  createdAt: now,
+  updatedAt: now,
+};
+
 export interface MapDevFixture {
   channels: SavedChannel[];
   groups: ChannelGroup[];
@@ -82,6 +134,10 @@ export function mapDevFixture(): MapDevFixture {
     { groupId: fixtureGroupLibrary, channelId: fixtureRepeaterLocated.id },
     { groupId: fixtureGroupLibrary, channelId: fixtureRepeaterUnlocated.id },
     { groupId: fixtureGroupLibrary, channelId: fixtureOrdinaryChannel.id },
+    { groupId: fixtureGroupTrip, channelId: fixtureTripStopNear.id },
+    { groupId: fixtureGroupTrip, channelId: fixtureTripStopMid.id },
+    { groupId: fixtureGroupTrip, channelId: fixtureTripStopFar.id },
+    { groupId: fixtureGroupTrip, channelId: fixtureTripStopUnlocated.id },
   ];
 
   const stations: RadioStation[] = [
@@ -146,7 +202,15 @@ export function mapDevFixture(): MapDevFixture {
   ];
 
   return {
-    channels: [fixtureRepeaterLocated, fixtureRepeaterUnlocated, fixtureOrdinaryChannel],
+    channels: [
+      fixtureRepeaterLocated,
+      fixtureRepeaterUnlocated,
+      fixtureOrdinaryChannel,
+      fixtureTripStopNear,
+      fixtureTripStopMid,
+      fixtureTripStopFar,
+      fixtureTripStopUnlocated,
+    ],
     groups,
     memberships,
     stations,

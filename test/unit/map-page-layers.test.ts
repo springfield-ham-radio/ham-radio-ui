@@ -23,6 +23,7 @@ import {
   mapStationFeatures,
   mapStationHomeUnlocated,
   mapStationOtherUnlocatedCount,
+  mapTripFeatures,
   resolveSelectedGroupIds,
 } from '../../app/utils/map-page-layers.ts';
 import type { ChannelGroup, ChannelGroupMembership } from '../../app/utils/channel-groups.ts';
@@ -368,5 +369,88 @@ describe('mapStationFeatures', () => {
 
     expect(mapStationAntennas(HOME_STATION_ID, antennas)).toEqual([atHome]);
     expect(mapStationAntennas('station-portable', antennas)).toEqual([]);
+  });
+});
+
+describe('mapTripFeatures', () => {
+  const tripGroupId = 'trip-austin';
+  const groups: ChannelGroup[] = [
+    { id: tripGroupId, name: 'Hill Country', kind: 'trip', createdAt: 1, updatedAt: 1 },
+    { id: 'group-library', name: 'Library', createdAt: 1, updatedAt: 1 },
+  ];
+
+  const near = {
+    id: RadioChannelId('trip-near'),
+    kind: 'repeater' as const,
+    transmitFrequency: 146_520_000,
+    receiveFrequency: 146_520_000,
+    latitude: 30.275,
+    longitude: -97.745,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const mid = {
+    id: RadioChannelId('trip-mid'),
+    kind: 'repeater' as const,
+    transmitFrequency: 146_520_000,
+    receiveFrequency: 146_520_000,
+    latitude: 30.29,
+    longitude: -97.72,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const far = {
+    id: RadioChannelId('trip-far'),
+    kind: 'repeater' as const,
+    transmitFrequency: 146_520_000,
+    receiveFrequency: 146_520_000,
+    latitude: 30.32,
+    longitude: -97.68,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const unlocated = {
+    id: RadioChannelId('trip-null'),
+    kind: 'repeater' as const,
+    transmitFrequency: 146_520_000,
+    receiveFrequency: 146_520_000,
+    latitude: 0,
+    longitude: 0,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  const channels = [near, mid, far, unlocated];
+  const memberships: ChannelGroupMembership[] = [
+    { groupId: tripGroupId, channelId: near.id },
+    { groupId: tripGroupId, channelId: mid.id },
+    { groupId: tripGroupId, channelId: far.id },
+    { groupId: tripGroupId, channelId: unlocated.id },
+  ];
+
+  const start = { latitude: 30.27, longitude: -97.74 };
+
+  it('draws one dashed line through located stops in distance order', () => {
+    const collection = mapTripFeatures(groups, channels, memberships, [tripGroupId], start);
+
+    expect(collection.features).toHaveLength(1);
+    expect(collection.features[0]?.properties).toEqual({
+      groupId: tripGroupId,
+      groupName: 'Hill Country',
+      straightLine: true,
+      lineColor: expect.any(String),
+    });
+    expect(collection.features[0]?.geometry.coordinates).toEqual([
+      [-97.745, 30.275],
+      [-97.72, 30.29],
+      [-97.68, 30.32],
+    ]);
+  });
+
+  it('omits a line without a start or with fewer than two located stops', () => {
+    expect(mapTripFeatures(groups, channels, memberships, [tripGroupId], undefined).features).toHaveLength(0);
+    expect(
+      mapTripFeatures(groups, [near], [{ groupId: tripGroupId, channelId: near.id }], [tripGroupId], start).features,
+    ).toHaveLength(0);
   });
 });

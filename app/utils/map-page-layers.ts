@@ -4,9 +4,9 @@ import {
   type ChannelMapChannel,
   type ChannelMapFeatureCollection,
 } from '~/utils/channel-map';
-import { channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
+import { channelsInGroup, isTripChannelGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
 import { geoJsonFeature } from '~/utils/location-format';
-import { normalizeMaidenhead } from '~/utils/maidenhead';
+import { normalizeMaidenhead, type GeoPoint } from '~/utils/maidenhead';
 import {
   antennaIsAtStation,
   HOME_STATION_ID,
@@ -14,7 +14,13 @@ import {
   type StationAntenna,
 } from '~/utils/antenna-station';
 import { MAP_PAGE_ALL_STORED_GROUPS, type MapPageGroupSelection } from '~/utils/map-page-settings';
-import type { SavedChannel } from '~/utils/saved-channels-db';
+import { coordinatesFromPair, type SavedChannel } from '~/utils/saved-channels-db';
+import {
+  defaultDistanceStartId,
+  orderTripChannels,
+  stationStartPoint,
+  TRIP_START_NONE,
+} from '~/utils/trip-channels';
 import {
   stationLogMapPoints,
   stationLogUnmappedCount,
@@ -357,4 +363,154 @@ export function mapChannelUnlocatedMessage(unlocated: number, total: number): st
   }
 
   return `${unlocated} of ${total} channels have no location.`;
+}
+
+export const MAP_TRIP_LINE_CAPTION =
+  'Straight line through located stops in distance order. Not a driven route.';
+
+const MAP_TRIP_LINE_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2'] as const;
+
+export interface MapPageTripFeatureProperties {
+  groupId: string;
+  groupName: string;
+  straightLine: true;
+  lineColor: string;
+}
+
+export interface MapPageTripFeatureCollection {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    geometry: {
+      type: 'LineString';
+      coordinates: [number, number][];
+    };
+    properties: MapPageTripFeatureProperties;
+  }>;
+}
+
+export function mapTripLineColor(groupId: string): string {
+  let hash = 0;
+
+  for (let index = 0; index < groupId.length; index += 1) {
+    hash = (hash * 31 + groupId.charCodeAt(index)) >>> 0;
+  }
+
+  return MAP_TRIP_LINE_COLORS[hash % MAP_TRIP_LINE_COLORS.length];
+}
+
+function mapTripLocatedCoordinate(channel: SavedChannel): [number, number] | undefined {
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+  if (point.latitude === undefined || point.longitude === undefined) {
+    return undefined;
+  }
+
+  return [point.longitude, point.latitude];
+}
+
+export function mapTripHasSelectedTripGroups(
+  groups: readonly ChannelGroup[],
+  selection: MapPageGroupSelection,
+): boolean {
+  const selectedIds = new Set(resolveSelectedGroupIds(selection, groups));
+
+  return groups.some((group) => selectedIds.has(group.id) && isTripChannelGroup(group));
+}
+
+/**
+ * Distance-order start for trip lines: selected station when located, otherwise Home, then the first located station.
+ */
+export function mapTripDistanceStart(
+  stations: readonly RadioStation[],
+  selectedStationId?: string,
+): GeoPoint | undefined {
+  const startId = defaultDistanceStartId(stations, {
+    selectedStationId,
+    homeStationId: HOME_STATION_ID,
+  });
+
+  if (startId === TRIP_START_NONE) {
+    return undefined;
+  }
+
+  const station = stations.find((entry) => entry.id === startId);
+
+  return station ? stationStartPoint(station) : undefined;
+}
+
+export function mapTripNeedsStartMessage(
+  stations: readonly RadioStation[],
+  groups: readonly ChannelGroup[],
+  selection: MapPageGroupSelection,
+  selectedStationId?: string,
+): string | undefined {
+  if (!mapTripHasSelectedTripGroups(groups, selection)) {
+    return undefined;
+  }
+
+  if (mapTripDistanceStart(stations, selectedStationId)) {
+    return undefined;
+  }
+
+  return 'A straight-line trip needs a located station under Preferences → Stations.';
+}
+
+/**
+ * One dashed line per selected trip group with a start point and at least two located members.
+ */
+export function mapTripFeatures(
+  groups: readonly ChannelGroup[],
+  channels: readonly SavedChannel[],
+  memberships: readonly ChannelGroupMembership[],
+  selection: MapPageGroupSelection,
+  start: GeoPoint | undefined,
+): MapPageTripFeatureCollection {
+  if (!start) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+
+  const selectedIds = new Set(resolveSelectedGroupIds(selection, groups));
+  const features: MapPageTripFeatureCollection['features'] = [];
+
+  for (const group of groups) {
+    if (!selectedIds.has(group.id) || !isTripChannelGroup(group)) {
+      continue;
+    }
+
+    const members = channelsInGroup(channels, memberships, group.id);
+    const ordered = orderTripChannels(members, start, 'asc');
+    const coordinates: [number, number][] = [];
+
+    for (const channel of ordered) {
+      const coordinate = mapTripLocatedCoordinate(channel);
+
+      if (coordinate) {
+        coordinates.push(coordinate);
+      }
+    }
+
+    if (coordinates.length < 2) {
+      continue;
+    }
+
+    features.push({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates,
+      },
+      properties: {
+        groupId: group.id,
+        groupName: group.name,
+        straightLine: true,
+        lineColor: mapTripLineColor(group.id),
+      },
+    });
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
 }
