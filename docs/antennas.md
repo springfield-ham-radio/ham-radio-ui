@@ -16,7 +16,7 @@ A station is a site (Home, Cabin, Portable), not a log `STATION_CALLSIGN`. Each 
 - **Maidenhead grid** — optional 2-, 4-, or 6-character locator. Editing the grid sets latitude and longitude to the **cell center**
 - **Latitude / longitude** — optional degrees, minutes, and decimal seconds with N/S and E/W. Editing coordinates keeps that point and derives a **6-character** grid
 
-Location can stay empty until you need it (later map work). HamBench does not treat the FCC mailing-address grid as the shack. If Home has no grid and no coordinates, a Callook **license** gridsquare is copied in as a starting point and remains editable.
+Location can stay empty until you need it (later map work). HamBench does not treat the FCC mailing-address grid as the shack. If Home has no grid and no coordinates, a Callook **license** gridsquare is copied in as a starting point and remains editable. Home and your other stations appear on the **Map** tab; opening a station pin lists the antennas installed at that site.
 
 You cannot delete the last station. Removing a station also removes the antennas assigned to it. The same physical antenna at two sites is two records. Removing a radio removes the antennas mounted on it.
 

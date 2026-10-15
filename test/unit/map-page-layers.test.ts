@@ -3,6 +3,12 @@ import { RadioChannelId } from '@springfield/ham-radio-api';
 import { CHANNEL_MAP_BAND_COLORS, CHANNEL_MAP_BAND_FALLBACK } from '../../app/utils/channel-map.ts';
 import { MAP_PAGE_ALL_STORED_GROUPS } from '../../app/utils/map-page-settings.ts';
 import {
+  HOME_STATION_ID,
+  createStationAntenna,
+  type RadioStation,
+  type StationAntenna,
+} from '../../app/utils/antenna-station.ts';
+import {
   mapChannelFeatures,
   mapChannelRows,
   mapChannelUnlocatedCount,
@@ -13,6 +19,10 @@ import {
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
+  mapStationAntennas,
+  mapStationFeatures,
+  mapStationHomeUnlocated,
+  mapStationOtherUnlocatedCount,
   resolveSelectedGroupIds,
 } from '../../app/utils/map-page-layers.ts';
 import type { ChannelGroup, ChannelGroupMembership } from '../../app/utils/channel-groups.ts';
@@ -277,5 +287,86 @@ describe('mapQsoFeatures', () => {
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('field center · about 20° × 10°');
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('square center · about 2° × 1°');
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('subsquare center · about 5′ × 2.5′');
+  });
+});
+
+describe('mapStationFeatures', () => {
+  const home: RadioStation = {
+    id: HOME_STATION_ID,
+    nickname: 'Home',
+    latitude: 30.27,
+    longitude: -97.74,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  const portable: RadioStation = {
+    id: 'station-portable',
+    nickname: 'Portable',
+    gridsquare: 'EM48',
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  const unlocated: RadioStation = {
+    id: 'station-missing',
+    nickname: 'Missing',
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  const stations = [home, portable, unlocated];
+
+  it('marks Home as home and another located site as station', () => {
+    const collection = mapStationFeatures(stations);
+
+    expect(collection.features.map((feature) => feature.properties.role)).toEqual(['home', 'station']);
+    expect(collection.features[0]?.properties.id).toBe(HOME_STATION_ID);
+    expect(collection.features[1]?.properties.id).toBe('station-portable');
+  });
+
+  it('uses stored coordinates instead of the grid center', () => {
+    const collection = mapStationFeatures([
+      {
+        ...home,
+        gridsquare: 'FN31',
+        latitude: 41.7,
+        longitude: -72.5,
+      },
+    ]);
+
+    expect(collection.features[0]?.geometry.coordinates).toEqual([-72.5, 41.7]);
+  });
+
+  it('omits Null Island and stations with no location', () => {
+    expect(
+      mapStationFeatures([{ id: 'null', nickname: 'Null', latitude: 0, longitude: 0, createdAt: 1, updatedAt: 1 }])
+        .features,
+    ).toHaveLength(0);
+    expect(mapStationFeatures([unlocated]).features).toHaveLength(0);
+    expect(mapStationHomeUnlocated(stations)).toBe(false);
+    expect(mapStationOtherUnlocatedCount(stations)).toBe(1);
+  });
+
+  it('returns only antennas assigned to a station', () => {
+    const atHome = createStationAntenna({
+      stationId: HOME_STATION_ID,
+      nickname: 'Dipole',
+      typeId: 'dipole',
+      heightAglM: 10,
+      headingDeg: 90,
+      bands: ['20m'],
+    });
+    const onRadio = createStationAntenna({
+      radioId: 'radio-1',
+      nickname: 'Whip',
+      typeId: 'dual-band-vertical',
+      heightAglM: 1.5,
+      bands: ['2m', '70cm'],
+    });
+    const antennas: StationAntenna[] = [atHome, onRadio];
+
+    expect(mapStationAntennas(HOME_STATION_ID, antennas)).toEqual([atHome]);
+    expect(mapStationAntennas('station-portable', antennas)).toEqual([]);
   });
 });

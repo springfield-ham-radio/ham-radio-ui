@@ -7,14 +7,132 @@ import {
 import { channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
 import { geoJsonFeature } from '~/utils/location-format';
 import { normalizeMaidenhead } from '~/utils/maidenhead';
+import {
+  antennaIsAtStation,
+  HOME_STATION_ID,
+  type RadioStation,
+  type StationAntenna,
+} from '~/utils/antenna-station';
 import { MAP_PAGE_ALL_STORED_GROUPS, type MapPageGroupSelection } from '~/utils/map-page-settings';
 import type { SavedChannel } from '~/utils/saved-channels-db';
 import {
   stationLogMapPoints,
   stationLogUnmappedCount,
+  stationMapPins,
   type QslMarkerStatus,
+  type StationMapPinInput,
 } from '~/utils/station-log-map';
 import type { StationLogQso } from '~/utils/station-log-db';
+
+export const MAP_STATION_OTHER_PIN_COLOR = '#0f766e';
+
+export type MapPageStationRole = 'home' | 'station';
+
+export interface MapPageStationFeatureProperties {
+  id: string;
+  nickname: string;
+  role: MapPageStationRole;
+}
+
+export interface MapPageStationFeatureCollection {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number];
+    };
+    properties: MapPageStationFeatureProperties;
+  }>;
+}
+
+function mapStationPinInputs(stations: readonly RadioStation[]): StationMapPinInput[] {
+  return stations.map((station) => ({
+    id: station.id,
+    nickname: station.nickname,
+    gridsquare: station.gridsquare,
+    latitude: station.latitude,
+    longitude: station.longitude,
+  }));
+}
+
+export function mapStationLocated(stations: readonly RadioStation[]): ReturnType<typeof stationMapPins> {
+  return stationMapPins(mapStationPinInputs(stations));
+}
+
+/**
+ * Station antennas assigned to a site. Radio-mounted antennas are omitted.
+ */
+export function mapStationAntennas(
+  stationId: string,
+  antennas: readonly StationAntenna[],
+): StationAntenna[] {
+  return antennas.filter((antenna) => antennaIsAtStation(antenna, stationId));
+}
+
+export function mapStationFeatures(stations: readonly RadioStation[]): MapPageStationFeatureCollection {
+  const pins = mapStationLocated(stations);
+
+  return {
+    type: 'FeatureCollection',
+    features: pins.map((pin) =>
+      geoJsonFeature(
+        { latitude: pin.latitude, longitude: pin.longitude },
+        {
+          id: pin.id,
+          nickname: pin.nickname,
+          role: pin.id === HOME_STATION_ID ? 'home' : 'station',
+        },
+      ),
+    ),
+  };
+}
+
+export function mapStationHomeUnlocated(stations: readonly RadioStation[]): boolean {
+  const home = stations.find((station) => station.id === HOME_STATION_ID);
+
+  if (!home) {
+    return false;
+  }
+
+  return mapStationLocated([home]).length === 0;
+}
+
+export function mapStationOtherUnlocatedCount(stations: readonly RadioStation[]): number {
+  let unlocated = 0;
+
+  for (const station of stations) {
+    if (station.id === HOME_STATION_ID) {
+      continue;
+    }
+
+    if (mapStationLocated([station]).length === 0) {
+      unlocated += 1;
+    }
+  }
+
+  return unlocated;
+}
+
+export function mapStationHomeUnlocatedMessage(stations: readonly RadioStation[]): string | undefined {
+  return mapStationHomeUnlocated(stations) ? 'Home has no location.' : undefined;
+}
+
+export function mapStationOtherUnlocatedMessage(
+  stations: readonly RadioStation[],
+): string | undefined {
+  const unlocated = mapStationOtherUnlocatedCount(stations);
+
+  if (unlocated === 1) {
+    return '1 station has no location.';
+  }
+
+  if (unlocated > 1) {
+    return `${unlocated} stations have no location.`;
+  }
+
+  return undefined;
+}
 
 export interface MapPageQsoFeatureProperties {
   grid: string;
