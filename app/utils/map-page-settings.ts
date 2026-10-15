@@ -59,13 +59,7 @@ export function parseMapPageGroupSelection(value: unknown): MapPageGroupSelectio
     return MAP_PAGE_ALL_STORED_GROUPS;
   }
 
-  const ids = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
-
-  if (ids.length === 0) {
-    return MAP_PAGE_ALL_STORED_GROUPS;
-  }
-
-  return ids;
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
 }
 
 export function parseMapPageSettings(raw: string | null): MapPageSettings {

@@ -487,6 +487,34 @@ function onRepeatersToggle(enabled: boolean | 'indeterminate'): void {
   persistSettings();
 }
 
+function flushCameraSave(): void {
+  if (!cameraSaveTimer) {
+    return;
+  }
+
+  clearTimeout(cameraSaveTimer);
+  cameraSaveTimer = undefined;
+
+  const instance = mapInstance();
+
+  if (!instance || suppressCameraSave || !mapReady) {
+    return;
+  }
+
+  const center = instance.getCenter();
+  const zoom = instance.getZoom();
+
+  pageSettings.value = {
+    ...pageSettings.value,
+    camera: {
+      longitude: center.lng,
+      latitude: center.lat,
+      zoom,
+    },
+  };
+  persistSettings();
+}
+
 onMounted(() => {
   if (useFixture.value) {
     return;
@@ -499,6 +527,10 @@ onMounted(() => {
   void refresh().catch(() => {
     // Browser dev without Tauri: fixture or empty library is fine.
   });
+});
+
+onBeforeUnmount(() => {
+  flushCameraSave();
 });
 
 watch(styleUrl, (url) => {

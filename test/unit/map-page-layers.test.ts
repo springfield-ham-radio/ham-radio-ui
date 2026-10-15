@@ -113,6 +113,9 @@ describe('mapRepeaterFeatures', () => {
       [String(locatedRepeater.id), String(unlocatedRepeater.id), String(equatorRepeater.id)].sort(),
     );
     expect(mapRepeaterUnlocatedCount(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS)).toBe(1);
+
+    const features = mapRepeaterFeatures(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS);
+    expect(features.features.map((feature) => feature.properties.id)).not.toContain(String(unlocatedRepeater.id));
   });
 
   it('dedupes a repeater that appears in two selected groups', () => {

@@ -55,6 +55,15 @@ describe('parseMapPageSettings', () => {
     });
   });
 
+  it('keeps an explicit empty group list', () => {
+    const settings = {
+      repeaters: true,
+      groupSelection: [] as string[],
+    };
+
+    expect(parseMapPageSettings(serializeMapPageSettings(settings))).toEqual(settings);
+  });
+
   it('defaults repeaters on when the key is missing', () => {
     expect(parseMapPageSettings(JSON.stringify({ groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
       repeaters: true,
