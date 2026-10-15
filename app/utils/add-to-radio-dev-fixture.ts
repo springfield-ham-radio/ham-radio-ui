@@ -9,7 +9,7 @@ export function addToRadioDevFixture(): SavedChannel[] {
     {
       id: RadioChannelId('fixture-add-125m'),
       kind: 'channel',
-      name: 'Fixture 1.25 m',
+      name: '1.25 m',
       transmitFrequency: 223_500_000,
       receiveFrequency: 223_500_000,
       latitude: 0,

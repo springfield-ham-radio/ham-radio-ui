@@ -116,6 +116,7 @@ function emptyRadioCardSession(): RadioCardSession {
 }
 
 const cardPersistQueues = new Map<string, Promise<void>>();
+let addToRadioFixtureSeed: Promise<void> | undefined;
 
 /** An open radio card that can receive library channels. */
 export interface RadioAddTarget {
@@ -176,7 +177,8 @@ export function useRadio() {
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const { lockedPorts: catLockedPorts } = useCatPortLock();
   const { radios } = useSavedRadios();
-  const { transferCardId, focusedCardId, cards, openGuestCard, beginTransfer, clearTransfer } = useRadioBoard();
+  const { transferCardId, focusedCardId, cards, openGuestCard, focusCard, beginTransfer, clearTransfer } = useRadioBoard();
+  const addToRadioFixtureCardId = useState<string | undefined>('add-to-radio-fixture-card', () => undefined);
   const injectedCardId = getCurrentInstance() ? inject(radioCardIdKey, undefined) : undefined;
   /** Card this component belongs to. Read and Write dialogs use `transferCardId` instead. */
   const cardId = computed(() => injectedCardId?.value ?? focusedCardId.value);
@@ -1240,8 +1242,7 @@ export function useRadio() {
 
     const first = accepted[0]!.channelNumber;
     const last = accepted[accepted.length - 1]!.channelNumber;
-    const saved = radios.value.find((radio) => radio.id === id);
-    const radioName = saved?.name ?? session.activeRadioId.name;
+    const radioName = boundRadio(id)?.name ?? session.activeRadioId.name;
     const slotLabel = accepted.length === 1 ? `memory slot ${first}` : `memory slots ${first} to ${last}`;
 
     toast.add({
@@ -1692,6 +1693,108 @@ export function useRadio() {
     });
   }
 
+  async function waitForRadioCatalog(): Promise<void> {
+    if (!isLoading.value) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      const stop = watch(isLoading, (loading) => {
+        if (!loading) {
+          stop();
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Dev-only: open a guest UV-5R with an empty memory image so Add to radio
+   * can be tried without a radio, a memory file, or an installed module.
+   */
+  async function seedAddToRadioDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    addToRadioFixtureSeed ??= seedAddToRadioDevFixtureInner().finally(() => {
+      addToRadioFixtureSeed = undefined;
+    });
+
+    return addToRadioFixtureSeed;
+  }
+
+  async function seedAddToRadioDevFixtureInner(): Promise<void> {
+    await waitForRadioCatalog();
+
+    const hadConfigs = configurations.value.length > 0;
+    let config = configurations.value.find((item) => String(item.id.model) === 'baofeng-uv5r');
+
+    if (!config) {
+      const { addToRadioFixtureConfig } = await import('~/utils/add-to-radio-dev-radio');
+      config = addToRadioFixtureConfig();
+      configurations.value = [...configurations.value, config];
+    }
+
+    if (!hadConfigs) {
+      modulesInstallRequired.value = false;
+      modulesInstallOpen.value = false;
+    }
+
+    const existingId = addToRadioFixtureCardId.value;
+    const cardStillOpen = existingId !== undefined && cards.value.some((card) => card.id === existingId);
+    const cardId = cardStillOpen
+      ? existingId
+      : openGuestCard({
+          name: 'Fixture UV-5R',
+          manufacturer: 'Baofeng',
+          model: 'baofeng-uv5r',
+          serialPort: 'fixture',
+        });
+
+    addToRadioFixtureCardId.value = cardId;
+    focusCard(cardId);
+
+    const session = readSession(cardId);
+
+    if (session?.program && session.memory && session.activeRadioId) {
+      return;
+    }
+
+    try {
+      const { addToRadioFixtureMemory } = await import('~/utils/add-to-radio-dev-radio');
+      const loaded = addToRadioFixtureMemory(config);
+      const radioId: RadioId = {
+        model: config.id.model,
+        name: config.id.name,
+        manufacturer: config.id.manufacturer,
+      };
+
+      patchSession(cardId, {
+        memory: loaded.memory,
+        activeRadioId: radioId,
+        program: loaded.program,
+        settingsMemoryMap: memoryMapFromConfig(config),
+        channels: rowsFromProgram(loaded.program),
+      });
+
+      toast.add({
+        title: 'Fixture UV-5R ready',
+        description: 'Empty memory is loaded. No radio or memory file is required.',
+        color: 'success',
+        icon: 'i-lucide-radio',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to load the fixture radio';
+      toast.add({
+        title: 'Could not load fixture radio',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+    }
+  }
+
   return {
     configurations,
     manufacturers,
@@ -1711,6 +1814,7 @@ export function useRadio() {
     settingsMemoryMap,
     activeRadioId,
     addTargets,
+    seedAddToRadioDevFixture,
     memoryFilePath,
     serialLog,
     transferSerialLog,

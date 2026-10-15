@@ -60,13 +60,23 @@ const {
 
 onMounted(() => {
   void refresh();
+
+  if (addToRadioFixtureActive.value) {
+    void seedAddToRadioDevFixture();
+  }
 });
 
 const route = useRoute();
-const { addTargets } = useRadio();
+const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
 const { choiceForRadio, assessmentFor } = useOperatorLicense();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
+
+watch(addToRadioFixtureActive, (active) => {
+  if (active) {
+    void seedAddToRadioDevFixture();
+  }
+});
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
 const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);

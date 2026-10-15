@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  focusedCardAfterHydrate,
+  hydratedBoardCards,
   parseRadioBoardSettings,
   persistedBoardOpenIds,
   reconcileOpenRadioIds,
@@ -39,6 +41,18 @@ describe('radio board', () => {
 
   it('should drop open cards whose radio was deleted', () => {
     expect(reconcileOpenRadioIds(['mobile', 'gone', 'base'], ['base', 'mobile'])).toEqual(['mobile', 'base']);
+  });
+
+  it('keeps guest clones that were opened before the board hydrates', () => {
+    const guest = {
+      id: 'guest-1',
+      guest: { name: 'Fixture UV-5R', manufacturer: 'Baofeng', model: 'baofeng-uv5r', serialPort: 'fixture' },
+    };
+    const cards = hydratedBoardCards([guest], ['base']);
+
+    expect(cards).toEqual([guest, { id: 'base', savedRadioId: 'base' }]);
+    expect(focusedCardAfterHydrate('guest-1', cards)).toBe('guest-1');
+    expect(focusedCardAfterHydrate(undefined, cards)).toBe('guest-1');
   });
 
   it('should keep saved radios on the board and drop guest clones', () => {

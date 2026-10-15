@@ -23,8 +23,12 @@ import {
   type ChannelPatch,
 } from '~/utils/channel-edit';
 import { settingsFieldHelp } from '~/utils/settings-field-help';
-import type { RadioPrivilegeChoice } from '~/utils/license-people';
+import type { PrivilegeAssessment, RadioPrivilegeChoice } from '~/utils/license-people';
 import type { SavedChannel } from '~/utils/saved-channels-db';
+import {
+  validateChannelForRadio,
+  type ChannelValidationRadio,
+} from '~/utils/channel-validation';
 
 const props = defineProps<{
   open: boolean;
@@ -33,6 +37,8 @@ const props = defineProps<{
   occupiedChannelNumbers?: number[];
   channelCapacity?: number;
   privilege?: RadioPrivilegeChoice;
+  validationRadio?: ChannelValidationRadio;
+  license?: PrivilegeAssessment;
 }>();
 
 const emit = defineEmits<{
@@ -53,6 +59,8 @@ const transmitError = ref<string | undefined>();
 const draftChannel = ref<RadioProgrammedChannel | undefined>();
 const slotNumber = ref(0);
 const libraryPickerOpen = shallowRef(false);
+const libraryFitOpen = shallowRef(false);
+const pendingLibraryReplace = shallowRef<SavedChannel | undefined>();
 
 const isCreate = computed(() => props.channel === undefined);
 const occupiedSlots = computed(() => new Set(props.occupiedChannelNumbers ?? []));
@@ -411,7 +419,7 @@ function updateExtra(field: RadioMemoryMapUiField, value: string | number | bool
   });
 }
 
-function applyLibraryChannel(source: SavedChannel): void {
+function applyLibraryChannelNow(source: SavedChannel): void {
   const patch = channelPatchFromLibrary(source);
   const nextName = nameMaxLength.value === undefined ? (patch.name ?? '') : (patch.name ?? '').slice(0, nameMaxLength.value);
 
@@ -424,6 +432,43 @@ function applyLibraryChannel(source: SavedChannel): void {
     ...patch,
     name: nextName,
   });
+}
+
+function applyLibraryChannel(source: SavedChannel): void {
+  const slotNumber = props.channel?.channelNumber;
+
+  if (props.validationRadio && slotNumber !== undefined) {
+    const findings = validateChannelForRadio(source, props.validationRadio, props.license);
+
+    if (findings.length > 0) {
+      pendingLibraryReplace.value = source;
+      libraryFitOpen.value = true;
+      return;
+    }
+  }
+
+  applyLibraryChannelNow(source);
+}
+
+function confirmLibraryReplace(mode: 'all' | 'valid-only'): void {
+  const source = pendingLibraryReplace.value;
+  const slotNumber = props.channel?.channelNumber;
+  libraryFitOpen.value = false;
+  pendingLibraryReplace.value = undefined;
+
+  if (!source || slotNumber === undefined) {
+    return;
+  }
+
+  if (mode === 'valid-only' && props.validationRadio) {
+    const findings = validateChannelForRadio(source, props.validationRadio, props.license);
+
+    if (findings.some((finding) => finding.level === 'error')) {
+      return;
+    }
+  }
+
+  applyLibraryChannelNow(source);
 }
 
 function submitCreate(): void {
@@ -620,4 +665,15 @@ function submitCreate(): void {
     </template>
   </USlideover>
   <ChannelLibraryPicker v-if="!isCreate" v-model:open="libraryPickerOpen" @select="applyLibraryChannel" />
+  <ChannelFitDialog
+    v-if="!isCreate && validationRadio"
+    v-model:open="libraryFitOpen"
+    :channels="pendingLibraryReplace ? [pendingLibraryReplace] : []"
+    :slot-numbers="channel ? [channel.channelNumber] : []"
+    :radio="validationRadio"
+    :license="license"
+    title="Replace from library"
+    clean-label="Replace"
+    @confirm="confirmLibraryReplace"
+  />
 </template>

@@ -16,7 +16,13 @@ import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { applyMacRowSelection, pruneRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
-import { assignLibraryChannelsToSlots, channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber } from '~/utils/channel-edit';
+import { channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
+import {
+  addToRadioRowsWithoutErrors,
+  addToRadioValidationRows,
+  channelSchemaFromSettingsSchema,
+  type ChannelValidationRadio,
+} from '~/utils/channel-validation';
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
@@ -597,13 +603,58 @@ function onCreateChannel(programmed: RadioProgrammedChannel): void {
   void addChannel(programmed);
 }
 
-function onAddFromLibrary(sources: SavedChannel[]): void {
-  const assignment = assignLibraryChannelsToSlots(
-    sources,
-    occupiedChannelNumbers.value,
-    settingsMemoryMap.value,
-  );
+const libraryFitOpen = shallowRef(false);
+const pendingLibraryAdd = shallowRef<SavedChannel[]>([]);
+
+const loadedValidationRadio = computed<ChannelValidationRadio>(() => {
+  const config = configurations.value.find((item) => item.id.model === activeRadioId.value?.model);
+
+  return {
+    bands: config?.bands,
+    memoryMap: settingsMemoryMap.value,
+    channelSchema: channelSchemaFromSettingsSchema(config?.settingsSchema),
+  };
+});
+
+function commitLibraryAdd(sources: SavedChannel[], slotNumbers: readonly number[]): void {
+  const assignment = programLibraryChannelsIntoSlots(sources, slotNumbers, settingsMemoryMap.value);
   void run(addFromLibrary.id, { programmedChannels: assignment.programmed });
+}
+
+function onAddFromLibrary(sources: SavedChannel[]): void {
+  const rows = addToRadioValidationRows(
+    sources,
+    freeSlotNumbers.value,
+    loadedValidationRadio.value,
+    privilegeAssessment.value,
+  );
+
+  if (rows.length === 0 || rows.every((row) => row.findings.length === 0)) {
+    commitLibraryAdd(
+      sources,
+      freeSlotNumbers.value,
+    );
+    return;
+  }
+
+  pendingLibraryAdd.value = sources;
+  libraryFitOpen.value = true;
+}
+
+function confirmLibraryFit(mode: 'all' | 'valid-only'): void {
+  const rows = addToRadioValidationRows(
+    pendingLibraryAdd.value,
+    freeSlotNumbers.value,
+    loadedValidationRadio.value,
+    privilegeAssessment.value,
+  );
+  const accepted = mode === 'all' ? rows : addToRadioRowsWithoutErrors(rows);
+  libraryFitOpen.value = false;
+  pendingLibraryAdd.value = [];
+  commitLibraryAdd(
+    accepted.map((row) => row.channel as SavedChannel),
+    accepted.map((row) => row.slotNumber),
+  );
 }
 
 function requestRemoveChannel(channelNumber: number): void {
@@ -1025,6 +1076,15 @@ async function onSaveSerialLog(): Promise<void> {
       :free-slot-numbers="freeSlotNumbers"
       @add="onAddFromLibrary"
     />
+    <ChannelFitDialog
+      v-model:open="libraryFitOpen"
+      :channels="pendingLibraryAdd"
+      :slot-numbers="freeSlotNumbers"
+      :radio="loadedValidationRadio"
+      :license="privilegeAssessment"
+      title="Add from library"
+      @confirm="confirmLibraryFit"
+    />
     <RadioChannelEditor
       v-model:open="editorOpen"
       :channel="editingChannel"
@@ -1032,6 +1092,8 @@ async function onSaveSerialLog(): Promise<void> {
       :occupied-channel-numbers="occupiedChannelNumbers"
       :channel-capacity="radioChannelCapacity"
       :privilege="radioPrivilege"
+      :validation-radio="loadedValidationRadio"
+      :license="privilegeAssessment"
       @update:channel="onChannelPatch"
       @create="onCreateChannel"
       @move="onChannelMove"

@@ -419,13 +419,14 @@ function bandMembershipFindings(
   const bandList = windows.map((window) => window.label).join(', ');
   const code = field === 'transmitFrequency' ? 'transmit-outside-bands' : 'receive-outside-bands';
   const level = field === 'transmitFrequency' ? 'error' : 'warning';
+  const side = field === 'transmitFrequency' ? 'Transmit' : 'Receive';
 
   return [
     {
       level,
       field,
       code,
-      message: `${formatMHz(hz)} is outside this radio’s ${bandList} coverage.`,
+      message: `${side} ${formatMHz(hz)} is outside this radio’s ${bandList} coverage.`,
     },
   ];
 }
