@@ -32,6 +32,8 @@ Markers use band colors with a legend for the bands in view. Click a pin to high
 
 If tiles cannot load, the map keeps markers on a plain background and shows a connection warning. Basemap choice is documented in `docs/adr/0003-map-basemap.md`.
 
+The **Map** tab plots located repeaters from your stored library groups (not built-in Weather, FRS, or GMRS). Use the group picker to limit which folders appear. The collapsible map on this page is unchanged.
+
 ## Distance
 
 **Distance from** is on every group. Pick a saved station or type coordinates. HamBench starts with the selected station when that station has a location, otherwise Home. The **Distance** column is straight-line miles or kilometers (**Preferences → Channels**; miles unless you change it). Sort the column either way. Rows without coordinates, including CHIRP imports and RepeaterBook website exports that omit latitude and longitude, show — and stay last. Hide **Distance** from **Columns**. With no start point the column is hidden. Bearing is not shown.
