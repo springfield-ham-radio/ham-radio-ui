@@ -5,8 +5,100 @@ import {
   type ChannelMapFeatureCollection,
 } from '~/utils/channel-map';
 import { channelsInGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
+import { geoJsonFeature } from '~/utils/location-format';
+import { normalizeMaidenhead } from '~/utils/maidenhead';
 import { MAP_PAGE_ALL_STORED_GROUPS, type MapPageGroupSelection } from '~/utils/map-page-settings';
 import type { SavedChannel } from '~/utils/saved-channels-db';
+import {
+  stationLogMapPoints,
+  stationLogUnmappedCount,
+  type QslMarkerStatus,
+} from '~/utils/station-log-map';
+import type { StationLogQso } from '~/utils/station-log-db';
+
+export interface MapPageQsoFeatureProperties {
+  grid: string;
+  status: QslMarkerStatus;
+  count: number;
+  locationKind: 'grid-center';
+  precisionLength: number;
+  precisionLabel: string;
+}
+
+export interface MapPageQsoFeatureCollection {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number];
+    };
+    properties: MapPageQsoFeatureProperties;
+  }>;
+}
+
+/**
+ * Phrase for a popup when the marker sits at a Maidenhead cell center.
+ */
+export function mapQsoPrecisionLabel(grid: string): string {
+  const normalized = normalizeMaidenhead(grid);
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.length === 2) {
+    return 'field center';
+  }
+
+  if (normalized.length === 4) {
+    return 'square center';
+  }
+
+  return 'subsquare center';
+}
+
+/**
+ * One feature per located grid. QSO rows are not embedded in GeoJSON properties.
+ */
+export function mapQsoFeatures(qsos: readonly StationLogQso[]): MapPageQsoFeatureCollection {
+  const points = stationLogMapPoints(qsos);
+
+  return {
+    type: 'FeatureCollection',
+    features: points.map((point) => {
+      const precisionLength = point.grid.length;
+
+      return geoJsonFeature(
+        { latitude: point.latitude, longitude: point.longitude },
+        {
+          grid: point.grid,
+          status: point.status,
+          count: point.qsos.length,
+          locationKind: 'grid-center',
+          precisionLength,
+          precisionLabel: mapQsoPrecisionLabel(point.grid),
+        },
+      );
+    }),
+  };
+}
+
+export function mapQsoUnmappedCount(qsos: readonly StationLogQso[]): number {
+  return stationLogUnmappedCount(qsos);
+}
+
+export function mapQsoUnmappedMessage(unmapped: number, total: number): string | undefined {
+  if (unmapped <= 0 || total <= 0) {
+    return undefined;
+  }
+
+  if (unmapped === 1) {
+    return '1 contact has no grid and is not on the map.';
+  }
+
+  return `${unmapped} contacts have no grid and are not on the map.`;
+}
 
 export function storedLibraryGroups(groups: readonly ChannelGroup[]): ChannelGroup[] {
   return groups.filter((group) => group.builtin !== true);

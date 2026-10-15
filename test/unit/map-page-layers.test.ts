@@ -6,13 +6,27 @@ import {
   mapChannelFeatures,
   mapChannelRows,
   mapChannelUnlocatedCount,
+  mapQsoFeatures,
+  mapQsoPrecisionLabel,
+  mapQsoUnmappedCount,
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
   resolveSelectedGroupIds,
 } from '../../app/utils/map-page-layers.ts';
 import type { ChannelGroup, ChannelGroupMembership } from '../../app/utils/channel-groups.ts';
+import { createStationLogQso, type StationLogQso } from '../../app/utils/station-log-db.ts';
 import type { SavedChannel } from '../../app/utils/saved-channels-db.ts';
+
+function contact(overrides: Partial<StationLogQso> = {}): StationLogQso {
+  return createStationLogQso({
+    startedAt: 1_000,
+    theirCallsign: 'W1AW',
+    mode: 'FM',
+    theirGridsquare: 'FN31',
+    ...overrides,
+  });
+}
 
 const groupA = 'group-a';
 const groupB = 'group-b';
@@ -174,5 +188,48 @@ describe('mapChannelFeatures', () => {
 
     expect(collection.features.map((feature) => feature.properties.id)).not.toContain(String(unlocatedOrdinary.id));
     expect(mapChannelUnlocatedCount(channels, memberships, groups, MAP_PAGE_ALL_STORED_GROUPS)).toBe(1);
+  });
+});
+
+describe('mapQsoFeatures', () => {
+  it('places FN31 at the grid center with grid-center metadata', () => {
+    const collection = mapQsoFeatures([contact()]);
+
+    expect(collection.features).toHaveLength(1);
+    expect(collection.features[0]?.geometry.coordinates).toEqual([-73, 41.5]);
+    expect(collection.features[0]?.properties).toEqual({
+      grid: 'FN31',
+      status: 'none',
+      count: 1,
+      locationKind: 'grid-center',
+      precisionLength: 4,
+      precisionLabel: 'square center',
+    });
+  });
+
+  it('labels field, square, and subsquare precision', () => {
+    expect(mapQsoPrecisionLabel('FN')).toBe('field center');
+    expect(mapQsoPrecisionLabel('FN31')).toBe('square center');
+    expect(mapQsoPrecisionLabel('FN31ab')).toBe('subsquare center');
+  });
+
+  it('clusters one thousand contacts into three grid features', () => {
+    const grids = ['FN31', 'EM48', 'DM04'];
+    const qsos: StationLogQso[] = [];
+
+    for (let index = 0; index < 1_000; index += 1) {
+      qsos.push(
+        contact({
+          theirCallsign: `K${index}`,
+          theirGridsquare: grids[index % grids.length],
+        }),
+      );
+    }
+
+    const collection = mapQsoFeatures(qsos);
+
+    expect(collection.features).toHaveLength(3);
+    expect(collection.features.reduce((sum, feature) => sum + feature.properties.count, 0)).toBe(1_000);
+    expect(mapQsoUnmappedCount(qsos)).toBe(0);
   });
 });

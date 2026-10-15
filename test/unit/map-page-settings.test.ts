@@ -25,7 +25,7 @@ describe('parseMapPageCamera', () => {
 });
 
 describe('parseMapPageSettings', () => {
-  it('defaults repeaters and channels on, all stored groups, and no camera', () => {
+  it('defaults repeaters, channels, and contacts on, all stored groups, and no camera', () => {
     expect(parseMapPageSettings(null)).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('{')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
@@ -35,6 +35,7 @@ describe('parseMapPageSettings', () => {
     const settings = {
       repeaters: true,
       channels: false,
+      log: true,
       groupSelection: ['group-a', 'group-b'],
       camera: { longitude: 10, latitude: 20, zoom: 4 },
     };
@@ -53,6 +54,7 @@ describe('parseMapPageSettings', () => {
     ).toEqual({
       repeaters: false,
       channels: true,
+      log: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -61,6 +63,7 @@ describe('parseMapPageSettings', () => {
     const settings = {
       repeaters: true,
       channels: true,
+      log: false,
       groupSelection: [] as string[],
     };
 
@@ -71,6 +74,7 @@ describe('parseMapPageSettings', () => {
     expect(parseMapPageSettings(JSON.stringify({ groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
       repeaters: true,
       channels: true,
+      log: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -79,6 +83,16 @@ describe('parseMapPageSettings', () => {
     expect(parseMapPageSettings(JSON.stringify({ repeaters: false, groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
       repeaters: false,
       channels: true,
+      log: true,
+      groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
+    });
+  });
+
+  it('defaults contacts on when the log key is missing', () => {
+    expect(parseMapPageSettings(JSON.stringify({ repeaters: true, channels: true, groupSelection: MAP_PAGE_ALL_STORED_GROUPS }))).toEqual({
+      repeaters: true,
+      channels: true,
+      log: true,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
