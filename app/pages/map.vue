@@ -283,6 +283,7 @@ const selectedGroupIds = computed({
 
 let popup: Popup | undefined;
 let listenersBound = false;
+let stationNicknamesShown: boolean | undefined;
 let mapReady = false;
 let suppressCameraSave = false;
 let cameraSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -413,10 +414,48 @@ function ensureStationPinImages(instance: MapLibreMap): void {
   }
 }
 
+function ensureOtherStationLayer(instance: MapLibreMap, showSymbols: boolean): void {
+  if (instance.getLayer(STATION_OTHER_LAYER_ID)) {
+    instance.removeLayer(STATION_OTHER_LAYER_ID);
+  }
+
+  instance.addLayer({
+    id: STATION_OTHER_LAYER_ID,
+    type: 'symbol',
+    source: STATION_SOURCE_ID,
+    filter: ['==', ['get', 'role'], 'station'],
+    layout: showSymbols
+      ? {
+          'icon-image': STATION_OTHER_PIN_IMAGE_ID,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'text-field': ['get', 'nickname'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.15],
+          'text-optional': true,
+        }
+      : {
+          'icon-image': STATION_OTHER_PIN_IMAGE_ID,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+        },
+    paint: showSymbols
+      ? {
+          'text-color': '#f8fafc',
+          'text-halo-color': '#0f172a',
+          'text-halo-width': 1.25,
+        }
+      : {},
+  });
+}
+
 function ensureStationLayers(instance: MapLibreMap, showSymbols: boolean): void {
   ensureStationPinImages(instance);
 
   if (!instance.getSource(STATION_SOURCE_ID)) {
+    stationNicknamesShown = undefined;
     instance.addSource(STATION_SOURCE_ID, {
       type: 'geojson',
       data: stationFeatureCollection.value,
@@ -438,30 +477,12 @@ function ensureStationLayers(instance: MapLibreMap, showSymbols: boolean): void 
   }
 
   if (!instance.getLayer(STATION_OTHER_LAYER_ID)) {
-    instance.addLayer({
-      id: STATION_OTHER_LAYER_ID,
-      type: 'symbol',
-      source: STATION_SOURCE_ID,
-      filter: ['==', ['get', 'role'], 'station'],
-      layout: {
-        'icon-image': STATION_OTHER_PIN_IMAGE_ID,
-        'icon-anchor': 'bottom',
-        'icon-allow-overlap': true,
-        'text-field': showSymbols ? ['get', 'nickname'] : '',
-        'text-font': ['Noto Sans Regular'],
-        'text-size': 12,
-        'text-anchor': 'top',
-        'text-offset': [0, 0.15],
-        'text-optional': true,
-      },
-      paint: {
-        'text-color': '#f8fafc',
-        'text-halo-color': '#0f172a',
-        'text-halo-width': 1.25,
-      },
-    });
-  } else if (instance.getLayer(STATION_OTHER_LAYER_ID)) {
-    instance.setLayoutProperty(STATION_OTHER_LAYER_ID, 'text-field', showSymbols ? ['get', 'nickname'] : '');
+    stationNicknamesShown = undefined;
+  }
+
+  if (stationNicknamesShown !== showSymbols) {
+    ensureOtherStationLayer(instance, showSymbols);
+    stationNicknamesShown = showSymbols;
   }
 }
 
