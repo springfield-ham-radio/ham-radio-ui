@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.5.0...v1.6.0) (2026-10-15)
+
+### Features
+
+* show stations on the Map tab ([#83](https://github.com/springfield-ham-radio/ham-radio-ui/issues/83)) ([#124](https://github.com/springfield-ham-radio/ham-radio-ui/issues/124)) ([74e2ffc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/74e2ffc071f8fe5f5a2b2f1196ea8042396ba4a8))
+
 ## [1.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.4.0...v1.5.0) (2026-10-15)
 
 ### Features
