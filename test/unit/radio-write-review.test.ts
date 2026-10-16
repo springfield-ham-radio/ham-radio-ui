@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CTCSS, Frequency, type RadioMemoryMap, type RadioProgram, type RadioProgrammedChannel, RadioToneType } from '@springfield/ham-radio-api';
-import { diffRadioPrograms, summarizeWriteReview } from '../../app/utils/radio-write-review.ts';
+import { diffRadioPrograms, summarizeWriteReview, writeReviewCapabilityFindings } from '../../app/utils/radio-write-review.ts';
 
 const memoryMap: RadioMemoryMap = {
   version: '1.0.0',
@@ -259,6 +259,59 @@ describe('diffRadioPrograms', () => {
     const diff = diffRadioPrograms(before, after, memoryMap);
 
     expect(summarizeWriteReview(diff)).toBe('1 channel cleared. 1 setting changed.');
+  });
+
+  it('should summarize capability findings for the image about to be written', () => {
+    const radio = {
+      bands: ['2m', '70cm'],
+      memoryMap,
+      channelSchema: { properties: { name: { maxLength: 7 } } },
+    };
+    const clean = writeReviewCapabilityFindings(program([channel({ channelNumber: 1 })]), radio);
+
+    expect(clean.allFit).toBe(true);
+    expect(clean.hasErrors).toBe(false);
+
+    const mixed = writeReviewCapabilityFindings(
+      program([
+        channel({
+          channelNumber: 0,
+          radioChannel: {
+            name: 'ABCDEFGH',
+            receiveFrequency: Frequency(146_520_000),
+            transmitFrequency: Frequency(146_520_000),
+            receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+            transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+          },
+        }),
+        channel({
+          channelNumber: 1,
+          radioChannel: {
+            name: '1.25 m',
+            receiveFrequency: Frequency(223_500_000),
+            transmitFrequency: Frequency(223_500_000),
+            receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+            transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+          },
+        }),
+      ]),
+      radio,
+    );
+
+    expect(mixed.allFit).toBe(false);
+    expect(mixed.hasErrors).toBe(true);
+    expect(mixed.rows).toHaveLength(2);
+    expect(mixed.rows[1]?.findings.some((finding) => finding.code === 'transmit-outside-bands')).toBe(true);
+  });
+
+  it('should run band checks without a memory map and say those checks are limited', () => {
+    const summary = writeReviewCapabilityFindings(program([channel({ channelNumber: 1 })]), {
+      bands: ['2m', '70cm'],
+    });
+
+    expect(summary.limitedChecks).toBe(true);
+    expect(summary.allFit).toBe(true);
+    expect(summary.hasErrors).toBe(false);
   });
 
   it('should report no changes when the programs match', () => {

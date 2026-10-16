@@ -18,6 +18,7 @@ import {
   channelCapacity,
   channelNameMaxLength,
   moveProgrammedChannel,
+  programLibraryChannelsIntoSlots,
   reorderProgrammedChannels,
   type ChannelPatch,
 } from '~/utils/channel-edit';
@@ -65,6 +66,7 @@ import { createTauriRadioImageBackupStore, loadRadioImageBackup } from '~/utils/
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
+import { addToRadioDevFixture, DEV_FIXTURE_SERIAL_PORT, isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import { type SerialLogOperation } from '~/utils/serial-log-file';
@@ -275,6 +277,7 @@ export function useRadio() {
       baseline: session?.radioBaseline,
       memoryMap: session?.settingsMemoryMap,
       radioId: session?.activeRadioId,
+      program: session?.program,
     };
   });
 
@@ -731,7 +734,31 @@ export function useRadio() {
     writeOpen.value = true;
   }
 
+  function actingCardIsDevFixture(): boolean {
+    const id = actingCardId();
+    const guest = id ? cards.value.find((card) => card.id === id)?.guest : undefined;
+    return isDevFixtureSerialPort(guest?.serialPort);
+  }
+
+  function refuseDevFixtureHardware(action: 'write' | 'read'): boolean {
+    if (!actingCardIsDevFixture()) {
+      return false;
+    }
+
+    toast.add({
+      title: action === 'write' ? 'Fixture radio was not written' : 'Fixture radio was not read',
+      description: 'This stand-in UV-5R never talks to a serial port.',
+      color: 'neutral',
+      icon: 'i-lucide-radio',
+    });
+    return true;
+  }
+
   async function writeToRadio(serialPortPath: string, baudRate?: number): Promise<void> {
+    if (refuseDevFixtureHardware('write')) {
+      return;
+    }
+
     if (!beginTransferOperation()) {
       return;
     }
@@ -842,6 +869,10 @@ export function useRadio() {
    * The write review uses that image to show what a write would change.
    */
   async function readRadioForWriteReview(serialPortPath: string, baudRate?: number): Promise<void> {
+    if (refuseDevFixtureHardware('read')) {
+      return;
+    }
+
     const sessionId = actingCardId();
     const session = readSession(sessionId);
 
@@ -1724,7 +1755,45 @@ export function useRadio() {
     return addToRadioFixtureSeed;
   }
 
-  async function seedAddToRadioDevFixtureInner(): Promise<void> {
+  /**
+   * Dev-only: load Fixture UV-5R with validation fixture channels and open Write review.
+   */
+  async function seedWriteReviewDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    await seedAddToRadioDevFixtureInner({ programValidationChannels: true, quietToast: true });
+    const cardId = addToRadioFixtureCardId.value;
+
+    if (cardId) {
+      openWriteToRadio(cardId);
+    }
+  }
+
+  async function programValidationFixtureChannels(cardId: string, config: LoadedRadioConfig): Promise<void> {
+    const session = readSession(cardId);
+
+    if (!session?.program) {
+      return;
+    }
+
+    const memoryMap = memoryMapFromConfig(config);
+    const assignment = programLibraryChannelsIntoSlots(addToRadioDevFixture(), [0, 1], memoryMap);
+
+    persistProgram(
+      {
+        ...session.program,
+        channels: assignment.programmed,
+      },
+      cardId,
+    );
+  }
+
+  async function seedAddToRadioDevFixtureInner(options?: {
+    programValidationChannels?: boolean;
+    quietToast?: boolean;
+  }): Promise<void> {
     await waitForRadioCatalog();
 
     const hadConfigs = configurations.value.length > 0;
@@ -1749,7 +1818,7 @@ export function useRadio() {
           name: 'Fixture UV-5R',
           manufacturer: 'Baofeng',
           model: 'baofeng-uv5r',
-          serialPort: 'fixture',
+          serialPort: DEV_FIXTURE_SERIAL_PORT,
         });
 
     addToRadioFixtureCardId.value = cardId;
@@ -1758,6 +1827,10 @@ export function useRadio() {
     const session = readSession(cardId);
 
     if (session?.program && session.memory && session.activeRadioId) {
+      if (options?.programValidationChannels) {
+        await programValidationFixtureChannels(cardId, config);
+      }
+
       return;
     }
 
@@ -1778,12 +1851,18 @@ export function useRadio() {
         channels: rowsFromProgram(loaded.program),
       });
 
-      toast.add({
-        title: 'Fixture UV-5R ready',
-        description: 'Empty memory is loaded. No radio or memory file is required.',
-        color: 'success',
-        icon: 'i-lucide-radio',
-      });
+      if (options?.programValidationChannels) {
+        await programValidationFixtureChannels(cardId, config);
+      }
+
+      if (!options?.quietToast) {
+        toast.add({
+          title: 'Fixture UV-5R ready',
+          description: 'Empty memory is loaded. No radio or memory file is required.',
+          color: 'success',
+          icon: 'i-lucide-radio',
+        });
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Failed to load the fixture radio';
       toast.add({
@@ -1815,6 +1894,7 @@ export function useRadio() {
     activeRadioId,
     addTargets,
     seedAddToRadioDevFixture,
+    seedWriteReviewDevFixture,
     memoryFilePath,
     serialLog,
     transferSerialLog,

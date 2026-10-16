@@ -21,6 +21,22 @@ const {
   cardById,
 } = useRadioBoard();
 const { disconnect } = useCat();
+const route = useRoute();
+const { seedWriteReviewDevFixture } = useRadio();
+
+function maybeOpenWriteReviewFixture(): void {
+  if (import.meta.dev && route.query.fixture === 'write-review') {
+    void seedWriteReviewDevFixture();
+  }
+}
+
+onMounted(() => {
+  maybeOpenWriteReviewFixture();
+});
+
+watch(() => route.query.fixture, () => {
+  maybeOpenWriteReviewFixture();
+});
 
 watch(
   radios,

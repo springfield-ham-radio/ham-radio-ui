@@ -3,6 +3,13 @@ import type { SavedChannel } from '~/utils/saved-channels-db';
 
 const now = 1_700_000_100_000;
 
+/** Serial port on the guest UV-5R used by dev fixtures. Never a real device. */
+export const DEV_FIXTURE_SERIAL_PORT = 'fixture';
+
+export function isDevFixtureSerialPort(serialPort: string | undefined): boolean {
+  return serialPort === DEV_FIXTURE_SERIAL_PORT;
+}
+
 /** Dev-only channels that show one validation error and one warning on a Baofeng UV-5R. */
 export function addToRadioDevFixture(): SavedChannel[] {
   return [

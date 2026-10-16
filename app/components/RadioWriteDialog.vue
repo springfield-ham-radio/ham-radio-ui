@@ -7,7 +7,14 @@ import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { memoryMapFromConfig } from '~/utils/radio-catalog-db';
 import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
-import { diffRadioPrograms, type WriteReviewDiff } from '~/utils/radio-write-review';
+import { isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
+import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
+import {
+  diffRadioPrograms,
+  writeReviewCapabilityFindings,
+  type WriteReviewCapabilitySummary,
+  type WriteReviewDiff,
+} from '~/utils/radio-write-review';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
@@ -15,8 +22,11 @@ const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
 const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview, transferInFlight } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById } = useSavedRadios();
+const { choiceForRadio, assessmentFor } = useOperatorLicense();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
+
+const validationErrorsAcknowledged = ref(false);
 
 const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
 const config = computed(() => {
@@ -53,6 +63,7 @@ type WriteReviewStatus = 'unavailable' | 'no-baseline' | 'no-codec' | 'decode-er
 interface WriteReviewState {
   status: WriteReviewStatus;
   diff?: WriteReviewDiff;
+  capability?: WriteReviewCapabilitySummary;
   beforeImage?: Uint8Array;
   afterImage?: Uint8Array;
 }
@@ -73,12 +84,32 @@ const review = computed<WriteReviewState>(() => {
   const memoryMap = target.memoryMap ?? memoryMapFromConfig(selected);
 
   if (!memoryMap) {
+    const license = assessmentFor(choiceForRadio(saved.value));
+    const capability = target.program
+      ? writeReviewCapabilityFindings(
+          target.program,
+          {
+            bands: selected.bands,
+            channelSchema: channelSchemaFromSettingsSchema(selected.settingsSchema),
+          },
+          license,
+        )
+      : undefined;
+
     return {
       status: 'no-codec',
+      capability,
       beforeImage: target.baseline,
       afterImage,
     };
   }
+
+  const validationRadio = {
+    bands: selected.bands,
+    memoryMap,
+    channelSchema: channelSchemaFromSettingsSchema(selected.settingsSchema),
+  };
+  const license = assessmentFor(choiceForRadio(saved.value));
 
   try {
     const after = decodeImage(afterImage, target.radioId.model, memoryMap);
@@ -87,19 +118,22 @@ const review = computed<WriteReviewState>(() => {
       return { status: 'decode-error', beforeImage: target.baseline, afterImage };
     }
 
+    const capability = writeReviewCapabilityFindings(after, validationRadio, license);
+
     if (!target.baseline || target.baseline.length === 0) {
-      return { status: 'no-baseline', afterImage };
+      return { status: 'no-baseline', afterImage, capability };
     }
 
     const before = decodeImage(target.baseline, target.radioId.model, memoryMap);
 
     if (!before) {
-      return { status: 'decode-error', beforeImage: target.baseline, afterImage };
+      return { status: 'decode-error', beforeImage: target.baseline, afterImage, capability };
     }
 
     return {
       status: 'ready',
       diff: diffRadioPrograms(before, after, memoryMap),
+      capability,
       beforeImage: target.baseline,
       afterImage,
     };
@@ -108,6 +142,13 @@ const review = computed<WriteReviewState>(() => {
     return { status: 'decode-error', beforeImage: target.baseline, afterImage };
   }
 });
+
+const writeConfirmDisabled = computed(
+  () => Boolean(review.value.capability?.hasErrors && !validationErrorsAcknowledged.value),
+);
+
+const isFixtureRadio = computed(() => isDevFixtureSerialPort(saved.value?.serialPort));
+const capabilityImage = computed(() => writeTarget.value.memory);
 
 function decodeImage(
   image: Uint8Array,
@@ -135,12 +176,21 @@ function decodeImage(
 watch(writeOpen, (open) => {
   if (open) {
     backupsEnabled.value = readRadioImageBackupSettings().enabled && isTauriRuntime();
+    validationErrorsAcknowledged.value = false;
   }
 
   if (!open) {
     reading.value = false;
     clearTransfer();
   }
+});
+
+watch(capabilityImage, () => {
+  if (!writeOpen.value) {
+    return;
+  }
+
+  validationErrorsAcknowledged.value = false;
 });
 
 async function readForReview(serialPortPath: string): Promise<void> {
@@ -189,6 +239,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     confirm-color="warning"
     :confirm-icon="writeEntry.icon"
     :confirm-loading="reading || transferInFlight"
+    :confirm-disabled="writeConfirmDisabled"
     warning-title="This replaces the radio's memory"
     :warning-description="warningDescription"
     :default-port="saved?.serialPort"
@@ -199,14 +250,19 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     <template #review="{ selectedPort }">
       <RadioWriteReview
         v-if="review.status !== 'unavailable'"
+        v-model:errors-acknowledged="validationErrorsAcknowledged"
         :status="review.status"
         :diff="review.diff"
+        :capability="review.capability"
         :before-image="review.beforeImage"
         :after-image="review.afterImage"
-        :can-read="Boolean(selectedPort)"
+        :can-read="Boolean(selectedPort) && !isFixtureRadio"
         :reading="reading"
-        @read="selectedPort && readForReview(selectedPort)"
+        @read="selectedPort && !isFixtureRadio && readForReview(selectedPort)"
       />
+      <p v-if="isFixtureRadio" class="mb-4 text-xs text-muted">
+        This fixture radio never writes to hardware. Write only confirms the review.
+      </p>
     </template>
   </RadioPortDialog>
 </template>
