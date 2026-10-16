@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.8.0...v1.9.0) (2026-10-16)
+
+### Features
+
+* show channel checks in Add to radio ([#61](https://github.com/springfield-ham-radio/ham-radio-ui/issues/61)) ([#127](https://github.com/springfield-ham-radio/ham-radio-ui/issues/127)) ([3e703af](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3e703afc0651026ec1e3de011376a1a5d21298d1))
+
 ## [1.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.7.0...v1.8.0) (2026-10-15)
 
 ### Features
