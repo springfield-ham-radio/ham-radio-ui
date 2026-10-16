@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.9.0...v1.10.0) (2026-10-16)
+
+### Features
+
+* summarize channel checks before Write ([#61](https://github.com/springfield-ham-radio/ham-radio-ui/issues/61)) ([#128](https://github.com/springfield-ham-radio/ham-radio-ui/issues/128)) ([c5f2bb2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c5f2bb217e536aa4c7c2fbaef26e15e600741d21))
+
 ## [1.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.8.0...v1.9.0) (2026-10-16)
 
 ### Features
