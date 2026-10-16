@@ -127,7 +127,16 @@ describe('GeoJSON axis order', () => {
 
     expect(pointFromGeoJsonPoint(geoJsonPoint(point))).toEqual(point);
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [120, 10] })).toEqual(point);
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [-180, -90] })).toEqual({
+      latitude: -90,
+      longitude: -180,
+    });
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [180, 90] })).toEqual({
+      latitude: 90,
+      longitude: 180,
+    });
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [10, 120] })).toBeUndefined();
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [Number.NaN, 10] })).toBeUndefined();
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: ['120', '10'] })).toBeUndefined();
     expect(pointFromGeoJsonPoint({ coordinates: [120, 10] })).toBeUndefined();
     expect(pointFromGeoJsonPoint(null)).toBeUndefined();

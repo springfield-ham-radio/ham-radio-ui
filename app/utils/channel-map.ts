@@ -1,3 +1,4 @@
+import type { GeoPoint } from '@springfield/ham-radio-api';
 import { formatChannelLocation } from '~/utils/channel-location';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import {
@@ -5,7 +6,6 @@ import {
   distanceKm,
   geoJsonFeature,
   locatedPoint,
-  type GeoPoint,
   type GeoJsonFeature,
 } from '~/utils/location-format';
 import { formatSavedTone } from '~/utils/saved-channels-db';

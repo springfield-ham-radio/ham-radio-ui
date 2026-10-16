@@ -15,16 +15,18 @@ import {
   type AntennaTypeId,
 } from '~/utils/antenna-types';
 import { equipmentCoversAdifBand } from '~/utils/radio-bands';
+import {
+  MAX_LATITUDE,
+  MAX_LONGITUDE,
+  MIN_LATITUDE,
+  MIN_LONGITUDE,
+} from '@springfield/ham-radio-api';
 import { formatLatitude, formatLongitude, locatedPoint } from '~/utils/location-format';
 import {
   isValidLatitude,
   isValidLongitude,
   latLonToMaidenhead,
   maidenheadToLatLon,
-  MAX_LATITUDE,
-  MAX_LONGITUDE,
-  MIN_LATITUDE,
-  MIN_LONGITUDE,
   normalizeMaidenhead,
 } from '~/utils/maidenhead';
 

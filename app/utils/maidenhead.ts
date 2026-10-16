@@ -7,7 +7,6 @@
 
 import {
   type GeoPoint,
-  isGeoPoint,
   MAX_LATITUDE,
   MAX_LONGITUDE,
   MIN_LATITUDE,
@@ -15,9 +14,6 @@ import {
 } from '@springfield/ham-radio-api';
 
 const GRID_PATTERN = /^(?:[A-R]{2}|[A-R]{2}\d{2}|[A-R]{2}\d{2}[A-X]{2})$/i;
-
-export type { GeoPoint };
-export { isGeoPoint, MAX_LATITUDE, MAX_LONGITUDE, MIN_LATITUDE, MIN_LONGITUDE };
 
 /**
  * Returns whether `value` is a 2-, 4-, or 6-character Maidenhead locator.

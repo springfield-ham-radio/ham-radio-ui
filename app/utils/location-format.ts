@@ -7,22 +7,22 @@
  * only for map and API boundaries.
  */
 
-import { type GeoPoint, isGeoPoint } from '@springfield/ham-radio-api';
+import {
+  type GeoPoint,
+  isGeoPoint,
+  MAX_LATITUDE,
+  MAX_LONGITUDE,
+  MIN_LATITUDE,
+  MIN_LONGITUDE,
+} from '@springfield/ham-radio-api';
 import {
   haversineDistanceKm,
   isValidLatitude,
   isValidLongitude,
   latLonToMaidenhead,
   maidenheadToLatLon,
-  MAX_LATITUDE,
-  MAX_LONGITUDE,
-  MIN_LATITUDE,
-  MIN_LONGITUDE,
   normalizeMaidenhead,
 } from '~/utils/maidenhead';
-
-export type { GeoPoint };
-export { isGeoPoint };
 
 const DECIMAL_FRACTION_DIGITS = 6;
 const SECONDS_DECIMALS = 2;

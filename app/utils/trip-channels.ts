@@ -1,5 +1,6 @@
 import { distanceKm } from '~/utils/location-format';
-import { isValidLatitude, isValidLongitude, maidenheadToLatLon, type GeoPoint } from '~/utils/maidenhead';
+import type { GeoPoint } from '@springfield/ham-radio-api';
+import { isValidLatitude, isValidLongitude, maidenheadToLatLon } from '~/utils/maidenhead';
 import { coordinatesFromPair, type RepeaterUse } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 
