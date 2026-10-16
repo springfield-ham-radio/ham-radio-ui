@@ -1,3 +1,9 @@
+## [1.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.10.0...v1.11.0) (2026-10-16)
+
+### Features
+
+* install beta radio drivers from a local zip (docs[#22](https://github.com/springfield-ham-radio/ham-radio-ui/issues/22)) ([#129](https://github.com/springfield-ham-radio/ham-radio-ui/issues/129)) ([9fd73df](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9fd73df2f862c9544bf2f690e1a8b5471a101c89))
+
 ## [1.10.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.9.0...v1.10.0) (2026-10-16)
 
 ### Features
