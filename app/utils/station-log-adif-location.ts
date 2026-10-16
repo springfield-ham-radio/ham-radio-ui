@@ -81,12 +81,37 @@ export function parseAdifLocationPair(
   return isGeoPoint(point) ? point : undefined;
 }
 
-function formatMinutes(minutes: number): string {
-  const clamped = Math.min(59.999, Math.max(0, minutes));
-  const whole = Math.floor(clamped);
-  const fraction = Math.round((clamped - whole) * 1000);
+const MINUTE_THOUSANDTHS_PER_DEGREE = 60_000;
 
-  return `${String(whole).padStart(2, '0')}.${String(fraction).padStart(3, '0')}`;
+/**
+ * Split a non-negative decimal degree value into ADIF degrees and thousandths of a minute.
+ * A thousandth that would print as 60.000 minutes carries into the next degree.
+ * A value that rounds past the pole or antimeridian stays on that boundary.
+ */
+function splitAdifDegrees(absolute: number, maxDegrees: number): { degrees: number; minuteThousandths: number } {
+  const totalThousandths = Math.round(absolute * MINUTE_THOUSANDTHS_PER_DEGREE);
+  let degrees = Math.floor(totalThousandths / MINUTE_THOUSANDTHS_PER_DEGREE);
+  let minuteThousandths = totalThousandths - degrees * MINUTE_THOUSANDTHS_PER_DEGREE;
+
+  if (minuteThousandths >= MINUTE_THOUSANDTHS_PER_DEGREE) {
+    degrees += 1;
+    minuteThousandths = 0;
+  }
+
+  if (degrees > maxDegrees || (degrees === maxDegrees && minuteThousandths > 0)) {
+    return { degrees: maxDegrees, minuteThousandths: 0 };
+  }
+
+  return { degrees, minuteThousandths };
+}
+
+function formatAdifLocation(value: number, maxDegrees: number, negativeHemisphere: string, positiveHemisphere: string): string {
+  const hemisphere = value < 0 ? negativeHemisphere : positiveHemisphere;
+  const { degrees, minuteThousandths } = splitAdifDegrees(Math.abs(value), maxDegrees);
+  const minutes = Math.floor(minuteThousandths / 1000);
+  const thousandths = minuteThousandths % 1000;
+
+  return `${hemisphere}${String(degrees).padStart(3, '0')} ${String(minutes).padStart(2, '0')}.${String(thousandths).padStart(3, '0')}`;
 }
 
 /**
@@ -97,12 +122,7 @@ export function formatAdifLocationLatitude(latitude: number): string | undefined
     return undefined;
   }
 
-  const hemisphere = latitude < 0 ? 'S' : 'N';
-  const absolute = Math.abs(latitude);
-  const degrees = Math.floor(absolute);
-  const minutes = (absolute - degrees) * 60;
-
-  return `${hemisphere}${String(degrees).padStart(3, '0')} ${formatMinutes(minutes)}`;
+  return formatAdifLocation(latitude, 90, 'S', 'N');
 }
 
 /**
@@ -113,16 +133,7 @@ export function formatAdifLocationLongitude(longitude: number): string | undefin
     return undefined;
   }
 
-  if (longitude === -180) {
-    return 'W180 00.000';
-  }
-
-  const hemisphere = longitude < 0 ? 'W' : 'E';
-  const absolute = Math.abs(longitude);
-  const degrees = Math.floor(absolute);
-  const minutes = (absolute - degrees) * 60;
-
-  return `${hemisphere}${String(degrees).padStart(3, '0')} ${formatMinutes(minutes)}`;
+  return formatAdifLocation(longitude, 180, 'W', 'E');
 }
 
 /**

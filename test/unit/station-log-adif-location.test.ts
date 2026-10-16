@@ -22,9 +22,19 @@ describe('ADIF location fields', () => {
     });
   });
 
-  it('should accept lowercase and two-digit latitude degrees', () => {
+  it('should accept lowercase, short degree fields, and extra whitespace', () => {
     expect(canonicalizeAdifLocationField('n30 16.032', 'latitude')).toBe('N030 16.032');
-    expect(canonicalizeAdifLocationField('w097 44.586', 'longitude')).toBe('W097 44.586');
+    expect(canonicalizeAdifLocationField('  W7 00.000 ', 'longitude')).toBe('W007 00.000');
+    expect(canonicalizeAdifLocationField('e007 00.000', 'longitude')).toBe('E007 00.000');
+    expect(parseAdifLocationPair('  n  30   16.032  ', 'w097 44.586')).toEqual(AUSTIN);
+  });
+
+  it('should carry a rounded 60.000 minutes into the next degree', () => {
+    expect(formatAdifLocationLatitude(30 + 16.9995 / 60)).toBe('N030 17.000');
+    expect(formatAdifLocationLatitude(30 + 59.9996 / 60)).toBe('N031 00.000');
+    expect(formatAdifLocationLatitude(89 + 59.9996 / 60)).toBe('N090 00.000');
+    expect(formatAdifLocationLongitude(-(179 + 59.9996 / 60))).toBe('W180 00.000');
+    expect(formatAdifLocationLatitude(30 + 16.9995 / 60)).not.toMatch(/\.1000$/);
   });
 
   it('should round-trip canonical strings through parse and format', () => {
@@ -83,5 +93,11 @@ describe('ADIF location fields', () => {
     expect(parseAdifLocationPair('E030 16.032', 'W097 44.586')).toBeUndefined();
     expect(parseAdifLocationPair('N030 16.032', 'N097 44.586')).toBeUndefined();
     expect(parseAdifLocationPair('N090 30.000', 'W097 44.586')).toBeUndefined();
+    expect(parseAdifLocationPair('N03016.032', 'W097 44.586')).toBeUndefined();
+    expect(parseAdifLocationPair('N030 16.03', 'W097 44.586')).toBeUndefined();
+    expect(parseAdifLocationPair('N030 16.0324', 'W097 44.586')).toBeUndefined();
+    expect(parseAdifLocationPair('X030 16.032', 'W097 44.586')).toBeUndefined();
+    expect(formatAdifLocationLatitude(91)).toBeUndefined();
+    expect(formatAdifLocationLongitude(180.0001)).toBeUndefined();
   });
 });
