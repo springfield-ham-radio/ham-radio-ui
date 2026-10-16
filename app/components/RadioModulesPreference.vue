@@ -9,10 +9,15 @@ import {
   installOfficialModule,
   switchAllToVerifiedModules,
   switchToVerifiedModule,
+  replaceWithOfficialModule,
   installPickedLocalModuleFile,
+  updateInstalledModule,
   isModuleInstallPath,
+  isBetaZipFileName,
   parseModuleInstallPath,
   pickLocalModuleFile,
+  sha256HexForLocalFile,
+  versionFromZipName,
 } from '~/utils/radio-module-install';
 import {
   buildAvailableManufacturerGroups,
@@ -20,6 +25,7 @@ import {
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   installedRadiosEligibleForVerifiedSwitch,
+  isBetaDriverRecord,
   radioDisplayName,
   type AvailableRadioModelItem,
   type InstalledRadioListItem,
@@ -37,7 +43,11 @@ const busyKey = ref<string | undefined>();
 const removeConfirmOpen = ref(false);
 const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
 const localWarningOpen = ref(false);
+const betaInstallOpen = ref(false);
 const pendingLocalFile = ref<{ path: string; kind: 'zip' | 'json' } | undefined>();
+const pendingBetaSha256 = ref<string | undefined>();
+const replaceOfficialOpen = ref(false);
+const pendingReplaceItem = ref<InstalledRadioListItem | undefined>();
 
 const installedListItems = computed(() =>
   buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value),
@@ -62,7 +72,14 @@ const removeConfirmMessage = computed(() => {
   return `Remove ${record.manufacturer} ${record.name} from your catalog? The original file on disk is not deleted.`;
 });
 
-function sourceBadge(record: RadioCatalogRecord): { label: string; color: 'warning' | 'success' } {
+function sourceBadge(record: RadioCatalogRecord): {
+  label: string;
+  color: 'warning' | 'success' | 'info';
+} {
+  if (isBetaDriverRecord(record)) {
+    return { label: 'Beta', color: 'info' };
+  }
+
   if (record.source === 'user') {
     return { label: 'Unverified', color: 'warning' };
   }
@@ -73,6 +90,31 @@ function sourceBadge(record: RadioCatalogRecord): { label: string; color: 'warni
 
   return { label: 'Bundled', color: 'success' };
 }
+
+const pendingBetaVersion = computed(() => {
+  const picked = pendingLocalFile.value;
+
+  if (!picked || picked.kind !== 'zip') {
+    return undefined;
+  }
+
+  const segments = picked.path.replace(/\\/g, '/').split('/');
+  const fileName = segments[segments.length - 1] ?? picked.path;
+  return versionFromZipName(fileName);
+});
+
+const replaceOfficialMessage = computed(() => {
+  const item = pendingReplaceItem.value;
+
+  if (!item?.catalogEntry) {
+    return '';
+  }
+
+  const installedVersion =
+    item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath)?.version : item.record.version;
+
+  return `Replace beta v${installedVersion ?? item.record.version} with official v${item.catalogEntry.version}? The beta files on this computer will be removed.`;
+});
 
 const anyBusy = computed(() => busyKey.value !== undefined);
 
@@ -258,22 +300,9 @@ async function updateRadio(item: InstalledRadioListItem): Promise<void> {
   }
 
   busyKey.value = item.catalogEntry.id;
-  const previous = item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath) : undefined;
 
   try {
-    await installOfficialModule(item.catalogEntry);
-
-    if (
-      previous &&
-      previous.moduleId === item.catalogEntry.id &&
-      previous.version !== item.catalogEntry.version
-    ) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('uninstall_radio_module', {
-        moduleId: previous.moduleId,
-        version: previous.version,
-      }).catch(() => undefined);
-    }
+    await updateInstalledModule(item.catalogEntry, item.record);
 
     await refreshCatalogState();
     await refreshInstalledRadios();
@@ -325,6 +354,11 @@ async function confirmRemoveRadio(): Promise<void> {
   }
 }
 
+function localZipFileName(path: string): string {
+  const segments = path.replace(/\\/g, '/').split('/');
+  return segments[segments.length - 1] ?? path;
+}
+
 async function onInstallFromFile(): Promise<void> {
   if (!requireDesktopApp()) {
     return;
@@ -338,6 +372,27 @@ async function onInstallFromFile(): Promise<void> {
     }
 
     pendingLocalFile.value = picked;
+    pendingBetaSha256.value = undefined;
+
+    if (picked.kind === 'zip' && isBetaZipFileName(localZipFileName(picked.path))) {
+      try {
+        pendingBetaSha256.value = await sha256HexForLocalFile(picked.path);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Could not hash file';
+        toast.add({
+          title: 'Could not read beta zip',
+          description: message,
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
+        pendingLocalFile.value = undefined;
+        return;
+      }
+
+      betaInstallOpen.value = true;
+      return;
+    }
+
     localWarningOpen.value = true;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'Could not open file';
@@ -350,23 +405,17 @@ async function onInstallFromFile(): Promise<void> {
   }
 }
 
-async function confirmLocalInstall(): Promise<void> {
-  const picked = pendingLocalFile.value;
-  localWarningOpen.value = false;
-  pendingLocalFile.value = undefined;
-
-  if (!picked) {
-    return;
-  }
-
+async function runLocalInstall(picked: { path: string; kind: 'zip' | 'json' }): Promise<void> {
   busyKey.value = picked.path;
 
   try {
     const result = await installPickedLocalModuleFile(picked);
     await refreshCatalogState();
     await refreshInstalledRadios();
+    const isBeta =
+      picked.kind === 'zip' && isBetaZipFileName(localZipFileName(picked.path));
     toast.add({
-      title: 'Unverified radio installed',
+      title: isBeta ? 'Beta driver installed' : 'Unverified radio installed',
       description: `Added ${result.radios.map((radio) => radio.id.name).join(', ')}`,
       color: 'success',
       icon: 'i-lucide-check',
@@ -384,9 +433,88 @@ async function confirmLocalInstall(): Promise<void> {
   }
 }
 
+async function confirmLocalInstall(): Promise<void> {
+  const picked = pendingLocalFile.value;
+  localWarningOpen.value = false;
+  pendingLocalFile.value = undefined;
+
+  if (!picked) {
+    return;
+  }
+
+  await runLocalInstall(picked);
+}
+
+async function confirmBetaInstall(): Promise<void> {
+  const picked = pendingLocalFile.value;
+  betaInstallOpen.value = false;
+  pendingLocalFile.value = undefined;
+  pendingBetaSha256.value = undefined;
+
+  if (!picked) {
+    return;
+  }
+
+  await runLocalInstall(picked);
+}
+
 function cancelLocalInstall(): void {
   localWarningOpen.value = false;
   pendingLocalFile.value = undefined;
+}
+
+function cancelBetaInstall(): void {
+  betaInstallOpen.value = false;
+  pendingLocalFile.value = undefined;
+  pendingBetaSha256.value = undefined;
+}
+
+function requestReplaceWithOfficial(item: InstalledRadioListItem): void {
+  pendingReplaceItem.value = item;
+  replaceOfficialOpen.value = true;
+}
+
+function cancelReplaceWithOfficial(): void {
+  replaceOfficialOpen.value = false;
+  pendingReplaceItem.value = undefined;
+}
+
+async function confirmReplaceWithOfficial(): Promise<void> {
+  const item = pendingReplaceItem.value;
+  replaceOfficialOpen.value = false;
+  pendingReplaceItem.value = undefined;
+
+  if (!item?.catalogEntry) {
+    return;
+  }
+
+  if (!requireDesktopApp()) {
+    return;
+  }
+
+  busyKey.value = `replace:${item.catalogEntry.id}`;
+
+  try {
+    await replaceWithOfficialModule(item.catalogEntry);
+    await refreshCatalogState();
+    await refreshInstalledRadios();
+    toast.add({
+      title: 'Replaced with official driver',
+      description: radioDisplayName(item.record.manufacturer, item.record.name),
+      color: 'success',
+      icon: 'i-lucide-check',
+    });
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Replace failed';
+    toast.add({
+      title: 'Could not replace with official driver',
+      description: message,
+      color: 'error',
+      icon: 'i-lucide-circle-alert',
+    });
+  } finally {
+    busyKey.value = undefined;
+  }
 }
 
 watch(
@@ -411,7 +539,7 @@ onMounted(() => {
             <p class="text-sm font-medium text-highlighted">Installed drivers</p>
             <p class="text-xs text-muted">
               Drivers are the modules HamBench uses to talk to each model. Official modules show a marker when a newer
-              catalog version is available. Local files are Unverified and are not updated from the catalog.
+              catalog version is available. Beta and other local zips follow semver rules against the catalog.
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
@@ -508,8 +636,19 @@ onMounted(() => {
                     :disabled="anyBusy"
                     @click="switchRadioToVerified(item)"
                   />
+                  <UButton
+                    v-if="item.canReplaceWithOfficial && item.catalogEntry"
+                    :label="`Replace with official v${item.catalogEntry.version}`"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    :loading="isBusy(`replace:${item.catalogEntry.id}`)"
+                    :disabled="anyBusy"
+                    @click="requestReplaceWithOfficial(item)"
+                  />
                   <UTooltip
-                    v-else-if="item.record.source === 'user' && item.catalogEntry && !item.canSwitchToVerified"
+                    v-else-if="item.record.source === 'user' && !isBetaDriverRecord(item.record) && item.catalogEntry && !item.canSwitchToVerified"
                     :text="item.switchBlockedReason"
                   >
                     <span class="inline-flex">
@@ -600,6 +739,13 @@ onMounted(() => {
                   variant="subtle"
                   size="sm"
                 />
+                <UBadge
+                  v-else-if="radio.installedBeta"
+                  label="Beta installed"
+                  color="info"
+                  variant="subtle"
+                  size="sm"
+                />
                 <div
                   v-else-if="radio.installedUnverified && radio.canSwitchToVerified"
                   class="flex items-center gap-2"
@@ -685,6 +831,50 @@ onMounted(() => {
             :loading="pendingRemoveRecord !== undefined && anyBusy"
             @click="confirmRemoveRadio"
           />
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal v-model:open="betaInstallOpen" :ui="{ content: 'sm:max-w-md' }">
+    <template #content>
+      <div class="flex flex-col gap-4 p-5">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+          <p class="mt-2 text-sm text-muted">
+            Compare the SHA-256 below with the value from the author before installing. Beta drivers are not published
+            on the official catalog.
+          </p>
+          <p v-if="pendingLocalFile" class="mt-2 truncate text-xs text-muted">
+            {{ pendingLocalFile.path }}
+          </p>
+          <p v-if="pendingBetaVersion" class="mt-2 text-sm text-highlighted">
+            Version {{ pendingBetaVersion }}
+          </p>
+          <p v-if="pendingBetaSha256" class="mt-2 break-all font-mono text-xs text-muted">
+            sha256:{{ pendingBetaSha256 }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="cancelBetaInstall" />
+          <UButton label="Install beta" color="primary" @click="confirmBetaInstall" />
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal v-model:open="replaceOfficialOpen" :ui="{ content: 'sm:max-w-md' }">
+    <template #content>
+      <div class="flex flex-col gap-4 p-5">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">Replace with official driver?</h2>
+          <p class="mt-2 text-sm text-muted">
+            {{ replaceOfficialMessage }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="cancelReplaceWithOfficial" />
+          <UButton label="Replace" color="primary" @click="confirmReplaceWithOfficial" />
         </div>
       </div>
     </template>

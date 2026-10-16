@@ -15,7 +15,19 @@ import {
   upsertRadioCatalogRecord,
 } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import {
+  isStrictSemverVersion,
+  moduleIdFromZipName,
+  versionFromZipName,
+} from '~/utils/radio-module-semver';
 import hamRadioApiPackage from '@springfield/ham-radio-api/package.json';
+
+export {
+  isBetaDriverVersion,
+  isBetaZipFileName,
+  moduleIdFromZipName,
+  versionFromZipName,
+} from '~/utils/radio-module-semver';
 
 /** Official catalog served via GitHub Pages. */
 export const OFFICIAL_MODULE_CATALOG_URL =
@@ -164,10 +176,50 @@ export async function fetchOfficialModuleCatalog(
 }
 
 function assertApiCompatible(entry: RadioModuleCatalogEntry): void {
-  if (!isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, entry.minApiVersion)) {
+  assertMinApiVersionCompatible(entry.id, entry.minApiVersion);
+}
+
+/** Validate `minApiVersion` from packed config JSON (local zip installs). */
+export function validatePackedConfigMinApiVersion(moduleId: string, configText: string): void {
+  const minApiVersion = readMinApiVersionFromConfigText(configText);
+
+  if (!minApiVersion) {
+    throw new Error(`Module ${moduleId} has invalid minApiVersion`);
+  }
+
+  assertMinApiVersionCompatible(moduleId, minApiVersion);
+}
+
+function readMinApiVersionFromConfigText(text: string): string | undefined {
+  const parsed = JSON.parse(text) as { minApiVersion?: unknown };
+
+  return typeof parsed.minApiVersion === 'string' ? parsed.minApiVersion : undefined;
+}
+
+function assertMinApiVersionCompatible(moduleId: string, minApiVersion: string): void {
+  if (!isStrictSemverVersion(minApiVersion)) {
+    throw new Error(`Module ${moduleId} has invalid minApiVersion`);
+  }
+
+  if (!isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, minApiVersion)) {
     throw new Error(
-      `Module ${entry.id} requires ham-radio-api ${entry.minApiVersion} or newer (app has ${APP_HAM_RADIO_API_VERSION})`,
+      `Module ${moduleId} requires ham-radio-api ${minApiVersion} or newer (app has ${APP_HAM_RADIO_API_VERSION})`,
     );
+  }
+}
+
+async function assertPackedConfigsApiCompatible(configPaths: string[], moduleId: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+
+  for (const configPath of configPaths) {
+    const text = await invoke<string>('load_text_file', { path: configPath });
+    const minApiVersion = readMinApiVersionFromConfigText(text);
+
+    if (!minApiVersion) {
+      throw new Error(`Module ${moduleId} has invalid minApiVersion`);
+    }
+
+    assertMinApiVersionCompatible(moduleId, minApiVersion);
   }
 }
 
@@ -316,6 +368,20 @@ async function removeUnverifiedModuleDirectory(
  * A failed download leaves the local catalog row unchanged.
  */
 export async function switchToVerifiedModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+  return replaceUserModuleWithOfficial(entry, 'No unverified local driver is installed');
+}
+
+/**
+ * Replace a beta or unverified local zip with the official catalog module (explicit downgrade when beta is newer).
+ */
+export async function replaceWithOfficialModule(entry: RadioModuleCatalogEntry): Promise<InstallModuleRadiosResult> {
+  return replaceUserModuleWithOfficial(entry, 'No local driver is installed');
+}
+
+async function replaceUserModuleWithOfficial(
+  entry: RadioModuleCatalogEntry,
+  missingMessage: string,
+): Promise<InstallModuleRadiosResult> {
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
   }
@@ -323,7 +389,7 @@ export async function switchToVerifiedModule(entry: RadioModuleCatalogEntry): Pr
   const existing = await getRadioCatalogRecord(entry.id);
 
   if (!existing || existing.source !== 'user') {
-    throw new Error(`No unverified local driver is installed for ${entry.id}`);
+    throw new Error(`${missingMessage} for ${entry.id}`);
   }
 
   const previousSourcePath = existing.sourcePath;
@@ -360,6 +426,27 @@ export async function switchAllToVerifiedModules(
 }
 
 /**
+ * Install the official catalog zip over an installed, beta, or unverified row.
+ * The previous module directory is removed only after the catalog row is `installed`.
+ * Loose user `.json` paths are left on disk.
+ */
+export async function updateInstalledModule(
+  entry: RadioModuleCatalogEntry,
+  previous: Pick<RadioCatalogRecord, 'source' | 'sourcePath'>,
+): Promise<InstallModuleRadiosResult> {
+  const result = await installOfficialModule(entry, {
+    replaceUserCatalog: previous.source === 'user',
+  });
+  const current = await getRadioCatalogRecord(entry.id);
+
+  if (current?.source === 'installed') {
+    await removeUnverifiedModuleDirectory(previous.sourcePath, result.moduleId, result.version);
+  }
+
+  return result;
+}
+
+/**
  * Install a local module zip without catalog integrity (caller must warn the user).
  */
 export async function installLocalModuleZip(
@@ -370,6 +457,9 @@ export async function installLocalModuleZip(
   if (!isTauriRuntime()) {
     throw new Error('Installing radio modules requires the Tauri desktop app.');
   }
+
+  const existing = await getRadioCatalogRecord(moduleId);
+  const previousSourcePath = existing?.sourcePath;
 
   const { invoke } = await import('@tauri-apps/api/core');
   const installed = await invoke<InstalledRadioModuleResult>('install_radio_module_from_zip', {
@@ -382,9 +472,11 @@ export async function installLocalModuleZip(
   let catalogUpdated = false;
 
   try {
-    const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'user', installed.installPath);
+    await assertPackedConfigsApiCompatible(installed.configPaths, moduleId);
+    const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'user', installed.installPath, moduleId);
     catalogUpdated = true;
     await settleReplacedInstall(installed, true);
+    await removeUnverifiedModuleDirectory(previousSourcePath, installed.moduleId, installed.version);
 
     return {
       moduleId: installed.moduleId,
@@ -398,6 +490,16 @@ export async function installLocalModuleZip(
     }
     throw cause;
   }
+}
+
+/** SHA-256 hex digest of a local file (for beta install confirmation). */
+export async function sha256HexForLocalFile(path: string): Promise<string> {
+  if (!isTauriRuntime()) {
+    throw new Error('SHA-256 requires the Tauri desktop app.');
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string>('sha256_file', { path });
 }
 
 /**
@@ -425,17 +527,6 @@ function basename(path: string): string {
   const normalized = path.replace(/\\/g, '/');
   const index = normalized.lastIndexOf('/');
   return index < 0 ? normalized : normalized.slice(index + 1);
-}
-
-function moduleIdFromZipName(fileName: string): string {
-  const withoutExt = fileName.replace(/\.zip$/i, '');
-  const match = withoutExt.match(/^radio-module-(.+?)(?:-\d+\.\d+\.\d+.*)?$/i);
-  return match?.[1]?.toLowerCase() || withoutExt.toLowerCase() || 'local';
-}
-
-function versionFromZipName(fileName: string): string {
-  const match = fileName.match(/(\d+\.\d+\.\d+[^-]*)/);
-  return match?.[1] || '0.0.0';
 }
 
 /**

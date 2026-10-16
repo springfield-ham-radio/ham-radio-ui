@@ -57,6 +57,35 @@ fn sha256_hex(bytes: &[u8]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// Beta zips are at most 1 MiB. This cap only stops an unbounded read of a device or huge file.
+const MAX_SHA256_FILE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Hash one regular file. Directories, devices, and oversized paths are refused before reading.
+fn sha256_regular_file(path: &Path) -> Result<String, String> {
+    if path.as_os_str().is_empty() {
+        return Err("SHA-256 requires a file path".into());
+    }
+
+    let canonical = fs::canonicalize(path).map_err(|error| error.to_string())?;
+    let metadata = fs::metadata(&canonical).map_err(|error| error.to_string())?;
+
+    if !metadata.file_type().is_file() {
+        return Err("SHA-256 requires a regular file".into());
+    }
+
+    if metadata.len() > MAX_SHA256_FILE_BYTES {
+        return Err("File is too large to hash for beta install".into());
+    }
+
+    let bytes = fs::read(&canonical).map_err(|error| error.to_string())?;
+
+    if bytes.len() as u64 > MAX_SHA256_FILE_BYTES {
+        return Err("File is too large to hash for beta install".into());
+    }
+
+    Ok(sha256_hex(&bytes))
+}
+
 fn radio_modules_root(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data = app
         .path()
@@ -469,6 +498,11 @@ pub async fn download_and_install_radio_module(
 }
 
 #[tauri::command]
+pub fn sha256_file(path: String) -> Result<String, String> {
+    sha256_regular_file(Path::new(&path))
+}
+
+#[tauri::command]
 pub fn install_radio_module_from_zip(
     app: AppHandle,
     zip_path: String,
@@ -527,7 +561,7 @@ pub fn uninstall_radio_module(
 mod tests {
     use super::{
         commit_replaced_install, config_json_count_in_zip, install_verified_tree, is_direct_configs_json,
-        previous_install_backup, rollback_replaced_install, safe_install_segment,
+        previous_install_backup, rollback_replaced_install, safe_install_segment, sha256_regular_file,
     };
     use std::fs;
     use std::io::{Cursor, Write};
@@ -635,6 +669,34 @@ mod tests {
         assert!(!previous_install_backup(&destination).expect("backup").exists());
         assert!(destination.join("configs/baofeng-uv5r.json").exists());
 
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn hashes_only_the_chosen_regular_file() {
+        let root = std::env::temp_dir().join(format!(
+            "ham-sha256-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("temp dir");
+        let chosen = root.join("radio-module-kenwood-th-d74-1.11.1-beta.1.zip");
+        let sibling = root.join("other.zip");
+        fs::write(&chosen, b"beta-zip-bytes").expect("chosen file");
+        fs::write(&sibling, b"do-not-read").expect("sibling");
+        fs::create_dir_all(root.join("nested")).expect("nested");
+
+        let digest = sha256_regular_file(&chosen).expect("hash");
+        assert_eq!(
+            digest,
+            "5ec27f5dd058b5ef63b4dce18753c4d50b45b431144f7051e77562f816db7afa"
+        );
+        let via_parent = root.join("nested").join("..").join(chosen.file_name().expect("name"));
+        assert_eq!(sha256_regular_file(&via_parent).expect("resolved file"), digest);
+        assert!(sha256_regular_file(&root).is_err());
         let _ = fs::remove_dir_all(&root);
     }
 }

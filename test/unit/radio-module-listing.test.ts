@@ -7,8 +7,11 @@ import {
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
   formatCatalogRadioName,
+  isBetaDriverRecord,
+  isUnverifiedDriverRecord,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
+  installedRadiosEligibleForVerifiedSwitch,
   radioDisplayName,
   radioMenuLabel,
 } from '../../app/utils/radio-module-listing.ts';
@@ -192,6 +195,38 @@ describe('radio module listing', () => {
     expect(items[0]?.canUpdate).toBe(false);
   });
 
+  it('should offer catalog update when a beta is older than the official release', () => {
+    const beta = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.1-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.1',
+    });
+    const items = buildInstalledRadioListItems([beta], catalog);
+
+    expect(items[0]?.updateAvailable).toBe(true);
+    expect(items[0]?.canUpdate).toBe(true);
+    expect(items[0]?.canSwitchToVerified).toBe(false);
+  });
+
+  it('should offer replace with official when beta is newer than the catalog', () => {
+    const beta = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.2-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1',
+    });
+    const items = buildInstalledRadioListItems([beta], catalog);
+
+    expect(items[0]?.updateAvailable).toBe(false);
+    expect(items[0]?.canSwitchToVerified).toBe(false);
+    expect(items[0]?.canReplaceWithOfficial).toBe(true);
+  });
+
   it('should not offer catalog updates for unverified local radios', () => {
     const local = record({
       modelId: 'baofeng-uv5r',
@@ -286,6 +321,64 @@ describe('radio module listing', () => {
     expect(baofeng?.radios[0]?.installedUnverified).toBe(true);
     expect(baofeng?.radios[0]?.installedOfficially).toBe(false);
     expect(baofeng?.radios[0]?.canSwitchToVerified).toBe(true);
+  });
+
+  it('should keep an unverified JSON install on Switch to verified even when its version looks like a beta', () => {
+    const local = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.2-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/th-d74.json',
+    });
+    const items = buildInstalledRadioListItems([local], catalog);
+
+    expect(isBetaDriverRecord(local)).toBe(false);
+    expect(isUnverifiedDriverRecord(local)).toBe(true);
+    expect(items[0]?.canSwitchToVerified).toBe(true);
+    expect(items[0]?.canReplaceWithOfficial).toBe(false);
+    expect(items[0]?.canUpdate).toBe(false);
+    expect(installedRadiosEligibleForVerifiedSwitch(items)).toHaveLength(1);
+  });
+
+  it('should leave a newer beta out of switch-all', () => {
+    const beta = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.2-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1',
+    });
+    const items = buildInstalledRadioListItems([beta], catalog);
+
+    expect(installedRadiosEligibleForVerifiedSwitch(items)).toEqual([]);
+    expect(items[0]?.canReplaceWithOfficial).toBe(true);
+  });
+
+  it('should distinguish beta zip installs from unverified json installs', () => {
+    const beta = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.1-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.1',
+    });
+    const json = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.0.0',
+      source: 'user',
+      sourcePath: '/tmp/th-d74.json',
+    });
+
+    expect(isBetaDriverRecord(beta)).toBe(true);
+    expect(isUnverifiedDriverRecord(beta)).toBe(false);
+    expect(isBetaDriverRecord(json)).toBe(false);
+    expect(isUnverifiedDriverRecord(json)).toBe(true);
   });
 
   it('should offer switch to verified on installed unverified rows that match the catalog', () => {
