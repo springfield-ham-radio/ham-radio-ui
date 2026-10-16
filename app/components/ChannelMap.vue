@@ -24,7 +24,7 @@ import {
   type ChannelMapChannel,
 } from '~/utils/channel-map';
 import { STATION_PIN_COLOR, resolveMapStyleUrl } from '~/utils/station-log-map';
-import type { GeoPoint } from '~/utils/location-format';
+import type { GeoPoint } from '@springfield/ham-radio-api';
 import type { DistanceUnit } from '~/utils/trip-channels';
 
 const MARKER_SOURCE_ID = 'channel-map-markers';

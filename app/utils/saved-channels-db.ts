@@ -2,6 +2,7 @@ import {
   Frequency,
   RadioChannelId,
   RadioToneType,
+  type GeoPoint,
   type RadioChannel,
   type RadioTone,
 } from '@springfield/ham-radio-api';
@@ -118,7 +119,7 @@ export interface SavedChannel extends RadioChannel, LinkedNodes {
 export function coordinatesFromPair(
   latitude: number | null | undefined,
   longitude: number | null | undefined,
-): { latitude?: number; longitude?: number } {
+): Partial<GeoPoint> {
   const point = locatedPoint(latitude, longitude);
 
   if (!point) {

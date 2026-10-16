@@ -5,17 +5,19 @@
  * Lat/lon from a grid are the center of that cell.
  */
 
+import {
+  type GeoPoint,
+  isGeoPoint,
+  MAX_LATITUDE,
+  MAX_LONGITUDE,
+  MIN_LATITUDE,
+  MIN_LONGITUDE,
+} from '@springfield/ham-radio-api';
+
 const GRID_PATTERN = /^(?:[A-R]{2}|[A-R]{2}\d{2}|[A-R]{2}\d{2}[A-X]{2})$/i;
 
-export const MIN_LATITUDE = -90;
-export const MAX_LATITUDE = 90;
-export const MIN_LONGITUDE = -180;
-export const MAX_LONGITUDE = 180;
-
-export interface GeoPoint {
-  latitude: number;
-  longitude: number;
-}
+export type { GeoPoint };
+export { isGeoPoint, MAX_LATITUDE, MAX_LONGITUDE, MIN_LATITUDE, MIN_LONGITUDE };
 
 /**
  * Returns whether `value` is a 2-, 4-, or 6-character Maidenhead locator.

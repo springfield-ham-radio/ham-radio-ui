@@ -7,6 +7,7 @@
  * only for map and API boundaries.
  */
 
+import { type GeoPoint, isGeoPoint } from '@springfield/ham-radio-api';
 import {
   haversineDistanceKm,
   isValidLatitude,
@@ -18,10 +19,10 @@ import {
   MIN_LATITUDE,
   MIN_LONGITUDE,
   normalizeMaidenhead,
-  type GeoPoint,
 } from '~/utils/maidenhead';
 
 export type { GeoPoint };
+export { isGeoPoint };
 
 const DECIMAL_FRACTION_DIGITS = 6;
 const SECONDS_DECIMALS = 2;
@@ -379,11 +380,9 @@ export function pointFromGeoJsonPoint(geometry: unknown): GeoPoint | undefined {
     return undefined;
   }
 
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-    return undefined;
-  }
+  const point = { latitude, longitude };
 
-  return { latitude, longitude };
+  return isGeoPoint(point) ? point : undefined;
 }
 
 /**

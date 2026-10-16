@@ -42,6 +42,15 @@ describe('decimal degrees', () => {
   });
 });
 
+describe('shared GeoPoint', () => {
+  it('should accept in-range coordinates via ham-radio-api isGeoPoint', async () => {
+    const { isGeoPoint } = await import('@springfield/ham-radio-api');
+    expect(isGeoPoint({ latitude: 30.27, longitude: -97.74 })).toBe(true);
+    expect(isGeoPoint({ latitude: 91, longitude: 0 })).toBe(false);
+    expect(isGeoPoint(null)).toBe(false);
+  });
+});
+
 describe('maidenhead point conversion', () => {
   it('converts a point to a 4- or 6-character locator', () => {
     expect(pointToMaidenhead(stLouis, 4)).toBe('EM48');
