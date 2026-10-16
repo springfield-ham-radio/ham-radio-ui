@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addToRadioDevFixture } from '../../app/utils/add-to-radio-dev-fixture.ts';
+import { addToRadioDevFixture, isDevFixtureSerialPort } from '../../app/utils/add-to-radio-dev-fixture.ts';
 import { addToRadioFixtureConfig, addToRadioFixtureMemory } from '../../app/utils/add-to-radio-dev-radio.ts';
 import { channelSchemaFromSettingsSchema, validateChannelForRadio } from '../../app/utils/channel-validation.ts';
 
@@ -24,5 +24,7 @@ describe('add to radio dev fixture', () => {
     expect(outOfBandFindings.some((finding) => finding.code === 'transmit-outside-bands')).toBe(true);
     expect(longNameFindings.some((finding) => finding.level === 'error')).toBe(false);
     expect(longNameFindings.some((finding) => finding.code === 'name-truncated')).toBe(true);
+    expect(isDevFixtureSerialPort('fixture')).toBe(true);
+    expect(isDevFixtureSerialPort('/dev/ttyUSB0')).toBe(false);
   });
 });

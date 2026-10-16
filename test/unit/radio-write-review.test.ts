@@ -304,6 +304,16 @@ describe('diffRadioPrograms', () => {
     expect(mixed.rows[1]?.findings.some((finding) => finding.code === 'transmit-outside-bands')).toBe(true);
   });
 
+  it('should run band checks without a memory map and say those checks are limited', () => {
+    const summary = writeReviewCapabilityFindings(program([channel({ channelNumber: 1 })]), {
+      bands: ['2m', '70cm'],
+    });
+
+    expect(summary.limitedChecks).toBe(true);
+    expect(summary.allFit).toBe(true);
+    expect(summary.hasErrors).toBe(false);
+  });
+
   it('should report no changes when the programs match', () => {
     const image = program([channel({ channelNumber: 1, radioChannel: { name: 'KEEP' } })], {
       settings: { squelch: 2 },

@@ -7,6 +7,7 @@ import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import { memoryMapFromConfig } from '~/utils/radio-catalog-db';
 import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import { isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
 import {
   diffRadioPrograms,
@@ -83,8 +84,21 @@ const review = computed<WriteReviewState>(() => {
   const memoryMap = target.memoryMap ?? memoryMapFromConfig(selected);
 
   if (!memoryMap) {
+    const license = assessmentFor(choiceForRadio(saved.value));
+    const capability = target.program
+      ? writeReviewCapabilityFindings(
+          target.program,
+          {
+            bands: selected.bands,
+            channelSchema: channelSchemaFromSettingsSchema(selected.settingsSchema),
+          },
+          license,
+        )
+      : undefined;
+
     return {
       status: 'no-codec',
+      capability,
       beforeImage: target.baseline,
       afterImage,
     };
@@ -133,6 +147,9 @@ const writeConfirmDisabled = computed(
   () => Boolean(review.value.capability?.hasErrors && !validationErrorsAcknowledged.value),
 );
 
+const isFixtureRadio = computed(() => isDevFixtureSerialPort(saved.value?.serialPort));
+const capabilityImage = computed(() => writeTarget.value.memory);
+
 function decodeImage(
   image: Uint8Array,
   radioModel: NonNullable<typeof writeTarget.value.radioId>['model'],
@@ -166,6 +183,14 @@ watch(writeOpen, (open) => {
     reading.value = false;
     clearTransfer();
   }
+});
+
+watch(capabilityImage, () => {
+  if (!writeOpen.value) {
+    return;
+  }
+
+  validationErrorsAcknowledged.value = false;
 });
 
 async function readForReview(serialPortPath: string): Promise<void> {
@@ -231,10 +256,13 @@ async function writeRadio(serialPortPath: string): Promise<void> {
         :capability="review.capability"
         :before-image="review.beforeImage"
         :after-image="review.afterImage"
-        :can-read="Boolean(selectedPort)"
+        :can-read="Boolean(selectedPort) && !isFixtureRadio"
         :reading="reading"
-        @read="selectedPort && readForReview(selectedPort)"
+        @read="selectedPort && !isFixtureRadio && readForReview(selectedPort)"
       />
+      <p v-if="isFixtureRadio" class="mb-4 text-xs text-muted">
+        This fixture radio never writes to hardware. Write only confirms the review.
+      </p>
     </template>
   </RadioPortDialog>
 </template>
