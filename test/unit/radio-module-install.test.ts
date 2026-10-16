@@ -16,6 +16,8 @@ import {
   parseModuleInstallPath,
   previousModuleDirectoryToRemove,
   switchAllToVerifiedModules,
+  validatePackedConfigMinApiVersion,
+  versionFromZipName,
 } from '../../app/utils/radio-module-install.ts';
 
 describe('radio module install helpers', () => {
@@ -181,6 +183,32 @@ describe('radio module install helpers', () => {
         '3.7.0',
       ),
     ).toEqual({ moduleId: 'baofeng-uv5r', version: '3.0.0' });
+  });
+
+  it('should validate packed config minApiVersion as strict semver', () => {
+    expect(() =>
+      validatePackedConfigMinApiVersion('kenwood-th-d74', JSON.stringify({ minApiVersion: '18.0.1' })),
+    ).not.toThrow();
+
+    expect(() => validatePackedConfigMinApiVersion('kenwood-th-d74', JSON.stringify({}))).toThrow(
+      /invalid minApiVersion/,
+    );
+    expect(() =>
+      validatePackedConfigMinApiVersion('kenwood-th-d74', JSON.stringify({ minApiVersion: '18.0.1-beta.1' })),
+    ).toThrow(/invalid minApiVersion/);
+  });
+
+  it('should block packed configs that need a newer ham-radio-api', () => {
+    const parts = APP_HAM_RADIO_API_VERSION.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const future = `${parts[0]}.${parts[1]}.${(parts[2] ?? 0) + 1}`;
+
+    expect(() =>
+      validatePackedConfigMinApiVersion('kenwood-th-d74', JSON.stringify({ minApiVersion: future })),
+    ).toThrow(/requires ham-radio-api/);
+  });
+
+  it('should export zip version parsing with beta suffix', () => {
+    expect(versionFromZipName('radio-module-kenwood-th-d74-1.11.1-beta.1.zip')).toBe('1.11.1-beta.1');
   });
 
   it('should keep switching the remaining radios when one download fails', async () => {

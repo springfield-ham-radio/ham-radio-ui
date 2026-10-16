@@ -2,6 +2,7 @@ import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import { compareSemver, isApiVersionCompatible } from '@springfield/ham-radio-registry';
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { APP_HAM_RADIO_API_VERSION, parseModuleInstallPath } from '~/utils/radio-module-install';
+import { compareSemverWithPrerelease, isBetaDriverRecord, isBetaDriverVersion } from '~/utils/radio-module-semver';
 
 const APP_UPDATE_REQUIRED = 'This radio module requires a newer version of HamBench.';
 
@@ -13,6 +14,8 @@ export interface InstalledRadioListItem {
   updateBlockedReason?: string;
   canSwitchToVerified: boolean;
   switchBlockedReason?: string;
+  canReplaceWithOfficial: boolean;
+  replaceBlockedReason?: string;
 }
 
 export interface InstalledManufacturerGroup {
@@ -27,10 +30,13 @@ export interface AvailableRadioModelItem {
   /** True when an official catalog install is present (not a local unverified file). */
   installedOfficially: boolean;
   installedUnverified: boolean;
+  installedBeta: boolean;
   canInstall: boolean;
   installBlockedReason?: string;
   canSwitchToVerified: boolean;
   switchBlockedReason?: string;
+  canReplaceWithOfficial: boolean;
+  replaceBlockedReason?: string;
 }
 
 export interface AvailableManufacturerGroup {
@@ -153,9 +159,9 @@ function moduleCompatible(entry: RadioModuleCatalogEntry): boolean {
   return isApiVersionCompatible(APP_HAM_RADIO_API_VERSION, entry.minApiVersion);
 }
 
-/** Local file / zip install marked Unverified in the UI. */
+/** Local JSON or non-beta zip install marked Unverified in the UI. */
 export function isUnverifiedDriverRecord(record: RadioCatalogRecord): boolean {
-  return record.source === 'user';
+  return record.source === 'user' && !isBetaDriverRecord(record);
 }
 
 /** Official or bundled driver install. */
@@ -179,12 +185,23 @@ export function buildInstalledRadioListItems(
   return records.map((record) => {
     const catalogEntry = catalogEntryForInstalledRadio(record, catalog);
     const installedVersion = installedModuleVersion(record);
-    const newer =
-      record.source !== 'user' &&
-      catalogEntry !== undefined &&
-      compareSemver(catalogEntry.version, installedVersion) > 0;
+    const beta = isBetaDriverRecord(record);
     const compatible = catalogEntry ? moduleCompatible(catalogEntry) : true;
+
+    let newer = false;
+
+    if (isVerifiedDriverRecord(record) && catalogEntry !== undefined) {
+      newer = compareSemver(catalogEntry.version, installedVersion) > 0;
+    } else if (beta && catalogEntry !== undefined) {
+      newer = compareSemverWithPrerelease(catalogEntry.version, installedVersion) > 0;
+    }
+
     const canSwitchToVerified = isUnverifiedDriverRecord(record) && catalogEntry !== undefined && compatible;
+    const canReplaceWithOfficial =
+      beta &&
+      catalogEntry !== undefined &&
+      compatible &&
+      compareSemverWithPrerelease(installedVersion, catalogEntry.version) > 0;
 
     return {
       record,
@@ -196,6 +213,8 @@ export function buildInstalledRadioListItems(
       ...(isUnverifiedDriverRecord(record) && catalogEntry && !compatible
         ? { switchBlockedReason: APP_UPDATE_REQUIRED }
         : {}),
+      canReplaceWithOfficial,
+      ...(beta && catalogEntry && !compatible ? { replaceBlockedReason: APP_UPDATE_REQUIRED } : {}),
     };
   });
 }
@@ -242,10 +261,18 @@ export function buildAvailableManufacturerGroups(
         const installedRecord = records.find((record) => record.modelId === entry.id);
         const installedOfficially =
           installedRecord !== undefined && isVerifiedDriverRecord(installedRecord);
+        const installedBeta = installedRecord !== undefined && isBetaDriverRecord(installedRecord);
         const installedUnverified =
           installedRecord !== undefined && isUnverifiedDriverRecord(installedRecord);
         const compatible = moduleCompatible(entry);
+        const installedVersion =
+          installedRecord !== undefined ? installedModuleVersion(installedRecord) : undefined;
         const canSwitchToVerified = installedUnverified && compatible;
+        const canReplaceWithOfficial =
+          installedBeta &&
+          compatible &&
+          installedVersion !== undefined &&
+          compareSemverWithPrerelease(installedVersion, entry.version) > 0;
         const canInstall = installedRecord === undefined && compatible;
 
         return {
@@ -256,10 +283,13 @@ export function buildAvailableManufacturerGroups(
           entry,
           installedOfficially,
           installedUnverified,
+          installedBeta,
           canInstall,
           canSwitchToVerified,
+          canReplaceWithOfficial,
           ...(canInstall && !compatible ? { installBlockedReason: APP_UPDATE_REQUIRED } : {}),
           ...(installedUnverified && !compatible ? { switchBlockedReason: APP_UPDATE_REQUIRED } : {}),
+          ...(installedBeta && !compatible ? { replaceBlockedReason: APP_UPDATE_REQUIRED } : {}),
         };
       });
 
@@ -276,3 +306,5 @@ export function buildAvailableManufacturerGroups(
     })
     .filter((group) => group.radios.some((radio) => !radio.installedOfficially));
 }
+
+export { isBetaDriverRecord, isBetaDriverVersion };

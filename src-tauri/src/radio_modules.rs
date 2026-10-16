@@ -469,6 +469,12 @@ pub async fn download_and_install_radio_module(
 }
 
 #[tauri::command]
+pub fn sha256_file(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+    Ok(sha256_hex(&bytes))
+}
+
+#[tauri::command]
 pub fn install_radio_module_from_zip(
     app: AppHandle,
     zip_path: String,

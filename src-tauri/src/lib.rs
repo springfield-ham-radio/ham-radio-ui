@@ -576,6 +576,7 @@ CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
             radio_image_backup::delete_radio_image_backups,
             fetch_repeaterbook_search,
             radio_modules::download_and_install_radio_module,
+            radio_modules::sha256_file,
             radio_modules::install_radio_module_from_zip,
             radio_modules::list_installed_radio_module_configs,
             radio_modules::uninstall_radio_module,
