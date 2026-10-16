@@ -109,3 +109,29 @@ export function reconcileOpenRadioIds(openIds: readonly string[], validIds: read
 export function persistedBoardOpenIds(cards: readonly { savedRadioId?: string }[]): string[] {
   return cards.flatMap((card) => (card.savedRadioId ? [card.savedRadioId] : []));
 }
+
+/**
+ * Restore saved radios onto the board without dropping guest clones already open.
+ * Guests are created before the Radio page mounts (for example the Add to radio dev fixture).
+ */
+export function hydratedBoardCards<T extends { id: string; guest?: unknown }>(
+  existing: readonly T[],
+  openSavedIds: readonly string[],
+): Array<T | { id: string; savedRadioId: string }> {
+  const guests = existing.filter((card) => card.guest !== undefined);
+  const guestIds = new Set(guests.map((card) => card.id));
+  const saved = openSavedIds
+    .filter((id) => !guestIds.has(id))
+    .map((id) => ({ id, savedRadioId: id }));
+
+  return [...guests, ...saved];
+}
+
+/** Keep the focused card when it is still on the board after hydration. */
+export function focusedCardAfterHydrate(focusedId: string | undefined, cards: readonly { id: string }[]): string | undefined {
+  if (focusedId && cards.some((card) => card.id === focusedId)) {
+    return focusedId;
+  }
+
+  return cards[0]?.id;
+}

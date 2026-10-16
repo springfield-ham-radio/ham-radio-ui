@@ -419,13 +419,14 @@ function bandMembershipFindings(
   const bandList = windows.map((window) => window.label).join(', ');
   const code = field === 'transmitFrequency' ? 'transmit-outside-bands' : 'receive-outside-bands';
   const level = field === 'transmitFrequency' ? 'error' : 'warning';
+  const side = field === 'transmitFrequency' ? 'Transmit' : 'Receive';
 
   return [
     {
       level,
       field,
       code,
-      message: `${formatMHz(hz)} is outside this radio’s ${bandList} coverage.`,
+      message: `${side} ${formatMHz(hz)} is outside this radio’s ${bandList} coverage.`,
     },
   ];
 }
@@ -591,4 +592,52 @@ export function partitionChannelFindings(findings: readonly ChannelValidationFin
     errors: findings.filter((finding) => finding.level === 'error'),
     warnings: findings.filter((finding) => finding.level === 'warning'),
   };
+}
+
+export function channelSchemaFromSettingsSchema(settingsSchema: unknown): unknown {
+  if (!settingsSchema || typeof settingsSchema !== 'object') {
+    return undefined;
+  }
+
+  return (settingsSchema as { channelSchema?: unknown }).channelSchema;
+}
+
+export interface AddToRadioValidationRow<TChannel extends Partial<RadioChannel> = Partial<RadioChannel>> {
+  channel: TChannel;
+  slotNumber: number;
+  findings: ChannelValidationFinding[];
+}
+
+/** Validate each library channel that would fill the next free slots on the target radio. */
+export function addToRadioValidationRows<TChannel extends Partial<RadioChannel>>(
+  channels: readonly TChannel[],
+  slotNumbers: readonly number[],
+  radio: ChannelValidationRadio,
+  license?: ChannelValidationLicense,
+): AddToRadioValidationRow<TChannel>[] {
+  const take = Math.min(channels.length, slotNumbers.length);
+  const rows: AddToRadioValidationRow<TChannel>[] = [];
+
+  for (let index = 0; index < take; index += 1) {
+    const channel = channels[index]!;
+    const slotNumber = slotNumbers[index]!;
+
+    rows.push({
+      channel,
+      slotNumber,
+      findings: validateChannelForRadio(channel, radio, license),
+    });
+  }
+
+  return rows;
+}
+
+export function addToRadioRowsWithoutErrors<TChannel extends Partial<RadioChannel>>(
+  rows: readonly AddToRadioValidationRow<TChannel>[],
+): AddToRadioValidationRow<TChannel>[] {
+  return rows.filter((row) => partitionChannelFindings(row.findings).errors.length === 0);
+}
+
+export function rowHasValidationErrors(row: AddToRadioValidationRow): boolean {
+  return partitionChannelFindings(row.findings).errors.length > 0;
 }

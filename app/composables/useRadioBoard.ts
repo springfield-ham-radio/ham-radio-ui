@@ -1,4 +1,6 @@
 import {
+  focusedCardAfterHydrate,
+  hydratedBoardCards,
   persistedBoardOpenIds,
   readRadioBoardSettings,
   reconcileOpenRadioIds,
@@ -49,9 +51,10 @@ export function useRadioBoard() {
 
     const stored = readRadioBoardSettings();
     const open = reconcileOpenRadioIds(stored.openIds, validIds);
+    const nextCards = hydratedBoardCards(cards.value, open);
     layout.value = stored.layout;
-    cards.value = open.map((id) => ({ id, savedRadioId: id }));
-    focusedCardId.value = open[0];
+    cards.value = nextCards;
+    focusedCardId.value = focusedCardAfterHydrate(focusedCardId.value, nextCards);
     hydrated.value = true;
   }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CTCSS, Frequency, type RadioMemoryMap, type RadioTone, RadioToneType } from '@springfield/ham-radio-api';
 import {
+  addToRadioRowsWithoutErrors,
+  addToRadioValidationRows,
   partitionChannelFindings,
   validateChannelForRadio,
   type ChannelValidationRadio,
@@ -410,6 +412,40 @@ describe('validateChannelForRadio', () => {
     );
 
     expect(findings.some((finding) => finding.code === 'frequency-not-encodable')).toBe(false);
+  });
+});
+
+describe('addToRadioValidationRows', () => {
+  it('validates only the channels that fit in free slots', () => {
+    const rows = addToRadioValidationRows(
+      [
+        channel({ name: 'OK', transmitFrequency: 146_520_000, receiveFrequency: 146_520_000 }),
+        channel({ name: 'TOOMANY', transmitFrequency: 446_000_000, receiveFrequency: 446_000_000 }),
+      ],
+      [3, 4, 5],
+      radio({ bands: ['2m', '70cm'], memoryMap: uv5rMemoryMap, channelSchema: uv5rSchema }),
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.slotNumber).toBe(3);
+    expect(rows[1]?.slotNumber).toBe(4);
+  });
+
+  it('filters rows with validation errors', () => {
+    const rows = addToRadioValidationRows(
+      [
+        channel({ name: 'ABCDEFGH', transmitFrequency: 146_520_000, receiveFrequency: 146_520_000 }),
+        channel({ name: 'Bad band', transmitFrequency: 223_500_000, receiveFrequency: 223_500_000 }),
+      ],
+      [1, 2],
+      radio({ bands: ['2m', '70cm'], memoryMap: uv5rMemoryMap, channelSchema: uv5rSchema }),
+    );
+
+    const valid = addToRadioRowsWithoutErrors(rows);
+
+    expect(valid).toHaveLength(1);
+    expect(valid[0]?.channel.name).toBe('ABCDEFGH');
+    expect(partitionChannelFindings(valid[0]!.findings).warnings.length).toBeGreaterThan(0);
   });
 });
 

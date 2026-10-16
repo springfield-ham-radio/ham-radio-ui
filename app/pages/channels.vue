@@ -6,6 +6,8 @@ import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import { HOME_STATION_ID } from '~/utils/antenna-station';
 import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-location';
+import { addToRadioDevFixture } from '~/utils/add-to-radio-dev-fixture';
+import { addToRadioRowsWithoutErrors, addToRadioValidationRows } from '~/utils/channel-validation';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isTripChannelGroup } from '~/utils/channel-groups';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
@@ -58,9 +60,23 @@ const {
 
 onMounted(() => {
   void refresh();
+
+  if (addToRadioFixtureActive.value) {
+    void seedAddToRadioDevFixture();
+  }
 });
 
-const { addTargets } = useRadio();
+const route = useRoute();
+const { addTargets, seedAddToRadioDevFixture } = useRadio();
+const { radios } = useSavedRadios();
+const { choiceForRadio, assessmentFor } = useOperatorLicense();
+const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
+
+watch(addToRadioFixtureActive, (active) => {
+  if (active) {
+    void seedAddToRadioDevFixture();
+  }
+});
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
 const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
@@ -180,6 +196,10 @@ const tripBandItems = computed(() => [
 ]);
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
   let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
+
+  if (addToRadioFixtureActive.value) {
+    rows = [...addToRadioDevFixture(), ...rows];
+  }
 
   if (isTripGroup.value) {
     rows = trimTripChannels(rows, {
@@ -700,16 +720,33 @@ function requestAddToRadio(): void {
   addToRadioOpen.value = true;
 }
 
-async function confirmAddToRadio(sessionId: string): Promise<void> {
-  const target = addTargets.value.find((candidate) => candidate.id === sessionId);
+function licenseForAddTarget(targetId: string) {
+  const radio = radios.value.find((candidate) => candidate.id === targetId);
+  return assessmentFor(choiceForRadio(radio));
+}
+
+async function confirmAddToRadio(payload: { sessionId: string; mode: 'all' | 'valid-only' }): Promise<void> {
+  const target = addTargets.value.find((candidate) => candidate.id === payload.sessionId);
 
   if (!target?.ready) {
     return;
   }
 
-  const assignment = programLibraryChannelsIntoSlots(
+  const license = licenseForAddTarget(target.id);
+  const rows = addToRadioValidationRows(
     selectedLibraryChannels.value,
     target.freeSlotNumbers,
+    {
+      bands: target.bands,
+      memoryMap: target.settingsMemoryMap,
+      channelSchema: target.channelSchema,
+    },
+    license,
+  );
+  const accepted = payload.mode === 'all' ? rows : addToRadioRowsWithoutErrors(rows);
+  const assignment = programLibraryChannelsIntoSlots(
+    accepted.map((row) => row.channel),
+    accepted.map((row) => row.slotNumber),
     target.settingsMemoryMap,
   );
 
@@ -1202,10 +1239,11 @@ async function onImportCsv(): Promise<void> {
     </UModal>
     <AddToRadioDialog
       v-model:open="addToRadioOpen"
-      :source-count="selectedCount"
+      :channels="selectedLibraryChannels"
       :targets="addTargets"
       :preferred-id="focusedCardId"
       :pending="isAddingToRadio"
+      :license-for-target="licenseForAddTarget"
       @confirm="confirmAddToRadio"
     />
   </div>
