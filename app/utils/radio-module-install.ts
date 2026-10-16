@@ -426,6 +426,27 @@ export async function switchAllToVerifiedModules(
 }
 
 /**
+ * Install the official catalog zip over an installed, beta, or unverified row.
+ * The previous module directory is removed only after the catalog row is `installed`.
+ * Loose user `.json` paths are left on disk.
+ */
+export async function updateInstalledModule(
+  entry: RadioModuleCatalogEntry,
+  previous: Pick<RadioCatalogRecord, 'source' | 'sourcePath'>,
+): Promise<InstallModuleRadiosResult> {
+  const result = await installOfficialModule(entry, {
+    replaceUserCatalog: previous.source === 'user',
+  });
+  const current = await getRadioCatalogRecord(entry.id);
+
+  if (current?.source === 'installed') {
+    await removeUnverifiedModuleDirectory(previous.sourcePath, result.moduleId, result.version);
+  }
+
+  return result;
+}
+
+/**
  * Install a local module zip without catalog integrity (caller must warn the user).
  */
 export async function installLocalModuleZip(
@@ -438,7 +459,7 @@ export async function installLocalModuleZip(
   }
 
   const existing = await getRadioCatalogRecord(moduleId);
-  const previousSourcePath = existing?.source === 'user' ? existing.sourcePath : undefined;
+  const previousSourcePath = existing?.sourcePath;
 
   const { invoke } = await import('@tauri-apps/api/core');
   const installed = await invoke<InstalledRadioModuleResult>('install_radio_module_from_zip', {

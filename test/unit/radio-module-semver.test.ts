@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { compareSemver } from '@springfield/ham-radio-registry';
 import {
   compareSemverWithPrerelease,
+  isBetaDriverRecord,
   isBetaDriverVersion,
   isBetaZipFileName,
   moduleIdFromZipName,
@@ -29,8 +31,31 @@ describe('radio module semver', () => {
   });
 
   it('should compare beta build numbers numerically', () => {
+    expect(compareSemverWithPrerelease('1.0.0-beta.2', '1.0.0-beta.10')).toBeLessThan(0);
     expect(compareSemverWithPrerelease('1.0.0-beta.10', '1.0.0-beta.2')).toBeGreaterThan(0);
+    expect(compareSemverWithPrerelease('1.11.1-beta.2', '1.11.1-beta.10')).toBeLessThan(0);
     expect(isBetaDriverVersion('1.11.1-beta.1')).toBe(true);
     expect(isBetaDriverVersion('1.11.1')).toBe(false);
+  });
+
+  it('should treat a release as newer than its beta while registry compare stays numeric-only', () => {
+    expect(compareSemver('1.11.1', '1.11.1-beta.1')).toBeLessThanOrEqual(0);
+    expect(compareSemverWithPrerelease('1.11.1', '1.11.1-beta.1')).toBeGreaterThan(0);
+    expect(compareSemverWithPrerelease('1.11.2-beta.1', '1.11.1')).toBeGreaterThan(0);
+  });
+
+  it('should not treat a user JSON path as a beta install', () => {
+    expect(
+      isBetaDriverRecord({
+        source: 'user',
+        sourcePath: '/tmp/kenwood-th-d74.json',
+      }),
+    ).toBe(false);
+    expect(
+      isBetaDriverRecord({
+        source: 'user',
+        sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.10',
+      }),
+    ).toBe(true);
   });
 });

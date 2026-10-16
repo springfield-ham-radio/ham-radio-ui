@@ -299,7 +299,14 @@ export function buildAvailableManufacturerGroups(
         manufacturer,
         radios,
         canInstall: hasInstallable,
-        ...(radios.some((radio) => !radio.installedOfficially && !radio.canInstall && !radio.canSwitchToVerified)
+        ...(radios.some(
+          (radio) =>
+            !radio.installedOfficially &&
+            !radio.installedBeta &&
+            !radio.installedUnverified &&
+            !radio.canInstall &&
+            !radio.canSwitchToVerified,
+        )
           ? { installBlockedReason: APP_UPDATE_REQUIRED }
           : {}),
       };

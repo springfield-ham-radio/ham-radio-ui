@@ -23,20 +23,14 @@ export function isBetaZipFileName(fileName: string): boolean {
   return BETA_ZIP_PATTERN.test(fileName.trim());
 }
 
-export function isBetaDriverRecord(record: Pick<RadioCatalogRecord, 'source' | 'sourcePath' | 'version'>): boolean {
-  if (record.source !== 'user') {
+/** Beta badge is the install directory version, so a loose user JSON stays Unverified. */
+export function isBetaDriverRecord(record: Pick<RadioCatalogRecord, 'source' | 'sourcePath'>): boolean {
+  if (record.source !== 'user' || !record.sourcePath) {
     return false;
   }
 
-  if (record.sourcePath) {
-    const match = record.sourcePath.replace(/\\/g, '/').match(MODULE_INSTALL_VERSION_PATTERN);
-
-    if (match?.[1] && isBetaDriverVersion(match[1])) {
-      return true;
-    }
-  }
-
-  return isBetaDriverVersion(record.version);
+  const match = record.sourcePath.replace(/\\/g, '/').match(MODULE_INSTALL_VERSION_PATTERN);
+  return Boolean(match?.[1] && isBetaDriverVersion(match[1]));
 }
 
 interface ParsedDriverVersion {

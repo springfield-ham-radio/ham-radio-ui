@@ -11,6 +11,7 @@ import {
   switchToVerifiedModule,
   replaceWithOfficialModule,
   installPickedLocalModuleFile,
+  updateInstalledModule,
   isModuleInstallPath,
   isBetaZipFileName,
   parseModuleInstallPath,
@@ -299,22 +300,9 @@ async function updateRadio(item: InstalledRadioListItem): Promise<void> {
   }
 
   busyKey.value = item.catalogEntry.id;
-  const previous = item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath) : undefined;
 
   try {
-    await installOfficialModule(item.catalogEntry);
-
-    if (
-      previous &&
-      previous.moduleId === item.catalogEntry.id &&
-      previous.version !== item.catalogEntry.version
-    ) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('uninstall_radio_module', {
-        moduleId: previous.moduleId,
-        version: previous.version,
-      }).catch(() => undefined);
-    }
+    await updateInstalledModule(item.catalogEntry, item.record);
 
     await refreshCatalogState();
     await refreshInstalledRadios();
@@ -748,6 +736,13 @@ onMounted(() => {
                   v-if="radio.installedOfficially"
                   label="Installed"
                   color="success"
+                  variant="subtle"
+                  size="sm"
+                />
+                <UBadge
+                  v-else-if="radio.installedBeta"
+                  label="Beta installed"
+                  color="info"
                   variant="subtle"
                   size="sm"
                 />

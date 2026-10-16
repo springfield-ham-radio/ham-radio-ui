@@ -7,7 +7,10 @@ import {
   type OfficialModuleCatalogFailure,
   installOfficialModule,
   installPickedLocalModuleFile,
+  isBetaZipFileName,
   pickLocalModuleFile,
+  sha256HexForLocalFile,
+  versionFromZipName,
 } from '~/utils/radio-module-install';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -31,7 +34,9 @@ const catalogFailure = ref<OfficialModuleCatalogFailure | null>(null);
 const catalogLoading = ref(false);
 const installing = ref(false);
 const localWarningOpen = ref(false);
+const betaInstallOpen = ref(false);
 const pendingLocalFile = ref<{ path: string; kind: 'zip' | 'json' } | undefined>();
+const pendingBetaSha256 = ref<string | undefined>();
 
 const isOpen = computed({
   get: () => props.open,
@@ -129,7 +134,22 @@ async function installSelected(): Promise<void> {
   }
 }
 
+function localZipFileName(path: string): string {
+  const segments = path.replace(/\\/g, '/').split('/');
+  return segments[segments.length - 1] ?? path;
+}
+
 async function onInstallFromFile(): Promise<void> {
+  if (!isTauriRuntime()) {
+    toast.add({
+      title: 'Desktop app required',
+      description: 'Install radio modules from the Tauri desktop build.',
+      color: 'warning',
+      icon: 'i-lucide-monitor',
+    });
+    return;
+  }
+
   try {
     const picked = await pickLocalModuleFile();
 
@@ -138,6 +158,27 @@ async function onInstallFromFile(): Promise<void> {
     }
 
     pendingLocalFile.value = picked;
+    pendingBetaSha256.value = undefined;
+
+    if (picked.kind === 'zip' && isBetaZipFileName(localZipFileName(picked.path))) {
+      try {
+        pendingBetaSha256.value = await sha256HexForLocalFile(picked.path);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Could not hash file';
+        toast.add({
+          title: 'Could not read beta zip',
+          description: message,
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
+        pendingLocalFile.value = undefined;
+        return;
+      }
+
+      betaInstallOpen.value = true;
+      return;
+    }
+
     localWarningOpen.value = true;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'Could not open file';
@@ -165,8 +206,9 @@ async function confirmLocalInstall(): Promise<void> {
     const result = await installPickedLocalModuleFile(picked);
     await refreshCatalogState();
     emit('installed');
+    const isBeta = picked.kind === 'zip' && isBetaZipFileName(localZipFileName(picked.path));
     toast.add({
-      title: 'Unverified radio installed',
+      title: isBeta ? 'Beta driver installed' : 'Unverified radio installed',
       description: `Added ${result.radios.map((radio) => radio.id.name).join(', ')}`,
       color: 'success',
       icon: 'i-lucide-check',
@@ -192,6 +234,28 @@ function cancelLocalInstall(): void {
   localWarningOpen.value = false;
   pendingLocalFile.value = undefined;
 }
+
+async function confirmBetaInstall(): Promise<void> {
+  betaInstallOpen.value = false;
+  pendingBetaSha256.value = undefined;
+  await confirmLocalInstall();
+}
+
+function cancelBetaInstall(): void {
+  betaInstallOpen.value = false;
+  pendingLocalFile.value = undefined;
+  pendingBetaSha256.value = undefined;
+}
+
+const pendingBetaVersion = computed(() => {
+  const picked = pendingLocalFile.value;
+
+  if (!picked || picked.kind !== 'zip') {
+    return undefined;
+  }
+
+  return versionFromZipName(localZipFileName(picked.path));
+});
 
 function toggleModule(id: string, checked: boolean): void {
   if (checked) {
@@ -283,6 +347,33 @@ function onOpenChange(value: boolean): void {
               @click="installSelected"
             />
           </div>
+        </div>
+      </div>
+    </template>
+  </UModal>
+
+  <UModal v-model:open="betaInstallOpen" :ui="{ content: 'sm:max-w-md' }">
+    <template #content>
+      <div class="flex flex-col gap-4 p-5">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+          <p class="mt-2 text-sm text-muted">
+            Compare the SHA-256 below with the value from the author before installing. Beta drivers are not published
+            on the official catalog.
+          </p>
+          <p v-if="pendingLocalFile" class="mt-2 truncate text-xs text-muted">
+            {{ pendingLocalFile.path }}
+          </p>
+          <p v-if="pendingBetaVersion" class="mt-2 text-sm text-highlighted">
+            Version {{ pendingBetaVersion }}
+          </p>
+          <p v-if="pendingBetaSha256" class="mt-2 break-all font-mono text-xs text-muted">
+            sha256:{{ pendingBetaSha256 }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="cancelBetaInstall" />
+          <UButton label="Install beta" color="primary" @click="confirmBetaInstall" />
         </div>
       </div>
     </template>

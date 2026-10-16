@@ -11,6 +11,7 @@ import {
   isUnverifiedDriverRecord,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
+  installedRadiosEligibleForVerifiedSwitch,
   radioDisplayName,
   radioMenuLabel,
 } from '../../app/utils/radio-module-listing.ts';
@@ -320,6 +321,40 @@ describe('radio module listing', () => {
     expect(baofeng?.radios[0]?.installedUnverified).toBe(true);
     expect(baofeng?.radios[0]?.installedOfficially).toBe(false);
     expect(baofeng?.radios[0]?.canSwitchToVerified).toBe(true);
+  });
+
+  it('should keep an unverified JSON install on Switch to verified even when its version looks like a beta', () => {
+    const local = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.2-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/th-d74.json',
+    });
+    const items = buildInstalledRadioListItems([local], catalog);
+
+    expect(isBetaDriverRecord(local)).toBe(false);
+    expect(isUnverifiedDriverRecord(local)).toBe(true);
+    expect(items[0]?.canSwitchToVerified).toBe(true);
+    expect(items[0]?.canReplaceWithOfficial).toBe(false);
+    expect(items[0]?.canUpdate).toBe(false);
+    expect(installedRadiosEligibleForVerifiedSwitch(items)).toHaveLength(1);
+  });
+
+  it('should leave a newer beta out of switch-all', () => {
+    const beta = record({
+      modelId: 'kenwood-th-d74',
+      name: 'TH-D74',
+      manufacturer: 'Kenwood',
+      version: '1.11.2-beta.1',
+      source: 'user',
+      sourcePath: '/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1',
+    });
+    const items = buildInstalledRadioListItems([beta], catalog);
+
+    expect(installedRadiosEligibleForVerifiedSwitch(items)).toEqual([]);
+    expect(items[0]?.canReplaceWithOfficial).toBe(true);
   });
 
   it('should distinguish beta zip installs from unverified json installs', () => {
