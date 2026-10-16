@@ -8,20 +8,21 @@
  */
 
 import {
+  type GeoPoint,
+  isGeoPoint,
+  MAX_LATITUDE,
+  MAX_LONGITUDE,
+  MIN_LATITUDE,
+  MIN_LONGITUDE,
+} from '@springfield/ham-radio-api';
+import {
   haversineDistanceKm,
   isValidLatitude,
   isValidLongitude,
   latLonToMaidenhead,
   maidenheadToLatLon,
-  MAX_LATITUDE,
-  MAX_LONGITUDE,
-  MIN_LATITUDE,
-  MIN_LONGITUDE,
   normalizeMaidenhead,
-  type GeoPoint,
 } from '~/utils/maidenhead';
-
-export type { GeoPoint };
 
 const DECIMAL_FRACTION_DIGITS = 6;
 const SECONDS_DECIMALS = 2;
@@ -379,11 +380,9 @@ export function pointFromGeoJsonPoint(geometry: unknown): GeoPoint | undefined {
     return undefined;
   }
 
-  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
-    return undefined;
-  }
+  const point = { latitude, longitude };
 
-  return { latitude, longitude };
+  return isGeoPoint(point) ? point : undefined;
 }
 
 /**

@@ -6,7 +6,8 @@ import {
 } from '~/utils/channel-map';
 import { channelsInGroup, isTripChannelGroup, type ChannelGroup, type ChannelGroupMembership } from '~/utils/channel-groups';
 import { geoJsonFeature } from '~/utils/location-format';
-import { normalizeMaidenhead, type GeoPoint } from '~/utils/maidenhead';
+import type { GeoPoint } from '@springfield/ham-radio-api';
+import { normalizeMaidenhead } from '~/utils/maidenhead';
 import {
   antennaIsAtStation,
   HOME_STATION_ID,

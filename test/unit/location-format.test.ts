@@ -42,6 +42,15 @@ describe('decimal degrees', () => {
   });
 });
 
+describe('shared GeoPoint', () => {
+  it('should accept in-range coordinates via ham-radio-api isGeoPoint', async () => {
+    const { isGeoPoint } = await import('@springfield/ham-radio-api');
+    expect(isGeoPoint({ latitude: 30.27, longitude: -97.74 })).toBe(true);
+    expect(isGeoPoint({ latitude: 91, longitude: 0 })).toBe(false);
+    expect(isGeoPoint(null)).toBe(false);
+  });
+});
+
 describe('maidenhead point conversion', () => {
   it('converts a point to a 4- or 6-character locator', () => {
     expect(pointToMaidenhead(stLouis, 4)).toBe('EM48');
@@ -118,7 +127,16 @@ describe('GeoJSON axis order', () => {
 
     expect(pointFromGeoJsonPoint(geoJsonPoint(point))).toEqual(point);
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [120, 10] })).toEqual(point);
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [-180, -90] })).toEqual({
+      latitude: -90,
+      longitude: -180,
+    });
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [180, 90] })).toEqual({
+      latitude: 90,
+      longitude: 180,
+    });
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [10, 120] })).toBeUndefined();
+    expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: [Number.NaN, 10] })).toBeUndefined();
     expect(pointFromGeoJsonPoint({ type: 'Point', coordinates: ['120', '10'] })).toBeUndefined();
     expect(pointFromGeoJsonPoint({ coordinates: [120, 10] })).toBeUndefined();
     expect(pointFromGeoJsonPoint(null)).toBeUndefined();

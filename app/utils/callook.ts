@@ -1,4 +1,5 @@
-import { parseLocatedPoint, pointFromGeoJsonPoint, type GeoPoint } from '~/utils/location-format';
+import type { GeoPoint } from '@springfield/ham-radio-api';
+import { parseLocatedPoint, pointFromGeoJsonPoint } from '~/utils/location-format';
 import { latLonToMaidenhead, normalizeMaidenhead } from '~/utils/maidenhead';
 
 export type CallookStatus = 'VALID' | 'INVALID' | 'UPDATING';
