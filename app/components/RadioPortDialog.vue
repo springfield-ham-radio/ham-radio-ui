@@ -13,6 +13,8 @@ const props = defineProps<{
   confirmColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral';
   confirmIcon?: string;
   confirmLoading?: boolean;
+  /** Extra gate on the confirm button (for example acknowledging validation errors). */
+  confirmDisabled?: boolean;
   defaultPort?: string;
   unavailablePorts?: string[];
   omitUnavailablePorts?: boolean;
@@ -182,7 +184,7 @@ watch(
           :color="confirmColor"
           :icon="confirmIcon"
           :label="confirmLabel"
-          :disabled="!canSubmit || confirmLoading"
+          :disabled="!canSubmit || confirmDisabled || confirmLoading"
           :loading="confirmLoading"
           @click="confirm"
         />

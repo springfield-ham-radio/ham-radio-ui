@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { compareMemoryImages } from '~/utils/driver-debug';
+import type { ChannelValidationFinding } from '~/utils/channel-validation';
 import {
   summarizeWriteReview,
+  type WriteReviewCapabilitySummary,
   type WriteReviewChannelKind,
   type WriteReviewDiff,
 } from '~/utils/radio-write-review';
@@ -9,11 +11,14 @@ import {
 const props = defineProps<{
   status: 'no-baseline' | 'no-codec' | 'decode-error' | 'ready';
   diff?: WriteReviewDiff;
+  capability?: WriteReviewCapabilitySummary;
   beforeImage?: Uint8Array;
   afterImage?: Uint8Array;
   canRead: boolean;
   reading: boolean;
 }>();
+
+const errorsAcknowledged = defineModel<boolean>('errorsAcknowledged', { default: false });
 
 const emit = defineEmits<{
   read: [];
@@ -53,6 +58,10 @@ function kindLabel(kind: WriteReviewChannelKind): string {
   return 'Changed';
 }
 
+function findingBadgeColor(level: ChannelValidationFinding['level']): 'error' | 'warning' {
+  return level === 'error' ? 'error' : 'warning';
+}
+
 function kindColor(kind: WriteReviewChannelKind): 'success' | 'error' | 'warning' {
   if (kind === 'added') {
     return 'success';
@@ -68,6 +77,42 @@ function kindColor(kind: WriteReviewChannelKind): 'success' | 'error' | 'warning
 
 <template>
   <div class="mb-4 space-y-3">
+    <section v-if="capability" class="space-y-2 rounded-lg bg-default p-3 ring-1 ring-default">
+      <p class="text-sm font-medium text-highlighted">Channel fit</p>
+      <p v-if="capability.allFit" class="text-sm text-muted">All channels fit this radio.</p>
+      <template v-else>
+        <ul class="max-h-48 space-y-2 overflow-y-auto text-sm">
+          <li v-for="row in capability.rows" :key="row.channelNumber" class="space-y-1">
+            <p class="font-medium text-highlighted">
+              Channel {{ row.channelNumber }}
+              <span v-if="row.name" class="font-normal text-toned">· {{ row.name }}</span>
+            </p>
+            <ul class="flex flex-col gap-1">
+              <li v-for="(finding, findingIndex) in row.findings" :key="findingIndex" class="flex items-start gap-2">
+                <UBadge
+                  :color="findingBadgeColor(finding.level)"
+                  variant="subtle"
+                  size="xs"
+                  class="mt-0.5 shrink-0 uppercase"
+                >
+                  {{ finding.level }}
+                </UBadge>
+                <span class="text-muted">{{ finding.message }}</span>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </template>
+      <p v-if="capability.limitedChecks" class="text-xs text-muted">
+        Name and tone limits need a memory map; only band and license checks ran.
+      </p>
+      <UCheckbox
+        v-if="capability.hasErrors"
+        v-model="errorsAcknowledged"
+        label="Write this image even though some channels have validation errors"
+      />
+    </section>
+
     <template v-if="status === 'no-baseline'">
       <UAlert
         color="info"

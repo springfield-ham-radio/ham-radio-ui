@@ -14,6 +14,12 @@ import {
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
 import { duplexFromFrequencies, formatFrequencyMHz } from '~/utils/channel-edit';
+import {
+  validateChannelForRadio,
+  type ChannelValidationFinding,
+  type ChannelValidationLicense,
+  type ChannelValidationRadio,
+} from '~/utils/channel-validation';
 import { collectMemoryMapUiGroups } from '~/utils/settings-groups';
 import { getSettingAtPath } from '~/utils/settings-path';
 
@@ -62,6 +68,20 @@ export interface WriteReviewDiff {
   settingsGroups: WriteReviewSettingsGroup[];
 }
 
+export interface WriteReviewCapabilityRow {
+  channelNumber: number;
+  name: string;
+  findings: ChannelValidationFinding[];
+}
+
+export interface WriteReviewCapabilitySummary {
+  rows: WriteReviewCapabilityRow[];
+  allFit: boolean;
+  hasErrors: boolean;
+  /** True when there is no memory map, so name and tone encode checks were skipped. */
+  limitedChecks: boolean;
+}
+
 interface VisibleChannel {
   channelNumber: number;
   radioChannel: RadioChannel;
@@ -102,6 +122,45 @@ export function diffRadioPrograms(
   return {
     channels,
     settingsGroups: diffSettings(before?.settings ?? {}, after.settings ?? {}, memoryMap),
+  };
+}
+
+/**
+ * Validation findings for every programmed channel in the image about to be written.
+ */
+export function writeReviewCapabilityFindings(
+  program: RadioProgram,
+  radio: ChannelValidationRadio,
+  license?: ChannelValidationLicense,
+): WriteReviewCapabilitySummary {
+  const limitedChecks = !radio.memoryMap;
+  const rows: WriteReviewCapabilityRow[] = [];
+
+  for (const channel of program.channels) {
+    const visible = asVisibleChannel(channel);
+
+    if (!visible) {
+      continue;
+    }
+
+    const findings = validateChannelForRadio(visible.radioChannel, radio, license);
+
+    if (findings.length > 0) {
+      rows.push({
+        channelNumber: visible.channelNumber,
+        name: visible.radioChannel.name?.trim() ?? '',
+        findings,
+      });
+    }
+  }
+
+  rows.sort((left, right) => left.channelNumber - right.channelNumber);
+
+  return {
+    rows,
+    allFit: rows.length === 0,
+    hasErrors: rows.some((row) => row.findings.some((finding) => finding.level === 'error')),
+    limitedChecks,
   };
 }
 
