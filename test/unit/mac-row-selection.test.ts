@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  anchorIdIfStillVisible,
   applyMacRowSelection,
   pruneRowSelection,
   type MacRowSelectionState,
@@ -150,6 +151,20 @@ describe('applyMacRowSelection', () => {
     });
 
     expect(next).toEqual(selection(['4'], '4'));
+  });
+});
+
+describe('anchorIdIfStillVisible', () => {
+  it('keeps the anchor when a sort still shows that row', () => {
+    expect(anchorIdIfStillVisible('2', ['5', '4', '2', '1'])).toBe('2');
+  });
+
+  it('clears the anchor when a filter drops that row', () => {
+    expect(anchorIdIfStillVisible('2', ['1', '3'])).toBeUndefined();
+  });
+
+  it('stays empty when there was no anchor', () => {
+    expect(anchorIdIfStillVisible(undefined, ['1', '2'])).toBeUndefined();
   });
 });
 

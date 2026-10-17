@@ -12,7 +12,11 @@ import { addToRadioDevFixture } from '~/utils/add-to-radio-dev-fixture';
 import { addToRadioRowsWithoutErrors, addToRadioValidationRows } from '~/utils/channel-validation';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { isTripChannelGroup } from '~/utils/channel-groups';
-import { applyMacRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
+import {
+  anchorIdIfStillVisible,
+  applyMacRowSelection,
+  type MacSelectionModifiers,
+} from '~/utils/mac-row-selection';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
@@ -664,9 +668,7 @@ watch(displayChannels, (rows) => {
     rowSelection.value = next;
   }
 
-  if (selectionAnchorId.value !== undefined && !visibleIds.includes(selectionAnchorId.value)) {
-    selectionAnchorId.value = undefined;
-  }
+  selectionAnchorId.value = anchorIdIfStillVisible(selectionAnchorId.value, visibleIds);
 });
 
 watch(
@@ -900,6 +902,20 @@ function commitChannelSelection(channelId: string, modifiers: MacSelectionModifi
 
   rowSelection.value = next.selected;
   selectionAnchorId.value = next.anchorId;
+}
+
+function onChannelTableMouseDown(event: MouseEvent): void {
+  if (!event.shiftKey) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (target instanceof Element && target.closest('button, input, a, textarea, label, [role="checkbox"]')) {
+    return;
+  }
+
+  event.preventDefault();
 }
 
 function onChannelCheckboxClick(event: Event, channelId: string): void {
@@ -1373,7 +1389,7 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
         />
       </template>
       <template #channels>
-        <div class="h-full min-h-0 w-full overflow-auto">
+        <div class="h-full min-h-0 w-full overflow-auto" @mousedown="onChannelTableMouseDown">
           <UTable
             ref="table"
             v-model:row-selection="rowSelection"

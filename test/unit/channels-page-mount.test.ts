@@ -128,7 +128,14 @@ describe('Channels page mount', () => {
     expect(source).toContain('event.shiftKey');
     expect(source).toContain('event.metaKey');
     expect(source).toContain('event.ctrlKey');
-    expect(source).toContain('openEdit(row.original)');
+    const selectHandler = source.slice(source.indexOf('function onSelectChannel'), source.indexOf('function requestAddToRadio'));
+    expect(selectHandler.indexOf('event.shiftKey')).toBeLessThan(selectHandler.indexOf('openEdit(row.original)'));
+    expect(source).toContain('watch(activeGroupId, () => {\n  clearRowSelection();');
+    expect(source).toContain('anchorIdIfStillVisible');
+    expect(source).toContain('@mousedown="onChannelTableMouseDown"');
+    const mouseDown = source.slice(source.indexOf('function onChannelTableMouseDown'), source.indexOf('function onChannelCheckboxClick'));
+    expect(mouseDown).toContain('if (!event.shiftKey)');
+    expect(mouseDown).toContain('event.preventDefault()');
     expect(source).not.toContain('user-select');
   });
 

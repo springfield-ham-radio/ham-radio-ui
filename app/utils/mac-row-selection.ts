@@ -100,6 +100,22 @@ function idsInRange(orderedIds: readonly string[], anchorId: string, clickedId: 
 }
 
 /**
+ * Anchor after the visible rows change.
+ * Kept when that row is still shown, including after a sort, so the next
+ * Shift-click uses the new order. Cleared when a filter removes the row.
+ */
+export function anchorIdIfStillVisible(
+  anchorId: string | undefined,
+  visibleIds: readonly string[],
+): string | undefined {
+  if (anchorId !== undefined && visibleIds.includes(anchorId)) {
+    return anchorId;
+  }
+
+  return undefined;
+}
+
+/**
  * Drop selection keys that are not in the current table row id list.
  */
 export function pruneRowSelection(
