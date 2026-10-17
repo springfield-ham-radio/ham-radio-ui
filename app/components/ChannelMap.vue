@@ -8,7 +8,6 @@ import {
   type MapGeoJSONFeature,
 } from 'maplibre-gl';
 import {
-  CHANNEL_MAP_EMPTY_STYLE,
   channelMapBandColor,
   channelMapBandColorExpression,
   channelMapBounds,
@@ -23,6 +22,7 @@ import {
   channelMapUnlocatedMessage,
   type ChannelMapChannel,
 } from '~/utils/channel-map';
+import { CHANNEL_MAP_EMPTY_STYLE } from '~/utils/map-canvas';
 import { STATION_PIN_COLOR, resolveMapStyleUrl } from '~/utils/station-log-map';
 import type { GeoPoint } from '@springfield/ham-radio-api';
 import type { DistanceUnit } from '~/utils/trip-channels';

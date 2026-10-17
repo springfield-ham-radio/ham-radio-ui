@@ -7,7 +7,6 @@ import {
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
   formatCatalogRadioName,
-  isBetaDriverRecord,
   isUnverifiedDriverRecord,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
@@ -15,6 +14,7 @@ import {
   radioDisplayName,
   radioMenuLabel,
 } from '../../app/utils/radio-module-listing.ts';
+import { isBetaDriverRecord } from '../../app/utils/radio-module-semver.ts';
 
 const baofengEntry = {
   id: 'baofeng-uv5r',

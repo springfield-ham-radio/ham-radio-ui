@@ -17,8 +17,8 @@ import {
   previousModuleDirectoryToRemove,
   switchAllToVerifiedModules,
   validatePackedConfigMinApiVersion,
-  versionFromZipName,
 } from '../../app/utils/radio-module-install.ts';
+import { versionFromZipName } from '../../app/utils/radio-module-semver.ts';
 
 describe('radio module install helpers', () => {
   it('should parse a schema version 3 catalog entry', () => {
