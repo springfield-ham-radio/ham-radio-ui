@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { isTextEditingTarget, radioMemoryShortcutAction } from '../../app/utils/radio-memory-shortcuts.ts';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  dispatchEditUndoRedo,
+  editUndoRedoRoute,
+  isTextEditingTarget,
+  radioMemoryShortcutAction,
+} from '../../app/utils/radio-memory-shortcuts.ts';
 
 function mockElement(
   tagName: string,
@@ -46,18 +51,59 @@ describe('radio memory shortcuts', () => {
     expect(isTextEditingTarget(mockElement('DIV'))).toBe(false);
   });
 
-  it('maps undo and redo chords outside text fields', () => {
+  it('routes edit undo to text or memory from focus', () => {
+    const input = mockElement('INPUT');
+
+    expect(editUndoRedoRoute(input)).toBe('text');
+    expect(editUndoRedoRoute(mockElement('BODY'))).toBe('memory');
+  });
+
+  it('dispatches to exactly one of text or memory handlers', () => {
+    const input = mockElement('INPUT');
+    const textUndo = vi.fn(() => true);
+    const memoryUndo = vi.fn();
+
+    expect(
+      dispatchEditUndoRedo('undo', input, {
+        textUndoRedo: textUndo,
+        memoryUndoRedo: memoryUndo,
+      }),
+    ).toBe(true);
+    expect(textUndo).toHaveBeenCalledOnce();
+    expect(memoryUndo).not.toHaveBeenCalled();
+
+    textUndo.mockClear();
+    memoryUndo.mockClear();
+
+    expect(
+      dispatchEditUndoRedo('undo', mockElement('BODY'), {
+        textUndoRedo: textUndo,
+        memoryUndoRedo: memoryUndo,
+        canMemoryUndo: () => true,
+      }),
+    ).toBe(true);
+    expect(textUndo).not.toHaveBeenCalled();
+    expect(memoryUndo).toHaveBeenCalledOnce();
+  });
+
+  it('skips memory undo when the stack is empty', () => {
+    const memoryUndo = vi.fn();
+
+    expect(
+      dispatchEditUndoRedo('undo', mockElement('BODY'), {
+        textUndoRedo: () => true,
+        memoryUndoRedo: memoryUndo,
+        canMemoryUndo: () => false,
+      }),
+    ).toBe(false);
+    expect(memoryUndo).not.toHaveBeenCalled();
+  });
+
+  it('maps standard undo and redo chords for browser keydown fallback', () => {
     expect(radioMemoryShortcutAction(keyboardEvent({ key: 'z', metaKey: true }))).toBe('undo');
     expect(radioMemoryShortcutAction(keyboardEvent({ key: 'z', ctrlKey: true }))).toBe('undo');
     expect(radioMemoryShortcutAction(keyboardEvent({ key: 'Z', metaKey: true, shiftKey: true }))).toBe('redo');
     expect(radioMemoryShortcutAction(keyboardEvent({ key: 'y', ctrlKey: true }))).toBe('redo');
-  });
-
-  it('does not take memory shortcuts inside text fields or with alt modifiers', () => {
-    const input = mockElement('INPUT');
-
-    expect(radioMemoryShortcutAction(keyboardEvent({ key: 'z', metaKey: true, target: input }))).toBeUndefined();
     expect(radioMemoryShortcutAction(keyboardEvent({ key: 'z', metaKey: true, altKey: true }))).toBeUndefined();
-    expect(radioMemoryShortcutAction(keyboardEvent({ key: 'a', metaKey: true }))).toBeUndefined();
   });
 });

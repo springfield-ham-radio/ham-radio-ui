@@ -47,6 +47,8 @@ const radioMemoryMenuAccelerators = [
   { id: 'redo-memory', accelerator: 'CmdOrCtrl+Alt+Shift+Z' },
 ];
 
+const editUndoMenuAccelerators = [{ id: 'edit-undo', accelerator: 'CmdOrCtrl+Z' }];
+
 function definition(overrides: Partial<ImportExportDefinition> & Pick<ImportExportDefinition, 'id'>): ImportExportDefinition {
   return {
     label: overrides.id,
@@ -216,6 +218,15 @@ describe('import/export registry', () => {
       expect(rust).toContain(`"${menu.id}"`);
       expect(rust).toContain(`"${menu.accelerator}"`);
     }
+
+    for (const menu of editUndoMenuAccelerators) {
+      expect(rust).toContain(`"${menu.id}"`);
+      expect(rust).toContain(`"${menu.accelerator}"`);
+    }
+
+    expect(rust).toContain('"edit-redo"');
+    expect(rust).toMatch(/CmdOrCtrl\+Shift\+Z|CmdOrCtrl\+Y/);
+    expect(rust).not.toContain('PredefinedMenuItem::undo');
 
     expect(channelImportExport.require(IMPORT_EXPORT_IDS.readFromRadio).icon).toBe('i-hambench-radio-read');
     expect(channelImportExport.require(IMPORT_EXPORT_IDS.writeToRadio).icon).toBe('i-hambench-radio-write');

@@ -1,5 +1,7 @@
 export type RadioMemoryShortcutAction = 'undo' | 'redo';
 
+export type EditUndoRedoRoute = 'text' | 'memory';
+
 type EditableElement = {
   tagName?: string;
   isContentEditable?: boolean;
@@ -33,9 +35,45 @@ export function isTextEditingTarget(target: EventTarget | null): boolean {
   );
 }
 
+/** Whether Edit → Undo/Redo should affect the focused field or radio memory. */
+export function editUndoRedoRoute(focusTarget: EventTarget | null): EditUndoRedoRoute {
+  return isTextEditingTarget(focusTarget) ? 'text' : 'memory';
+}
+
+export interface EditUndoRedoHandlers {
+  textUndoRedo: (action: RadioMemoryShortcutAction) => boolean;
+  memoryUndoRedo: (action: RadioMemoryShortcutAction) => void;
+  canMemoryUndo?: () => boolean;
+  canMemoryRedo?: () => boolean;
+}
+
 /**
- * Memory undo/redo chord for the focused radio card.
- * Returns undefined when the shortcut should fall through (text fields, unrelated keys).
+ * Route a standard undo/redo chord once. Returns true when an action ran.
+ */
+export function dispatchEditUndoRedo(
+  action: RadioMemoryShortcutAction,
+  focusTarget: EventTarget | null,
+  handlers: EditUndoRedoHandlers,
+): boolean {
+  if (editUndoRedoRoute(focusTarget) === 'text') {
+    return handlers.textUndoRedo(action);
+  }
+
+  if (action === 'undo' && handlers.canMemoryUndo && !handlers.canMemoryUndo()) {
+    return false;
+  }
+
+  if (action === 'redo' && handlers.canMemoryRedo && !handlers.canMemoryRedo()) {
+    return false;
+  }
+
+  handlers.memoryUndoRedo(action);
+  return true;
+}
+
+/**
+ * Memory undo/redo chord for browser builds (no Tauri Edit menu).
+ * Returns undefined when the shortcut should fall through.
  */
 export function radioMemoryShortcutAction(event: KeyboardEvent): RadioMemoryShortcutAction | undefined {
   if (!event.metaKey && !event.ctrlKey) {
@@ -43,10 +81,6 @@ export function radioMemoryShortcutAction(event: KeyboardEvent): RadioMemoryShor
   }
 
   if (event.altKey) {
-    return undefined;
-  }
-
-  if (isTextEditingTarget(event.target)) {
     return undefined;
   }
 

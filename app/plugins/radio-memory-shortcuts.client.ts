@@ -1,4 +1,4 @@
-import { radioMemoryShortcutAction } from '~/utils/radio-memory-shortcuts';
+import { dispatchEditUndoRedo, radioMemoryShortcutAction } from '~/utils/radio-memory-shortcuts';
 
 export default defineNuxtPlugin(() => {
   if (!import.meta.client) {
@@ -31,35 +31,27 @@ export default defineNuxtPlugin(() => {
     redoMemoryEdit(id);
   }
 
-  window.addEventListener('keydown', (event) => {
-    const action = radioMemoryShortcutAction(event);
-
-    if (!action) {
-      return;
-    }
-
-    const id = focusedCardId.value;
-
-    if (!id) {
-      return;
-    }
-
-    if (action === 'undo' && !canUndoMemory.value) {
-      return;
-    }
-
-    if (action === 'redo' && !canRedoMemory.value) {
-      return;
-    }
-
-    event.preventDefault();
-    runMemoryShortcut(action);
-  });
+  function handleEditChord(action: 'undo' | 'redo'): void {
+    dispatchEditUndoRedo(action, document.activeElement, {
+      textUndoRedo: (command) => document.execCommand(command),
+      memoryUndoRedo: runMemoryShortcut,
+      canMemoryUndo: () => canUndoMemory.value,
+      canMemoryRedo: () => canRedoMemory.value,
+    });
+  }
 
   void (async () => {
     try {
       const { listen } = await import('@tauri-apps/api/event');
       const { invoke } = await import('@tauri-apps/api/core');
+
+      await listen('edit-undo', () => {
+        handleEditChord('undo');
+      });
+
+      await listen('edit-redo', () => {
+        handleEditChord('redo');
+      });
 
       await listen('undo-memory', () => {
         runMemoryShortcut('undo');
@@ -80,7 +72,24 @@ export default defineNuxtPlugin(() => {
         });
       });
     } catch {
-      // Browser build without the Tauri runtime.
+      window.addEventListener('keydown', (event) => {
+        const action = radioMemoryShortcutAction(event);
+
+        if (!action) {
+          return;
+        }
+
+        const handled = dispatchEditUndoRedo(action, event.target, {
+          textUndoRedo: (command) => document.execCommand(command),
+          memoryUndoRedo: runMemoryShortcut,
+          canMemoryUndo: () => canUndoMemory.value,
+          canMemoryRedo: () => canRedoMemory.value,
+        });
+
+        if (handled) {
+          event.preventDefault();
+        }
+      });
     }
   })();
 });

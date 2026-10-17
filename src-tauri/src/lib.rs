@@ -156,13 +156,26 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         ],
     )?;
 
+    let edit_undo = MenuItem::with_id(app, "edit-undo", "Undo", true, Some("CmdOrCtrl+Z"))?;
+    let edit_redo = MenuItem::with_id(
+        app,
+        "edit-redo",
+        "Redo",
+        true,
+        Some(if cfg!(target_os = "macos") {
+            "CmdOrCtrl+Shift+Z"
+        } else {
+            "CmdOrCtrl+Y"
+        }),
+    )?;
+
     let edit_menu = Submenu::with_items(
         app,
         "Edit",
         true,
         &[
-            &PredefinedMenuItem::undo(app, None)?,
-            &PredefinedMenuItem::redo(app, None)?,
+            &edit_undo,
+            &edit_redo,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, None)?,
             &PredefinedMenuItem::copy(app, None)?,
@@ -690,6 +703,8 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
             "read-from-radio" => emit_menu_event(app, "read-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
             "show-backups" => emit_menu_event(app, "show-backups"),
+            "edit-undo" => emit_menu_event(app, "edit-undo"),
+            "edit-redo" => emit_menu_event(app, "edit-redo"),
             "undo-memory" => emit_menu_event(app, "undo-memory"),
             "redo-memory" => emit_menu_event(app, "redo-memory"),
             "developer-mode" => emit_developer_mode(app),
