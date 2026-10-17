@@ -2,6 +2,18 @@
 
 The **Channels** tab is HamBench’s portable channel list. Rows can be ordinary channels or imported repeaters. **Weather**, **FRS**, and **GMRS** are built-in groups (not stored in the library). Hide each one under **Preferences → Channels**. Select either kind and use **Add to radio** to copy them into unused memory slots. The dialog asks which open radio receives them.
 
+## Channel packs
+
+Use **Import / Export** on the Channels page. **Import pack** and **Export pack** read and write a `.hpack` JSON file for one library group. A pack carries the group name, optional author and description, a free-text version, an `updated` timestamp, and an optional `source` URL for a club-hosted file. Export always includes every channel in the open group, not a selection.
+
+RepeaterBook rows are left out of an export unless you check **Include RepeaterBook rows** and have written permission from RepeaterBook. Included rows carry `provenance: "repeaterbook"` so a later export omits them again by default.
+
+Import shows added, changed, and removed rows before you apply. Applying a pack overwrites name and notes from the file and removes channels that are no longer in the pack from that group. A library row is deleted only when no other group still references it. Re-importing a pack matches rows by pack channel id, then by source key.
+
+Open a stored group tab before exporting a pack. **All** and built-in groups cannot export packs.
+
+For local testing, open Channels with `?fixture=channel-pack-import` in a dev build, or import `public/fixtures/sample-club.hpack`.
+
 ## Import
 
 Use **Import CSV** on the Channels page. HamBench accepts:

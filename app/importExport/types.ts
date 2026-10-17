@@ -1,4 +1,5 @@
 import type { RadioChannel, RadioProgrammedChannel } from '@springfield/ham-radio-api';
+import type { ChannelPackDocument, ChannelPackMetadata } from '~/utils/channel-pack';
 import type { ParsedSavedChannelsCsv } from '~/utils/saved-channels-csv';
 import type { SavedChannel } from '~/utils/saved-channels-db';
 
@@ -42,6 +43,8 @@ export interface ImportExportAvailabilityContext {
   writeSupported?: boolean;
   /** The channel library group on screen cannot accept imports. */
   libraryLocked?: boolean;
+  /** Exporting a pack requires a stored group tab, not All or a built-in group. */
+  packExportLocked?: boolean;
   /**
    * Phase 5 per-user credential.
    * Online sources stay unavailable until the caller supplies one.
@@ -73,6 +76,11 @@ export interface ImportExportHandlerInput {
    */
   sessionId?: string;
   file?: ImportExportFilePayload;
+  /** Channel pack export metadata and options. */
+  channelPackExport?: {
+    metadata: ChannelPackMetadata;
+    includeRepeaterBook?: boolean;
+  };
   /**
    * Phase 5 per-user credential for an online source.
    * Built-in entries ignore it.
@@ -102,6 +110,8 @@ export interface ImportExportHandlerResult {
   cancelled?: boolean;
   /** How many channels the action wrote, when it reports a count. */
   count?: number;
+  /** Parsed `.hpack` document from a pack import source. */
+  channelPack?: ChannelPackDocument;
 }
 
 export type ImportExportHandler = (
