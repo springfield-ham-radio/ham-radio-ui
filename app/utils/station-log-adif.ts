@@ -209,8 +209,10 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
   const txPowerRaw = fields.get('TX_PWR')?.trim();
   const txPowerWatts = txPowerRaw && Number.isFinite(Number(txPowerRaw)) ? Number(txPowerRaw) : undefined;
 
-  const contactLocation = parseAdifLocationPair(fields.get('LAT'), fields.get('LON'));
-  const myLocation = parseAdifLocationPair(fields.get('MY_LAT'), fields.get('MY_LON'));
+  const parsedContact = parseAdifLocationPair(fields.get('LAT'), fields.get('LON'));
+  const parsedMine = parseAdifLocationPair(fields.get('MY_LAT'), fields.get('MY_LON'));
+  const contactLocation = locatedPoint(parsedContact?.latitude, parsedContact?.longitude);
+  const myLocation = locatedPoint(parsedMine?.latitude, parsedMine?.longitude);
   const adifExtra: Record<string, string> = {};
 
   for (const [tag, value] of fields) {

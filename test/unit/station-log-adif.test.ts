@@ -165,6 +165,22 @@ describe('station-log-adif', () => {
     expect(parsed.adifExtra).toEqual({ DXCC: '291' });
   });
 
+  it('keeps an unlocated or one-sided location pair out of the columns', () => {
+    const nullIsland =
+      '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<LAT:11>N000 00.000<LON:11>E000 00.000<EOR>';
+    const invalid =
+      '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<LAT:11>N030 16.032<LON:3>bad<EOR>';
+
+    const island = parseStationLogAdif(nullIsland).qsos[0]!;
+    const broken = parseStationLogAdif(invalid).qsos[0]!;
+
+    expect(island.latitude).toBeUndefined();
+    expect(island.longitude).toBeUndefined();
+    expect(island.adifExtra).toEqual({ LAT: 'N000 00.000', LON: 'E000 00.000' });
+    expect(broken.latitude).toBeUndefined();
+    expect(broken.adifExtra).toEqual({ LAT: 'N030 16.032', LON: 'bad' });
+  });
+
   it('keeps a lone LAT tag in adifExtra on import', () => {
     const adi =
       '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<LAT:12>N030 16.032<DXCC:3>291<EOR>';

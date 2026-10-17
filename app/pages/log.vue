@@ -164,7 +164,7 @@
 <script setup lang="ts">
 import type { SplitterItem, TableColumn } from '@nuxt/ui';
 import { contactAntennaLabel } from '~/utils/antenna-station';
-import { locatedPoint } from '~/utils/location-format';
+import { myCoordinatesFromSavedStation } from '~/utils/station-log-qso-location';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
 import { qslTableLabel } from '~/utils/station-log-map';
@@ -248,7 +248,7 @@ const displayQsos = computed<DisplayQso[]>(() => {
 
 const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
   const radio = radios.value.length === 1 ? radios.value[0] : undefined;
-  const myStation = locatedPoint(selectedStation.value?.latitude, selectedStation.value?.longitude);
+  const myStation = myCoordinatesFromSavedStation(selectedStation.value);
 
   return {
     myRig: radio?.name,
@@ -258,8 +258,8 @@ const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
       radio,
       selectedStationAntenna: selectedAntenna.value,
     }),
-    myLatitude: myStation?.latitude,
-    myLongitude: myStation?.longitude,
+    myLatitude: myStation.myLatitude,
+    myLongitude: myStation.myLongitude,
   };
 });
 

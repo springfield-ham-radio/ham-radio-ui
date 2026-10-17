@@ -2,7 +2,7 @@ import Database from '@tauri-apps/plugin-sql';
 import { findBandByFrequency, displayBandName } from '~/utils/transmit-privileges';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { locatedPoint } from '~/utils/location-format';
-import { promoteAdifExtraCoordinates } from '~/utils/station-log-qso-location';
+import { coordinatePromotionNeedsPersist, promoteAdifExtraCoordinates } from '~/utils/station-log-qso-location';
 
 export const STATION_LOG_DATABASE = 'sqlite:ham-radio.db';
 
@@ -215,34 +215,15 @@ function finalizeStationLogQso(
 }
 
 function rowNeedsCoordinatePromotionPersist(row: StationLogQsoRow, qso: StationLogQso): boolean {
-  const extra = parseAdifExtra(row.adif_extra);
-
-  if (!extra) {
-    return false;
-  }
-
-  const hasLocationTags =
-    'LAT' in extra ||
-    'LON' in extra ||
-    'MY_LAT' in extra ||
-    'MY_LON' in extra ||
-    Object.keys(extra).some((key) => ['lat', 'lon', 'my_lat', 'my_lon'].includes(key.toLowerCase()));
-
-  if (!hasLocationTags) {
-    return false;
-  }
-
-  const serializedExtra = qso.adifExtra ? JSON.stringify(qso.adifExtra) : null;
-
-  if (serializedExtra !== row.adif_extra) {
-    return true;
-  }
-
-  return (
-    (qso.latitude !== undefined && row.latitude == null) ||
-    (qso.longitude !== undefined && row.longitude == null) ||
-    (qso.myLatitude !== undefined && row.my_latitude == null) ||
-    (qso.myLongitude !== undefined && row.my_longitude == null)
+  return coordinatePromotionNeedsPersist(
+    {
+      latitude: row.latitude,
+      longitude: row.longitude,
+      myLatitude: row.my_latitude,
+      myLongitude: row.my_longitude,
+      adifExtra: parseAdifExtra(row.adif_extra),
+    },
+    qso,
   );
 }
 

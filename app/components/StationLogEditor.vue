@@ -84,18 +84,36 @@
             </div>
           </UFormField>
 
-          <UFormField label="Grid">
-            <UInput v-model="theirGridsquare" class="w-full uppercase" placeholder="FN31" :loading="isLookingUp" />
+          <UFormField label="Grid" :description="theirGridDescription">
+            <UInput
+              :model-value="theirGridsquare"
+              class="w-full uppercase"
+              placeholder="FN31"
+              :loading="isLookingUp"
+              @update:model-value="onTheirGridInput"
+            />
           </UFormField>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Latitude" description="Decimal degrees. Fills grid when grid is empty.">
-            <UInput v-model="latitude" inputmode="decimal" class="w-full tabular-nums" placeholder="30.2672" />
+            <UInput
+              v-model="latitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              placeholder="30.2672"
+              @blur="fillTheirGridFromCoordinates"
+            />
           </UFormField>
 
           <UFormField label="Longitude" description="Decimal degrees. Fills grid when grid is empty.">
-            <UInput v-model="longitude" inputmode="decimal" class="w-full tabular-nums" placeholder="-97.7431" />
+            <UInput
+              v-model="longitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              placeholder="-97.7431"
+              @blur="fillTheirGridFromCoordinates"
+            />
           </UFormField>
         </div>
 
@@ -128,12 +146,22 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="My latitude" description="Your station for this QSO. Fills my grid when empty.">
-            <UInput v-model="myLatitude" inputmode="decimal" class="w-full tabular-nums" />
+          <UFormField label="My latitude" :description="myGridDescription">
+            <UInput
+              v-model="myLatitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              @blur="fillMyGridFromCoordinates"
+            />
           </UFormField>
 
-          <UFormField label="My longitude" description="Your station for this QSO. Fills my grid when empty.">
-            <UInput v-model="myLongitude" inputmode="decimal" class="w-full tabular-nums" />
+          <UFormField label="My longitude" description="Decimal degrees. Fills my grid when it is empty.">
+            <UInput
+              v-model="myLongitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              @blur="fillMyGridFromCoordinates"
+            />
           </UFormField>
         </div>
 
@@ -173,7 +201,7 @@ import { contactAntennaLabel, formatAntennaBands, formatStationAntennaLogLabel }
 import { formatFrequencyMHz, frequencyMHzFieldError, parseFrequencyMHz } from '~/utils/channel-edit';
 import { fetchCallookLicense, qthFromCallook, resolveCallookGrid } from '~/utils/callook';
 import { parseLocatedPoint } from '~/utils/location-format';
-import { gridsquareFromCoordinatesIfEmpty } from '~/utils/station-log-qso-location';
+import { coordinatesOutsideGrid, gridsquareFromCoordinatesIfEmpty } from '~/utils/station-log-qso-location';
 import {
   equipmentCoversAdifBand,
   equipmentListedForBand,
@@ -533,6 +561,7 @@ watch(
     theirGridsquare.value = source.theirGridsquare ?? '';
     latitude.value = source.latitude !== undefined ? String(source.latitude) : '';
     longitude.value = source.longitude !== undefined ? String(source.longitude) : '';
+    fillTheirGridFromCoordinates();
     qslSent.value = source.qslSent === true;
     qslReceived.value = source.qslReceived === true;
     myRig.value = source.myRig ?? '';
@@ -549,6 +578,7 @@ watch(
     myGridsquare.value = source.myGridsquare ?? identity.gridsquare;
     myLatitude.value = source.myLatitude !== undefined ? String(source.myLatitude) : '';
     myLongitude.value = source.myLongitude !== undefined ? String(source.myLongitude) : '';
+    fillMyGridFromCoordinates();
     adifExtra.value = source.adifExtra;
     resetErrors();
     isSaving.value = false;
@@ -556,23 +586,43 @@ watch(
   },
 );
 
-watch([latitude, longitude], () => {
-  const point = parseLocatedPoint(latitude.value, longitude.value);
-  const next = gridsquareFromCoordinatesIfEmpty(theirGridsquare.value, point);
+const theirGridDescription = computed(() =>
+  coordinatesOutsideGrid(theirGridsquare.value, parseLocatedPoint(latitude.value, longitude.value))
+    ? 'Logged coordinates are outside this grid.'
+    : undefined,
+);
+
+const myGridDescription = computed(() =>
+  coordinatesOutsideGrid(myGridsquare.value, parseLocatedPoint(myLatitude.value, myLongitude.value))
+    ? 'Logged coordinates are outside this grid.'
+    : 'Decimal degrees for this QSO. Fills my grid when it is empty.',
+);
+
+function onTheirGridInput(value: string): void {
+  theirGridsquare.value = value;
+}
+
+function fillTheirGridFromCoordinates(): void {
+  const next = gridsquareFromCoordinatesIfEmpty(
+    theirGridsquare.value,
+    parseLocatedPoint(latitude.value, longitude.value),
+  );
 
   if (next !== undefined) {
     theirGridsquare.value = next;
   }
-});
+}
 
-watch([myLatitude, myLongitude], () => {
-  const point = parseLocatedPoint(myLatitude.value, myLongitude.value);
-  const next = gridsquareFromCoordinatesIfEmpty(myGridsquare.value, point);
+function fillMyGridFromCoordinates(): void {
+  const next = gridsquareFromCoordinatesIfEmpty(
+    myGridsquare.value,
+    parseLocatedPoint(myLatitude.value, myLongitude.value),
+  );
 
   if (next !== undefined) {
     myGridsquare.value = next;
   }
-});
+}
 
 function close(): void {
   emit('update:open', false);

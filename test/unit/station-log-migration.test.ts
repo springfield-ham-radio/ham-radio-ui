@@ -9,6 +9,8 @@ const { DatabaseSync } = require('node:sqlite') as {
     exec(sql: string): void;
     prepare(sql: string): {
       all: (...args: unknown[]) => Array<Record<string, unknown>>;
+      get: (...args: unknown[]) => Record<string, unknown> | undefined;
+      run: (...args: unknown[]) => unknown;
     };
   };
 };
@@ -35,9 +37,35 @@ describe('station log migrations', () => {
 
     const database = new DatabaseSync(':memory:');
 
-    for (const entry of migrations.filter((migrationEntry) => migrationEntry.version <= 15)) {
+    for (const entry of migrations.filter((migrationEntry) => migrationEntry.version < 15)) {
       database.exec(entry.sql);
     }
+
+    database
+      .prepare(
+        `INSERT INTO station_log_qsos (
+           id, started_at, their_callsign, mode, adif_extra, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('qso-1', 1_000, 'W1AW', 'FM', '{"LAT":"N030 16.032","LON":"W097 44.586"}', 1_000, 1_000);
+
+    database.exec(migrations.find((entry) => entry.version === 15)!.sql);
+
+    const stored = database
+      .prepare(
+        `SELECT their_callsign, latitude, longitude, my_latitude, my_longitude, adif_extra
+         FROM station_log_qsos WHERE id = ?`,
+      )
+      .get('qso-1');
+
+    expect(stored).toEqual({
+      their_callsign: 'W1AW',
+      latitude: null,
+      longitude: null,
+      my_latitude: null,
+      my_longitude: null,
+      adif_extra: '{"LAT":"N030 16.032","LON":"W097 44.586"}',
+    });
 
     const columns = columnNames(database, 'station_log_qsos');
 
