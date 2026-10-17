@@ -1,3 +1,9 @@
+## [1.16.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.15.0...v1.16.0) (2026-10-17)
+
+### Features
+
+* **channels:** unified Import / Export dialog ([#136](https://github.com/springfield-ham-radio/ham-radio-ui/issues/136)) ([4444ccc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4444cccc68857d6871d14f3e4bb407e94b9d78cb))
+
 ## [1.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.14.0...v1.15.0) (2026-10-17)
 
 ### Features
