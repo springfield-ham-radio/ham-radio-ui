@@ -82,6 +82,7 @@ import {
   type CapturedSerialLogSnapshot,
 } from '~/utils/serial-log-session';
 import {
+  cloneRadioProgram,
   createRadioMemoryHistory,
   isRadioMemoryHistoryUnsaved,
   markRadioMemoryHistoryClean,
@@ -1410,20 +1411,24 @@ export function useRadio() {
 
     const session = readSession(id);
     const recordHistory = options.recordHistory ?? true;
-    let memoryHistory = session?.memoryHistory;
-
-    if (recordHistory && session?.program) {
-      memoryHistory = recordRadioMemoryEdit(
-        memoryHistory ?? createRadioMemoryHistory(session.program),
-        nextProgram,
-      );
-    }
+    const previousProgram = session?.program;
 
     patchSession(id, {
       program: nextProgram,
       channels: rowsFromProgram(nextProgram),
-      memoryHistory,
     });
+
+    if (recordHistory && previousProgram) {
+      try {
+        const memoryHistory = recordRadioMemoryEdit(
+          session?.memoryHistory ?? createRadioMemoryHistory(previousProgram),
+          nextProgram,
+        );
+        patchSession(id, { memoryHistory });
+      } catch (cause) {
+        logger.withError(cause).error('Failed to record radio memory history');
+      }
+    }
 
     const queued = sessionQueue(id)
       .then(async () => {
@@ -1439,7 +1444,7 @@ export function useRadio() {
           return;
         }
 
-        const encoded = codec.encode(session.program, {
+        const encoded = codec.encode(cloneRadioProgram(session.program), {
           radioModel: session.activeRadioId.model,
           contents: session.memory,
         });
