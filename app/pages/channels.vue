@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RadioChannel } from '@springfield/ham-radio-api';
-import type { SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
+import type { DropdownMenuItem, SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
@@ -20,6 +20,21 @@ import {
   parseChannelMapRangeRadius,
 } from '~/utils/channel-map';
 import {
+  libraryBandFilterItems,
+  matchesLibraryBandFilter,
+  matchesLibraryLinkedFilter,
+  matchesLibraryOnAirFilter,
+  selectionVisibleOnly,
+  type ChannelLinkedFilter,
+  type ChannelOnAirFilter,
+  type ChannelTripOpenFilter,
+  uniqueLibraryBandTokens,
+} from '~/utils/channel-library-filters';
+import {
+  readChannelLibraryFilterSettings,
+  writeChannelLibraryFilterSettings,
+} from '~/utils/channel-library-filter-settings';
+import {
   readChannelMapSettings,
   writeChannelMapSettings,
 } from '~/utils/channel-map-settings';
@@ -33,7 +48,6 @@ import {
   tripDistanceKm,
   TRIP_START_COORDINATES,
   TRIP_START_NONE,
-  uniqueTripBands,
 } from '~/utils/trip-channels';
 
 useHead({ title: 'Channels' });
@@ -42,6 +56,7 @@ const UCheckbox = resolveComponent('UCheckbox');
 
 const {
   filteredChannels,
+  channelsForGroup,
   isLoading,
   error,
   search,
@@ -111,15 +126,44 @@ const table = useTemplateRef<{
     getColumn: (id: string) => { toggleVisibility: (visible: boolean) => void } | undefined;
   };
 }>('table');
-const tripBand = ref('all');
-const tripOpenOnly = ref(false);
-const tripOnAirOnly = ref(false);
+const tripOpenFilter = ref<ChannelTripOpenFilter>('all');
 const isSavingGroup = shallowRef(false);
 const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
 const deleteChannelsOpen = shallowRef(false);
 const isDeletingChannels = shallowRef(false);
-const linkedOnly = ref(false);
+type ChannelLibraryCreateAction = 'add-channel' | 'empty-group' | 'trip-group';
+
+const channelCreateAction = useState<ChannelLibraryCreateAction>('channel-library-create-action', () => 'add-channel');
+const libraryFilterSettings = ref(readChannelLibraryFilterSettings());
+const selectedBandTokens = computed({
+  get: () => libraryFilterSettings.value.bands,
+  set: (bands: string[]) => {
+    libraryFilterSettings.value = { ...libraryFilterSettings.value, bands };
+    writeChannelLibraryFilterSettings(libraryFilterSettings.value);
+  },
+});
+const onAirFilter = computed({
+  get: () => libraryFilterSettings.value.onAir,
+  set: (onAir: ChannelOnAirFilter) => {
+    libraryFilterSettings.value = { ...libraryFilterSettings.value, onAir };
+    writeChannelLibraryFilterSettings(libraryFilterSettings.value);
+  },
+});
+const onAirFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'On air', value: 'on-air' as const },
+  { label: 'Off air', value: 'off-air' as const },
+];
+const linkedFilter = ref<ChannelLinkedFilter>('all');
+const linkedFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'Linked only', value: 'linked-only' as const },
+];
+const tripOpenFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'Open use only', value: 'open-only' as const },
+];
 const channelMapSettings = ref(readChannelMapSettings());
 const showMap = computed({
   get: () => channelMapSettings.value.open,
@@ -190,12 +234,14 @@ const distanceStartPoint = computed(() => {
   const station = stations.value.find((entry) => entry.id === distanceStartId.value);
   return station ? stationStartPoint(station) : undefined;
 });
-const tripBandItems = computed(() => [
-  { label: 'All bands', value: 'all' },
-  ...uniqueTripBands(filteredChannels.value).map((band) => ({ label: band, value: band })),
-]);
+const scopedChannels = computed(() => channelsForGroup(activeGroupId.value));
+const libraryBandFilterOptions = computed(() =>
+  libraryBandFilterItems(uniqueLibraryBandTokens(scopedChannels.value)),
+);
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
-  let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
+  let rows = filteredChannels.value.filter((channel) => matchesLibraryLinkedFilter(channel, linkedFilter.value));
+  rows = rows.filter((channel) => matchesLibraryBandFilter(channel, selectedBandTokens.value));
+  rows = rows.filter((channel) => matchesLibraryOnAirFilter(channel, onAirFilter.value));
 
   if (addToRadioFixtureActive.value) {
     rows = [...addToRadioDevFixture(), ...rows];
@@ -203,9 +249,9 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
 
   if (isTripGroup.value) {
     rows = trimTripChannels(rows, {
-      band: tripBand.value === 'all' ? '' : tripBand.value,
-      openOnly: tripOpenOnly.value,
-      onAirOnly: tripOnAirOnly.value,
+      band: '',
+      openOnly: tripOpenFilter.value === 'open-only',
+      onAirOnly: false,
     });
   }
 
@@ -230,16 +276,19 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
 });
 
 const selectedLibraryChannels = computed(() => {
-  const selected = new Set(
-    Object.entries(rowSelection.value)
-      .filter(([, isSelected]) => isSelected)
-      .map(([id]) => id),
+  const visible = selectionVisibleOnly(
+    rowSelection.value,
+    displayChannels.value.map((channel) => String(channel.id)),
   );
 
-  return displayChannels.value.filter((channel) => selected.has(String(channel.id)));
+  return displayChannels.value.filter((channel) => visible[String(channel.id)] === true);
 });
 
 const selectedCount = computed(() => selectedLibraryChannels.value.length);
+const hasBulkSelection = computed(() => selectedCount.value > 0);
+const selectedCountLabel = computed(() =>
+  selectedCount.value === 1 ? '1 selected' : `${selectedCount.value} selected`,
+);
 const radiosWithRoom = computed(() =>
   addTargets.value.filter((target) => target.ready && target.freeSlotNumbers.length > 0),
 );
@@ -299,9 +348,75 @@ const importTooltip = computed(() => {
 const addChannelTooltip = computed(() =>
   builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
 );
+const channelCreatePrimaryLabel = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'New empty group';
+    case 'trip-group':
+      return 'New trip group';
+    default:
+      return 'Add channel';
+  }
+});
+const channelCreatePrimaryIcon = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'i-lucide-folder-plus';
+    case 'trip-group':
+      return 'i-lucide-route';
+    default:
+      return 'i-lucide-plus';
+  }
+});
+const channelCreatePrimaryTooltip = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'Create an empty group, then import a CSV to fill it.';
+    case 'trip-group':
+      return 'Create a trip group, then import a route CSV you exported';
+    default:
+      return addChannelTooltip.value;
+  }
+});
+const channelCreatePrimaryDisabled = computed(
+  () => channelCreateAction.value === 'add-channel' && builtinGroup.value,
+);
+const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
+  [
+    {
+      label: 'Add channel',
+      icon: 'i-lucide-plus',
+      disabled: builtinGroup.value,
+      description: builtinGroup.value
+        ? 'Built-in groups cannot be changed'
+        : channelCreateAction.value === 'add-channel'
+          ? 'Current'
+          : undefined,
+      onSelect() {
+        runChannelCreateAction('add-channel');
+      },
+    },
+    {
+      label: 'New empty group',
+      icon: 'i-lucide-folder-plus',
+      description: channelCreateAction.value === 'empty-group' ? 'Current' : undefined,
+      onSelect() {
+        runChannelCreateAction('empty-group');
+      },
+    },
+    {
+      label: 'New trip group',
+      icon: 'i-lucide-route',
+      description: channelCreateAction.value === 'trip-group' ? 'Current' : undefined,
+      onSelect() {
+        runChannelCreateAction('trip-group');
+      },
+    },
+  ],
+]);
 const emptyMessage = computed(() => {
-  if (linkedOnly.value) {
-    return 'No linked repeaters match. Turn off Linked only to see every channel.';
+  if (linkedFilter.value === 'linked-only') {
+    return 'No linked repeaters match. Set Linked to All to see every channel.';
   }
 
   if (builtinGroup.value) {
@@ -501,6 +616,19 @@ watch(activeGroupId, () => {
   rowSelection.value = {};
 });
 
+watch(displayChannels, (rows) => {
+  const next = selectionVisibleOnly(
+    rowSelection.value,
+    rows.map((channel) => String(channel.id)),
+  );
+  const currentIds = Object.keys(rowSelection.value).filter((id) => rowSelection.value[id]).sort();
+  const nextIds = Object.keys(next).sort();
+
+  if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
+    rowSelection.value = next;
+  }
+});
+
 watch(
   [stations, selectedStationId],
   () => {
@@ -548,12 +676,6 @@ watch(
   { immediate: true },
 );
 
-watch(tripBandItems, (items) => {
-  if (!items.some((item) => item.value === tripBand.value)) {
-    tripBand.value = 'all';
-  }
-});
-
 watch(mapRangeText, () => {
   const rangeRadiusKm = channelMapRangeRadiusKm(parseChannelMapRangeRadius(mapRangeText.value), distanceUnit.value);
   channelMapSettings.value = { ...channelMapSettings.value, rangeRadiusKm };
@@ -588,6 +710,10 @@ function onMapHighlight(channelId: string): void {
 
 function onChannelRowHover(_event: Event, row: TableRow<DisplaySavedChannel> | null): void {
   hoveredChannelId.value = row ? String(row.original.id) : undefined;
+}
+
+function clearRowSelection(): void {
+  rowSelection.value = {};
 }
 
 function openEmptyGroup(): void {
@@ -687,6 +813,22 @@ async function confirmDeleteChannels(): Promise<void> {
 function openCreate(): void {
   editingChannel.value = undefined;
   editorOpen.value = true;
+}
+
+function runChannelCreateAction(action: ChannelLibraryCreateAction): void {
+  channelCreateAction.value = action;
+
+  switch (action) {
+    case 'add-channel':
+      openCreate();
+      break;
+    case 'empty-group':
+      openEmptyGroup();
+      break;
+    case 'trip-group':
+      openTripGroup();
+      break;
+  }
 }
 
 function openEdit(channel: SavedChannel): void {
@@ -902,42 +1044,6 @@ async function onImportCsv(): Promise<void> {
             @click="onExportCsv"
           />
         </UTooltip>
-        <UTooltip text="Create a trip group, then import a route CSV you exported">
-          <UButton
-            icon="i-lucide-route"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            label="New trip group"
-            @click="openTripGroup"
-          />
-        </UTooltip>
-        <UTooltip :text="newGroupTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-folder-plus"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              label="New group"
-              :disabled="builtinGroup || selectedCount === 0"
-              @click="openGroupFromSelection"
-            />
-          </span>
-        </UTooltip>
-        <UTooltip :text="deleteChannelsTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="outline"
-              size="sm"
-              label="Delete"
-              :disabled="builtinGroup || selectedCount === 0 || isDeletingChannels"
-              @click="deleteChannelsOpen = true"
-            />
-          </span>
-        </UTooltip>
         <UTooltip :text="importTooltip">
           <UButton
             :icon="importChannels.icon"
@@ -950,103 +1056,206 @@ async function onImportCsv(): Promise<void> {
             @click="onImportCsv"
           />
         </UTooltip>
-        <UTooltip :text="addToRadioTooltip">
-          <span class="inline-flex">
+        <UFieldGroup size="sm" role="group" aria-label="Create channel or group">
+          <UTooltip :text="channelCreatePrimaryTooltip">
             <UButton
-              :icon="addToRadio.icon"
-              color="primary"
-              variant="soft"
-              size="sm"
-              :label="addToRadio.label"
-              :disabled="!canAddToRadio || isAddingToRadio"
-              :loading="isAddingToRadio"
-              @click="requestAddToRadio"
-            />
-          </span>
-        </UTooltip>
-        <UButton
-          icon="i-lucide-map"
-          color="neutral"
-          :variant="showMap ? 'soft' : 'outline'"
-          size="sm"
-          label="Map"
-          :aria-pressed="showMap"
-          @click="showMap = !showMap"
-        />
-        <UTooltip :text="addChannelTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-plus"
+              :icon="channelCreatePrimaryIcon"
               color="primary"
               size="sm"
-              label="Add channel"
-              :disabled="builtinGroup"
-              @click="openCreate"
+              :label="channelCreatePrimaryLabel"
+              :disabled="channelCreatePrimaryDisabled"
+              @click="runChannelCreateAction(channelCreateAction)"
             />
-          </span>
-        </UTooltip>
+          </UTooltip>
+          <UDropdownMenu :items="channelCreateMenuItems" :content="{ align: 'end' }">
+            <UButton
+              color="primary"
+              size="sm"
+              square
+              icon="i-lucide-chevron-down"
+              aria-label="Choose create action"
+              :ui="{ base: 'border-s border-white/20' }"
+            />
+          </UDropdownMenu>
+        </UFieldGroup>
       </div>
     </div>
 
     <ChannelGroupTabs
       v-model:active-id="activeGroupId"
       :groups="groups"
-      @create-empty="openEmptyGroup"
       @rename="openRenameGroup"
       @remove="removeGroupOpen = true"
     />
 
-    <div class="flex flex-wrap items-center gap-3">
-      <UInput
-        v-model="search"
-        icon="i-lucide-search"
-        placeholder="Search by name, frequency, node, or repeater"
-        size="sm"
-        class="w-full max-w-sm"
-      />
-      <UCheckbox v-model="linkedOnly" label="Linked only" />
-    </div>
-
-    <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
-      <ChannelDistanceFrom
-        v-model:start-id="distanceStartId"
-        v-model:latitude-text="distanceLatitudeText"
-        v-model:longitude-text="distanceLongitudeText"
-        :stations="stations"
-        @update:start-id="distanceStartChosen = true"
-      />
-      <UFormField
-        v-if="distanceStartPoint"
-        :label="distanceUnit === 'km' ? 'Range (km)' : 'Range (mi)'"
-        class="w-28"
-      >
+    <div class="flex flex-col gap-1">
+      <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
         <UInput
-          v-model="mapRangeText"
-          placeholder="Off"
+          v-model="search"
+          icon="i-lucide-search"
+          placeholder="Search by name, frequency, node, or repeater"
           size="sm"
-          class="w-full"
-          inputmode="decimal"
-          aria-label="Map range ring radius"
+          class="w-full min-w-0 sm:w-72 sm:max-w-sm"
         />
-      </UFormField>
-      <UFormField v-if="isTripGroup" label="Band" class="w-36">
-        <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
-      </UFormField>
-      <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" />
-      <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" />
-      <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }" class="ml-auto">
-        <UButton
-          label="Columns"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          trailing-icon="i-lucide-chevron-down"
-          aria-label="Choose visible columns"
-        />
-      </UDropdownMenu>
-      <p v-if="distanceStartPoint" class="basis-full text-xs text-muted">
+        <UFormField label="Band" class="w-36 shrink-0">
+          <USelectMenu
+            v-model="selectedBandTokens"
+            :items="libraryBandFilterOptions"
+            value-key="value"
+            multiple
+            placeholder="All bands"
+            color="neutral"
+            size="sm"
+            class="w-full"
+            :disabled="libraryBandFilterOptions.length === 0"
+            :search-input="libraryBandFilterOptions.length > 8"
+          />
+        </UFormField>
+        <UFormField label="On-air" class="w-32 shrink-0">
+          <USelect
+            v-model="onAirFilter"
+            :items="onAirFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
+        <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <ChannelDistanceFrom
+            v-model:start-id="distanceStartId"
+            v-model:latitude-text="distanceLatitudeText"
+            v-model:longitude-text="distanceLongitudeText"
+            :stations="stations"
+            @update:start-id="distanceStartChosen = true"
+          />
+        </div>
+        <UFormField
+          v-if="distanceStartPoint"
+          :label="distanceUnit === 'km' ? 'Range (km)' : 'Range (mi)'"
+          class="w-28 shrink-0"
+        >
+          <UInput
+            v-model="mapRangeText"
+            placeholder="Off"
+            size="sm"
+            class="w-full"
+            inputmode="decimal"
+            aria-label="Map range ring radius"
+          />
+        </UFormField>
+        <UFormField label="Linked" class="w-32 shrink-0">
+          <USelect
+            v-model="linkedFilter"
+            :items="linkedFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
+        <UFormField v-if="isTripGroup" label="Open use" class="w-32 shrink-0">
+          <USelect
+            v-model="tripOpenFilter"
+            :items="tripOpenFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
+        <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
+          <UButton
+            icon="i-lucide-map"
+            color="neutral"
+            :variant="showMap ? 'soft' : 'outline'"
+            size="sm"
+            label="Map"
+            :aria-pressed="showMap"
+            @click="showMap = !showMap"
+          />
+          <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }">
+            <UButton
+              label="Columns"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              trailing-icon="i-lucide-chevron-down"
+              aria-label="Choose visible columns"
+            />
+          </UDropdownMenu>
+        </div>
+      </div>
+      <p v-if="distanceStartPoint" class="text-xs text-muted">
         Straight-line distance. Rows without coordinates show — and stay last when this column is sorted.
       </p>
+      <div
+        class="grid transition-[grid-template-rows] duration-200 ease-out"
+        :class="hasBulkSelection ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+        :aria-hidden="!hasBulkSelection"
+      >
+        <div class="min-h-0 overflow-hidden">
+          <div
+            v-show="hasBulkSelection"
+            role="region"
+            aria-live="polite"
+            aria-label="Bulk channel actions"
+            class="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-default bg-elevated/60 px-3 py-2"
+          >
+            <span class="text-sm font-medium text-highlighted tabular-nums">{{ selectedCountLabel }}</span>
+            <UButton
+              color="neutral"
+              variant="link"
+              size="sm"
+              label="Clear selection"
+              @click="clearRowSelection"
+            />
+            <div class="ml-auto flex flex-wrap items-center gap-1.5">
+              <UTooltip :text="newGroupTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    v-if="!builtinGroup"
+                    icon="i-lucide-folder-plus"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    label="New group"
+                    @click="openGroupFromSelection"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="deleteChannelsTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    v-if="!builtinGroup"
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="outline"
+                    size="sm"
+                    label="Delete"
+                    :disabled="isDeletingChannels"
+                    @click="deleteChannelsOpen = true"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="addToRadioTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    :icon="addToRadio.icon"
+                    color="primary"
+                    variant="soft"
+                    size="sm"
+                    :label="addToRadio.label"
+                    :disabled="!canAddToRadio || isAddingToRadio"
+                    :loading="isAddingToRadio"
+                    @click="requestAddToRadio"
+                  />
+                </span>
+              </UTooltip>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <UAlert

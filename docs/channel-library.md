@@ -24,7 +24,7 @@ The **Location** column shows city and state (`Austin, Texas`) when those are kn
 
 ## Map
 
-Use **Map** above the channel table to open a collapsible repeater map. The map shows the same rows as the table after group, search, **Linked only**, and trip filters. Open or closed state and the splitter size are remembered; the map starts **closed** on first visit.
+Use **Map** above the channel table to open a collapsible repeater map. The map shows the same rows as the table after group, search, **Band**, **On-air**, **Linked only**, and trip filters. **Band** and **On-air** choices are remembered in the browser. Repeater on-air status comes from imported repeater records; channels without that field appear only when **On-air** is **All**. Open or closed state and the splitter size are remembered; the map starts **closed** on first visit.
 
 Markers use band colors with a legend for the bands in view. Click a pin to highlight the row, scroll it into view, and open a popup with call sign, frequencies, tones, and location. When **Distance from** has a start point, the popup also shows straight-line distance and compass bearing. Row hover highlights the matching pin without changing checkbox selection.
 
@@ -40,9 +40,9 @@ The **Map** tab plots located repeaters and ordinary channels from your stored l
 
 ## Trip lists
 
-**New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
+The **Add channel** split button defaults to adding a channel. Open its menu to choose **New empty group** or **New trip group**; the last choice stays for the session. **New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
 
-Trip groups use the same **Distance from** control. Filter by band, **Open use**, and **On-air** when the import included those fields. Select the rows you want and use **Add to radio**.
+Trip groups use the same **Band**, **On-air**, and **Distance from** controls. Filter by **Open use** when the import included that field. Select the rows you want and use **Add to radio**.
 
 ## Add to a radio
 

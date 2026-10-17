@@ -126,4 +126,49 @@ describe('Channels page mount', () => {
     expect(source).toContain(':groups="groups"');
     expect(source).toMatch(/\brefresh,\s*\n/);
   });
+
+  it('keeps library filters on a wrapping row and a session split create button', () => {
+    const source = readFileSync(new URL('../../app/pages/channels.vue', import.meta.url), 'utf8');
+    const filterRow = source.slice(source.indexOf('flex flex-col gap-1'), source.indexOf('Could not load channel library'));
+
+    expect(filterRow).toContain('flex flex-wrap items-end');
+    expect(filterRow).not.toContain('flex-nowrap');
+    expect(filterRow).toContain('label="Linked"');
+    expect(filterRow).toContain('v-model="linkedFilter"');
+    expect(filterRow.indexOf('Range (mi)')).toBeLessThan(filterRow.indexOf('label="Linked"'));
+    expect(filterRow).toContain('v-if="isTripGroup"');
+    expect(filterRow).toContain('v-model="tripOpenFilter"');
+    expect(source).toContain("label: 'Linked only', value: 'linked-only'");
+    expect(source).toContain("label: 'Open use only', value: 'open-only'");
+    expect(filterRow).not.toContain('ChannelLibraryFilterCheckbox');
+    expect(filterRow).toContain('placeholder="All bands"');
+    expect(filterRow).toContain('label="On-air"');
+    expect(source).toContain('writeChannelLibraryFilterSettings');
+    expect(filterRow).toContain('<ChannelDistanceFrom');
+    expect(filterRow).toContain('Range (mi)');
+    expect(filterRow.indexOf('label="Map"')).toBeLessThan(filterRow.indexOf('label="Columns"'));
+    expect(filterRow).toContain('Straight-line distance');
+    expect(source).toContain("useState<ChannelLibraryCreateAction>('channel-library-create-action'");
+    expect(source).toContain('aria-label="Choose create action"');
+    const createSplitStart = source.lastIndexOf('<UFieldGroup', source.indexOf('aria-label="Create channel or group"'));
+    const createSplit = source.slice(createSplitStart, source.indexOf('aria-label="Choose create action"') + 40);
+    expect(createSplit).toContain('aria-label="Create channel or group"');
+    expect(createSplit).not.toContain('<span class="inline-flex">');
+    expect(createSplit).toContain('square');
+    expect(source).toContain("runChannelCreateAction('empty-group')");
+    expect(source).toContain("runChannelCreateAction('trip-group')");
+    const createMenu = source.slice(
+      source.indexOf('const channelCreateMenuItems'),
+      source.indexOf('const emptyMessage'),
+    );
+    expect(createMenu).not.toContain("type: 'checkbox'");
+    expect(source).toContain('aria-label="Bulk channel actions"');
+    expect(source).toContain('Clear selection');
+    const headerToolbar = source.slice(source.indexOf('Channel library'), source.indexOf('<ChannelGroupTabs'));
+    expect(headerToolbar).not.toContain('label="Delete"');
+    expect(headerToolbar).not.toContain(':label="addToRadio.label"');
+    expect(headerToolbar).not.toContain('label="New group"');
+    expect(source).toContain('grid-rows-[0fr]');
+    expect(source).toContain('grid-rows-[1fr]');
+  });
 });
