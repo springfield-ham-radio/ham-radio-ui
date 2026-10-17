@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://springfield-ham-radio.github.io/ham-radio-ui/channel-pack.schema.json",
+  "title": "HamBench channel pack",
+  "description": "Model-independent channel library group file (.hpack)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "id", "name", "version", "updated", "channels"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "description": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updated": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/channel"
+      }
+    }
+  },
+  "$defs": {
+    "tone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["ctcss", "dcs"]
+        },
+        "hz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "kind", "rxHz", "txHz"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["channel", "repeater"]
+        },
+        "callsign": {
+          "type": "string"
+        },
+        "rxHz": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "txHz": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rxTone": {
+          "$ref": "#/$defs/tone"
+        },
+        "txTone": {
+          "$ref": "#/$defs/tone"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "use": {
+          "enum": ["open", "closed"]
+        },
+        "onAir": {
+          "type": "boolean"
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "city": {
+          "type": "string"
+        },
+        "county": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "landmark": {
+          "type": "string"
+        },
+        "modes": {
+          "type": "string"
+        },
+        "sourceKey": {
+          "type": "string"
+        },
+        "provenance": {
+          "enum": ["repeaterbook"]
+        },
+        "allstarNode": {
+          "type": "string"
+        },
+        "echolinkNode": {
+          "type": "string"
+        },
+        "irlpNode": {
+          "type": "string"
+        },
+        "wiresNode": {
+          "type": "string"
+        },
+        "allstar": {
+          "type": "boolean"
+        },
+        "echolink": {
+          "type": "boolean"
+        },
+        "irlp": {
+          "type": "boolean"
+        },
+        "wires": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
