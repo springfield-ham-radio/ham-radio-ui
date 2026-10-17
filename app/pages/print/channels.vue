@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
-  clearChannelPrintDocument,
+  closeChannelPrintWindow,
   readChannelPrintDocument,
   reportChannelPrintError,
 } from '~/utils/channel-print-window';
@@ -22,17 +21,25 @@ useHead({
 
 const printDocument = computed(() => readChannelPrintDocument());
 
-function closePrintWindow(): void {
-  clearChannelPrintDocument();
+const PRINT_COLUMN_CLASS: Record<string, string> = {
+  name: 'w-[14%]',
+  callsign: 'w-[9%]',
+  location: 'w-[16%]',
+  band: 'w-[10%]',
+  transmit: 'w-[8%]',
+  receive: 'w-[8%]',
+  txTone: 'w-[8%]',
+  rxTone: 'w-[8%]',
+  distance: 'w-[7%]',
+  use: 'w-[6%]',
+  onAir: 'w-[6%]',
+  linked: 'w-[8%]',
+  channelNumber: 'w-[4%]',
+  toneType: 'w-[7%]',
+};
 
-  if (isTauriRuntime()) {
-    void import('@tauri-apps/api/webviewWindow').then(({ WebviewWindow }) => {
-      void WebviewWindow.getCurrent().close();
-    });
-    return;
-  }
-
-  window.close();
+function columnClass(id: string): string {
+  return PRINT_COLUMN_CLASS[id] ?? '';
 }
 
 onMounted(async () => {
@@ -44,8 +51,25 @@ onMounted(async () => {
   page.body.style.color = '#000';
 
   if (!printDocument.value) {
-    closePrintWindow();
+    closeChannelPrintWindow();
     return;
+  }
+
+  const pageStyle = page.createElement('style');
+  pageStyle.textContent =
+    printDocument.value.layout === 'wallet'
+      ? '@page { size: letter portrait; margin: 0.4in; }'
+      : '@page { size: letter landscape; margin: 0.35in; }';
+  page.head.append(pageStyle);
+  page.documentElement.style.height = 'auto';
+  page.documentElement.style.overflow = 'visible';
+  page.body.style.height = 'auto';
+  page.body.style.overflow = 'visible';
+  const root = page.getElementById('__nuxt');
+
+  if (root instanceof HTMLElement) {
+    root.style.height = 'auto';
+    root.style.overflow = 'visible';
   }
 
   if (page.fonts) {
@@ -60,7 +84,7 @@ onMounted(async () => {
   });
 
   const finish = (): void => {
-    closePrintWindow();
+    closeChannelPrintWindow();
   };
 
   window.addEventListener('afterprint', finish, { once: true });
@@ -77,7 +101,7 @@ onMounted(async () => {
 
     await reportChannelPrintError(message);
     window.removeEventListener('afterprint', finish);
-    closePrintWindow();
+    closeChannelPrintWindow();
   }
 });
 </script>
@@ -94,13 +118,14 @@ onMounted(async () => {
       </dl>
     </header>
 
-    <table v-if="printDocument.layout === 'full'" class="selectable-print w-full border-collapse text-xs">
+    <table v-if="printDocument.layout === 'full'" class="selectable-print channel-print-table w-full border-collapse">
       <thead>
         <tr>
           <th
             v-for="column in printDocument.columns"
             :key="column.id"
-            class="border border-black/30 px-2 py-1 text-left font-semibold"
+            class="border border-black/30 px-1 py-0.5 text-left font-semibold"
+            :class="columnClass(column.id)"
           >
             {{ column.header }}
           </th>
@@ -111,7 +136,8 @@ onMounted(async () => {
           <td
             v-for="column in printDocument.columns"
             :key="column.id"
-            class="border border-black/20 px-2 py-1 align-top tabular-nums"
+            class="border border-black/20 px-1 py-0.5 align-top tabular-nums"
+            :class="columnClass(column.id)"
           >
             {{ row[column.id] ?? '' }}
           </td>
@@ -140,6 +166,12 @@ onMounted(async () => {
   color: #000;
 }
 
+.channel-print-table {
+  table-layout: fixed;
+  font-size: 8pt;
+  line-height: 1.15;
+}
+
 .selectable-print {
   user-select: text;
 }
@@ -152,10 +184,6 @@ onMounted(async () => {
 .wallet-line {
   break-inside: avoid;
   page-break-inside: avoid;
-}
-
-@page {
-  margin: 0.5in;
 }
 
 @media print {

@@ -1,3 +1,6 @@
+import { emit } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import type { ChannelPrintDocument } from '~/utils/channel-print';
 
@@ -49,8 +52,18 @@ export async function reportChannelPrintError(message: string): Promise<void> {
     return;
   }
 
-  const { emit } = await import('@tauri-apps/api/event');
   await emit(CHANNEL_PRINT_ERROR_EVENT, { message });
+}
+
+export function closeChannelPrintWindow(): void {
+  clearChannelPrintDocument();
+
+  if (!isTauriRuntime()) {
+    window.close();
+    return;
+  }
+
+  void getCurrentWindow().close();
 }
 
 function printRouteUrl(): string {
@@ -70,7 +83,6 @@ export async function openChannelPrintWindow(document: ChannelPrintDocument): Pr
     const url = printRouteUrl();
 
     if (isTauriRuntime()) {
-      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
       const existing = await WebviewWindow.getByLabel(CHANNEL_PRINT_WINDOW_LABEL);
 
       if (existing) {

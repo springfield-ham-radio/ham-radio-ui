@@ -1,9 +1,8 @@
 import type { RadioSettings } from '@springfield/ham-radio-api';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { duplexFromFrequencies, formatFrequencyMHz } from '~/utils/channel-edit';
-import { formatChannelLocation } from '~/utils/channel-location';
 import { linkedNodeBadges } from '~/utils/linked-nodes';
-import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
+import { coordinatesFromPair, formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 
 export type ChannelPrintLayout = 'full' | 'wallet';
 
@@ -235,6 +234,30 @@ function formatLinkedColumn(channel: SavedChannel): string {
     .join(', ');
 }
 
+/** One line for the print table. City and state when present, otherwise short decimal degrees. */
+export function formatPrintLocation(channel: {
+  city?: string;
+  state?: string;
+  latitude?: number;
+  longitude?: number;
+}): string {
+  const place = [channel.city?.trim(), channel.state?.trim()].filter((part): part is string => Boolean(part)).join(', ');
+
+  if (place) {
+    return place;
+  }
+
+  const point = coordinatesFromPair(channel.latitude, channel.longitude);
+
+  if (point.latitude === undefined || point.longitude === undefined) {
+    return '—';
+  }
+
+  const latitude = `${Math.abs(point.latitude).toFixed(4)}° ${point.latitude >= 0 ? 'N' : 'S'}`;
+  const longitude = `${Math.abs(point.longitude).toFixed(4)}° ${point.longitude >= 0 ? 'E' : 'W'}`;
+  return `${latitude} ${longitude}`;
+}
+
 export function libraryRowCells(channel: ChannelPrintLibraryRow, columnIds: readonly string[]): Record<string, string> {
   const cells: Record<string, string> = {};
 
@@ -247,7 +270,7 @@ export function libraryRowCells(channel: ChannelPrintLibraryRow, columnIds: read
         cells[id] = channel.kind === 'repeater' ? channel.callsign ?? '' : '';
         break;
       case 'location':
-        cells[id] = formatChannelLocation(channel);
+        cells[id] = formatPrintLocation(channel);
         break;
       case 'band':
         cells[id] = channel.band;

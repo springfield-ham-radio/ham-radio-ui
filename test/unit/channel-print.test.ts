@@ -4,6 +4,7 @@ import {
   buildLibraryPrintDocument,
   buildRadioPrintDocument,
   channelsForLibraryPrint,
+  formatPrintLocation,
   formatPrintOffset,
   formatPrintTone,
   libraryColumnIsVisible,
@@ -134,6 +135,32 @@ describe('channel-print', () => {
         wholeTab,
       }).map((row) => row.id),
     ).toEqual(['b']);
+  });
+
+  it('prints location as city or one-line decimal degrees', () => {
+    expect(formatPrintLocation({ city: 'Belton', state: 'Texas', latitude: 31.05, longitude: -97.46 })).toBe(
+      'Belton, Texas',
+    );
+    expect(formatPrintLocation({ latitude: 30.3946, longitude: -97.7477 })).toBe('30.3946° N 97.7477° W');
+
+    const cells = libraryRowCells(
+      {
+        id: 'rb-loc',
+        kind: 'repeater',
+        name: 'K5TRA',
+        callsign: 'K5TRA',
+        transmitFrequency: Frequency(902_012_500),
+        receiveFrequency: Frequency(927_012_500),
+        latitude: 30.3946,
+        longitude: -97.7477,
+        band: '33 Centimeter',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      ['location'],
+    );
+    expect(cells.location).toBe('30.3946° N 97.7477° W');
+    expect(cells.location).not.toContain('"');
   });
 
   it('uses callsign when repeater name is empty', () => {

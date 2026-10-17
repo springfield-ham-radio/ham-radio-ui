@@ -5,6 +5,12 @@ export default defineNuxtPlugin(() => {
     return;
   }
 
+  const route = useRoute();
+
+  if (route.path.startsWith('/print/')) {
+    return;
+  }
+
   const { focusedCardId } = useRadioBoard();
   const { undoMemoryEdit, redoMemoryEdit, canUndoMemory, canRedoMemory, memoryUndoLabel, memoryRedoLabel } = useRadio();
 

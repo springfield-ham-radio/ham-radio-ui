@@ -55,6 +55,7 @@ async function onPrint(): Promise<void> {
     :description="dialog.subtitle"
     :ui="{ content: 'sm:max-w-md', footer: 'justify-end' }"
   >
+    <template #body>
     <div class="space-y-4">
       <UFormField label="Layout">
         <USelect v-model="layout" :items="layoutItems" value-key="value" class="w-full" />
@@ -87,6 +88,7 @@ async function onPrint(): Promise<void> {
         />
       </UFormField>
     </div>
+    </template>
 
     <template #footer="{ close }">
       <UButton color="neutral" variant="outline" label="Cancel" @click="close" />

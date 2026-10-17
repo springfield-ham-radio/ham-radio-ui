@@ -1,5 +1,15 @@
 <template>
-  <div class="min-h-screen bg-white text-black">
+  <div class="bg-white text-black">
     <slot />
   </div>
 </template>
+
+<style>
+html,
+body,
+#__nuxt {
+  height: auto !important;
+  overflow: visible !important;
+  background: #fff !important;
+}
+</style>

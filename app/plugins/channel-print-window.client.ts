@@ -1,5 +1,4 @@
-import { reportChannelPrintError } from '~/utils/channel-print-window';
-import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import { closeChannelPrintWindow, reportChannelPrintError } from '~/utils/channel-print-window';
 
 function printFailureMessage(reason: unknown): string | undefined {
   const message =
@@ -18,17 +17,6 @@ function printFailureMessage(reason: unknown): string | undefined {
   return message;
 }
 
-function closePrintWindow(): void {
-  if (isTauriRuntime()) {
-    void import('@tauri-apps/api/webviewWindow').then(({ WebviewWindow }) => {
-      void WebviewWindow.getCurrent().close();
-    });
-    return;
-  }
-
-  window.close();
-}
-
 export default defineNuxtPlugin(() => {
   const route = useRoute();
 
@@ -45,7 +33,7 @@ export default defineNuxtPlugin(() => {
 
     event.preventDefault();
     void reportChannelPrintError(message).finally(() => {
-      closePrintWindow();
+      closeChannelPrintWindow();
     });
   });
 });

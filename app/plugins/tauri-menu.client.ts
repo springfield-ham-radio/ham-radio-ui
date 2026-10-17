@@ -1,3 +1,6 @@
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { runImportExport } from '~/importExport/registry';
 import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
@@ -7,6 +10,12 @@ import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
+  const route = useRoute();
+
+  if (route.path.startsWith('/print/')) {
+    return;
+  }
+
   const toast = useToast();
   const { requestPrintFromMenu } = useChannelPrint();
   const { checkForUpdate } = useAppUpdater();
@@ -14,8 +23,6 @@ export default defineNuxtPlugin(() => {
 
   void (async () => {
     try {
-      const { listen } = await import('@tauri-apps/api/event');
-      const { invoke } = await import('@tauri-apps/api/core');
       await listen<boolean>('developer-mode-changed', (event) => {
         const checked = event.payload === true;
         setDeveloperMode(checked);
@@ -59,33 +66,25 @@ export default defineNuxtPlugin(() => {
         void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
       });
       await listen<{ message: string }>(CHANNEL_PRINT_ERROR_EVENT, (event) => {
-        void (async () => {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        if (getCurrentWindow().label !== 'main') {
+          return;
+        }
 
-          if (getCurrentWindow().label !== 'main') {
-            return;
-          }
+        const message = event.payload?.message?.trim() || 'Could not open the system print dialog.';
 
-          const message = event.payload?.message?.trim() || 'Could not open the system print dialog.';
-
-          toast.add({
-            title: 'Print failed',
-            description: message,
-            color: 'error',
-            icon: 'i-lucide-circle-alert',
-          });
-        })();
+        toast.add({
+          title: 'Print failed',
+          description: message,
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
       });
       await listen('print-channels', () => {
-        void (async () => {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        if (getCurrentWindow().label !== 'main') {
+          return;
+        }
 
-          if (getCurrentWindow().label !== 'main') {
-            return;
-          }
-
-          requestPrintFromMenu(router.currentRoute.value.path);
-        })();
+        requestPrintFromMenu(router.currentRoute.value.path);
       });
       await listen('show-backups', () => {
         void showRadioImageBackups().catch((cause: unknown) => {
