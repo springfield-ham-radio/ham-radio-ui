@@ -7,6 +7,7 @@ import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils
 export default defineNuxtPlugin(() => {
   const router = useRouter();
   const toast = useToast();
+  const { requestPrintFromMenu } = useChannelPrint();
   const { checkForUpdate } = useAppUpdater();
   const { setEnabled: setDeveloperMode } = useDeveloperMode();
 
@@ -55,6 +56,9 @@ export default defineNuxtPlugin(() => {
       await listen('write-to-radio', () => {
         void router.push('/');
         void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
+      });
+      await listen('print-channels', () => {
+        requestPrintFromMenu(router.currentRoute.value.path);
       });
       await listen('show-backups', () => {
         void showRadioImageBackups().catch((cause: unknown) => {

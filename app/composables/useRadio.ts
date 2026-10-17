@@ -1963,6 +1963,10 @@ export function useRadio() {
    * Dev-only: guest UV-5R with two library channels for undo testing.
    * Uses the fixture serial port only; never reads or writes a radio.
    */
+  async function seedChannelPrintDevFixture(): Promise<void> {
+    await seedUndoMemoryDevFixture();
+  }
+
   async function seedUndoMemoryDevFixture(): Promise<void> {
     if (!import.meta.dev) {
       return;
@@ -2199,6 +2203,7 @@ export function useRadio() {
     addTargets,
     seedAddToRadioDevFixture,
     seedUndoMemoryDevFixture,
+    seedChannelPrintDevFixture,
     seedWriteReviewDevFixture,
     seedDialogMessageDevFixture,
     seedErrorReportDevFixture,

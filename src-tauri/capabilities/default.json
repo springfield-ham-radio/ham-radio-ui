@@ -2,9 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
-  "windows": ["main"],
+  "windows": ["main", "channel-print-*"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "serialplugin:default",

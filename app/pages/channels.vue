@@ -16,6 +16,16 @@ import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
+import { soleAmateurIdentity } from '~/utils/license-people';
+import {
+  buildLibraryPrintDocument,
+  channelsForLibraryPrint,
+  emptyPrintReason,
+  formatChannelPrintDate,
+  libraryColumnIsVisible,
+  libraryPrintColumnIds,
+  type ChannelPrintLibraryRow,
+} from '~/utils/channel-print';
 import {
   channelMapRangeRadiusKm,
   formatChannelMapRangeDisplay,
@@ -76,18 +86,11 @@ const {
   removeGroup,
 } = useSavedChannels();
 
-onMounted(() => {
-  void refresh();
-
-  if (addToRadioFixtureActive.value) {
-    void seedAddToRadioDevFixture();
-  }
-});
-
 const route = useRoute();
 const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
-const { choiceForRadio, assessmentFor } = useOperatorLicense();
+const { choiceForRadio, assessmentFor, directory, amateurIdentity } = useOperatorLicense();
+const { openPrintDialog, registerLibraryProvider, unregisterLibraryProvider } = useChannelPrint();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
 
@@ -1032,6 +1035,113 @@ async function onSave(payload: {
   }
 }
 
+function toLibraryPrintRow(channel: SavedChannel): ChannelPrintLibraryRow {
+  const distanceKm = tripDistanceKm(channel, distanceStartPoint.value);
+
+  return {
+    ...channel,
+    band: bandNameForFrequency(channel.transmitFrequency),
+    distanceLabel: formatTripDistance(distanceKm, distanceUnit.value),
+  };
+}
+
+const wholeTabPrintRows = computed(() => scopedChannels.value.map((channel) => toLibraryPrintRow(channel)));
+
+const libraryHasActiveFilters = computed(() => {
+  return (
+    search.value.trim().length > 0 ||
+    selectedBandTokens.value.length > 0 ||
+    onAirFilter.value !== 'all' ||
+    linkedFilter.value !== 'all' ||
+    (isTripGroup.value && tripOpenFilter.value !== 'all')
+  );
+});
+
+const libraryVisibleColumnIds = computed(() =>
+  libraryPrintColumnIds(columnVisibility.value, Boolean(distanceStartPoint.value), true),
+);
+
+const amateurCallSignOptions = computed(() =>
+  directory.value.licenses
+    .filter((license) => license.kind === 'amateur')
+    .map((license) => ({ label: license.callSign, value: license.callSign })),
+);
+
+function buildLibraryPrintContext() {
+  const visibleCount = displayChannels.value.length;
+  const groupLabel = activeGroup.value?.name ?? 'All';
+  const defaultCallSign = amateurIdentity.value.callSign ?? soleAmateurIdentity(directory.value).callSign;
+
+  return {
+    surface: 'library' as const,
+    title: 'Print channels',
+    subtitle: `${groupLabel} · ${visibleCount} channel${visibleCount === 1 ? '' : 's'}`,
+    rowCount: visibleCount,
+    hasFiltersActive:
+      libraryHasActiveFilters.value && wholeTabPrintRows.value.length !== displayChannels.value.length,
+    hasSelection: selectedCount.value > 0,
+    callSignOptions: amateurCallSignOptions.value,
+    defaultCallSign,
+    buildDocument: (options: {
+      layout: 'full' | 'wallet';
+      matchVisibleColumns: boolean;
+      callSign?: string;
+      libraryScope: 'visible' | 'whole-tab';
+      selectedOnly: boolean;
+    }) => {
+      const rows = channelsForLibraryPrint({
+        scope: options.libraryScope,
+        selectedOnly: options.selectedOnly,
+        selected: selectedLibraryChannels.value.map((channel) => toLibraryPrintRow(channel)),
+        visible: displayChannels.value,
+        wholeTab: wholeTabPrintRows.value,
+      });
+
+      if (emptyPrintReason(rows.length)) {
+        return undefined;
+      }
+
+      return buildLibraryPrintDocument({
+        layout: options.layout,
+        groupLabel,
+        callSign: options.callSign,
+        printedOn: formatChannelPrintDate(new Date()),
+        rows,
+        visibleColumnIds: libraryVisibleColumnIds.value,
+        matchVisibleColumns: options.matchVisibleColumns,
+      });
+    },
+  };
+}
+
+function libraryPrintProvider() {
+  return buildLibraryPrintContext();
+}
+
+function openLibraryPrintDialog(): void {
+  const context = buildLibraryPrintContext();
+
+  if (emptyPrintReason(context.rowCount)) {
+    return;
+  }
+
+  openPrintDialog(context);
+}
+
+onMounted(() => {
+  void refresh();
+
+  if (addToRadioFixtureActive.value) {
+    void seedAddToRadioDevFixture();
+  }
+
+  registerLibraryProvider(libraryPrintProvider);
+});
+
+onUnmounted(() => {
+  unregisterLibraryProvider(libraryPrintProvider);
+});
+
 async function onChannelImportExportSelect(id: string): Promise<void> {
   importExportPendingId.value = id;
 
@@ -1196,6 +1306,15 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
               aria-label="Choose visible columns"
             />
           </UDropdownMenu>
+          <UButton
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            label="Print"
+            :disabled="displayChannels.length === 0"
+            @click="openLibraryPrintDialog"
+          />
         </div>
       </div>
       <p v-if="distanceStartPoint" class="text-xs text-muted">
