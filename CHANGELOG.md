@@ -1,3 +1,9 @@
+## [1.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.22.0...v1.23.0) (2026-10-17)
+
+### Features
+
+* **print:** channel card print for radio and library ([#145](https://github.com/springfield-ham-radio/ham-radio-ui/issues/145)) ([fb8fe8d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/fb8fe8d51c62d73fda8d38183cfea80de1fc3a9d)), closes [#62](https://github.com/springfield-ham-radio/ham-radio-ui/issues/62)
+
 ## [1.22.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.21.0...v1.22.0) (2026-10-17)
 
 ### Features
