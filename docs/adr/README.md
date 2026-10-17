@@ -16,6 +16,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0004](./0004-channel-radio-validation.md) | accepted | Channel validation before add/write |
 | [0005](./0005-radio-memory-undo.md) | accepted | Radio memory undo and redo |
 | [0009](./0009-per-radio-modules.md) | accepted | Per-radio module installs |
+| [0010](./0010-channel-pack.md) | accepted | Channel pack (.hpack) format |
 
 Numbers 0006–0008 are unused in this repository. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
