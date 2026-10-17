@@ -29,6 +29,11 @@ const toast = useToast();
 const validationErrorsAcknowledged = ref(false);
 
 const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
+const transferGuest = computed(() => {
+  const card = cardById(transferCardId.value);
+
+  return Boolean(card?.guest && !card.savedRadioId);
+});
 const config = computed(() => {
   if (!saved.value) {
     return undefined;
@@ -42,7 +47,7 @@ const description = computed(() => {
     return 'Choose the serial port for this radio.';
   }
 
-  return `Write the loaded memory to ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
+  return 'The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else.';
 });
 
 const backupsEnabled = ref(false);
@@ -247,6 +252,13 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     panel-class="max-w-3xl"
     @confirm="writeRadio"
   >
+    <template #target>
+      <RadioTransferTargetHeader
+        :radio="saved"
+        :configurations="configurations"
+        :guest="transferGuest"
+      />
+    </template>
     <template #review="{ selectedPort }">
       <RadioWriteReview
         v-if="review.status !== 'unavailable'"

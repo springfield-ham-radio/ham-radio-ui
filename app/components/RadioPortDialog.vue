@@ -140,6 +140,7 @@ watch(
     :class="panelClass ?? 'max-w-lg'"
   >
     <template #body>
+      <slot name="target" />
       <UAlert
         v-if="warningTitle"
         color="warning"

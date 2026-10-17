@@ -13,13 +13,18 @@ const { lockedPorts } = useCatPortLock();
 const toast = useToast();
 
 const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
+const transferGuest = computed(() => {
+  const card = cardById(transferCardId.value);
+
+  return Boolean(card?.guest && !card.savedRadioId);
+});
 
 const description = computed(() => {
   if (!saved.value) {
     return 'Choose the serial port for this radio.';
   }
 
-  return `Read memory from ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
+  return 'The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else.';
 });
 
 watch(readOpen, (open) => {
@@ -66,5 +71,13 @@ async function importRadio(serialPortPath: string): Promise<void> {
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"
-  />
+  >
+    <template #target>
+      <RadioTransferTargetHeader
+        :radio="saved"
+        :configurations="configurations"
+        :guest="transferGuest"
+      />
+    </template>
+  </RadioPortDialog>
 </template>
