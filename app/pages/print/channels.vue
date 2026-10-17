@@ -3,6 +3,7 @@ import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   clearChannelPrintDocument,
   readChannelPrintDocument,
+  reportChannelPrintError,
 } from '~/utils/channel-print-window';
 
 definePageMeta({
@@ -63,7 +64,21 @@ onMounted(async () => {
   };
 
   window.addEventListener('afterprint', finish, { once: true });
-  window.print();
+
+  try {
+    window.print();
+  } catch (cause) {
+    const message =
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === 'string'
+          ? cause
+          : 'Printing is not allowed in this window.';
+
+    await reportChannelPrintError(message);
+    window.removeEventListener('afterprint', finish);
+    closePrintWindow();
+  }
 });
 </script>
 
@@ -79,7 +94,7 @@ onMounted(async () => {
       </dl>
     </header>
 
-    <table v-if="printDocument.layout === 'full'" class="w-full border-collapse text-xs">
+    <table v-if="printDocument.layout === 'full'" class="selectable-print w-full border-collapse text-xs">
       <thead>
         <tr>
           <th
@@ -104,7 +119,7 @@ onMounted(async () => {
       </tbody>
     </table>
 
-    <div v-else class="wallet-columns text-[8pt] leading-tight">
+    <div v-else class="wallet-columns selectable-print text-[8pt] leading-tight">
       <div v-for="(line, index) in printDocument.walletLines" :key="index" class="wallet-line mb-1">
         <span v-if="line.slot" class="tabular-nums">{{ line.slot }}</span>
         <span v-if="line.slot">&nbsp;</span>
@@ -123,6 +138,10 @@ onMounted(async () => {
   color-scheme: light;
   background: #fff;
   color: #000;
+}
+
+.selectable-print {
+  user-select: text;
 }
 
 .wallet-columns {

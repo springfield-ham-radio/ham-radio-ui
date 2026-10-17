@@ -42,6 +42,17 @@ export function clearChannelPrintDocument(): void {
   localStorage.removeItem(CHANNEL_PRINT_STORAGE_KEY);
 }
 
+export const CHANNEL_PRINT_ERROR_EVENT = 'channel-print-error';
+
+export async function reportChannelPrintError(message: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  const { emit } = await import('@tauri-apps/api/event');
+  await emit(CHANNEL_PRINT_ERROR_EVENT, { message });
+}
+
 function printRouteUrl(): string {
   return `${window.location.origin}/print/channels`;
 }

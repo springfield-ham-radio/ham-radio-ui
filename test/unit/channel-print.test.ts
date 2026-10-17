@@ -8,6 +8,7 @@ import {
   formatPrintTone,
   libraryColumnIsVisible,
   libraryPrintColumnIds,
+  libraryChannelDisplayName,
   libraryRowCells,
 } from '../../app/utils/channel-print.ts';
 import {
@@ -133,6 +134,36 @@ describe('channel-print', () => {
         wholeTab,
       }).map((row) => row.id),
     ).toEqual(['b']);
+  });
+
+  it('uses callsign when repeater name is empty', () => {
+    const repeater: ChannelPrintLibraryRow = {
+      id: 'rb-1',
+      kind: 'repeater',
+      callsign: 'K5TRA',
+      transmitFrequency: Frequency(927_012_500),
+      receiveFrequency: Frequency(902_012_500),
+      band: '33 Centimeter',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    expect(libraryChannelDisplayName(repeater)).toBe('K5TRA');
+
+    const cells = libraryRowCells(repeater, ['name', 'callsign']);
+    expect(cells.name).toBe('K5TRA');
+    expect(cells.callsign).toBe('K5TRA');
+
+    const wallet = buildLibraryPrintDocument({
+      layout: 'wallet',
+      groupLabel: 'All',
+      printedOn: 'Oct 17, 2026',
+      rows: [repeater],
+      columnVisibility: {},
+      includeDistance: false,
+      matchVisibleColumns: true,
+    });
+    expect(wallet.walletLines[0]?.name).toBe('K5TRA');
   });
 
   it('formats library cells and wallet notes without a full-page Notes column', () => {

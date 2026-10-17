@@ -188,6 +188,23 @@ export function formatPrintTone(txTone: string, rxTone: string): string {
   return tone || '—';
 }
 
+/** Matches channel list titles (name, then repeater callsign). */
+export function libraryChannelDisplayName(channel: SavedChannel): string {
+  const name = channel.name?.trim();
+
+  if (name) {
+    return name;
+  }
+
+  const callsign = channel.callsign?.trim();
+
+  if (callsign) {
+    return callsign;
+  }
+
+  return '—';
+}
+
 function formatRepeaterUse(use?: RepeaterUse): string {
   if (use === 'open') {
     return 'Open';
@@ -224,7 +241,7 @@ export function libraryRowCells(channel: ChannelPrintLibraryRow, columnIds: read
   for (const id of columnIds) {
     switch (id) {
       case 'name':
-        cells[id] = channel.name ?? '';
+        cells[id] = libraryChannelDisplayName(channel);
         break;
       case 'callsign':
         cells[id] = channel.kind === 'repeater' ? channel.callsign ?? '' : '';
@@ -308,7 +325,7 @@ function walletLineFromLibrary(channel: ChannelPrintLibraryRow): ChannelPrintWal
   const notes = channel.notes?.trim();
 
   return {
-    name: channel.name,
+    name: libraryChannelDisplayName(channel),
     rx: formatFrequencyMHz(channel.receiveFrequency),
     offset: formatPrintOffset({
       receiveFrequencyHz: channel.receiveFrequency,

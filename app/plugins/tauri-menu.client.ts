@@ -2,6 +2,7 @@ import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { runImportExport } from '~/importExport/registry';
 import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { readDeveloperMode } from '~/utils/developer-mode';
+import { CHANNEL_PRINT_ERROR_EVENT } from '~/utils/channel-print-window';
 import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
 
 export default defineNuxtPlugin(() => {
@@ -56,6 +57,24 @@ export default defineNuxtPlugin(() => {
       await listen('write-to-radio', () => {
         void router.push('/');
         void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
+      });
+      await listen<{ message: string }>(CHANNEL_PRINT_ERROR_EVENT, (event) => {
+        void (async () => {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+
+          if (getCurrentWindow().label !== 'main') {
+            return;
+          }
+
+          const message = event.payload?.message?.trim() || 'Could not open the system print dialog.';
+
+          toast.add({
+            title: 'Print failed',
+            description: message,
+            color: 'error',
+            icon: 'i-lucide-circle-alert',
+          });
+        })();
       });
       await listen('print-channels', () => {
         void (async () => {
