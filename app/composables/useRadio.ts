@@ -81,6 +81,19 @@ import {
   snapshotFromDriverSerialLog,
   type CapturedSerialLogSnapshot,
 } from '~/utils/serial-log-session';
+import {
+  cloneRadioProgram,
+  createRadioMemoryHistory,
+  isRadioMemoryHistoryUnsaved,
+  markRadioMemoryHistoryClean,
+  redoLabelForHistory,
+  redoRadioMemoryHistory,
+  resetRadioMemoryHistory,
+  recordRadioMemoryEdit,
+  type RadioMemoryHistory,
+  undoLabelForHistory,
+  undoRadioMemoryHistory,
+} from '~/utils/radio-memory-history';
 
 const logger = new LogLayer({
   transport: [
@@ -111,6 +124,7 @@ interface RadioCardSession {
   activeRadioId?: RadioId;
   memoryFilePath?: string;
   serialLog?: CapturedSerialLog;
+  memoryHistory?: RadioMemoryHistory;
 }
 
 function emptyRadioCardSession(): RadioCardSession {
@@ -336,6 +350,13 @@ export function useRadio() {
       progressKind.value,
     ),
   );
+
+  const memoryHistory = computed(() => readSession(cardId.value)?.memoryHistory);
+  const memoryUnsaved = computed(() => isRadioMemoryHistoryUnsaved(memoryHistory.value));
+  const memoryUndoLabel = computed(() => undoLabelForHistory(memoryHistory.value));
+  const memoryRedoLabel = computed(() => redoLabelForHistory(memoryHistory.value));
+  const canUndoMemory = computed(() => memoryUndoLabel.value !== undefined);
+  const canRedoMemory = computed(() => memoryRedoLabel.value !== undefined);
 
   function notifyWriteCanceledForBackupFailure(): void {
     toast.add({
@@ -1377,17 +1398,37 @@ export function useRadio() {
     });
   }
 
-  function persistProgram(nextProgram: RadioProgram, sessionId?: string): void {
+  function persistProgram(
+    nextProgram: RadioProgram,
+    sessionId?: string,
+    options: { recordHistory?: boolean } = {},
+  ): void {
     const id = sessionId ?? cardId.value;
 
     if (!id) {
       return;
     }
 
+    const session = readSession(id);
+    const recordHistory = options.recordHistory ?? true;
+    const previousProgram = session?.program;
+
     patchSession(id, {
       program: nextProgram,
       channels: rowsFromProgram(nextProgram),
     });
+
+    if (recordHistory && previousProgram) {
+      try {
+        const memoryHistory = recordRadioMemoryEdit(
+          session?.memoryHistory ?? createRadioMemoryHistory(previousProgram),
+          nextProgram,
+        );
+        patchSession(id, { memoryHistory });
+      } catch (cause) {
+        logger.withError(cause).error('Failed to record radio memory history');
+      }
+    }
 
     const queued = sessionQueue(id)
       .then(async () => {
@@ -1403,7 +1444,7 @@ export function useRadio() {
           return;
         }
 
-        const encoded = codec.encode(session.program, {
+        const encoded = codec.encode(cloneRadioProgram(session.program), {
           radioModel: session.activeRadioId.model,
           contents: session.memory,
         });
@@ -1415,6 +1456,42 @@ export function useRadio() {
       });
 
     cardPersistQueues.set(id, queued);
+  }
+
+  function undoMemoryEdit(sessionId?: string): void {
+    const id = sessionId ?? cardId.value;
+    const session = readSession(id);
+
+    if (!session?.memoryHistory) {
+      return;
+    }
+
+    const { history, program } = undoRadioMemoryHistory(session.memoryHistory);
+
+    if (!program) {
+      return;
+    }
+
+    patchSession(id, { memoryHistory: history });
+    persistProgram(program, id, { recordHistory: false });
+  }
+
+  function redoMemoryEdit(sessionId?: string): void {
+    const id = sessionId ?? cardId.value;
+    const session = readSession(id);
+
+    if (!session?.memoryHistory) {
+      return;
+    }
+
+    const { history, program } = redoRadioMemoryHistory(session.memoryHistory);
+
+    if (!program) {
+      return;
+    }
+
+    patchSession(id, { memoryHistory: history });
+    persistProgram(program, id, { recordHistory: false });
   }
 
   function cancelTransfer(): void {
@@ -1666,7 +1743,12 @@ export function useRadio() {
         await writeTextFile(destination, contents);
       }
 
-      patchSession(sessionId, { memoryFilePath: destination });
+      const history = latest.memoryHistory;
+
+      patchSession(sessionId, {
+        memoryFilePath: destination,
+        memoryHistory: history ? markRadioMemoryHistoryClean(history) : history,
+      });
       toast.add({
         title: saveAs ? 'Memory saved as' : 'Memory saved',
         description: `${memoryFileDisplayName(destination)} (${latest.memory.length} bytes)`,
@@ -1721,6 +1803,7 @@ export function useRadio() {
       program: decoded,
       settingsMemoryMap: memoryMapFromConfig(config),
       channels: rowsFromProgram(decoded),
+      memoryHistory: decoded ? resetRadioMemoryHistory(decoded) : undefined,
     });
   }
 
@@ -1743,6 +1826,52 @@ export function useRadio() {
    * Dev-only: open a guest UV-5R with an empty memory image so Add to radio
    * can be tried without a radio, a memory file, or an installed module.
    */
+  async function programUndoMemoryFixtureChannels(cardId: string, config: LoadedRadioConfig): Promise<void> {
+    const session = readSession(cardId);
+
+    if (!session?.program) {
+      return;
+    }
+
+    const memoryMap = memoryMapFromConfig(config);
+    const assignment = programLibraryChannelsIntoSlots(addToRadioDevFixture(), [0, 1], memoryMap);
+    const nextProgram: RadioProgram = {
+      ...session.program,
+      channels: assignment.programmed,
+    };
+
+    patchSession(cardId, {
+      program: nextProgram,
+      channels: rowsFromProgram(nextProgram),
+      memoryHistory: resetRadioMemoryHistory(nextProgram),
+    });
+    persistProgram(nextProgram, cardId, { recordHistory: false });
+    await sessionQueue(cardId);
+  }
+
+  /**
+   * Dev-only: guest UV-5R with two library channels for undo testing.
+   * Uses the fixture serial port only; never reads or writes a radio.
+   */
+  async function seedUndoMemoryDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    await seedAddToRadioDevFixtureInner({ quietToast: true });
+    const cardId = addToRadioFixtureCardId.value;
+
+    if (!cardId) {
+      return;
+    }
+
+    const config = configurations.value.find((item) => String(item.id.model) === 'baofeng-uv5r');
+
+    if (config) {
+      await programUndoMemoryFixtureChannels(cardId, config);
+    }
+  }
+
   async function seedAddToRadioDevFixture(): Promise<void> {
     if (!import.meta.dev) {
       return;
@@ -1849,6 +1978,7 @@ export function useRadio() {
         program: loaded.program,
         settingsMemoryMap: memoryMapFromConfig(config),
         channels: rowsFromProgram(loaded.program),
+        memoryHistory: resetRadioMemoryHistory(loaded.program),
       });
 
       if (options?.programValidationChannels) {
@@ -1894,7 +2024,15 @@ export function useRadio() {
     activeRadioId,
     addTargets,
     seedAddToRadioDevFixture,
+    seedUndoMemoryDevFixture,
     seedWriteReviewDevFixture,
+    memoryUnsaved,
+    memoryUndoLabel,
+    memoryRedoLabel,
+    canUndoMemory,
+    canRedoMemory,
+    undoMemoryEdit,
+    redoMemoryEdit,
     memoryFilePath,
     serialLog,
     transferSerialLog,

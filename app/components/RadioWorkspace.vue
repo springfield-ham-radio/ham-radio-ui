@@ -52,6 +52,12 @@ const {
   cardRadio,
   isLoading,
   modulesInstallRequired,
+  canUndoMemory,
+  canRedoMemory,
+  memoryUndoLabel,
+  memoryRedoLabel,
+  undoMemoryEdit,
+  redoMemoryEdit,
 } = useRadio();
 const { cards } = useRadioBoard();
 const { radioById } = useSavedRadios();
@@ -881,6 +887,33 @@ async function onSaveSerialLog(): Promise<void> {
               </p>
             </div>
             <div class="flex shrink-0 items-center gap-1.5">
+              <UTooltip :text="memoryUndoLabel ? `Undo ${memoryUndoLabel}` : 'Undo'">
+                <span class="inline-flex">
+                  <UButton
+                    icon="i-lucide-undo-2"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Undo memory edit"
+                    :disabled="!canUndoMemory"
+                    @click="undoMemoryEdit()"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="memoryRedoLabel ? `Redo ${memoryRedoLabel}` : 'Redo'">
+                <span class="inline-flex">
+                  <UButton
+                    icon="i-lucide-redo-2"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Redo memory edit"
+                    :disabled="!canRedoMemory"
+                    @click="redoMemoryEdit()"
+                  />
+                </span>
+              </UTooltip>
+              <USeparator orientation="vertical" class="h-5" />
               <UTooltip :text="addChannelTooltip" :disabled="canAddChannel">
                 <span class="inline-flex">
                   <UButton
