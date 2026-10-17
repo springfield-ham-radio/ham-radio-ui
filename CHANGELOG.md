@@ -1,3 +1,9 @@
+## [1.20.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.19.0...v1.20.0) (2026-10-17)
+
+### Features
+
+* **radio:** show config read/write setup messages in dialogs ([#143](https://github.com/springfield-ham-radio/ham-radio-ui/issues/143)) ([57f36c6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/57f36c62d1d705389828e95dd90ec47a39667c3b)), closes [springfield-ham-radio/ham-radio-api#24](https://github.com/springfield-ham-radio/ham-radio-api/issues/24)
+
 ## [1.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.18.0...v1.19.0) (2026-10-17)
 
 ### Features
