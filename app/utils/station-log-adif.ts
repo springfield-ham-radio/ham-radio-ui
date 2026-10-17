@@ -10,14 +10,6 @@ import {
   parseAdifLocationPair,
 } from '~/utils/station-log-adif-location';
 
-export {
-  canonicalizeAdifLocationField,
-  formatAdifLocationLatitude,
-  formatAdifLocationLongitude,
-  formatAdifLocationPair,
-  parseAdifLocationPair,
-} from '~/utils/station-log-adif-location';
-
 const CONTACT_LOCATION_TAGS = new Set(['LAT', 'LON']);
 const MY_LOCATION_TAGS = new Set(['MY_LAT', 'MY_LON']);
 

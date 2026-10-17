@@ -22,13 +22,6 @@ import {
 } from '~/utils/radio-module-semver';
 import hamRadioApiPackage from '@springfield/ham-radio-api/package.json';
 
-export {
-  isBetaDriverVersion,
-  isBetaZipFileName,
-  moduleIdFromZipName,
-  versionFromZipName,
-} from '~/utils/radio-module-semver';
-
 /** Official catalog served via GitHub Pages. */
 export const OFFICIAL_MODULE_CATALOG_URL =
   'https://springfield-ham-radio.github.io/radio-module-catalog/catalog.json';

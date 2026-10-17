@@ -7,11 +7,10 @@ import {
   type OfficialModuleCatalogFailure,
   installOfficialModule,
   installPickedLocalModuleFile,
-  isBetaZipFileName,
   pickLocalModuleFile,
   sha256HexForLocalFile,
-  versionFromZipName,
 } from '~/utils/radio-module-install';
+import { isBetaZipFileName, versionFromZipName } from '~/utils/radio-module-semver';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const props = defineProps<{

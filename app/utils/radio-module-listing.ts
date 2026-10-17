@@ -2,7 +2,7 @@ import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import { compareSemver, isApiVersionCompatible } from '@springfield/ham-radio-registry';
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
 import { APP_HAM_RADIO_API_VERSION, parseModuleInstallPath } from '~/utils/radio-module-install';
-import { compareSemverWithPrerelease, isBetaDriverRecord, isBetaDriverVersion } from '~/utils/radio-module-semver';
+import { compareSemverWithPrerelease, isBetaDriverRecord } from '~/utils/radio-module-semver';
 
 const APP_UPDATE_REQUIRED = 'This radio module requires a newer version of HamBench.';
 
@@ -313,5 +313,3 @@ export function buildAvailableManufacturerGroups(
     })
     .filter((group) => group.radios.some((radio) => !radio.installedOfficially));
 }
-
-export { isBetaDriverRecord, isBetaDriverVersion };

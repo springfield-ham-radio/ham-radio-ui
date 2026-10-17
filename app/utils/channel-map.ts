@@ -82,8 +82,6 @@ export interface ChannelMapBounds {
   maxLatitude: number;
 }
 
-export { CHANNEL_MAP_EMPTY_STYLE } from '~/utils/map-canvas';
-
 export function channelMapBandColor(band: string): string {
   const key = band.trim();
 

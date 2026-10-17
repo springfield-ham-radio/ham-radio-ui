@@ -28,7 +28,7 @@ We need one canonical in-memory point, consistent SQLite columns, GeoJSON only a
 | GeoJSON | `geoJsonPoint`, `geoJsonFeature`, `pointFromGeoJsonPoint` |
 | Located vs unlocated | `isLocated`, `locatedPoint`, `parseLocatedPoint` |
 
-DMS symbols remain re-exported from `maidenhead.ts` for backward-compatible imports. Channel pair normalization uses `locatedPoint` via `coordinatesFromPair` in `saved-channels-db.ts`. Callook parses lat/lon strings at the client in `callook.ts`. Per-entity storage (station grid + point + `locationSource`, channel point only, QSO grid only) is summarized in `docs/location.md`.
+DMS parsing and formatting live in `location-format.ts`; Maidenhead encode/decode stay in `maidenhead.ts`. Channel pair normalization uses `locatedPoint` via `coordinatesFromPair` in `saved-channels-db.ts`. Callook parses lat/lon strings at the client in `callook.ts`. Per-entity storage (station grid + point + `locationSource`, channel point only, QSO grid only) is summarized in `docs/location.md`.
 
 ## Consequences
 
