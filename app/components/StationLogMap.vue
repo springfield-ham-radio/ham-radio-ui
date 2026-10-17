@@ -23,7 +23,9 @@ import {
 } from '~/utils/station-log-map';
 
 const SOURCE_ID = 'station-log-contacts';
-const LAYER_ID = 'station-log-contacts';
+const CLUSTER_LAYER_ID = 'station-log-contacts-clusters';
+const CLUSTER_COUNT_LAYER_ID = 'station-log-contacts-cluster-count';
+const UNCLUSTERED_LAYER_ID = 'station-log-contacts-unclustered';
 const STATION_SOURCE_ID = 'station-log-stations';
 const STATION_LAYER_ID = 'station-log-stations';
 const STATION_PIN_IMAGE_ID = 'station-log-pin';
@@ -51,11 +53,27 @@ const unmappedCount = computed(() => stationLogUnmappedCount(props.qsos));
 
 const unmappedMessage = computed(() => {
   if (unmappedCount.value === 1) {
-    return '1 contact has no grid and is not on the map.';
+    return '1 contact has no grid or coordinates and is not on the map.';
   }
 
-  return `${unmappedCount.value} contacts have no grid and are not on the map.`;
+  return `${unmappedCount.value} contacts have no grid or coordinates and are not on the map.`;
 });
+
+function qslCircleColorExpression(): ['match', ...unknown[]] {
+  return [
+    'match',
+    ['get', 'status'],
+    'sent',
+    QSL_MARKER_COLOR.sent,
+    'received',
+    QSL_MARKER_COLOR.received,
+    'both',
+    QSL_MARKER_COLOR.both,
+    'mixed',
+    QSL_MARKER_COLOR.mixed,
+    QSL_MARKER_COLOR.none,
+  ];
+}
 
 const legend = computed(() => {
   const items: { key: string; label: string; color: string; pin: boolean }[] = [
@@ -149,26 +167,47 @@ function ensureLayers(instance: MapLibreMap): void {
     instance.addSource(SOURCE_ID, {
       type: 'geojson',
       data: stationLogMapFeatureCollection(points.value),
+      cluster: true,
+      clusterMaxZoom: 12,
+      clusterRadius: 50,
     });
 
     instance.addLayer({
-      id: LAYER_ID,
+      id: CLUSTER_LAYER_ID,
       type: 'circle',
       source: SOURCE_ID,
+      filter: ['has', 'point_count'],
       paint: {
-        'circle-color': [
-          'match',
-          ['get', 'status'],
-          'sent',
-          QSL_MARKER_COLOR.sent,
-          'received',
-          QSL_MARKER_COLOR.received,
-          'both',
-          QSL_MARKER_COLOR.both,
-          'mixed',
-          QSL_MARKER_COLOR.mixed,
-          QSL_MARKER_COLOR.none,
-        ],
+        'circle-color': '#334155',
+        'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 25, 22],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.92,
+      },
+    });
+
+    instance.addLayer({
+      id: CLUSTER_COUNT_LAYER_ID,
+      type: 'symbol',
+      source: SOURCE_ID,
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': '#f8fafc',
+      },
+    });
+
+    instance.addLayer({
+      id: UNCLUSTERED_LAYER_ID,
+      type: 'circle',
+      source: SOURCE_ID,
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': qslCircleColorExpression(),
         'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
         'circle-stroke-width': 1.5,
         'circle-stroke-color': '#ffffff',
@@ -293,8 +332,8 @@ function stationIdsAt(event: { features?: { properties?: { id?: unknown } | null
   return ids;
 }
 
-function openPoint(grid: string, lngLat: LngLatLike): void {
-  const point = points.value.find((candidate) => candidate.grid === grid);
+function openPoint(locationKey: string, lngLat: LngLatLike): void {
+  const point = points.value.find((candidate) => candidate.locationKey === locationKey);
   const instance = mapInstance();
 
   if (!point || !instance) {
@@ -353,7 +392,32 @@ function bindPointer(instance: MapLibreMap): void {
     openStations(ids, event.lngLat);
   });
 
-  instance.on('click', LAYER_ID, (event) => {
+  instance.on('click', CLUSTER_LAYER_ID, (event) => {
+    void (async () => {
+      const feature = event.features?.[0];
+      const clusterId = Number(feature?.properties?.cluster_id);
+      const source = geoJsonSource(instance, SOURCE_ID);
+
+      if (feature === undefined || !Number.isInteger(clusterId) || !source) {
+        return;
+      }
+
+      const coordinates = (feature.geometry as { coordinates?: [number, number] }).coordinates;
+
+      if (!coordinates) {
+        return;
+      }
+
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        instance.easeTo({ center: coordinates, zoom });
+      } catch {
+        // Cluster went away between click and worker reply.
+      }
+    })();
+  });
+
+  instance.on('click', UNCLUSTERED_LAYER_ID, (event) => {
     if (instance.getLayer(STATION_LAYER_ID)) {
       const stationsHere = instance.queryRenderedFeatures(event.point, { layers: [STATION_LAYER_ID] });
 
@@ -362,16 +426,16 @@ function bindPointer(instance: MapLibreMap): void {
       }
     }
 
-    const grid = event.features?.[0]?.properties?.grid;
+    const locationKey = event.features?.[0]?.properties?.locationKey;
 
-    if (typeof grid !== 'string') {
+    if (typeof locationKey !== 'string') {
       return;
     }
 
-    openPoint(grid, event.lngLat);
+    openPoint(locationKey, event.lngLat);
   });
 
-  for (const layerId of [LAYER_ID, STATION_LAYER_ID]) {
+  for (const layerId of [CLUSTER_LAYER_ID, UNCLUSTERED_LAYER_ID, STATION_LAYER_ID]) {
     instance.on('mouseenter', layerId, () => {
       instance.getCanvas().style.cursor = 'pointer';
     });

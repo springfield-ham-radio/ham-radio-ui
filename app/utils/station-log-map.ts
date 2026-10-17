@@ -101,12 +101,28 @@ export const QSL_MARKER_COLOR: Record<QslMarkerStatus, string> = {
   mixed: '#7c3aed',
 };
 
+export type StationLogMapLocationKind = 'coordinates' | 'grid-center';
+
+export const MAP_QSO_EXACT_COORDINATES_LABEL = 'Exact coordinates';
+
 export interface StationLogMapPoint {
+  /** Stable key for popups and clustering lookups. */
+  locationKey: string;
+  /** Normalized Maidenhead grid when known; empty for coordinate-only contacts. */
   grid: string;
   latitude: number;
   longitude: number;
+  locationKind: StationLogMapLocationKind;
   status: QslMarkerStatus;
   qsos: StationLogQso[];
+}
+
+export interface ResolvedStationLogMapLocation {
+  locationKey: string;
+  grid: string;
+  latitude: number;
+  longitude: number;
+  locationKind: StationLogMapLocationKind;
 }
 
 export interface StationLogMapFeatureCollection {
@@ -154,7 +170,9 @@ export interface StationLogMapFeature {
     coordinates: [number, number];
   };
   properties: {
+    locationKey: string;
     grid: string;
+    locationKind: StationLogMapLocationKind;
     status: QslMarkerStatus;
     count: number;
   };
@@ -236,53 +254,89 @@ function combinedQslStatus(qsos: readonly StationLogQso[]): QslMarkerStatus {
   return 'mixed';
 }
 
+function coordinateLocationKey(point: { latitude: number; longitude: number }): string {
+  return `coord:${point.latitude.toFixed(6)}:${point.longitude.toFixed(6)}`;
+}
+
 /**
- * One map point per Maidenhead grid. Contacts without a valid grid are omitted.
+ * Stored coordinates win over the Maidenhead grid center. Contacts need one or the other.
  */
-export function stationLogMapPoints(qsos: readonly StationLogQso[]): StationLogMapPoint[] {
-  const groups = new Map<string, StationLogQso[]>();
+export function resolveStationLogMapLocation(qso: StationLogQso): ResolvedStationLogMapLocation | undefined {
+  const grid = normalizeMaidenhead(qso.theirGridsquare);
+  const point = locatedPoint(qso.latitude, qso.longitude);
 
-  for (const qso of qsos) {
-    const grid = normalizeMaidenhead(qso.theirGridsquare);
-
-    if (!grid) {
-      continue;
-    }
-
-    const existing = groups.get(grid);
-
-    if (existing) {
-      existing.push(qso);
-    } else {
-      groups.set(grid, [qso]);
-    }
+  if (point) {
+    return {
+      locationKey: coordinateLocationKey(point),
+      grid: grid ?? '',
+      latitude: point.latitude,
+      longitude: point.longitude,
+      locationKind: 'coordinates',
+    };
   }
 
-  const points: StationLogMapPoint[] = [];
+  if (!grid) {
+    return undefined;
+  }
 
-  for (const [grid, group] of groups) {
-    const location = maidenheadToLatLon(grid);
+  const center = maidenheadToLatLon(grid);
+
+  if (!center) {
+    return undefined;
+  }
+
+  return {
+    locationKey: `grid:${grid}`,
+    grid,
+    latitude: center.latitude,
+    longitude: center.longitude,
+    locationKind: 'grid-center',
+  };
+}
+
+/**
+ * One map point per located contact or shared location. Coordinates win over grid centers.
+ */
+export function stationLogMapPoints(qsos: readonly StationLogQso[]): StationLogMapPoint[] {
+  const groups = new Map<string, { location: ResolvedStationLogMapLocation; qsos: StationLogQso[] }>();
+
+  for (const qso of qsos) {
+    const location = resolveStationLogMapLocation(qso);
 
     if (!location) {
       continue;
     }
 
+    const existing = groups.get(location.locationKey);
+
+    if (existing) {
+      existing.qsos.push(qso);
+    } else {
+      groups.set(location.locationKey, { location, qsos: [qso] });
+    }
+  }
+
+  const points: StationLogMapPoint[] = [];
+
+  for (const { location, qsos: group } of groups.values()) {
     points.push({
-      grid,
+      locationKey: location.locationKey,
+      grid: location.grid,
       latitude: location.latitude,
       longitude: location.longitude,
+      locationKind: location.locationKind,
       status: combinedQslStatus(group),
       qsos: group,
     });
   }
 
-  points.sort((left, right) => left.grid.localeCompare(right.grid));
+  points.sort((left, right) => left.locationKey.localeCompare(right.locationKey));
 
   return points;
 }
 
 /**
- * Contacts that cannot be plotted because they have no valid Maidenhead grid.
+ * Contacts that cannot be plotted because they have no coordinates or valid grid.
  */
 export function stationLogUnmappedCount(qsos: readonly StationLogQso[]): number {
   const mapped = stationLogMapPoints(qsos).reduce((sum, point) => sum + point.qsos.length, 0);
@@ -300,7 +354,9 @@ export function stationLogMapFeatureCollection(points: readonly StationLogMapPoi
       geoJsonFeature(
         { latitude: point.latitude, longitude: point.longitude },
         {
+          locationKey: point.locationKey,
           grid: point.grid,
+          locationKind: point.locationKind,
           status: point.status,
           count: point.qsos.length,
         },

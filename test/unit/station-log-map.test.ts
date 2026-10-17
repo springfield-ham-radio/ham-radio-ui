@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createStationLogQso, type StationLogQso } from '../../app/utils/station-log-db.ts';
+import { parseAdifLocationPair } from '../../app/utils/station-log-adif-location.ts';
+import { maidenheadToLatLon } from '../../app/utils/maidenhead.ts';
 import {
   qslMarkerStatus,
   qslStatusLabel,
@@ -51,9 +53,51 @@ describe('stationLogMapPoints', () => {
 
     expect(points).toHaveLength(1);
     expect(points[0]?.grid).toBe('FN31');
+    expect(points[0]?.locationKind).toBe('grid-center');
     expect(points[0]?.status).toBe('none');
     expect(points[0]?.latitude).toBe(41.5);
     expect(points[0]?.longitude).toBe(-73);
+  });
+
+  it('plots stored coordinates instead of the grid center', () => {
+    const adif = parseAdifLocationPair('N030 16.200', 'W097 44.580');
+    const points = stationLogMapPoints([
+      contact({
+        theirCallsign: 'K5TST',
+        theirGridsquare: 'EM10',
+        latitude: adif?.latitude,
+        longitude: adif?.longitude,
+      }),
+    ]);
+    const gridCenter = maidenheadToLatLon('EM10');
+
+    expect(points).toHaveLength(1);
+    expect(points[0]?.locationKind).toBe('coordinates');
+    expect(points[0]?.latitude).toBeCloseTo(adif!.latitude, 4);
+    expect(points[0]?.longitude).toBeCloseTo(adif!.longitude, 4);
+    expect(points[0]?.latitude).not.toBeCloseTo(gridCenter!.latitude, 2);
+  });
+
+  it('plots coordinate-only contacts without a grid', () => {
+    const adif = parseAdifLocationPair('N030 16.200', 'W097 44.580');
+    const points = stationLogMapPoints([
+      contact({ theirCallsign: 'K5TST', theirGridsquare: undefined, latitude: adif?.latitude, longitude: adif?.longitude }),
+    ]);
+
+    expect(points).toHaveLength(1);
+    expect(points[0]?.grid).toBe('');
+    expect(points[0]?.locationKind).toBe('coordinates');
+  });
+
+  it('keeps coordinate and grid-only contacts on the same grid separate', () => {
+    const adif = parseAdifLocationPair('N030 16.200', 'W097 44.580');
+    const points = stationLogMapPoints([
+      contact({ theirCallsign: 'K5TST', theirGridsquare: 'EM10', latitude: adif?.latitude, longitude: adif?.longitude }),
+      contact({ theirCallsign: 'W1AW', theirGridsquare: 'EM10' }),
+    ]);
+
+    expect(points).toHaveLength(2);
+    expect(points.map((point) => point.locationKind).sort()).toEqual(['coordinates', 'grid-center']);
   });
 
   it('skips contacts without a valid grid', () => {
@@ -108,11 +152,13 @@ describe('stationLogMapFeatureCollection', () => {
 
     expect(collection.features).toHaveLength(1);
     expect(collection.features[0]?.geometry.coordinates).toEqual([-73, 41.5]);
-    expect(collection.features[0]?.properties).toEqual({
+    expect(collection.features[0]?.properties).toMatchObject({
       grid: 'FN31',
+      locationKind: 'grid-center',
       status: 'sent',
       count: 1,
     });
+    expect(collection.features[0]?.properties.locationKey).toBe('grid:FN31');
   });
 });
 

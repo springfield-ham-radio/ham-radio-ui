@@ -173,14 +173,14 @@ const contactFeatureCollection = computed(() => {
 
 const contactPoints = computed(() => stationLogMapPoints(logQsos.value));
 
-const contactPointByGrid = computed(() => {
-  const byGrid = new Map<string, StationLogMapPoint>();
+const contactPointByKey = computed(() => {
+  const byKey = new Map<string, StationLogMapPoint>();
 
   for (const point of contactPoints.value) {
-    byGrid.set(point.grid, point);
+    byKey.set(point.locationKey, point);
   }
 
-  return byGrid;
+  return byKey;
 });
 
 const contactUnmappedCount = computed(() => mapQsoUnmappedCount(logQsos.value));
@@ -943,15 +943,27 @@ function openStationPopup(stationId: string, lngLat: LngLatLike): void {
   );
 }
 
-function openContactPopup(grid: string, lngLat: LngLatLike): void {
+function contactPopupTitle(point: StationLogMapPoint): string {
+  if (point.grid) {
+    return point.grid;
+  }
+
+  const [first] = point.qsos;
+
+  return first?.theirCallsign ?? 'Contact';
+}
+
+function openContactPopup(locationKey: string, lngLat: LngLatLike): void {
   const instance = mapInstance();
-  const point = contactPointByGrid.value.get(grid);
+  const point = contactPointByKey.value.get(locationKey);
 
   if (!instance || !point) {
     return;
   }
 
-  const feature = contactFeatureCollection.value.features.find((entry) => entry.properties.grid === grid);
+  const feature = contactFeatureCollection.value.features.find(
+    (entry) => entry.properties.locationKey === locationKey,
+  );
   const precisionLabel = feature?.properties.precisionLabel ?? '';
 
   const root = document.createElement('div');
@@ -959,7 +971,7 @@ function openContactPopup(grid: string, lngLat: LngLatLike): void {
 
   const title = document.createElement('div');
   title.style.fontWeight = '600';
-  title.textContent = grid;
+  title.textContent = contactPopupTitle(point);
   root.append(title);
 
   if (precisionLabel) {
@@ -1124,13 +1136,13 @@ function bindPointer(instance: MapLibreMap): void {
           return;
         }
 
-        const grid = feature.properties?.grid;
+        const locationKey = feature.properties?.locationKey;
 
-        if (typeof grid !== 'string') {
+        if (typeof locationKey !== 'string') {
           return;
         }
 
-        openContactPopup(grid, event.lngLat);
+        openContactPopup(locationKey, event.lngLat);
         return;
       }
 

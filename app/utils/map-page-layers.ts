@@ -19,10 +19,12 @@ import { coordinatesFromPair, type SavedChannel } from '~/utils/saved-channels-d
 import { distanceKm } from '~/utils/location-format';
 import { defaultDistanceStartId, stationStartPoint, TRIP_START_NONE } from '~/utils/trip-channels';
 import {
+  MAP_QSO_EXACT_COORDINATES_LABEL,
   stationLogMapPoints,
   stationLogUnmappedCount,
   stationMapPins,
   type QslMarkerStatus,
+  type StationLogMapLocationKind,
   type StationMapPinInput,
 } from '~/utils/station-log-map';
 import type { StationLogQso } from '~/utils/station-log-db';
@@ -138,10 +140,11 @@ export function mapStationOtherUnlocatedMessage(
 }
 
 export interface MapPageQsoFeatureProperties {
+  locationKey: string;
   grid: string;
   status: QslMarkerStatus;
   count: number;
-  locationKind: 'grid-center';
+  locationKind: StationLogMapLocationKind;
   precisionLength: number;
   precisionLabel: string;
 }
@@ -162,9 +165,9 @@ const MAP_QSO_FIELD_PRECISION = 'field center · about 20° × 10°';
 const MAP_QSO_SQUARE_PRECISION = 'square center · about 2° × 1°';
 const MAP_QSO_SUBSQUARE_PRECISION = 'subsquare center · about 5′ × 2.5′';
 
-/** Standing note under the contact legend. Lists the three cell spans. */
+/** Standing note under the contact legend. */
 export const MAP_QSO_GRID_CENTER_NOTE =
-  `Contacts are plotted at the center of each Maidenhead grid: ${MAP_QSO_FIELD_PRECISION}, ${MAP_QSO_SQUARE_PRECISION}, ${MAP_QSO_SUBSQUARE_PRECISION}.`;
+  `Contacts with stored coordinates plot at that position. Others use the Maidenhead grid center: ${MAP_QSO_FIELD_PRECISION}, ${MAP_QSO_SQUARE_PRECISION}, ${MAP_QSO_SUBSQUARE_PRECISION}.`;
 
 /**
  * Phrase for a popup when the marker sits at a Maidenhead cell center.
@@ -187,6 +190,17 @@ export function mapQsoPrecisionLabel(grid: string): string {
   return MAP_QSO_SUBSQUARE_PRECISION;
 }
 
+export function mapQsoLocationPrecisionLabel(
+  locationKind: StationLogMapLocationKind,
+  grid: string,
+): string {
+  if (locationKind === 'coordinates') {
+    return MAP_QSO_EXACT_COORDINATES_LABEL;
+  }
+
+  return mapQsoPrecisionLabel(grid);
+}
+
 /**
  * One feature per located grid. QSO rows are not embedded in GeoJSON properties.
  */
@@ -196,17 +210,18 @@ export function mapQsoFeatures(qsos: readonly StationLogQso[]): MapPageQsoFeatur
   return {
     type: 'FeatureCollection',
     features: points.map((point) => {
-      const precisionLength = point.grid.length;
+      const precisionLength = point.locationKind === 'coordinates' ? 0 : point.grid.length;
 
       return geoJsonFeature(
         { latitude: point.latitude, longitude: point.longitude },
         {
+          locationKey: point.locationKey,
           grid: point.grid,
           status: point.status,
           count: point.qsos.length,
-          locationKind: 'grid-center',
+          locationKind: point.locationKind,
           precisionLength,
-          precisionLabel: mapQsoPrecisionLabel(point.grid),
+          precisionLabel: mapQsoLocationPrecisionLabel(point.locationKind, point.grid),
         },
       );
     }),
@@ -223,10 +238,10 @@ export function mapQsoUnmappedMessage(unmapped: number, total: number): string |
   }
 
   if (unmapped === 1) {
-    return '1 contact has no grid and is not on the map.';
+    return '1 contact has no grid or coordinates and is not on the map.';
   }
 
-  return `${unmapped} contacts have no grid and are not on the map.`;
+  return `${unmapped} contacts have no grid or coordinates and are not on the map.`;
 }
 
 export function storedLibraryGroups(groups: readonly ChannelGroup[]): ChannelGroup[] {
