@@ -39,6 +39,34 @@ fn find_check_item<R: tauri::Runtime>(menu: &Menu<R>, id: &str) -> Option<CheckM
     find_check_in_items(&items, id)
 }
 
+fn find_menu_in_items<R: tauri::Runtime>(
+    items: &[MenuItemKind<R>],
+    id: &str,
+) -> Option<MenuItem<R>> {
+    for item in items {
+        match item {
+            MenuItemKind::MenuItem(menu_item) if menu_item.id().as_ref() == id => {
+                return Some(menu_item.clone());
+            }
+            MenuItemKind::Submenu(submenu) => {
+                if let Ok(children) = submenu.items() {
+                    if let Some(found) = find_menu_in_items(&children, id) {
+                        return Some(found);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn find_menu_item<R: tauri::Runtime>(menu: &Menu<R>, id: &str) -> Option<MenuItem<R>> {
+    let items = menu.items().ok()?;
+    find_menu_in_items(&items, id)
+}
+
 fn emit_developer_mode(app: &tauri::AppHandle) {
     let checked = app
         .menu()
@@ -99,15 +127,55 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         Some("CmdOrCtrl+Shift+U"),
     )?;
     let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
-    let radio_menu = Submenu::with_items(app, "Radio", true, &[&read_from_radio, &write_to_radio])?;
+    // Alt chords keep Edit → Undo/Redo on CmdOrCtrl+Z for text fields. The webview
+    // handles plain CmdOrCtrl+Z outside fields; these accelerators mirror memory undo.
+    let undo_memory = MenuItem::with_id(
+        app,
+        "undo-memory",
+        "Undo Memory",
+        false,
+        Some("CmdOrCtrl+Alt+Z"),
+    )?;
+    let redo_memory = MenuItem::with_id(
+        app,
+        "redo-memory",
+        "Redo Memory",
+        false,
+        Some("CmdOrCtrl+Alt+Shift+Z"),
+    )?;
+    let radio_menu = Submenu::with_items(
+        app,
+        "Radio",
+        true,
+        &[
+            &read_from_radio,
+            &write_to_radio,
+            &PredefinedMenuItem::separator(app)?,
+            &undo_memory,
+            &redo_memory,
+        ],
+    )?;
+
+    let edit_undo = MenuItem::with_id(app, "edit-undo", "Undo", true, Some("CmdOrCtrl+Z"))?;
+    let edit_redo = MenuItem::with_id(
+        app,
+        "edit-redo",
+        "Redo",
+        true,
+        Some(if cfg!(target_os = "macos") {
+            "CmdOrCtrl+Shift+Z"
+        } else {
+            "CmdOrCtrl+Y"
+        }),
+    )?;
 
     let edit_menu = Submenu::with_items(
         app,
         "Edit",
         true,
         &[
-            &PredefinedMenuItem::undo(app, None)?,
-            &PredefinedMenuItem::redo(app, None)?,
+            &edit_undo,
+            &edit_redo,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, None)?,
             &PredefinedMenuItem::copy(app, None)?,
@@ -247,6 +315,30 @@ fn set_developer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String
     let item = find_check_item(&menu, "developer-mode")
         .ok_or_else(|| "Developer Mode menu item is missing".to_string())?;
     item.set_checked(enabled).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_radio_memory_menu_state(
+    app: tauri::AppHandle,
+    undo_enabled: bool,
+    redo_enabled: bool,
+    undo_title: String,
+    redo_title: String,
+) -> Result<(), String> {
+    let menu = app
+        .menu()
+        .ok_or_else(|| "Application menu is not available".to_string())?;
+    let undo = find_menu_item(&menu, "undo-memory")
+        .ok_or_else(|| "Undo Memory menu item is missing".to_string())?;
+    let redo = find_menu_item(&menu, "redo-memory")
+        .ok_or_else(|| "Redo Memory menu item is missing".to_string())?;
+
+    undo.set_text(undo_title).map_err(|error| error.to_string())?;
+    undo.set_enabled(undo_enabled).map_err(|error| error.to_string())?;
+    redo.set_text(redo_title).map_err(|error| error.to_string())?;
+    redo.set_enabled(redo_enabled).map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -573,6 +665,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
         .manage(zoom::ZoomState::default())
         .invoke_handler(tauri::generate_handler![
             set_developer_mode,
+            set_radio_memory_menu_state,
             zoom::zoom_in_command,
             zoom::zoom_out_command,
             zoom::zoom_reset_command,
@@ -610,6 +703,10 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
             "read-from-radio" => emit_menu_event(app, "read-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
             "show-backups" => emit_menu_event(app, "show-backups"),
+            "edit-undo" => emit_menu_event(app, "edit-undo"),
+            "edit-redo" => emit_menu_event(app, "edit-redo"),
+            "undo-memory" => emit_menu_event(app, "undo-memory"),
+            "redo-memory" => emit_menu_event(app, "redo-memory"),
             "developer-mode" => emit_developer_mode(app),
             "zoom-in" => {
                 if let Err(error) = zoom::zoom_in(app) {
