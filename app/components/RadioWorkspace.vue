@@ -32,6 +32,8 @@ import {
   buildRadioPrintDocument,
   emptyPrintReason,
   formatChannelPrintDate,
+  printScopeSummary,
+  resolvePrintRows,
   type ChannelPrintRadioRow,
 } from '~/utils/channel-print';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
@@ -787,8 +789,19 @@ const radioPrintRows = computed<ChannelPrintRadioRow[]>(() =>
   })),
 );
 
+function radioPrintSelection() {
+  const visible = radioPrintRows.value;
+  const selectedNumbers = new Set(selectedChannelNumbers.value);
+
+  return resolvePrintRows({
+    selected: visible.filter((row) => selectedNumbers.has(row.channelNumber)),
+    visible,
+    id: (row) => String(row.channelNumber),
+  });
+}
+
 function buildRadioPrintContext() {
-  const count = radioPrintRows.value.length;
+  const resolved = radioPrintSelection();
   const radioName = cardRadio.value?.name ?? activeRadioId.value?.name ?? 'Radio';
   const manufacturer = String(activeRadioId.value?.manufacturer ?? '');
   const model = String(activeRadioId.value?.model ?? '');
@@ -797,20 +810,18 @@ function buildRadioPrintContext() {
   return {
     surface: 'radio' as const,
     title: 'Print channels',
-    subtitle: `${radioName} · ${count} programmed channel${count === 1 ? '' : 's'}`,
-    rowCount: count,
-    hasFiltersActive: false,
-    hasSelection: false,
+    subtitle: printScopeSummary(resolved.rows.length, resolved.scope),
+    rowCount: resolved.rows.length,
     callSignOptions: amateurCallSignOptions.value,
     defaultCallSign: identity.callSign,
     buildDocument: (options: {
       layout: 'full' | 'wallet';
       matchVisibleColumns: boolean;
       callSign?: string;
-      libraryScope: 'visible' | 'whole-tab';
-      selectedOnly: boolean;
     }) => {
-      if (emptyPrintReason(count)) {
+      const channels = radioPrintSelection().rows;
+
+      if (emptyPrintReason(channels.length)) {
         return undefined;
       }
 
@@ -821,7 +832,7 @@ function buildRadioPrintContext() {
         model,
         callSign: options.callSign,
         printedOn: formatChannelPrintDate(new Date()),
-        channels: radioPrintRows.value,
+        channels,
         extraFields: channelUiFields.value.map((field) => ({
           fieldId: field.fieldId,
           label: field.ui.label,

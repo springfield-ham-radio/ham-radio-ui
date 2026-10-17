@@ -18,9 +18,10 @@ import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/sa
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import {
   buildLibraryPrintDocument,
-  channelsForLibraryPrint,
   emptyPrintReason,
   formatChannelPrintDate,
+  printScopeSummary,
+  resolvePrintRows,
   type ChannelPrintLibraryRow,
 } from '~/utils/channel-print';
 import {
@@ -1042,47 +1043,35 @@ function toLibraryPrintRow(channel: SavedChannel): ChannelPrintLibraryRow {
   };
 }
 
-const wholeTabPrintRows = computed(() => scopedChannels.value.map((channel) => toLibraryPrintRow(channel)));
+function libraryPrintSelection() {
+  const visible = displayChannels.value.map((channel) => toLibraryPrintRow(channel));
+  const selected = selectedLibraryChannels.value.map((channel) => toLibraryPrintRow(channel));
 
-const libraryHasActiveFilters = computed(() => {
-  return (
-    search.value.trim().length > 0 ||
-    selectedBandTokens.value.length > 0 ||
-    onAirFilter.value !== 'all' ||
-    linkedFilter.value !== 'all' ||
-    (isTripGroup.value && tripOpenFilter.value !== 'all')
-  );
-});
+  return resolvePrintRows({
+    selected,
+    visible,
+    id: (row) => String(row.id),
+  });
+}
 
 function buildLibraryPrintContext() {
-  const visibleCount = displayChannels.value.length;
+  const resolved = libraryPrintSelection();
   const groupLabel = activeGroup.value?.name ?? 'All';
   const defaultCallSign = amateurIdentity.value.callSign;
 
   return {
     surface: 'library' as const,
     title: 'Print channels',
-    subtitle: `${groupLabel} · ${visibleCount} channel${visibleCount === 1 ? '' : 's'}`,
-    rowCount: visibleCount,
-    hasFiltersActive:
-      libraryHasActiveFilters.value && wholeTabPrintRows.value.length !== displayChannels.value.length,
-    hasSelection: selectedCount.value > 0,
+    subtitle: printScopeSummary(resolved.rows.length, resolved.scope),
+    rowCount: resolved.rows.length,
     callSignOptions: amateurCallSignOptions.value,
     defaultCallSign,
     buildDocument: (options: {
       layout: 'full' | 'wallet';
       matchVisibleColumns: boolean;
       callSign?: string;
-      libraryScope: 'visible' | 'whole-tab';
-      selectedOnly: boolean;
     }) => {
-      const rows = channelsForLibraryPrint({
-        scope: options.libraryScope,
-        selectedOnly: options.selectedOnly,
-        selected: selectedLibraryChannels.value.map((channel) => toLibraryPrintRow(channel)),
-        visible: displayChannels.value,
-        wholeTab: wholeTabPrintRows.value,
-      });
+      const rows = libraryPrintSelection().rows;
 
       if (emptyPrintReason(rows.length)) {
         return undefined;

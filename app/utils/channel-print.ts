@@ -6,7 +6,8 @@ import { coordinatesFromPair, formatSavedTone, type RepeaterUse, type SavedChann
 
 export type ChannelPrintLayout = 'full' | 'wallet';
 
-export type LibraryPrintRowScope = 'visible' | 'whole-tab';
+/** Selected rows when any are selected; otherwise the rows on screen. */
+export type ChannelPrintRowScope = 'selected' | 'visible';
 
 export interface ChannelPrintColumn {
   id: string;
@@ -138,22 +139,35 @@ export function libraryPrintColumnIds(
   return ordered.filter((id) => libraryColumnIsVisible(id, visibility));
 }
 
-export function channelsForLibraryPrint(input: {
-  scope: LibraryPrintRowScope;
-  selectedOnly: boolean;
-  selected: readonly ChannelPrintLibraryRow[];
-  visible: readonly ChannelPrintLibraryRow[];
-  wholeTab: readonly ChannelPrintLibraryRow[];
-}): ChannelPrintLibraryRow[] {
-  if (input.selectedOnly) {
-    return [...input.selected];
+/**
+ * Same rule as library export: a selection prints those rows (hidden rows dropped),
+ * and no selection prints the visible table.
+ */
+export function resolvePrintRows<T>(input: {
+  selected: readonly T[];
+  visible: readonly T[];
+  id: (row: T) => string;
+}): { scope: ChannelPrintRowScope; rows: T[] } {
+  if (input.selected.length === 0) {
+    return { scope: 'visible', rows: [...input.visible] };
   }
 
-  if (input.scope === 'whole-tab') {
-    return [...input.wholeTab];
+  const visibleIds = new Set(input.visible.map((row) => input.id(row)));
+
+  return {
+    scope: 'selected',
+    rows: input.selected.filter((row) => visibleIds.has(input.id(row))),
+  };
+}
+
+export function printScopeSummary(count: number, scope: ChannelPrintRowScope): string {
+  const noun = count === 1 ? 'channel' : 'channels';
+
+  if (scope === 'selected') {
+    return `Printing ${count} selected ${noun}`;
   }
 
-  return [...input.visible];
+  return `Printing ${count} ${noun}`;
 }
 
 export function formatPrintOffset(input: {

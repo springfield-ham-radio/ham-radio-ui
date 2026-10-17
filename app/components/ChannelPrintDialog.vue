@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import type { LibraryPrintRowScope } from '~/utils/channel-print';
-
 const { dialog, closePrintDialog, confirmPrint } = useChannelPrint();
 
 const layout = ref<'full' | 'wallet'>('full');
 const matchVisibleColumns = ref(true);
-const libraryScope = ref<LibraryPrintRowScope>('visible');
-const selectedOnly = ref(false);
 const callSign = ref<string | undefined>();
 
 watch(
@@ -18,8 +14,6 @@ watch(
 
     layout.value = 'full';
     matchVisibleColumns.value = true;
-    libraryScope.value = 'visible';
-    selectedOnly.value = false;
     callSign.value = dialog.value.defaultCallSign ?? dialog.value.callSignOptions[0]?.value;
   },
 );
@@ -29,11 +23,6 @@ const layoutItems = [
   { label: 'Wallet card', value: 'wallet' },
 ];
 
-const libraryScopeItems = [
-  { label: 'As shown in the table', value: 'visible' },
-  { label: 'Whole tab', value: 'whole-tab' },
-];
-
 const canPrint = computed(() => dialog.value.rowCount > 0);
 
 async function onPrint(): Promise<void> {
@@ -41,8 +30,6 @@ async function onPrint(): Promise<void> {
     layout: layout.value,
     matchVisibleColumns: matchVisibleColumns.value,
     callSign: callSign.value,
-    libraryScope: libraryScope.value,
-    selectedOnly: selectedOnly.value,
   });
 }
 </script>
@@ -66,17 +53,6 @@ async function onPrint(): Promise<void> {
         label="Columns"
       >
         <UCheckbox v-model="matchVisibleColumns" label="Match the table’s visible columns" />
-      </UFormField>
-
-      <UFormField
-        v-if="dialog.surface === 'library' && dialog.hasFiltersActive"
-        label="Rows"
-      >
-        <USelect v-model="libraryScope" :items="libraryScopeItems" value-key="value" class="w-full" />
-      </UFormField>
-
-      <UFormField v-if="dialog.surface === 'library' && dialog.hasSelection">
-        <UCheckbox v-model="selectedOnly" label="Selected rows only" />
       </UFormField>
 
       <UFormField v-if="dialog.callSignOptions.length > 0" label="Call sign">

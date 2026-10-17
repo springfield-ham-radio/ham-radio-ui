@@ -4,7 +4,8 @@ import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
   buildLibraryPrintDocument,
   buildRadioPrintDocument,
-  channelsForLibraryPrint,
+  printScopeSummary,
+  resolvePrintRows,
   formatPrintLocation,
   formatPrintOffset,
   formatPrintTone,
@@ -104,40 +105,31 @@ describe('channel-print', () => {
     expect(libraryColumnIsVisible('band', { band: false })).toBe(false);
   });
 
-  it('selects library rows for visible, whole-tab, and selected-only scopes', () => {
-    const visible = [{ id: 'a' }, { id: 'b' }] as ChannelPrintLibraryRow[];
-    const wholeTab = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as ChannelPrintLibraryRow[];
-    const selected = [{ id: 'b' }] as ChannelPrintLibraryRow[];
+  it('prints the selection when any rows are selected, otherwise the visible rows', () => {
+    const visible = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as ChannelPrintLibraryRow[];
+    const id = (row: ChannelPrintLibraryRow) => String(row.id);
 
-    expect(
-      channelsForLibraryPrint({
-        scope: 'visible',
-        selectedOnly: false,
-        selected,
-        visible,
-        wholeTab,
-      }).map((row) => row.id),
-    ).toEqual(['a', 'b']);
+    const allVisible = resolvePrintRows({ selected: [], visible, id });
+    expect(allVisible.scope).toBe('visible');
+    expect(allVisible.rows.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+    expect(printScopeSummary(allVisible.rows.length, allVisible.scope)).toBe('Printing 3 channels');
 
-    expect(
-      channelsForLibraryPrint({
-        scope: 'whole-tab',
-        selectedOnly: false,
-        selected,
-        visible,
-        wholeTab,
-      }).map((row) => row.id),
-    ).toEqual(['a', 'b', 'c']);
+    const twoSelected = resolvePrintRows({
+      selected: [visible[0]!, visible[2]!],
+      visible,
+      id,
+    });
+    expect(twoSelected.scope).toBe('selected');
+    expect(twoSelected.rows.map((row) => row.id)).toEqual(['a', 'c']);
+    expect(printScopeSummary(twoSelected.rows.length, twoSelected.scope)).toBe('Printing 2 selected channels');
 
-    expect(
-      channelsForLibraryPrint({
-        scope: 'visible',
-        selectedOnly: true,
-        selected,
-        visible,
-        wholeTab,
-      }).map((row) => row.id),
-    ).toEqual(['b']);
+    const hiddenDropped = resolvePrintRows({
+      selected: [{ id: 'hidden' } as ChannelPrintLibraryRow, visible[1]!],
+      visible,
+      id,
+    });
+    expect(hiddenDropped.rows.map((row) => row.id)).toEqual(['b']);
+    expect(printScopeSummary(1, 'selected')).toBe('Printing 1 selected channel');
   });
 
   it('prints location as city or one-line decimal degrees', () => {

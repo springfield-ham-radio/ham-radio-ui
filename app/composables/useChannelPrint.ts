@@ -7,16 +7,12 @@ export interface ChannelPrintDialogState {
   title: string;
   subtitle: string;
   rowCount: number;
-  hasFiltersActive: boolean;
-  hasSelection: boolean;
   callSignOptions: Array<{ label: string; value: string }>;
   defaultCallSign?: string;
   buildDocument: (options: {
     layout: 'full' | 'wallet';
     matchVisibleColumns: boolean;
     callSign?: string;
-    libraryScope: 'visible' | 'whole-tab';
-    selectedOnly: boolean;
   }) => ChannelPrintDocument | undefined;
 }
 
@@ -26,8 +22,6 @@ const closedDialog = (): ChannelPrintDialogState => ({
   title: 'Print channels',
   subtitle: '',
   rowCount: 0,
-  hasFiltersActive: false,
-  hasSelection: false,
   callSignOptions: [],
   buildDocument: () => undefined,
 });
@@ -79,8 +73,6 @@ export function useChannelPrint() {
     layout: 'full' | 'wallet';
     matchVisibleColumns: boolean;
     callSign?: string;
-    libraryScope: 'visible' | 'whole-tab';
-    selectedOnly: boolean;
   }): Promise<void> {
     const document = dialog.value.buildDocument(options);
 
