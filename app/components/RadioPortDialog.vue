@@ -4,11 +4,14 @@ import { markCatBusySerialPorts } from '~/utils/cat-memory-transfer';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import type { RadioDialogMessageAlert } from '~/utils/radio-dialog-message';
 
 const props = defineProps<{
   open: boolean;
   title: string;
   description: string;
+  /** Optional per-radio setup text (immediately above the serial port field). */
+  setupAlert?: RadioDialogMessageAlert;
   confirmLabel: string;
   confirmColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral';
   confirmIcon?: string;
@@ -155,6 +158,18 @@ watch(
         class="mb-4"
       />
       <slot name="review" :selected-port="selectedPort" />
+      <UAlert
+        v-if="setupAlert"
+        :color="setupAlert.color"
+        variant="subtle"
+        :icon="setupAlert.icon"
+        :title="setupAlert.title"
+        class="mb-4"
+      >
+        <template #description>
+          <p class="whitespace-pre-line">{{ setupAlert.body }}</p>
+        </template>
+      </UAlert>
       <UFormField label="Serial port">
         <div class="flex gap-2">
           <USelectMenu

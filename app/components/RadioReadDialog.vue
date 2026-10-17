@@ -7,6 +7,7 @@ import {
   radioTransferModalSubtitle,
   resolveRadioTransferTarget,
 } from '~/utils/radio-transfer-target';
+import { radioDialogMessage } from '~/utils/radio-dialog-message';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
@@ -28,6 +29,14 @@ const transferGuest = computed(() => {
 
 const title = computed(() => radioTransferDialogTitle('read', saved.value?.name));
 const subtitle = computed(() => radioTransferModalSubtitle(saved.value, configurations.value));
+const config = computed(() => {
+  if (!saved.value) {
+    return undefined;
+  }
+
+  return configurations.value.find((item) => String(item.id.model) === saved.value?.model);
+});
+const setupAlert = computed(() => radioDialogMessage(config.value, 'read'));
 
 watch(readOpen, (open) => {
   if (!open) {
@@ -72,6 +81,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
     :confirm-icon="readEntry.icon"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
+    :setup-alert="setupAlert"
     @confirm="importRadio"
   >
     <template v-if="transferGuest" #description>
