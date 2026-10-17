@@ -42,7 +42,6 @@ function channelOrderChanged(before: RadioProgram, after: RadioProgram): boolean
 
 function movedChannelLabel(before: RadioProgram, after: RadioProgram): string | undefined {
   const beforeByNumber = new Map(before.channels.map((channel) => [channel.channelNumber, channel]));
-  const afterByNumber = new Map(after.channels.map((channel) => [channel.channelNumber, channel]));
 
   if (before.channels.length !== after.channels.length) {
     return undefined;
