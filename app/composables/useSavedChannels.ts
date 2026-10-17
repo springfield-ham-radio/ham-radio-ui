@@ -20,7 +20,25 @@ import {
   listChannelGroupMemberships,
   listChannelGroups,
   renameChannelGroup,
+  replaceChannelGroupMembers,
+  updateChannelGroupPackFields,
+  type ChannelGroupPackFields,
 } from '~/utils/channel-groups-db';
+import {
+  defaultPackFileName,
+  ensurePackChannelIds,
+  parseChannelPack,
+  type ChannelPackDocument,
+  type ChannelPackMetadata,
+  type SavedChannelWithPackId,
+} from '~/utils/channel-pack';
+import { readChannelPackWithPicker, saveChannelPackWithPicker } from '~/utils/channel-pack-io';
+import {
+  planChannelPackImport,
+  resolveChannelPackGroup,
+  type ChannelPackGroupResolution,
+  type ChannelPackImportPlan,
+} from '~/utils/channel-pack-import';
 import { linkedNodesForKind } from '~/utils/linked-nodes';
 import { formatLibraryImportSummary, planLibraryImport } from '~/utils/library-import';
 import { fillRepeaterBookUseAndOnAir } from '~/utils/repeaterbook-listings';
@@ -549,6 +567,200 @@ export function useSavedChannels() {
     }
   }
 
+  function packGroupCandidates() {
+    return storedGroups.value.map((group) => ({
+      id: group.id,
+      name: group.name,
+      packId: group.packId,
+      builtin: false,
+    }));
+  }
+
+  function libraryChannelsWithPackIds(): SavedChannelWithPackId[] {
+    return channels.value.map((channel) => ({ ...channel }));
+  }
+
+  function packFieldsFromDocument(pack: ChannelPackDocument): ChannelGroupPackFields {
+    return {
+      packId: pack.id,
+      description: pack.description,
+      author: pack.author,
+      packVersion: pack.version,
+      packUpdated: pack.updated,
+      packSourceUrl: pack.source,
+    };
+  }
+
+  function defaultPackMetadataForGroup(group: ChannelGroup): ChannelPackMetadata {
+    return {
+      id: group.packId ?? crypto.randomUUID(),
+      name: group.name,
+      description: group.description,
+      author: group.author,
+      version: group.packVersion ?? '1.0.0',
+      updated: new Date().toISOString(),
+      source: group.packSourceUrl,
+    };
+  }
+
+  function computePackImportPreview(
+    pack: ChannelPackDocument,
+    groupName: string,
+  ): { pack: ChannelPackDocument; resolution: ChannelPackGroupResolution; plan: ChannelPackImportPlan } {
+    const namedPack: ChannelPackDocument = { ...pack, name: groupName };
+    const resolution = resolveChannelPackGroup(namedPack, packGroupCandidates());
+    const groupId = resolution.action === 'update' ? resolution.groupId : 'new';
+    const groupChannels =
+      resolution.action === 'update' ? (channelsForGroup(groupId) as SavedChannelWithPackId[]) : [];
+
+    const plan = planChannelPackImport(namedPack, {
+      groupId,
+      groupChannels,
+      libraryChannels: libraryChannelsWithPackIds(),
+      memberships: memberships.value,
+    });
+
+    return { pack: namedPack, resolution, plan };
+  }
+
+  async function exportChannelPack(input: {
+    groupId: string;
+    metadata: ChannelPackMetadata;
+    includeRepeaterBook: boolean;
+    channels: readonly SavedChannel[];
+  }): Promise<void> {
+    const group = storedGroups.value.find((candidate) => candidate.id === input.groupId);
+
+    if (!group) {
+      throw new Error('That group no longer exists');
+    }
+
+    if (input.channels.length === 0) {
+      refuseEmptyChannelExport(true, 0);
+      return;
+    }
+
+    try {
+      const stamped = ensurePackChannelIds([...input.channels]);
+
+      for (const channel of stamped) {
+        const existing = channels.value.find((candidate) => candidate.id === channel.id);
+
+        if (existing?.packChannelId !== channel.packChannelId) {
+          await updateSavedChannel(channel);
+        }
+      }
+
+      const rendered = await importExportEntry(IMPORT_EXPORT_IDS.exportChannelsPack).handler({
+        savedChannels: stamped,
+        channelPackExport: {
+          metadata: input.metadata,
+          includeRepeaterBook: input.includeRepeaterBook,
+        },
+      });
+      const text = rendered.text;
+
+      if (!text) {
+        return;
+      }
+
+      const destination = await saveChannelPackWithPicker(text, defaultPackFileName(input.metadata.name));
+
+      if (!destination) {
+        return;
+      }
+
+      await updateChannelGroupPackFields(input.groupId, {
+        ...packFieldsFromDocument({
+          ...input.metadata,
+          schemaVersion: 1,
+          channels: [],
+        }),
+      });
+      await reloadLibrary();
+      toast.add({
+        title: 'Channel pack exported',
+        description: `${stamped.length} channels from ${group.name} were saved to a pack file.`,
+        color: 'success',
+        icon: 'i-lucide-package',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to export channel pack';
+      toast.add({
+        title: 'Could not export channel pack',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
+  async function readChannelPackFile(): Promise<ChannelPackDocument | undefined> {
+    const picked = await readChannelPackWithPicker();
+
+    if (!picked) {
+      return undefined;
+    }
+
+    return parseChannelPack(picked.text);
+  }
+
+  async function applyChannelPackImport(pack: ChannelPackDocument, groupName: string): Promise<void> {
+    const preview = computePackImportPreview(pack, groupName);
+
+    if (preview.resolution.action === 'blocked') {
+      throw new Error(preview.resolution.reason);
+    }
+
+    try {
+      let groupId: string;
+
+      if (preview.resolution.action === 'create') {
+        const created = await insertChannelGroup(groupName, [], 'group', packFieldsFromDocument(preview.pack));
+        groupId = created.id;
+      } else {
+        groupId = preview.resolution.groupId;
+      }
+
+      const plan = preview.plan;
+
+      for (const row of plan.update) {
+        await updateSavedChannel(row);
+      }
+
+      await insertSavedChannelModels(plan.insert);
+      await replaceChannelGroupMembers(groupId, plan.memberIds);
+
+      if (plan.deleteOrphans.length > 0) {
+        await deleteSavedChannels(plan.deleteOrphans);
+      }
+
+      await updateChannelGroupPackFields(groupId, {
+        name: groupName,
+        ...packFieldsFromDocument(preview.pack),
+      });
+      await reloadLibrary();
+      activeGroupId.value = groupId;
+
+      toast.add({
+        title: preview.resolution.action === 'create' ? 'Channel pack imported' : 'Channel pack updated',
+        description: `${plan.added} added, ${plan.changed} changed, ${plan.removed} removed in ${groupName}.`,
+        color: 'success',
+        icon: 'i-lucide-package-open',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to import channel pack';
+      toast.add({
+        title: 'Could not import channel pack',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
   async function createGroup(
     name: string,
     channelIds: readonly RadioChannelId[],
@@ -665,6 +877,11 @@ export function useSavedChannels() {
     exportLibraryCsv,
     exportChirpLibraryCsv,
     importLibraryCsv,
+    defaultPackMetadataForGroup,
+    computePackImportPreview,
+    exportChannelPack,
+    readChannelPackFile,
+    applyChannelPackImport,
     createGroup,
     renameGroup,
     removeGroup,

@@ -638,6 +638,22 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "add_channel_pack_metadata",
+            sql: r#"
+ALTER TABLE channel_groups ADD COLUMN pack_id TEXT;
+ALTER TABLE channel_groups ADD COLUMN description TEXT;
+ALTER TABLE channel_groups ADD COLUMN author TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_version TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_updated TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_source_url TEXT;
+ALTER TABLE saved_channels ADD COLUMN pack_channel_id TEXT;
+CREATE INDEX idx_channel_groups_pack_id ON channel_groups(pack_id);
+CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_id);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

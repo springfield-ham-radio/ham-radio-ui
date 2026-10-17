@@ -1,5 +1,5 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
-import { bindImportExportAction } from '~/importExport/registry';
+import { bindImportExportAction, importExportEntry } from '~/importExport/registry';
 
 /**
  * Point registry ids at the existing radio and library flows.
@@ -49,5 +49,13 @@ export default defineNuxtPlugin(() => {
   bindImportExportAction(IMPORT_EXPORT_IDS.exportChannelsChirpCsv, async (input) => {
     await channels.exportChirpLibraryCsv(input);
     return {};
+  });
+  bindImportExportAction(IMPORT_EXPORT_IDS.importChannelsPack, async (input) => {
+    if (input.file?.text) {
+      return importExportEntry(IMPORT_EXPORT_IDS.importChannelsPack).handler(input);
+    }
+
+    const pack = await channels.readChannelPackFile();
+    return pack ? { channelPack: pack } : { cancelled: true };
   });
 });

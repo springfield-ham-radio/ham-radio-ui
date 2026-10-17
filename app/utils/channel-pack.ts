@@ -135,6 +135,42 @@ export function countRepeaterBookChannels(channels: readonly SavedChannel[]): nu
   return channels.filter((channel) => channel.sourceFormat === 'repeaterbook').length;
 }
 
+/** Mint missing pack channel slugs before export or database write. */
+export function ensurePackChannelIds(channels: readonly SavedChannelWithPackId[]): SavedChannelWithPackId[] {
+  const usedIds = new Set<string>();
+
+  for (const channel of channels) {
+    const stored = channel.packChannelId?.trim();
+
+    if (stored) {
+      usedIds.add(stored);
+    }
+  }
+
+  return channels.map((channel) => {
+    const stored = channel.packChannelId?.trim();
+
+    if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored) && stored.length <= 64) {
+      return { ...channel, packChannelId: stored };
+    }
+
+    const packChannelId = mintPackChannelId(channel, usedIds);
+    usedIds.add(packChannelId);
+    return { ...channel, packChannelId };
+  });
+}
+
+export function defaultPackFileName(groupName: string): string {
+  const slug = groupName
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 48);
+
+  return `${slug || 'channel-pack'}.${CHANNEL_PACK_FILE_EXTENSION}`;
+}
+
 export function buildChannelPackDocument(
   metadata: ChannelPackMetadata,
   channels: readonly SavedChannelWithPackId[],

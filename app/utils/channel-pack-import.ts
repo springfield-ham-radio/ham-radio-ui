@@ -5,6 +5,8 @@ import { packChannelsToSavedChannels } from '~/utils/channel-pack';
 import { linkedNodesEqual } from '~/utils/linked-nodes';
 import type { SavedChannel } from '~/utils/saved-channels-db';
 
+export const CHANNEL_PACK_DIFF_PREVIEW_LIMIT = 8;
+
 export type ChannelPackDiffKind = 'add' | 'change' | 'remove';
 
 export interface ChannelPackDiffEntry {

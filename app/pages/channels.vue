@@ -11,7 +11,8 @@ import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-l
 import { addToRadioDevFixture } from '~/utils/add-to-radio-dev-fixture';
 import { addToRadioRowsWithoutErrors, addToRadioValidationRows } from '~/utils/channel-validation';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
-import { isTripChannelGroup } from '~/utils/channel-groups';
+import { ALL_CHANNELS_TAB_ID, isTripChannelGroup } from '~/utils/channel-groups';
+import type { ChannelPackDocument, ChannelPackMetadata } from '~/utils/channel-pack';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
@@ -74,6 +75,10 @@ const {
   createGroup,
   renameGroup,
   removeGroup,
+  defaultPackMetadataForGroup,
+  computePackImportPreview,
+  exportChannelPack,
+  applyChannelPackImport,
 } = useSavedChannels();
 
 onMounted(() => {
@@ -90,6 +95,7 @@ const { radios } = useSavedRadios();
 const { choiceForRadio, assessmentFor } = useOperatorLicense();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
+const channelPackFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'channel-pack-import');
 
 watch(addToRadioFixtureActive, (active) => {
   if (active) {
@@ -104,6 +110,12 @@ const { unit: distanceUnit } = useDistanceUnit();
 
 const importExportOpen = ref(false);
 const importExportPendingId = ref<string | undefined>();
+const packExportOpen = ref(false);
+const packExportSaving = ref(false);
+const packPreviewOpen = ref(false);
+const packApplying = ref(false);
+const pendingPack = shallowRef<ChannelPackDocument | null>(null);
+const packImportGroupName = ref('');
 
 watch(
   importExportFixtureActive,
@@ -113,6 +125,40 @@ watch(
     }
   },
   { immediate: true },
+);
+
+async function openSamplePackFixture(): Promise<void> {
+  const response = await fetch('/fixtures/sample-club.hpack');
+
+  if (!response.ok) {
+    return;
+  }
+
+  const { parseChannelPack } = await import('~/utils/channel-pack');
+  const pack = parseChannelPack(await response.text());
+  pendingPack.value = pack;
+  packImportGroupName.value = pack.name;
+  packPreviewOpen.value = true;
+}
+
+watch(
+  channelPackFixtureActive,
+  (active) => {
+    if (active) {
+      void openSamplePackFixture();
+    }
+  },
+  { immediate: true },
+);
+
+const packExportMetadata = computed(() =>
+  activeGroup.value && !activeGroup.value.builtin ? defaultPackMetadataForGroup(activeGroup.value) : null,
+);
+const packExportChannels = computed(() =>
+  activeGroup.value && !activeGroup.value.builtin ? channelsForGroup(activeGroup.value.id) : [],
+);
+const packImportPreview = computed(() =>
+  pendingPack.value ? computePackImportPreview(pendingPack.value, packImportGroupName.value) : null,
 );
 const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
@@ -354,6 +400,8 @@ const channelImportExportContext = computed(() =>
   importExportContext({
     tauri: isTauriRuntime(),
     libraryLocked: builtinGroup.value,
+    packExportLocked:
+      activeGroupId.value === ALL_CHANNELS_TAB_ID || !activeGroup.value || Boolean(activeGroup.value.builtin),
   }),
 );
 const exportScopeChannels = computed(() =>
@@ -1033,9 +1081,28 @@ async function onSave(payload: {
 }
 
 async function onChannelImportExportSelect(id: string): Promise<void> {
+  if (id === IMPORT_EXPORT_IDS.exportChannelsPack) {
+    importExportOpen.value = false;
+    packExportOpen.value = true;
+    return;
+  }
+
   importExportPendingId.value = id;
 
   try {
+    if (id === IMPORT_EXPORT_IDS.importChannelsPack) {
+      const result = await run(id, {});
+      importExportOpen.value = false;
+
+      if (result.channelPack) {
+        pendingPack.value = result.channelPack;
+        packImportGroupName.value = result.channelPack.name;
+        packPreviewOpen.value = true;
+      }
+
+      return;
+    }
+
     const isExport =
       id === IMPORT_EXPORT_IDS.exportChannelsCsv || id === IMPORT_EXPORT_IDS.exportChannelsChirpCsv;
     await run(id, isExport ? { savedChannels: exportScopeChannels.value } : {});
@@ -1044,6 +1111,49 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
     // Toast is shown by the composable.
   } finally {
     importExportPendingId.value = undefined;
+  }
+}
+
+async function onPackExportSave(payload: {
+  metadata: ChannelPackMetadata;
+  includeRepeaterBook: boolean;
+}): Promise<void> {
+  if (!activeGroup.value || activeGroup.value.builtin) {
+    return;
+  }
+
+  packExportSaving.value = true;
+
+  try {
+    await exportChannelPack({
+      groupId: activeGroup.value.id,
+      metadata: payload.metadata,
+      includeRepeaterBook: payload.includeRepeaterBook,
+      channels: packExportChannels.value,
+    });
+    packExportOpen.value = false;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    packExportSaving.value = false;
+  }
+}
+
+async function onPackImportApply(): Promise<void> {
+  if (!pendingPack.value || packImportPreview.value?.resolution.action === 'blocked') {
+    return;
+  }
+
+  packApplying.value = true;
+
+  try {
+    await applyChannelPackImport(pendingPack.value, packImportGroupName.value);
+    packPreviewOpen.value = false;
+    pendingPack.value = null;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    packApplying.value = false;
   }
 }
 </script>
@@ -1473,6 +1583,25 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
       :export-scope-summary="exportScopeSummary"
       :pending-id="importExportPendingId"
       @select="onChannelImportExportSelect"
+    />
+    <ChannelPackExportDialog
+      v-if="packExportMetadata"
+      v-model:open="packExportOpen"
+      :group-name="activeGroup?.name ?? ''"
+      :channel-count="packExportChannels.length"
+      :channels="packExportChannels"
+      :initial="packExportMetadata"
+      @save="onPackExportSave"
+    />
+    <ChannelPackPreviewDialog
+      v-if="pendingPack && packImportPreview"
+      v-model:open="packPreviewOpen"
+      v-model:group-name="packImportGroupName"
+      :pack="packImportPreview.pack"
+      :plan="packImportPreview.plan"
+      :resolution="packImportPreview.resolution"
+      :applying="packApplying"
+      @apply="onPackImportApply"
     />
   </div>
 </template>
