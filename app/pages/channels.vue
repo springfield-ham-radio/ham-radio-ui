@@ -13,6 +13,11 @@ import { addToRadioRowsWithoutErrors, addToRadioValidationRows } from '~/utils/c
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
 import { ALL_CHANNELS_TAB_ID, isTripChannelGroup } from '~/utils/channel-groups';
 import type { ChannelPackDocument, ChannelPackMetadata } from '~/utils/channel-pack';
+import {
+  anchorIdIfStillVisible,
+  applyMacRowSelection,
+  type MacSelectionModifiers,
+} from '~/utils/mac-row-selection';
 import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
@@ -166,6 +171,8 @@ const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
 const addToRadioOpen = ref(false);
 const rowSelection = ref<Record<string, boolean>>({});
+const selectionAnchorId = shallowRef<string | undefined>();
+let ignoreNextCheckboxToggle = false;
 const groupNameOpen = shallowRef(false);
 const groupNameMode = shallowRef<'empty' | 'selection' | 'rename' | 'trip'>('empty');
 const distanceStartId = ref(TRIP_START_NONE);
@@ -183,6 +190,7 @@ const table = useTemplateRef<{
       getIsVisible: () => boolean;
     }>;
     getColumn: (id: string) => { toggleVisibility: (visible: boolean) => void } | undefined;
+    getRowModel?: () => { rows: Array<{ id: string }> };
   };
 }>('table');
 const tripOpenFilter = ref<ChannelTripOpenFilter>('all');
@@ -586,11 +594,11 @@ const columns = computed<TableColumn<DisplaySavedChannel>[]>(() => [
         h(UCheckbox, {
           modelValue: row.getIsSelected(),
           'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
-            row.toggleSelected(!!value);
+            onChannelCheckboxUpdate(row, value);
           },
           'aria-label': `Select ${row.original.name || 'saved channel'}`,
           onClick: (event: Event) => {
-            event.stopPropagation();
+            onChannelCheckboxClick(event, String(row.original.id));
           },
         }),
       ),
@@ -696,20 +704,20 @@ const columnMenuItems = computed(() => {
 });
 
 watch(activeGroupId, () => {
-  rowSelection.value = {};
+  clearRowSelection();
 });
 
 watch(displayChannels, (rows) => {
-  const next = selectionVisibleOnly(
-    rowSelection.value,
-    rows.map((channel) => String(channel.id)),
-  );
+  const visibleIds = rows.map((channel) => String(channel.id));
+  const next = selectionVisibleOnly(rowSelection.value, visibleIds);
   const currentIds = Object.keys(rowSelection.value).filter((id) => rowSelection.value[id]).sort();
   const nextIds = Object.keys(next).sort();
 
   if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
     rowSelection.value = next;
   }
+
+  selectionAnchorId.value = anchorIdIfStillVisible(selectionAnchorId.value, visibleIds);
 });
 
 watch(
@@ -797,6 +805,7 @@ function onChannelRowHover(_event: Event, row: TableRow<DisplaySavedChannel> | n
 
 function clearRowSelection(): void {
   rowSelection.value = {};
+  selectionAnchorId.value = undefined;
 }
 
 function openEmptyGroup(): void {
@@ -841,7 +850,7 @@ async function confirmGroupName(name: string): Promise<void> {
     } else {
       const channelIds = mode === 'selection' ? selectedLibraryChannels.value.map((channel) => channel.id) : [];
       await createGroup(name, channelIds);
-      rowSelection.value = {};
+      clearRowSelection();
     }
 
     groupNameOpen.value = false;
@@ -884,7 +893,7 @@ async function confirmDeleteChannels(): Promise<void> {
 
   try {
     await removeChannels(ids);
-    rowSelection.value = {};
+    clearRowSelection();
     deleteChannelsOpen.value = false;
   } catch {
     // Toast is shown by the composable.
@@ -919,6 +928,73 @@ function openEdit(channel: SavedChannel): void {
   editorOpen.value = true;
 }
 
+function visibleChannelIds(): string[] {
+  const rows = table.value?.tableApi.getRowModel?.().rows;
+
+  if (rows) {
+    return rows.map((row) => row.id);
+  }
+
+  return displayChannels.value.map((channel) => String(channel.id));
+}
+
+function commitChannelSelection(channelId: string, modifiers: MacSelectionModifiers): void {
+  const next = applyMacRowSelection(
+    visibleChannelIds(),
+    {
+      selected: rowSelection.value,
+      anchorId: selectionAnchorId.value,
+    },
+    channelId,
+    modifiers,
+  );
+
+  rowSelection.value = next.selected;
+  selectionAnchorId.value = next.anchorId;
+}
+
+function onChannelTableMouseDown(event: MouseEvent): void {
+  if (!event.shiftKey) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (target instanceof Element && target.closest('button, input, a, textarea, label, [role="checkbox"]')) {
+    return;
+  }
+
+  event.preventDefault();
+}
+
+function onChannelCheckboxClick(event: Event, channelId: string): void {
+  event.stopPropagation();
+
+  if (event instanceof MouseEvent && event.shiftKey) {
+    ignoreNextCheckboxToggle = true;
+    commitChannelSelection(channelId, {
+      shiftKey: true,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+    });
+    queueMicrotask(() => {
+      ignoreNextCheckboxToggle = false;
+    });
+    return;
+  }
+
+  selectionAnchorId.value = channelId;
+}
+
+function onChannelCheckboxUpdate(row: TableRow<DisplaySavedChannel>, value: boolean | 'indeterminate'): void {
+  if (ignoreNextCheckboxToggle) {
+    ignoreNextCheckboxToggle = false;
+    return;
+  }
+
+  row.toggleSelected(value === true);
+}
+
 function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void {
   const target = event.target;
 
@@ -926,12 +1002,25 @@ function onSelectChannel(event: Event, row: TableRow<DisplaySavedChannel>): void
     return;
   }
 
+  const channelId = String(row.original.id);
+
+  if (event instanceof MouseEvent && (event.shiftKey || event.metaKey || event.ctrlKey)) {
+    commitChannelSelection(channelId, {
+      shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+    });
+    return;
+  }
+
+  selectionAnchorId.value = channelId;
+
   if (isPredefinedChannelId(row.original.id)) {
     return;
   }
 
   if (showMap.value) {
-    highlightedChannelId.value = String(row.original.id);
+    highlightedChannelId.value = channelId;
   }
 
   openEdit(row.original);
@@ -984,7 +1073,7 @@ async function confirmAddToRadio(payload: { sessionId: string; mode: 'all' | 'va
     });
 
     if ((added.count ?? 0) > 0) {
-      rowSelection.value = {};
+      clearRowSelection();
       addToRadioOpen.value = false;
     }
   } finally {
@@ -1506,7 +1595,7 @@ async function onPackImportApply(): Promise<void> {
         />
       </template>
       <template #channels>
-        <div class="h-full min-h-0 w-full overflow-auto">
+        <div class="h-full min-h-0 w-full overflow-auto" @mousedown="onChannelTableMouseDown">
           <UTable
             ref="table"
             v-model:row-selection="rowSelection"
