@@ -17,6 +17,14 @@ import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import {
+  buildLibraryPrintDocument,
+  emptyPrintReason,
+  formatChannelPrintDate,
+  printScopeSummary,
+  resolvePrintRows,
+  type ChannelPrintLibraryRow,
+} from '~/utils/channel-print';
+import {
   channelMapRangeRadiusKm,
   formatChannelMapRangeDisplay,
   parseChannelMapRangeRadius,
@@ -76,18 +84,11 @@ const {
   removeGroup,
 } = useSavedChannels();
 
-onMounted(() => {
-  void refresh();
-
-  if (addToRadioFixtureActive.value) {
-    void seedAddToRadioDevFixture();
-  }
-});
-
 const route = useRoute();
 const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
-const { choiceForRadio, assessmentFor } = useOperatorLicense();
+const { choiceForRadio, assessmentFor, amateurIdentity, amateurCallSignOptions } = useOperatorLicense();
+const { openPrintDialog, registerLibraryProvider, unregisterLibraryProvider } = useChannelPrint();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
 
@@ -1032,6 +1033,92 @@ async function onSave(payload: {
   }
 }
 
+function toLibraryPrintRow(channel: SavedChannel): ChannelPrintLibraryRow {
+  const distanceKm = tripDistanceKm(channel, distanceStartPoint.value);
+
+  return {
+    ...channel,
+    band: bandNameForFrequency(channel.transmitFrequency),
+    distanceLabel: formatTripDistance(distanceKm, distanceUnit.value),
+  };
+}
+
+function libraryPrintSelection() {
+  const visible = displayChannels.value.map((channel) => toLibraryPrintRow(channel));
+  const selected = selectedLibraryChannels.value.map((channel) => toLibraryPrintRow(channel));
+
+  return resolvePrintRows({
+    selected,
+    visible,
+    id: (row) => String(row.id),
+  });
+}
+
+function buildLibraryPrintContext() {
+  const resolved = libraryPrintSelection();
+  const groupLabel = activeGroup.value?.name ?? 'All';
+  const defaultCallSign = amateurIdentity.value.callSign;
+
+  return {
+    surface: 'library' as const,
+    title: 'Print channels',
+    subtitle: printScopeSummary(resolved.rows.length, resolved.scope),
+    rowCount: resolved.rows.length,
+    callSignOptions: amateurCallSignOptions.value,
+    defaultCallSign,
+    buildDocument: (options: {
+      layout: 'full' | 'wallet';
+      matchVisibleColumns: boolean;
+      callSign?: string;
+    }) => {
+      const rows = libraryPrintSelection().rows;
+
+      if (emptyPrintReason(rows.length)) {
+        return undefined;
+      }
+
+      return buildLibraryPrintDocument({
+        layout: options.layout,
+        groupLabel,
+        callSign: options.callSign,
+        printedOn: formatChannelPrintDate(new Date()),
+        rows,
+        columnVisibility: columnVisibility.value,
+        includeDistance: Boolean(distanceStartPoint.value),
+        matchVisibleColumns: options.matchVisibleColumns,
+      });
+    },
+  };
+}
+
+function libraryPrintProvider() {
+  return buildLibraryPrintContext();
+}
+
+function openLibraryPrintDialog(): void {
+  const context = buildLibraryPrintContext();
+
+  if (emptyPrintReason(context.rowCount)) {
+    return;
+  }
+
+  openPrintDialog(context);
+}
+
+onMounted(() => {
+  void refresh();
+
+  if (addToRadioFixtureActive.value) {
+    void seedAddToRadioDevFixture();
+  }
+
+  registerLibraryProvider(libraryPrintProvider);
+});
+
+onUnmounted(() => {
+  unregisterLibraryProvider(libraryPrintProvider);
+});
+
 async function onChannelImportExportSelect(id: string): Promise<void> {
   importExportPendingId.value = id;
 
@@ -1196,6 +1283,15 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
               aria-label="Choose visible columns"
             />
           </UDropdownMenu>
+          <UButton
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            label="Print"
+            :disabled="displayChannels.length === 0"
+            @click="openLibraryPrintDialog"
+          />
         </div>
       </div>
       <p v-if="distanceStartPoint" class="text-xs text-muted">

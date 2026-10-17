@@ -127,6 +127,13 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         Some("CmdOrCtrl+Shift+U"),
     )?;
     let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
+    let print_channels = MenuItem::with_id(
+        app,
+        "print-channels",
+        "Print...",
+        true,
+        Some("CmdOrCtrl+P"),
+    )?;
     // Alt chords keep Edit → Undo/Redo on CmdOrCtrl+Z for text fields. The webview
     // handles plain CmdOrCtrl+Z outside fields; these accelerators mirror memory undo.
     let undo_memory = MenuItem::with_id(
@@ -247,6 +254,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &PredefinedMenuItem::separator(app)?,
                 &show_backups,
                 &PredefinedMenuItem::separator(app)?,
+                &print_channels,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::close_window(app, None)?,
             ],
         )?;
@@ -289,6 +298,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &show_backups,
+                &PredefinedMenuItem::separator(app)?,
+                &print_channels,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
                 &check_updates,
@@ -704,6 +715,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
             "read-from-radio" => emit_menu_event(app, "read-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
             "show-backups" => emit_menu_event(app, "show-backups"),
+            "print-channels" => emit_menu_event(app, "print-channels"),
             "edit-undo" => emit_menu_event(app, "edit-undo"),
             "edit-redo" => emit_menu_event(app, "edit-redo"),
             "undo-memory" => emit_menu_event(app, "undo-memory"),

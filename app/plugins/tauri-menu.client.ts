@@ -1,19 +1,22 @@
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { runImportExport } from '~/importExport/registry';
 import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { readDeveloperMode } from '~/utils/developer-mode';
+import { CHANNEL_PRINT_ERROR_EVENT } from '~/utils/channel-print-window';
 import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
   const toast = useToast();
+  const { requestPrintFromMenu } = useChannelPrint();
   const { checkForUpdate } = useAppUpdater();
   const { setEnabled: setDeveloperMode } = useDeveloperMode();
 
   void (async () => {
     try {
-      const { listen } = await import('@tauri-apps/api/event');
-      const { invoke } = await import('@tauri-apps/api/core');
       await listen<boolean>('developer-mode-changed', (event) => {
         const checked = event.payload === true;
         setDeveloperMode(checked);
@@ -55,6 +58,27 @@ export default defineNuxtPlugin(() => {
       await listen('write-to-radio', () => {
         void router.push('/');
         void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
+      });
+      await listen<{ message: string }>(CHANNEL_PRINT_ERROR_EVENT, (event) => {
+        if (getCurrentWindow().label !== 'main') {
+          return;
+        }
+
+        const message = event.payload?.message?.trim() || 'Could not open the system print dialog.';
+
+        toast.add({
+          title: 'Print failed',
+          description: message,
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
+      });
+      await listen('print-channels', () => {
+        if (getCurrentWindow().label !== 'main') {
+          return;
+        }
+
+        requestPrintFromMenu(router.currentRoute.value.path);
       });
       await listen('show-backups', () => {
         void showRadioImageBackups().catch((cause: unknown) => {

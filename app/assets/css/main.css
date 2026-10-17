@@ -27,6 +27,15 @@ body,
   overflow: hidden;
 }
 
+@media print {
+  html,
+  body,
+  #__nuxt {
+    height: auto;
+    overflow: visible;
+  }
+}
+
 body {
   @apply bg-muted text-highlighted antialiased;
 }

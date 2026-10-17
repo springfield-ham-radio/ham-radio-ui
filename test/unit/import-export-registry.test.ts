@@ -49,6 +49,8 @@ const radioMemoryMenuAccelerators = [
 
 const editUndoMenuAccelerators = [{ id: 'edit-undo', accelerator: 'CmdOrCtrl+Z' }];
 
+const printMenuAccelerators = [{ id: 'print-channels', accelerator: 'CmdOrCtrl+P' }];
+
 function definition(overrides: Partial<ImportExportDefinition> & Pick<ImportExportDefinition, 'id'>): ImportExportDefinition {
   return {
     label: overrides.id,
@@ -220,6 +222,11 @@ describe('import/export registry', () => {
     }
 
     for (const menu of editUndoMenuAccelerators) {
+      expect(rust).toContain(`"${menu.id}"`);
+      expect(rust).toContain(`"${menu.accelerator}"`);
+    }
+
+    for (const menu of printMenuAccelerators) {
       expect(rust).toContain(`"${menu.id}"`);
       expect(rust).toContain(`"${menu.accelerator}"`);
     }

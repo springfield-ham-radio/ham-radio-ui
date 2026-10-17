@@ -2,6 +2,7 @@ import { fetchCallookLicense } from '~/utils/callook';
 import { fetchGmrsLicense } from '~/utils/gmrs-lookup';
 import {
   addPerson,
+  amateurCallSignSelectOptions,
   amateurLicenseClassOptions,
   amateurLicenseFromCallook,
   assessPrivilege,
@@ -59,6 +60,7 @@ export function useOperatorLicense() {
   const solePrivilege = computed(() => solePrivilegeChoice(directory.value));
   const homeGridsquare = computed(() => homeGridsquareFor(directory.value));
   const amateurIdentity = computed(() => soleAmateurIdentity(directory.value));
+  const amateurCallSignOptions = computed(() => amateurCallSignSelectOptions(directory.value));
 
   function persist(next: LicenseDirectory): void {
     directory.value = next;
@@ -231,11 +233,13 @@ export function useOperatorLicense() {
   }
 
   return {
+    directory: readonly(directory),
     people,
     privilegeGroups,
     privilegeChoices,
     solePrivilege,
     amateurIdentity,
+    amateurCallSignOptions,
     homeGridsquare,
     amateurLicenseClassOptions,
     licensesFor,
