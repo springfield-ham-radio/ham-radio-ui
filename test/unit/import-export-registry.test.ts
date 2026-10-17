@@ -42,6 +42,11 @@ const menuAccelerators: Array<{ id: string; shortcut: string; accelerator: strin
   { id: IMPORT_EXPORT_IDS.writeToRadio, shortcut: 'meta_shift_u', accelerator: 'CmdOrCtrl+Shift+U' },
 ];
 
+const radioMemoryMenuAccelerators = [
+  { id: 'undo-memory', accelerator: 'CmdOrCtrl+Alt+Z' },
+  { id: 'redo-memory', accelerator: 'CmdOrCtrl+Alt+Shift+Z' },
+];
+
 function definition(overrides: Partial<ImportExportDefinition> & Pick<ImportExportDefinition, 'id'>): ImportExportDefinition {
   return {
     label: overrides.id,
@@ -203,6 +208,11 @@ describe('import/export registry', () => {
     for (const menu of menuAccelerators) {
       const entry = channelImportExport.require(menu.id);
       expect(entry.shortcut).toBe(menu.shortcut);
+      expect(rust).toContain(`"${menu.id}"`);
+      expect(rust).toContain(`"${menu.accelerator}"`);
+    }
+
+    for (const menu of radioMemoryMenuAccelerators) {
       expect(rust).toContain(`"${menu.id}"`);
       expect(rust).toContain(`"${menu.accelerator}"`);
     }

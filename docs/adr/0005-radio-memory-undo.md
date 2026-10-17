@@ -1,6 +1,6 @@
 # Radio memory undo and redo
 
-**Status:** proposed  
+**Status:** accepted  
 **Date:** 2026-10-17  
 **Related:** [#64](https://github.com/springfield-ham-radio/ham-radio-ui/issues/64)
 
@@ -17,7 +17,7 @@ Edits to an open radio’s clone memory (channels, settings, reorder, library re
 - Clear history when a card loads a new image (read, open memory, restore backup) or when the card session is cleared. Save and write do not clear the stack.
 - **Clean** index: set when memory is loaded and when a memory file save succeeds. The card shows “Unsaved” when the current index differs from the clean index. Undo back to the clean index clears unsaved.
 - **UI (PR 1):** Undo and Redo buttons on the radio workspace Channels toolbar with tooltips from the history labels.
-- **Shortcuts (PR 2):** Webview Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z when focus is not in a text field; Radio menu items without OS accelerators so Edit → Undo keeps text undo.
+- **Shortcuts (PR 2):** Webview Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z (plus Ctrl+Y redo on Windows) when focus is not in a text field. Radio menu **Undo Memory** / **Redo Memory** use Cmd/Ctrl+Alt+Z and Cmd/Ctrl+Alt+Shift+Z so Edit → Undo keeps Cmd/Ctrl+Z for text.
 - **Live CAT** is out of scope; CAT commands are not stored in the clone image.
 - **ADR status** moves to `accepted` when PR 2 lands.
 
