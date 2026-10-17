@@ -1,8 +1,5 @@
 <template>
-  <div v-if="isPrintRoute" class="min-h-screen bg-white text-black">
-    <NuxtPage />
-  </div>
-  <UApp v-else>
+  <UApp>
     <div class="flex h-dvh min-h-0 flex-col overflow-hidden bg-muted text-highlighted">
       <AppHeader />
       <main class="min-h-0 flex-1 overflow-hidden">
@@ -39,7 +36,6 @@ const {
 const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
 const route = useRoute();
-const isPrintRoute = computed(() => route.path.startsWith('/print/'));
 
 const modulesDialogOpen = computed({
   get: () => {
@@ -100,10 +96,6 @@ async function onModulesInstalled(): Promise<void> {
 }
 
 onMounted(() => {
-  if (isPrintRoute.value) {
-    return;
-  }
-
   void initialize();
   startAppUpdater();
 });

@@ -1,5 +1,3 @@
-import { emit } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import type { ChannelPrintDocument } from '~/utils/channel-print';
@@ -9,6 +7,9 @@ export const CHANNEL_PRINT_STORAGE_KEY = 'ham-radio-channel-print';
 
 /** Stable label so a second print focuses this window instead of opening another. */
 export const CHANNEL_PRINT_WINDOW_LABEL = 'channel-print';
+
+/** Site-root document. It is not a Nuxt route, so it loads no module scripts. */
+export const CHANNEL_PRINT_PAGE = '/channel-print.html';
 
 export function storeChannelPrintDocument(document: ChannelPrintDocument): void {
   const json = JSON.stringify(document);
@@ -47,27 +48,8 @@ export function clearChannelPrintDocument(): void {
 
 export const CHANNEL_PRINT_ERROR_EVENT = 'channel-print-error';
 
-export async function reportChannelPrintError(message: string): Promise<void> {
-  if (!isTauriRuntime()) {
-    return;
-  }
-
-  await emit(CHANNEL_PRINT_ERROR_EVENT, { message });
-}
-
-export function closeChannelPrintWindow(): void {
-  clearChannelPrintDocument();
-
-  if (!isTauriRuntime()) {
-    window.close();
-    return;
-  }
-
-  void getCurrentWindow().close();
-}
-
-function printRouteUrl(): string {
-  return `${window.location.origin}/print/channels`;
+function printPageUrl(): string {
+  return `${window.location.origin}${CHANNEL_PRINT_PAGE}`;
 }
 
 let opening = false;
@@ -80,7 +62,7 @@ export async function openChannelPrintWindow(document: ChannelPrintDocument): Pr
   opening = true;
 
   try {
-    const url = printRouteUrl();
+    const url = printPageUrl();
 
     if (isTauriRuntime()) {
       const existing = await WebviewWindow.getByLabel(CHANNEL_PRINT_WINDOW_LABEL);

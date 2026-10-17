@@ -10,12 +10,6 @@ import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils
 
 export default defineNuxtPlugin(() => {
   const router = useRouter();
-  const route = useRoute();
-
-  if (route.path.startsWith('/print/')) {
-    return;
-  }
-
   const toast = useToast();
   const { requestPrintFromMenu } = useChannelPrint();
   const { checkForUpdate } = useAppUpdater();

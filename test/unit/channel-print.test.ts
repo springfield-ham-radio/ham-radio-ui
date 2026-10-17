@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
@@ -13,6 +14,8 @@ import {
   libraryRowCells,
 } from '../../app/utils/channel-print.ts';
 import {
+  CHANNEL_PRINT_ERROR_EVENT,
+  CHANNEL_PRINT_PAGE,
   CHANNEL_PRINT_STORAGE_KEY,
   clearChannelPrintDocument,
   readChannelPrintDocument,
@@ -252,6 +255,21 @@ describe('channel-print', () => {
     expect(document.columns).toEqual([]);
     expect(document.walletLines[0]?.notes).toBe('Club net');
     expect(document.walletLines[0]?.offset).toBe('-0.600');
+  });
+
+  it('serves the print window as a static page with no module scripts', () => {
+    expect(CHANNEL_PRINT_PAGE).toBe('/channel-print.html');
+    const html = readFileSync(new URL('../../public/channel-print.html', import.meta.url), 'utf8');
+
+    expect(html).not.toMatch(/<script[^>]*type=["']module["']/);
+    expect(html).not.toMatch(/\bimport\s*\(/);
+    expect(html).toContain('column-count: 3');
+    expect(html).toContain('height: auto');
+    expect(html).toContain('overflow: visible');
+    expect(html).toContain('@page { size: letter landscape; margin: 0.35in; }');
+    expect(html).toContain('@page { size: letter portrait; margin: 0.4in; }');
+    expect(html).toContain(CHANNEL_PRINT_STORAGE_KEY);
+    expect(html).toContain(CHANNEL_PRINT_ERROR_EVENT);
   });
 
   it('stores one print payload in localStorage and clears it', () => {
