@@ -14,7 +14,6 @@ const props = withDefaults(
 const activeId = defineModel<string>('activeId', { required: true });
 
 const emit = defineEmits<{
-  createEmpty: [];
   rename: [];
   remove: [];
 }>();
@@ -49,16 +48,6 @@ const items = computed<TabsItem[]>(() => [
         indicator: 'bg-primary bottom-0 h-0.5 rounded-full',
       }"
     />
-    <UTooltip v-if="manage" text="Create an empty group, then import a CSV">
-      <UButton
-        icon="i-lucide-folder-plus"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        label="Empty group"
-        @click="emit('createEmpty')"
-      />
-    </UTooltip>
     <UTooltip v-if="manage && canEditGroup" text="Rename this group">
       <UButton
         icon="i-lucide-folder-pen"

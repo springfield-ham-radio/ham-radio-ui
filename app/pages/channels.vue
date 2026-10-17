@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RadioChannel } from '@springfield/ham-radio-api';
-import type { SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
+import type { DropdownMenuItem, SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
@@ -119,6 +119,9 @@ const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
 const deleteChannelsOpen = shallowRef(false);
 const isDeletingChannels = shallowRef(false);
+type ChannelLibraryCreateAction = 'add-channel' | 'empty-group' | 'trip-group';
+
+const channelCreateAction = useState<ChannelLibraryCreateAction>('channel-library-create-action', () => 'add-channel');
 const linkedOnly = ref(false);
 const channelMapSettings = ref(readChannelMapSettings());
 const showMap = computed({
@@ -299,6 +302,71 @@ const importTooltip = computed(() => {
 const addChannelTooltip = computed(() =>
   builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
 );
+const channelCreatePrimaryLabel = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'New empty group';
+    case 'trip-group':
+      return 'New trip group';
+    default:
+      return 'Add channel';
+  }
+});
+const channelCreatePrimaryIcon = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'i-lucide-folder-plus';
+    case 'trip-group':
+      return 'i-lucide-route';
+    default:
+      return 'i-lucide-plus';
+  }
+});
+const channelCreatePrimaryTooltip = computed(() => {
+  switch (channelCreateAction.value) {
+    case 'empty-group':
+      return 'Create an empty group, then import a CSV to fill it.';
+    case 'trip-group':
+      return 'Create a trip group, then import a route CSV you exported';
+    default:
+      return addChannelTooltip.value;
+  }
+});
+const channelCreatePrimaryDisabled = computed(
+  () => channelCreateAction.value === 'add-channel' && builtinGroup.value,
+);
+const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
+  [
+    {
+      label: 'Add channel',
+      icon: 'i-lucide-plus',
+      type: 'checkbox',
+      checked: channelCreateAction.value === 'add-channel',
+      disabled: builtinGroup.value,
+      onSelect() {
+        runChannelCreateAction('add-channel');
+      },
+    },
+    {
+      label: 'New empty group',
+      icon: 'i-lucide-folder-plus',
+      type: 'checkbox',
+      checked: channelCreateAction.value === 'empty-group',
+      onSelect() {
+        runChannelCreateAction('empty-group');
+      },
+    },
+    {
+      label: 'New trip group',
+      icon: 'i-lucide-route',
+      type: 'checkbox',
+      checked: channelCreateAction.value === 'trip-group',
+      onSelect() {
+        runChannelCreateAction('trip-group');
+      },
+    },
+  ],
+]);
 const emptyMessage = computed(() => {
   if (linkedOnly.value) {
     return 'No linked repeaters match. Turn off Linked only to see every channel.';
@@ -689,6 +757,22 @@ function openCreate(): void {
   editorOpen.value = true;
 }
 
+function runChannelCreateAction(action: ChannelLibraryCreateAction): void {
+  channelCreateAction.value = action;
+
+  switch (action) {
+    case 'add-channel':
+      openCreate();
+      break;
+    case 'empty-group':
+      openEmptyGroup();
+      break;
+    case 'trip-group':
+      openTripGroup();
+      break;
+  }
+}
+
 function openEdit(channel: SavedChannel): void {
   editingChannel.value = channel;
   editorOpen.value = true;
@@ -902,16 +986,6 @@ async function onImportCsv(): Promise<void> {
             @click="onExportCsv"
           />
         </UTooltip>
-        <UTooltip text="Create a trip group, then import a route CSV you exported">
-          <UButton
-            icon="i-lucide-route"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            label="New trip group"
-            @click="openTripGroup"
-          />
-        </UTooltip>
         <UTooltip :text="newGroupTooltip">
           <span class="inline-flex">
             <UButton
@@ -973,25 +1047,36 @@ async function onImportCsv(): Promise<void> {
           :aria-pressed="showMap"
           @click="showMap = !showMap"
         />
-        <UTooltip :text="addChannelTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-plus"
-              color="primary"
-              size="sm"
-              label="Add channel"
-              :disabled="builtinGroup"
-              @click="openCreate"
-            />
-          </span>
-        </UTooltip>
+        <div role="group" aria-label="Create channel or group" class="inline-flex">
+          <UFieldGroup size="sm">
+            <UTooltip :text="channelCreatePrimaryTooltip">
+              <span class="inline-flex">
+                <UButton
+                  :icon="channelCreatePrimaryIcon"
+                  color="primary"
+                  size="sm"
+                  :label="channelCreatePrimaryLabel"
+                  :disabled="channelCreatePrimaryDisabled"
+                  @click="runChannelCreateAction(channelCreateAction)"
+                />
+              </span>
+            </UTooltip>
+            <UDropdownMenu :items="channelCreateMenuItems" :content="{ align: 'end' }">
+              <UButton
+                color="primary"
+                size="sm"
+                icon="i-lucide-chevron-down"
+                aria-label="Choose create action"
+              />
+            </UDropdownMenu>
+          </UFieldGroup>
+        </div>
       </div>
     </div>
 
     <ChannelGroupTabs
       v-model:active-id="activeGroupId"
       :groups="groups"
-      @create-empty="openEmptyGroup"
       @rename="openRenameGroup"
       @remove="removeGroupOpen = true"
     />
