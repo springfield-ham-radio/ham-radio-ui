@@ -1,3 +1,9 @@
+## [1.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.14.0...v1.15.0) (2026-10-17)
+
+### Features
+
+* **channels:** CHIRP CSV export ([#135](https://github.com/springfield-ham-radio/ham-radio-ui/issues/135)) ([e182603](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e18260322764d398cced4ed1d8231ee502143678))
+
 ## [1.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.13.0...v1.14.0) (2026-10-17)
 
 ### Features
