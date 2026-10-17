@@ -1,3 +1,9 @@
+## [1.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.17.0...v1.18.0) (2026-10-17)
+
+### Features
+
+* **radio:** memory undo shortcuts and Radio menu (closes [#64](https://github.com/springfield-ham-radio/ham-radio-ui/issues/64)) ([#141](https://github.com/springfield-ham-radio/ham-radio-ui/issues/141)) ([20b94a1](https://github.com/springfield-ham-radio/ham-radio-ui/commit/20b94a139a2d93bf6228603c33e3847c1b32dc24))
+
 ## [1.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.16.0...v1.17.0) (2026-10-17)
 
 ### Features
