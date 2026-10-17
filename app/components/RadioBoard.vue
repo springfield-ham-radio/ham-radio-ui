@@ -22,7 +22,12 @@ const {
 } = useRadioBoard();
 const { disconnect } = useCat();
 const route = useRoute();
-const { seedWriteReviewDevFixture, seedUndoMemoryDevFixture, seedDialogMessageDevFixture } = useRadio();
+const {
+  seedWriteReviewDevFixture,
+  seedUndoMemoryDevFixture,
+  seedDialogMessageDevFixture,
+  seedErrorReportDevFixture,
+} = useRadio();
 
 function maybeOpenWriteReviewFixture(): void {
   if (import.meta.dev && route.query.fixture === 'write-review') {
@@ -42,16 +47,24 @@ function maybeOpenDialogMessageFixture(): void {
   }
 }
 
+function maybeOpenErrorReportFixture(): void {
+  if (import.meta.dev && route.query.fixture === 'error-report') {
+    void seedErrorReportDevFixture();
+  }
+}
+
 onMounted(() => {
   maybeOpenWriteReviewFixture();
   maybeOpenUndoMemoryFixture();
   maybeOpenDialogMessageFixture();
+  maybeOpenErrorReportFixture();
 });
 
 watch(() => route.query.fixture, () => {
   maybeOpenWriteReviewFixture();
   maybeOpenUndoMemoryFixture();
   maybeOpenDialogMessageFixture();
+  maybeOpenErrorReportFixture();
 });
 
 watch(

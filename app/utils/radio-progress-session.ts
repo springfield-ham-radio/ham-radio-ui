@@ -1,4 +1,5 @@
 import type { BackupFailureChoice } from '~/utils/radio-backup-failure-decision';
+import type { RadioErrorReport } from '~/utils/radio-error-report';
 import type { CapturedSerialLogSnapshot } from '~/utils/serial-log-session';
 import { serialLogForProgressSave } from '~/utils/serial-log-session';
 
@@ -29,7 +30,7 @@ export function readProgressSerialLog(
   sessions: Record<string, { serialLog?: CapturedSerialLogSnapshot }>,
   pinnedTransferCardId: string | undefined,
   actingCardId: string | undefined,
-  progressError: string | null,
+  progressError: RadioErrorReport | null,
   progressKind: 'import' | 'write' | 'backup',
 ): CapturedSerialLogSnapshot | undefined {
   const sessionId = progressTransferSessionId(pinnedTransferCardId, actingCardId);

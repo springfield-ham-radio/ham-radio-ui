@@ -12,6 +12,8 @@ import {
 } from '~/utils/radio-module-install';
 import { isBetaZipFileName, versionFromZipName } from '~/utils/radio-module-semver';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import { showRadioErrorToast, radioErrorLogger } from '~/composables/useRadioErrorToast';
+import { createRadioErrorReport } from '~/utils/radio-error-report';
 
 const props = defineProps<{
   open: boolean;
@@ -121,12 +123,14 @@ async function installSelected(): Promise<void> {
       isOpen.value = false;
     }
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : 'Install failed';
-    toast.add({
+    const report = await createRadioErrorReport(
+      { operation: 'module', step: 'install from catalog' },
+      cause,
+    );
+    showRadioErrorToast(toast, radioErrorLogger, {
       title: 'Could not install modules',
-      description: message,
-      color: 'error',
-      icon: 'i-lucide-circle-alert',
+      report,
+      logMessage: 'Module install failed',
     });
   } finally {
     installing.value = false;

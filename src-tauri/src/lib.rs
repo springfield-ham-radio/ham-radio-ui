@@ -645,6 +645,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_os::init())
         // Do not persist VISIBLE: a saved hidden state would keep the window hidden forever.
         .plugin(
             tauri_plugin_window_state::Builder::new()

@@ -133,23 +133,11 @@ function closeProgress(): void {
     class="max-w-md"
   >
     <template #body>
-      <UAlert
-        v-if="progressError"
-        color="error"
-        variant="subtle"
-        icon="i-lucide-circle-alert"
-        :title="errorTitle"
-        :description="progressError"
-      />
+      <RadioErrorDetails v-if="progressError" :report="progressError" :alert-title="errorTitle" />
       <p v-if="progressError && progressSerialLog" class="mt-3 text-sm text-muted">
         {{ progressSerialLog.entryCount }} serial frame{{ progressSerialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
-      <div v-else class="flex flex-col gap-3">
-        <!--
-          Size the fill by width. UProgress translates a full-width indicator, and that
-          percentage is resolved against the wrong box while the modal is opening, so the
-          fill paints left of the track and then slides into place.
-        -->
+      <div v-else-if="!progressError" class="flex flex-col gap-3">
         <div
           class="h-2 w-full overflow-hidden rounded-full bg-accented"
           role="progressbar"

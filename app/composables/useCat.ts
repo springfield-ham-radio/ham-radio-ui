@@ -14,6 +14,9 @@ import {
   serializeSerialLogFile,
   serialLogEntryCount,
 } from '~/utils/serial-log-file';
+import { showRadioErrorToast } from '~/composables/useRadioErrorToast';
+import { radioErrorContextFromRadio } from '~/utils/radio-error-context';
+import { createRadioErrorReport } from '~/utils/radio-error-report';
 
 const logger = new LogLayer({
   transport: [
@@ -172,12 +175,18 @@ export function useCat() {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Failed to open CAT session';
       error.value = message;
-      logger.withError(cause).error('CAT connect failed');
-      toast.add({
+      const report = await createRadioErrorReport(
+        radioErrorContextFromRadio('cat', 'connect', {
+          radioId: radio.id,
+          config: radio,
+          port: path,
+        }),
+        cause,
+      );
+      showRadioErrorToast(toast, logger, {
         title: 'Could not connect CAT',
-        description: message,
-        color: 'error',
-        icon: 'i-lucide-circle-alert',
+        report,
+        logMessage: 'CAT connect failed',
       });
     } finally {
       connecting.value = false;
