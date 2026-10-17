@@ -1,3 +1,4 @@
+import { emit } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import type { ChannelPrintDocument } from '~/utils/channel-print';
@@ -48,6 +49,19 @@ export function clearChannelPrintDocument(): void {
 
 export const CHANNEL_PRINT_ERROR_EVENT = 'channel-print-error';
 
+/** Tells an already-open print window to show the payload just stored. */
+export const CHANNEL_PRINT_SHOW_EVENT = 'channel-print-show';
+
+/**
+ * A new card never closes the print window. Closing it while the macOS print
+ * panel is attached dismisses the panel.
+ */
+export function printWindowAction(hasOpenWindow: boolean): 'focus' | 'create' {
+  return hasOpenWindow ? 'focus' : 'create';
+}
+
+let browserPrintWindow: Window | null = null;
+
 function printPageUrl(): string {
   return `${window.location.origin}${CHANNEL_PRINT_PAGE}`;
 }
@@ -63,22 +77,16 @@ export async function openChannelPrintWindow(document: ChannelPrintDocument): Pr
 
   try {
     const url = printPageUrl();
+    storeChannelPrintDocument(document);
 
     if (isTauriRuntime()) {
       const existing = await WebviewWindow.getByLabel(CHANNEL_PRINT_WINDOW_LABEL);
 
-      if (existing) {
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 1000);
-          void existing.once('tauri://destroyed', () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-          void existing.close();
-        });
+      if (printWindowAction(Boolean(existing)) === 'focus' && existing) {
+        await existing.setFocus().catch(() => undefined);
+        await emit(CHANNEL_PRINT_SHOW_EVENT);
+        return;
       }
-
-      storeChannelPrintDocument(document);
 
       const printWindow = new WebviewWindow(CHANNEL_PRINT_WINDOW_LABEL, {
         url,
@@ -97,13 +105,19 @@ export async function openChannelPrintWindow(document: ChannelPrintDocument): Pr
       return;
     }
 
-    storeChannelPrintDocument(document);
+    if (printWindowAction(Boolean(browserPrintWindow && !browserPrintWindow.closed)) === 'focus' && browserPrintWindow) {
+      browserPrintWindow.focus();
+      return;
+    }
+
     const popup = window.open(url, CHANNEL_PRINT_WINDOW_LABEL, 'width=900,height=700');
 
     if (!popup) {
       clearChannelPrintDocument();
       throw new Error('Allow pop-ups to print channels in the browser.');
     }
+
+    browserPrintWindow = popup;
   } finally {
     opening = false;
   }

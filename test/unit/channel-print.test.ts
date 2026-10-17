@@ -17,8 +17,10 @@ import {
 import {
   CHANNEL_PRINT_ERROR_EVENT,
   CHANNEL_PRINT_PAGE,
+  CHANNEL_PRINT_SHOW_EVENT,
   CHANNEL_PRINT_STORAGE_KEY,
   clearChannelPrintDocument,
+  printWindowAction,
   readChannelPrintDocument,
   storeChannelPrintDocument,
 } from '../../app/utils/channel-print-window.ts';
@@ -262,6 +264,24 @@ describe('channel-print', () => {
     expect(html).toContain('@page { size: letter portrait; margin: 0.4in; }');
     expect(html).toContain(CHANNEL_PRINT_STORAGE_KEY);
     expect(html).toContain(CHANNEL_PRINT_ERROR_EVENT);
+  });
+
+  it('leaves the print window open until the operator closes it', () => {
+    expect(printWindowAction(true)).toBe('focus');
+    expect(printWindowAction(false)).toBe('create');
+
+    const html = readFileSync(new URL('../../public/channel-print.html', import.meta.url), 'utf8');
+    const opener = readFileSync(new URL('../../app/utils/channel-print-window.ts', import.meta.url), 'utf8');
+
+    expect(html).toContain('id="close"');
+    expect(html).toContain('>Close<');
+    expect(html).toContain('#close { display: none; }');
+    expect(html).toContain('event.metaKey');
+    expect(html).toContain(CHANNEL_PRINT_SHOW_EVENT);
+    expect(html).not.toContain("addEventListener('afterprint'");
+    expect(html).not.toContain('printed.then(closeWindow');
+    expect(opener).not.toContain('existing.close');
+    expect(opener).not.toContain('setTimeout(resolve, 1000)');
   });
 
   it('stores one print payload in localStorage and clears it', () => {

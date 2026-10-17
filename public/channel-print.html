@@ -80,17 +80,34 @@
     .name { font-weight: 650; }
     .notes { font-size: 7pt; }
 
+    #close {
+      position: fixed;
+      top: 0.45rem;
+      right: 0.5rem;
+      z-index: 1;
+      font: inherit;
+      font-size: 11pt;
+      padding: 0.2rem 0.7rem;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+
     @media print {
       body { padding: 0; }
+      #close { display: none; }
     }
   </style>
 </head>
 <body>
+  <button id="close" type="button">Close</button>
   <div id="root"></div>
   <script>
     (function () {
       var STORAGE_KEY = 'ham-radio-channel-print';
       var ERROR_EVENT = 'channel-print-error';
+      var SHOW_EVENT = 'channel-print-show';
       var COLUMN_WIDTH = {
         name: '14%',
         callsign: '9%',
@@ -251,29 +268,76 @@
         return;
       }
 
-      render(doc);
-      window.addEventListener('afterprint', closeWindow);
+      // WKWebView fires afterprint, and Tauri's print promise settles, as the
+      // sheet opens. Closing then destroys the webview and dismisses the panel.
+      // The operator closes this window with the button or Cmd/Ctrl+W.
+      document.getElementById('close').addEventListener('click', closeWindow);
+      document.addEventListener('keydown', function (event) {
+        var key = event.key || '';
 
-      var printWhenReady = function () {
+        if ((event.metaKey || event.ctrlKey) && (key === 'w' || key === 'W')) {
+          event.preventDefault();
+          closeWindow();
+        }
+      });
+
+      function schedulePrint() {
         requestAnimationFrame(function () {
           requestAnimationFrame(function () {
             try {
               var printed = window.print();
 
               if (printed && typeof printed.then === 'function') {
-                printed.then(closeWindow, fail);
+                printed.catch(fail);
               }
             } catch (cause) {
               fail(cause);
             }
           });
         });
-      };
+      }
+
+      function reprint() {
+        var next = null;
+
+        try {
+          next = localStorage.getItem(STORAGE_KEY);
+        } catch (ignored) {
+          next = null;
+        }
+
+        if (!next) {
+          return;
+        }
+
+        try {
+          render(JSON.parse(next));
+        } catch (ignored) {
+          fail('The print card could not be read.');
+          return;
+        }
+
+        schedulePrint();
+      }
+
+      render(doc);
+
+      var tauri = window.__TAURI__;
+
+      if (tauri && tauri.event && typeof tauri.event.listen === 'function') {
+        tauri.event.listen(SHOW_EVENT, reprint);
+      } else {
+        window.addEventListener('storage', function (event) {
+          if (event.key === STORAGE_KEY && event.newValue) {
+            reprint();
+          }
+        });
+      }
 
       if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(printWhenReady, printWhenReady);
+        document.fonts.ready.then(schedulePrint, schedulePrint);
       } else {
-        printWhenReady();
+        schedulePrint();
       }
     })();
   </script>
