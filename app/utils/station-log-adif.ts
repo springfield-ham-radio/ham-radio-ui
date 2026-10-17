@@ -5,6 +5,14 @@ import {
   type StationLogQsoInput,
 } from '~/utils/station-log-db';
 
+export {
+  canonicalizeAdifLocationField,
+  formatAdifLocationLatitude,
+  formatAdifLocationLongitude,
+  formatAdifLocationPair,
+  parseAdifLocationPair,
+} from '~/utils/station-log-adif-location';
+
 /** ADIF field names we map to first-class QSO columns. */
 const MAPPED_TAGS = new Set([
   'CALL',
