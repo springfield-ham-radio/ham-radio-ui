@@ -33,9 +33,9 @@
   },
   "dependencies": {
     "@nuxt/ui": "4.11.3",
-    "@springfield/ham-radio-api": "^18.1.0",
+    "@springfield/ham-radio-api": "18.2.0",
     "@springfield/ham-radio-driver": "^3.5.4",
-    "@springfield/ham-radio-registry": "^2.0.0",
+    "@springfield/ham-radio-registry": "2.1.0",
     "@springfield/ham-radio-utils": "^4.15.1",
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-dialog": "^2.8.1",
@@ -73,6 +73,7 @@
     "vitest": "^5.0.3"
   },
   "resolutions": {
+    "@springfield/ham-radio-api": "18.2.0",
     "conventional-changelog-conventionalcommits": "9.3.1"
   },
   "release": {

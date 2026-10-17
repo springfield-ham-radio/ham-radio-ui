@@ -1900,6 +1900,58 @@ export function useRadio() {
     }
   }
 
+  /**
+   * Dev-only: inject a config with readMessage and writeMessage and open Read from Radio.
+   */
+  async function seedDialogMessageDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    await waitForRadioCatalog();
+
+    const {
+      DIALOG_MESSAGE_FIXTURE_MODEL,
+      dialogMessageFixtureConfig,
+      dialogMessageFixtureMemory,
+    } = await import('~/utils/dialog-message-dev-fixture');
+
+    let config = configurations.value.find((item) => String(item.id.model) === DIALOG_MESSAGE_FIXTURE_MODEL);
+
+    if (!config) {
+      config = dialogMessageFixtureConfig();
+      configurations.value = [...configurations.value, config];
+    }
+
+    modulesInstallRequired.value = false;
+    modulesInstallOpen.value = false;
+
+    const cardId = openGuestCard({
+      name: 'Dialog message fixture',
+      manufacturer: String(config.id.manufacturer),
+      model: DIALOG_MESSAGE_FIXTURE_MODEL,
+      serialPort: DEV_FIXTURE_SERIAL_PORT,
+    });
+    focusCard(cardId);
+
+    const loaded = dialogMessageFixtureMemory(config);
+    const radioId: RadioId = {
+      model: config.id.model,
+      name: config.id.name,
+      manufacturer: config.id.manufacturer,
+    };
+
+    patchSession(cardId, {
+      memory: loaded.memory,
+      program: loaded.program,
+      activeRadioId: radioId,
+      channels: loaded.program.channels,
+      settingsMemoryMap: config.memoryMap,
+    });
+
+    openReadFromRadio(cardId);
+  }
+
   async function programValidationFixtureChannels(cardId: string, config: LoadedRadioConfig): Promise<void> {
     const session = readSession(cardId);
 
@@ -2026,6 +2078,7 @@ export function useRadio() {
     seedAddToRadioDevFixture,
     seedUndoMemoryDevFixture,
     seedWriteReviewDevFixture,
+    seedDialogMessageDevFixture,
     memoryUnsaved,
     memoryUndoLabel,
     memoryRedoLabel,

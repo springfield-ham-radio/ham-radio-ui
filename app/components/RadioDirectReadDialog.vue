@@ -12,6 +12,7 @@ import {
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { radioDialogMessage } from '~/utils/radio-dialog-message';
 
 
 const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
@@ -63,6 +64,8 @@ const showBaudRate = computed(() => {
 
   return shouldSelectProgrammingBaudRate(selectedConfig.value.serialConfig);
 });
+
+const setupAlert = computed(() => radioDialogMessage(selectedConfig.value, 'read'));
 
 const baudItems = computed(() => {
   if (!selectedConfig.value) {
@@ -228,6 +231,18 @@ async function confirm(): Promise<void> {
             class="w-full"
           />
         </UFormField>
+
+        <UAlert
+          v-if="setupAlert"
+          :color="setupAlert.color"
+          variant="subtle"
+          :icon="setupAlert.icon"
+          :title="setupAlert.title"
+        >
+          <template #description>
+            <p class="whitespace-pre-line">{{ setupAlert.body }}</p>
+          </template>
+        </UAlert>
 
         <UFormField label="Serial port" :error="portError" required>
           <div class="flex gap-2">

@@ -20,6 +20,7 @@ import {
   radioTransferModalSubtitle,
   resolveRadioTransferTarget,
 } from '~/utils/radio-transfer-target';
+import { radioDialogMessage } from '~/utils/radio-dialog-message';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
@@ -51,6 +52,7 @@ const config = computed(() => {
 });
 
 const subtitle = computed(() => radioTransferModalSubtitle(saved.value, configurations.value));
+const setupAlert = computed(() => radioDialogMessage(config.value, 'write'));
 
 const backupsEnabled = ref(false);
 const reading = ref(false);
@@ -251,6 +253,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     :warning-description="warningDescription"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
+    :setup-alert="setupAlert"
     panel-class="max-w-3xl"
     @confirm="writeRadio"
   >
