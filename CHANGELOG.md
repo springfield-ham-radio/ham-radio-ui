@@ -1,3 +1,9 @@
+## [1.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.16.0...v1.17.0) (2026-10-17)
+
+### Features
+
+* **radio:** memory undo and redo (PR 1) ([#137](https://github.com/springfield-ham-radio/ham-radio-ui/issues/137)) ([ae916e1](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ae916e109685510bdadfcbebdfc61e257dc8ecb0))
+
 ## [1.16.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.15.0...v1.16.0) (2026-10-17)
 
 ### Features
