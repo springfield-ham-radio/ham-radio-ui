@@ -29,6 +29,8 @@ const emit = defineEmits<{
   confirm: [serialPortPath: string];
 }>();
 
+const slots = useSlots();
+
 const isOpen = computed({
   get: () => props.open,
   set: (open: boolean) => {
@@ -136,9 +138,12 @@ watch(
   <UModal
     v-model:open="isOpen"
     :title="title"
-    :description="description"
+    :description="slots.description ? undefined : description"
     :class="panelClass ?? 'max-w-lg'"
   >
+    <template v-if="slots.description" #description>
+      <slot name="description" />
+    </template>
     <template #body>
       <UAlert
         v-if="warningTitle"
@@ -150,10 +155,7 @@ watch(
         class="mb-4"
       />
       <slot name="review" :selected-port="selectedPort" />
-      <UFormField
-        label="Serial port"
-        description="The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else."
-      >
+      <UFormField label="Serial port">
         <div class="flex gap-2">
           <USelectMenu
             v-model="selectedPort"

@@ -2,6 +2,11 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { importExportEntry } from '~/importExport/registry';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
+import {
+  radioTransferDialogTitle,
+  radioTransferModalSubtitle,
+  resolveRadioTransferTarget,
+} from '~/utils/radio-transfer-target';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
@@ -12,15 +17,17 @@ const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
 
-const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
+const saved = computed(() =>
+  resolveRadioTransferTarget(transferCardId.value, (id) => radioById(id), (id) => cardById(id)),
+);
+const transferGuest = computed(() => {
+  const card = cardById(transferCardId.value);
 
-const description = computed(() => {
-  if (!saved.value) {
-    return 'Choose the serial port for this radio.';
-  }
-
-  return `Read memory from ${saved.value.name}. The saved port is selected; pick another if this cable is on a different adapter.`;
+  return Boolean(card?.guest && !card.savedRadioId);
 });
+
+const title = computed(() => radioTransferDialogTitle('read', saved.value?.name));
+const subtitle = computed(() => radioTransferModalSubtitle(saved.value, configurations.value));
 
 watch(readOpen, (open) => {
   if (!open) {
@@ -58,13 +65,20 @@ async function importRadio(serialPortPath: string): Promise<void> {
 <template>
   <RadioPortDialog
     v-model:open="readOpen"
-    title="Read from Radio"
-    :description="description"
+    :title="title"
+    :description="subtitle"
     confirm-label="Read"
     :confirm-loading="transferInFlight"
     :confirm-icon="readEntry.icon"
     :default-port="saved?.serialPort"
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"
-  />
+  >
+    <template v-if="transferGuest" #description>
+      <span class="inline-flex flex-wrap items-center gap-2">
+        <span>{{ subtitle }}</span>
+        <UBadge color="neutral" variant="outline" size="sm">Guest</UBadge>
+      </span>
+    </template>
+  </RadioPortDialog>
 </template>
