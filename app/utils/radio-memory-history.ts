@@ -14,8 +14,9 @@ export interface RadioMemoryHistory {
   cleanIndex?: number;
 }
 
+/** Plain snapshot for the history stack. JSON round-trip matches `programsEqual` and avoids Vue proxy clone errors. */
 export function cloneRadioProgram(program: RadioProgram): RadioProgram {
-  return structuredClone(program);
+  return JSON.parse(JSON.stringify(program)) as RadioProgram;
 }
 
 function channelNumbers(program: RadioProgram): number[] {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reactive } from 'vue';
 import type { RadioProgram } from '@springfield/ham-radio-api';
 import {
   createRadioMemoryHistory,
@@ -16,6 +17,27 @@ function program(channels: RadioProgram['channels'], settings: Record<string, un
 }
 
 describe('radio-memory-history', () => {
+  it('snapshots Vue reactive programs and nested reactive channels', () => {
+    const channel = {
+      channelNumber: 1,
+      radioChannel: { receiveFrequency: 146_520_000, transmitFrequency: 146_520_000, name: '2m' },
+    };
+    const plain: RadioProgram = {
+      channels: [channel],
+      settings: { display: { contrast: 3 } },
+    };
+    const reactiveProgram = reactive({
+      channels: [reactive(channel)],
+      settings: reactive(plain.settings),
+    }) as RadioProgram;
+
+    const history = createRadioMemoryHistory(reactiveProgram);
+
+    expect(history.timeline[0]).not.toBe(reactiveProgram);
+    expect(history.timeline[0]).toEqual(plain);
+    expect(history.timeline[0]!.channels[0]).not.toBe(reactiveProgram.channels[0]);
+  });
+
   it('labels common memory edits', () => {
     const before = program([{ channelNumber: 1, radioChannel: { receiveFrequency: 1, transmitFrequency: 1 } }]);
     const afterRemove = program([]);
