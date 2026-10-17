@@ -6,6 +6,19 @@ Numbered Markdown files record code and architecture decisions so future work st
 
 `NNNN-short-title.md` — for example `0001-location-model.md`. Use the next free number when adding a record.
 
+## Records
+
+| Record | Status | Topic |
+| --- | --- | --- |
+| [0001](./0001-location-model.md) | accepted | Location and Maidenhead display |
+| [0002](./0002-repeater-record-reimport.md) | accepted | Repeater record re-import |
+| [0003](./0003-map-basemap.md) | accepted | Map basemap |
+| [0004](./0004-channel-radio-validation.md) | accepted | Channel validation before add/write |
+| [0005](./0005-radio-memory-undo.md) | proposed | Radio memory undo and redo |
+| [0009](./0009-per-radio-modules.md) | accepted | Per-radio module installs |
+
+Numbers 0006–0008 are unused in this repository. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
+
 ## Status
 
 Each ADR has a **Status**: `proposed`, `accepted`, or `superseded`. When a later ADR replaces an older one, mark the old record `superseded` and link to the new file.
