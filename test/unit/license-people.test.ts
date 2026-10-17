@@ -8,6 +8,7 @@ import {
   parseLicenseDirectory,
   privilegeMenu,
   serializeLicenseDirectory,
+  amateurCallSignSelectOptions,
   soleAmateurIdentity,
   solePrivilegeChoice,
   type AmateurLicense,
@@ -130,6 +131,21 @@ describe('license people', () => {
     expect(transmitPrivilegeWarning(462_562_500, assessment)).toBeUndefined();
     expect(transmitPrivilegeWarning(146_520_000, assessment)?.title).toBe('Outside FRS privileges');
     expect(transmitPrivilegeWarning(467_550_000, assessment)?.detail).toContain('GMRS');
+  });
+
+  it('lists amateur call signs for print and preference selects', () => {
+    const directory: LicenseDirectory = {
+      people: [person('ada', 'Ada'), person('bob', 'Bob')],
+      licenses: [
+        amateur('ada', 'tech', 'W1AW', 'TECHNICIAN'),
+        amateur('bob', 'extra', 'KF5UFJ', 'EXTRA'),
+      ],
+    };
+
+    expect(amateurCallSignSelectOptions(directory)).toEqual([
+      { label: 'W1AW', value: 'W1AW' },
+      { label: 'KF5UFJ', value: 'KF5UFJ' },
+    ]);
   });
 
   it('should allow FRS for a Technician and warn on GMRS repeater inputs', () => {

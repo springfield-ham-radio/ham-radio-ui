@@ -27,7 +27,7 @@ import {
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
-import { logIdentityFor, privilegeValue } from '~/utils/license-people';
+import { privilegeValue } from '~/utils/license-people';
 import {
   buildRadioPrintDocument,
   emptyPrintReason,
@@ -76,7 +76,8 @@ const {
   privilegeGroups,
   privilegeChoices,
   choiceForRadio,
-  directory,
+  amateurCallSignOptions,
+  identityFor,
   setRadioPrivilege,
   assessmentFor,
   getTransmitPrivilegeWarning,
@@ -786,18 +787,12 @@ const radioPrintRows = computed<ChannelPrintRadioRow[]>(() =>
   })),
 );
 
-const amateurCallSignOptions = computed(() =>
-  directory.value.licenses
-    .filter((license) => license.kind === 'amateur')
-    .map((license) => ({ label: license.callSign, value: license.callSign })),
-);
-
 function buildRadioPrintContext() {
   const count = radioPrintRows.value.length;
   const radioName = cardRadio.value?.name ?? activeRadioId.value?.name ?? 'Radio';
   const manufacturer = String(activeRadioId.value?.manufacturer ?? '');
   const model = String(activeRadioId.value?.model ?? '');
-  const identity = logIdentityFor(directory.value, choiceForRadio(savedRadio.value));
+  const identity = identityFor(choiceForRadio(savedRadio.value));
 
   return {
     surface: 'radio' as const,

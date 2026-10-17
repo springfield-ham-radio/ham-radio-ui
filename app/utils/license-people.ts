@@ -361,6 +361,15 @@ export function soleAmateurIdentity(directory: LicenseDirectory): { callSign?: s
   return { callSign: amateur[0]!.callSign, gridsquare: amateur[0]!.gridsquare };
 }
 
+/** Select-menu items for every saved amateur call sign. */
+export function amateurCallSignSelectOptions(
+  directory: LicenseDirectory,
+): Array<{ label: string; value: string }> {
+  return directory.licenses
+    .filter((license): license is AmateurLicense => license.kind === 'amateur')
+    .map((license) => ({ label: license.callSign, value: license.callSign }));
+}
+
 export function createLicensePerson(name: string, now: string, id: string): LicensePerson | undefined {
   const trimmed = name.trim();
 

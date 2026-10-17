@@ -16,7 +16,6 @@ import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
-import { soleAmateurIdentity } from '~/utils/license-people';
 import {
   buildLibraryPrintDocument,
   channelsForLibraryPrint,
@@ -87,7 +86,7 @@ const {
 const route = useRoute();
 const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
-const { choiceForRadio, assessmentFor, directory, amateurIdentity } = useOperatorLicense();
+const { choiceForRadio, assessmentFor, amateurIdentity, amateurCallSignOptions } = useOperatorLicense();
 const { openPrintDialog, registerLibraryProvider, unregisterLibraryProvider } = useChannelPrint();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
@@ -1055,16 +1054,10 @@ const libraryHasActiveFilters = computed(() => {
   );
 });
 
-const amateurCallSignOptions = computed(() =>
-  directory.value.licenses
-    .filter((license) => license.kind === 'amateur')
-    .map((license) => ({ label: license.callSign, value: license.callSign })),
-);
-
 function buildLibraryPrintContext() {
   const visibleCount = displayChannels.value.length;
   const groupLabel = activeGroup.value?.name ?? 'All';
-  const defaultCallSign = amateurIdentity.value.callSign ?? soleAmateurIdentity(directory.value).callSign;
+  const defaultCallSign = amateurIdentity.value.callSign;
 
   return {
     surface: 'library' as const,
