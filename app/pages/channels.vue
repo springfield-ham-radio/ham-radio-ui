@@ -243,6 +243,10 @@ const selectedLibraryChannels = computed(() => {
 });
 
 const selectedCount = computed(() => selectedLibraryChannels.value.length);
+const hasBulkSelection = computed(() => selectedCount.value > 0);
+const selectedCountLabel = computed(() =>
+  selectedCount.value === 1 ? '1 selected' : `${selectedCount.value} selected`,
+);
 const radiosWithRoom = computed(() =>
   addTargets.value.filter((target) => target.ready && target.freeSlotNumbers.length > 0),
 );
@@ -659,6 +663,10 @@ function onChannelRowHover(_event: Event, row: TableRow<DisplaySavedChannel> | n
   hoveredChannelId.value = row ? String(row.original.id) : undefined;
 }
 
+function clearRowSelection(): void {
+  rowSelection.value = {};
+}
+
 function openEmptyGroup(): void {
   groupNameMode.value = 'empty';
   groupNameOpen.value = true;
@@ -987,32 +995,6 @@ async function onImportCsv(): Promise<void> {
             @click="onExportCsv"
           />
         </UTooltip>
-        <UTooltip :text="newGroupTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-folder-plus"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              label="New group"
-              :disabled="builtinGroup || selectedCount === 0"
-              @click="openGroupFromSelection"
-            />
-          </span>
-        </UTooltip>
-        <UTooltip :text="deleteChannelsTooltip">
-          <span class="inline-flex">
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="outline"
-              size="sm"
-              label="Delete"
-              :disabled="builtinGroup || selectedCount === 0 || isDeletingChannels"
-              @click="deleteChannelsOpen = true"
-            />
-          </span>
-        </UTooltip>
         <UTooltip :text="importTooltip">
           <UButton
             :icon="importChannels.icon"
@@ -1024,20 +1006,6 @@ async function onImportCsv(): Promise<void> {
             :loading="isImporting"
             @click="onImportCsv"
           />
-        </UTooltip>
-        <UTooltip :text="addToRadioTooltip">
-          <span class="inline-flex">
-            <UButton
-              :icon="addToRadio.icon"
-              color="primary"
-              variant="soft"
-              size="sm"
-              :label="addToRadio.label"
-              :disabled="!canAddToRadio || isAddingToRadio"
-              :loading="isAddingToRadio"
-              @click="requestAddToRadio"
-            />
-          </span>
         </UTooltip>
         <div role="group" aria-label="Create channel or group" class="inline-flex">
           <UFieldGroup size="sm">
@@ -1136,6 +1104,73 @@ async function onImportCsv(): Promise<void> {
       <p v-if="distanceStartPoint" class="text-xs text-muted">
         Straight-line distance. Rows without coordinates show — and stay last when this column is sorted.
       </p>
+      <div
+        class="grid transition-[grid-template-rows] duration-200 ease-out"
+        :class="hasBulkSelection ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+        :aria-hidden="!hasBulkSelection"
+      >
+        <div class="min-h-0 overflow-hidden">
+          <div
+            v-show="hasBulkSelection"
+            role="region"
+            aria-live="polite"
+            aria-label="Bulk channel actions"
+            class="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-default bg-elevated/60 px-3 py-2"
+          >
+            <span class="text-sm font-medium text-highlighted tabular-nums">{{ selectedCountLabel }}</span>
+            <UButton
+              color="neutral"
+              variant="link"
+              size="sm"
+              label="Clear selection"
+              @click="clearRowSelection"
+            />
+            <div class="ml-auto flex flex-wrap items-center gap-1.5">
+              <UTooltip :text="newGroupTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    v-if="!builtinGroup"
+                    icon="i-lucide-folder-plus"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    label="New group"
+                    @click="openGroupFromSelection"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="deleteChannelsTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    v-if="!builtinGroup"
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="outline"
+                    size="sm"
+                    label="Delete"
+                    :disabled="isDeletingChannels"
+                    @click="deleteChannelsOpen = true"
+                  />
+                </span>
+              </UTooltip>
+              <UTooltip :text="addToRadioTooltip">
+                <span class="inline-flex">
+                  <UButton
+                    :icon="addToRadio.icon"
+                    color="primary"
+                    variant="soft"
+                    size="sm"
+                    :label="addToRadio.label"
+                    :disabled="!canAddToRadio || isAddingToRadio"
+                    :loading="isAddingToRadio"
+                    @click="requestAddToRadio"
+                  />
+                </span>
+              </UTooltip>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <UAlert

@@ -147,5 +147,13 @@ describe('Channels page mount', () => {
       source.indexOf('const emptyMessage'),
     );
     expect(createMenu).not.toContain("type: 'checkbox'");
+    expect(source).toContain('aria-label="Bulk channel actions"');
+    expect(source).toContain('Clear selection');
+    const headerToolbar = source.slice(source.indexOf('Channel library'), source.indexOf('<ChannelGroupTabs'));
+    expect(headerToolbar).not.toContain('label="Delete"');
+    expect(headerToolbar).not.toContain(':label="addToRadio.label"');
+    expect(headerToolbar).not.toContain('label="New group"');
+    expect(source).toContain('grid-rows-[0fr]');
+    expect(source).toContain('grid-rows-[1fr]');
   });
 });
