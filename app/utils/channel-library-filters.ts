@@ -87,8 +87,23 @@ export function matchesLibraryBandFilter(
 }
 
 /**
- * Rows without repeater on-air status appear only when the filter is All.
+ * Selection keys that are still in the filtered table. Hidden rows are not selected.
  */
+export function selectionVisibleOnly(
+  selection: Record<string, boolean>,
+  visibleIds: readonly string[],
+): Record<string, boolean> {
+  const visible = new Set(visibleIds);
+  const next: Record<string, boolean> = {};
+
+  for (const [id, selected] of Object.entries(selection)) {
+    if (selected && visible.has(id)) {
+      next[id] = true;
+    }
+  }
+
+  return next;
+}
 export function matchesLibraryOnAirFilter(channel: { onAir?: boolean }, filter: ChannelOnAirFilter): boolean {
   if (filter === 'all') {
     return true;

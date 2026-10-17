@@ -23,6 +23,7 @@ import {
   libraryBandFilterItems,
   matchesLibraryBandFilter,
   matchesLibraryOnAirFilter,
+  selectionVisibleOnly,
   type ChannelOnAirFilter,
   uniqueLibraryBandTokens,
 } from '~/utils/channel-library-filters';
@@ -44,7 +45,6 @@ import {
   tripDistanceKm,
   TRIP_START_COORDINATES,
   TRIP_START_NONE,
-  uniqueTripBands,
 } from '~/utils/trip-channels';
 
 useHead({ title: 'Channels' });
@@ -123,9 +123,7 @@ const table = useTemplateRef<{
     getColumn: (id: string) => { toggleVisibility: (visible: boolean) => void } | undefined;
   };
 }>('table');
-const tripBand = ref('all');
 const tripOpenOnly = ref(false);
-const tripOnAirOnly = ref(false);
 const isSavingGroup = shallowRef(false);
 const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
@@ -229,10 +227,6 @@ const scopedChannels = computed(() => channelsForGroup(activeGroupId.value));
 const libraryBandFilterOptions = computed(() =>
   libraryBandFilterItems(uniqueLibraryBandTokens(scopedChannels.value)),
 );
-const tripBandItems = computed(() => [
-  { label: 'All bands', value: 'all' },
-  ...uniqueTripBands(filteredChannels.value).map((band) => ({ label: band, value: band })),
-]);
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
   let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
   rows = rows.filter((channel) => matchesLibraryBandFilter(channel, selectedBandTokens.value));
@@ -244,9 +238,9 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
 
   if (isTripGroup.value) {
     rows = trimTripChannels(rows, {
-      band: tripBand.value === 'all' ? '' : tripBand.value,
+      band: '',
       openOnly: tripOpenOnly.value,
-      onAirOnly: tripOnAirOnly.value,
+      onAirOnly: false,
     });
   }
 
@@ -271,13 +265,12 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
 });
 
 const selectedLibraryChannels = computed(() => {
-  const selected = new Set(
-    Object.entries(rowSelection.value)
-      .filter(([, isSelected]) => isSelected)
-      .map(([id]) => id),
+  const visible = selectionVisibleOnly(
+    rowSelection.value,
+    displayChannels.value.map((channel) => String(channel.id)),
   );
 
-  return displayChannels.value.filter((channel) => selected.has(String(channel.id)));
+  return displayChannels.value.filter((channel) => visible[String(channel.id)] === true);
 });
 
 const selectedCount = computed(() => selectedLibraryChannels.value.length);
@@ -612,6 +605,19 @@ watch(activeGroupId, () => {
   rowSelection.value = {};
 });
 
+watch(displayChannels, (rows) => {
+  const next = selectionVisibleOnly(
+    rowSelection.value,
+    rows.map((channel) => String(channel.id)),
+  );
+  const currentIds = Object.keys(rowSelection.value).filter((id) => rowSelection.value[id]).sort();
+  const nextIds = Object.keys(next).sort();
+
+  if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
+    rowSelection.value = next;
+  }
+});
+
 watch(
   [stations, selectedStationId],
   () => {
@@ -658,12 +664,6 @@ watch(
   },
   { immediate: true },
 );
-
-watch(tripBandItems, (items) => {
-  if (!items.some((item) => item.value === tripBand.value)) {
-    tripBand.value = 'all';
-  }
-});
 
 watch(mapRangeText, () => {
   const rangeRadiusKm = channelMapRangeRadiusKm(parseChannelMapRangeRadius(mapRangeText.value), distanceUnit.value);
@@ -1136,11 +1136,7 @@ async function onImportCsv(): Promise<void> {
             aria-label="Map range ring radius"
           />
         </UFormField>
-        <UFormField v-if="isTripGroup" label="Band" class="w-36 shrink-0">
-          <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
-        </UFormField>
         <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" class="shrink-0 pb-2" />
-        <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" class="shrink-0 pb-2" />
         <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
           <UButton
             icon="i-lucide-map"

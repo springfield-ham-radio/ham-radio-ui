@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   matchesLibraryBandFilter,
   matchesLibraryOnAirFilter,
+  selectionVisibleOnly,
   uniqueLibraryBandTokens,
 } from '../../app/utils/channel-library-filters.ts';
 import { parseChannelLibraryFilterSettings } from '../../app/utils/channel-library-filter-settings.ts';
@@ -35,6 +36,13 @@ describe('channel-library-filters', () => {
     expect(matchesLibraryOnAirFilter({}, 'on-air')).toBe(false);
     expect(matchesLibraryOnAirFilter({ onAir: false }, 'off-air')).toBe(true);
     expect(matchesLibraryOnAirFilter({}, 'off-air')).toBe(false);
+  });
+
+  it('drops filtered-out rows from the selection used by bulk delete', () => {
+    const visible = selectionVisibleOnly({ 'on-2m': true, 'hidden-70cm': true, 'unchecked': false }, ['on-2m']);
+
+    expect(visible).toEqual({ 'on-2m': true });
+    expect(Object.keys(visible)).toEqual(['on-2m']);
   });
 });
 
