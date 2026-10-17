@@ -95,6 +95,54 @@ describe('applyMacRowSelection', () => {
     expect(next).toEqual(selection(['1', '2', '3', '4', '5'], '2'));
   });
 
+  it('moves the anchor on a plain click and leaves the selection unchanged', () => {
+    const next = applyMacRowSelection(orderedIds, selection(['2', '4'], '2'), '6', {
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(next).toEqual(selection(['2', '4'], '6'));
+  });
+
+  it('toggles a row on with Control-click and moves the anchor', () => {
+    const next = applyMacRowSelection(orderedIds, selection(['2'], '2'), '4', {
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: true,
+    });
+
+    expect(next).toEqual(selection(['2', '4'], '4'));
+  });
+
+  it('toggles a row off with Control-click', () => {
+    const next = applyMacRowSelection(orderedIds, selection(['2', '4'], '4'), '2', {
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: true,
+    });
+
+    expect(next).toEqual(selection(['4'], '2'));
+  });
+
+  it('adds a range on Shift-Control-click without clearing other rows', () => {
+    const next = applyMacRowSelection(orderedIds, selection(['1', '2'], '2'), '5', {
+      shiftKey: true,
+      metaKey: false,
+      ctrlKey: true,
+    });
+
+    expect(next).toEqual(selection(['1', '2', '3', '4', '5'], '2'));
+  });
+
+  it('selects the range in the given visible order', () => {
+    const next = applyMacRowSelection(['10', '2', '3', '4'], selection(['10'], '10'), '3', {
+      shiftKey: true,
+      metaKey: false,
+    });
+
+    expect(next).toEqual(selection(['10', '2', '3'], '10'));
+  });
+
   it('ignores an anchor that is no longer in the list', () => {
     const next = applyMacRowSelection(orderedIds, selection(['2'], '9'), '4', {
       shiftKey: true,

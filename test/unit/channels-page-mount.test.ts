@@ -119,6 +119,19 @@ describe('Channels page mount', () => {
     expect(tabItems.map((item) => item.label)).toEqual(['All', 'Austin', 'I-35 Texas']);
   });
 
+  it('selects a visible range from the anchor on shift-click', () => {
+    const source = readFileSync(new URL('../../app/pages/channels.vue', import.meta.url), 'utf8');
+
+    expect(source).toContain('applyMacRowSelection');
+    expect(source).toContain('getRowModel');
+    expect(source).toContain('onChannelCheckboxClick');
+    expect(source).toContain('event.shiftKey');
+    expect(source).toContain('event.metaKey');
+    expect(source).toContain('event.ctrlKey');
+    expect(source).toContain('openEdit(row.original)');
+    expect(source).not.toContain('user-select');
+  });
+
   it('wires the Channels page to refresh on mount and pass groups to ChannelGroupTabs', () => {
     const source = readFileSync(new URL('../../app/pages/channels.vue', import.meta.url), 'utf8');
 

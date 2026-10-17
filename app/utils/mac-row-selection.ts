@@ -1,6 +1,8 @@
 export interface MacSelectionModifiers {
   shiftKey: boolean;
   metaKey: boolean;
+  /** Windows and Linux use Control the same way macOS uses Command. */
+  ctrlKey?: boolean;
 }
 
 export interface MacRowSelectionState {
@@ -10,11 +12,13 @@ export interface MacRowSelectionState {
 }
 
 /**
- * macOS list selection for one click.
+ * List selection for one click. `orderedIds` is the current visible order
+ * (sort and filter already applied).
  *
- * Command-click toggles the clicked row and moves the anchor.
+ * A plain click leaves the selection alone and moves the anchor.
+ * Command-click or Control-click toggles the clicked row and moves the anchor.
  * Shift-click selects every row from the anchor through the clicked row.
- * Shift-Command-click adds that range and leaves other selected rows selected.
+ * Shift plus Command or Control adds that range and leaves other selected rows selected.
  * With no anchor, Shift-click selects only the clicked row and anchors there.
  */
 export function applyMacRowSelection(
@@ -24,8 +28,9 @@ export function applyMacRowSelection(
   modifiers: MacSelectionModifiers,
 ): MacRowSelectionState {
   const selected = new Set(selectedIds(state.selected));
+  const togglesOneRow = modifiers.metaKey || modifiers.ctrlKey === true;
 
-  if (modifiers.metaKey && !modifiers.shiftKey) {
+  if (togglesOneRow && !modifiers.shiftKey) {
     if (selected.has(clickedId)) {
       selected.delete(clickedId);
     } else {
@@ -42,7 +47,7 @@ export function applyMacRowSelection(
     const anchorId = state.anchorId !== undefined && orderedIds.includes(state.anchorId) ? state.anchorId : clickedId;
     const range = idsInRange(orderedIds, anchorId, clickedId);
 
-    if (modifiers.metaKey) {
+    if (togglesOneRow) {
       for (const id of range) {
         selected.add(id);
       }
@@ -59,7 +64,10 @@ export function applyMacRowSelection(
     };
   }
 
-  return state;
+  return {
+    selected: selectionRecord(selected),
+    anchorId: clickedId,
+  };
 }
 
 function selectedIds(selected: Record<string, boolean>): string[] {
