@@ -1,3 +1,9 @@
+## [1.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.13.0...v1.14.0) (2026-10-17)
+
+### Features
+
+* **log:** plot QSO coordinates on log and Map tab ([#134](https://github.com/springfield-ham-radio/ham-radio-ui/issues/134)) ([3696a3e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3696a3eedca7cb089969613a30203a06ed40e352))
+
 ## [1.13.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.12.0...v1.13.0) (2026-10-17)
 
 ### Features
