@@ -16,8 +16,8 @@ import {
   type WriteReviewDiff,
 } from '~/utils/radio-write-review';
 import {
-  radioTransferDialogDescription,
   radioTransferDialogTitle,
+  radioTransferModalSubtitle,
   resolveRadioTransferTarget,
 } from '~/utils/radio-transfer-target';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
@@ -50,7 +50,7 @@ const config = computed(() => {
   return configurations.value.find((item) => String(item.id.model) === saved.value?.model);
 });
 
-const description = computed(() => radioTransferDialogDescription('write', saved.value?.name));
+const subtitle = computed(() => radioTransferModalSubtitle(saved.value, configurations.value));
 
 const backupsEnabled = ref(false);
 const reading = ref(false);
@@ -241,7 +241,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
   <RadioPortDialog
     v-model:open="writeOpen"
     :title="title"
-    :description="description"
+    :description="subtitle"
     confirm-label="Write"
     confirm-color="warning"
     :confirm-icon="writeEntry.icon"
@@ -254,12 +254,11 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     panel-class="max-w-3xl"
     @confirm="writeRadio"
   >
-    <template #target>
-      <RadioTransferTargetHeader
-        :radio="saved"
-        :configurations="configurations"
-        :guest="transferGuest"
-      />
+    <template v-if="transferGuest" #description>
+      <span class="inline-flex flex-wrap items-center gap-2">
+        <span>{{ subtitle }}</span>
+        <UBadge color="neutral" variant="outline" size="sm">Guest</UBadge>
+      </span>
     </template>
     <template #review="{ selectedPort }">
       <RadioWriteReview

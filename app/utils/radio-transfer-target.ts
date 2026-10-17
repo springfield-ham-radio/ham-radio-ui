@@ -56,18 +56,16 @@ export function radioTransferDialogTitle(action: 'read' | 'write', cardName?: st
   return action === 'read' ? `Read from ${trimmed}` : `Write to ${trimmed}`;
 }
 
-export function radioTransferDialogDescription(action: 'read' | 'write', cardName?: string | null): string {
-  const trimmed = cardName?.trim();
-
-  if (!trimmed) {
+/** Manufacturer + model line for the transfer dialog header (no card name). */
+export function radioTransferModalSubtitle(
+  radio: RadioTransferTarget | undefined | null,
+  configurations: readonly LoadedRadioConfig[],
+): string {
+  if (!radio) {
     return 'Choose the serial port for this radio.';
   }
 
-  if (action === 'read') {
-    return `Read memory from ${trimmed}. Pick the serial port on the cable connected to this radio.`;
-  }
-
-  return `Write the loaded memory to ${trimmed}. Pick the serial port on the cable connected to this radio.`;
+  return radioTransferManufacturerModelLine(radioTransferTargetDisplay(radio, configurations));
 }
 
 /**

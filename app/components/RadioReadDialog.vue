@@ -3,8 +3,8 @@ import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { importExportEntry } from '~/importExport/registry';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
 import {
-  radioTransferDialogDescription,
   radioTransferDialogTitle,
+  radioTransferModalSubtitle,
   resolveRadioTransferTarget,
 } from '~/utils/radio-transfer-target';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
@@ -27,7 +27,7 @@ const transferGuest = computed(() => {
 });
 
 const title = computed(() => radioTransferDialogTitle('read', saved.value?.name));
-const description = computed(() => radioTransferDialogDescription('read', saved.value?.name));
+const subtitle = computed(() => radioTransferModalSubtitle(saved.value, configurations.value));
 
 watch(readOpen, (open) => {
   if (!open) {
@@ -66,7 +66,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
   <RadioPortDialog
     v-model:open="readOpen"
     :title="title"
-    :description="description"
+    :description="subtitle"
     confirm-label="Read"
     :confirm-loading="transferInFlight"
     :confirm-icon="readEntry.icon"
@@ -74,12 +74,11 @@ async function importRadio(serialPortPath: string): Promise<void> {
     :unavailable-ports="lockedPorts"
     @confirm="importRadio"
   >
-    <template #target>
-      <RadioTransferTargetHeader
-        :radio="saved"
-        :configurations="configurations"
-        :guest="transferGuest"
-      />
+    <template v-if="transferGuest" #description>
+      <span class="inline-flex flex-wrap items-center gap-2">
+        <span>{{ subtitle }}</span>
+        <UBadge color="neutral" variant="outline" size="sm">Guest</UBadge>
+      </span>
     </template>
   </RadioPortDialog>
 </template>

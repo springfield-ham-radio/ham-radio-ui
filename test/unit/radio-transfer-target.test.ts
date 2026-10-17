@@ -1,12 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { createSSRApp, defineComponent } from 'vue';
-import { renderToString } from 'vue/server-renderer';
 import { describe, expect, it } from 'vitest';
-import RadioTransferTargetHeader from '../../app/components/RadioTransferTargetHeader.vue';
 import {
-  radioTransferDialogDescription,
   radioTransferDialogTitle,
   radioTransferManufacturerModelLine,
+  radioTransferModalSubtitle,
   radioTransferTargetDisplay,
   resolveRadioTransferTarget,
 } from '../../app/utils/radio-transfer-target.ts';
@@ -87,6 +84,12 @@ describe('radioTransferDialogTitle', () => {
   });
 });
 
+describe('radioTransferModalSubtitle', () => {
+  it('shows manufacturer and model without the card name', () => {
+    expect(radioTransferModalSubtitle(saved, configs)).toBe('Baofeng UV-5R');
+  });
+});
+
 describe('resolveRadioTransferTarget', () => {
   it('uses the transfer card id, not another open card', () => {
     const focusedGuest = {
@@ -122,58 +125,17 @@ describe('resolveRadioTransferTarget', () => {
   });
 });
 
-describe('RadioTransferTargetHeader', () => {
-  it('renders the transfer target and Guest badge for read guest cards', async () => {
-    const UCard = defineComponent({ template: '<div class="u-card"><slot /></div>' });
-    const UBadge = defineComponent({ template: '<span class="u-badge"><slot /></span>' });
-
-    const app = createSSRApp({
-      components: { RadioTransferTargetHeader },
-      template: `<RadioTransferTargetHeader
-        :radio="{ name: 'Fixture UV-5R', manufacturer: 'Baofeng', model: 'baofeng-uv5r', serialPort: '/dev/fixture' }"
-        :configurations="configs"
-        guest
-      />`,
-      setup() {
-        return { configs };
-      },
-    });
-    app.component('UCard', UCard);
-    app.component('UBadge', UBadge);
-
-    const html = await renderToString(app);
-
-    expect(html).toContain('Fixture UV-5R');
-    expect(html).toContain('Baofeng UV-5R');
-    expect(html).toContain('u-badge');
-    expect(html).toContain('Guest');
-    expect(html).not.toContain('Baofeng · Baofeng');
-  });
-});
-
 describe('read/write transfer dialogs', () => {
-  it('place the transfer target header above the serial port after the write review', () => {
+  it('use transfer card helpers and no target header card in the body', () => {
     const readDialog = readFileSync('app/components/RadioReadDialog.vue', 'utf8');
     const writeDialog = readFileSync('app/components/RadioWriteDialog.vue', 'utf8');
     const portDialog = readFileSync('app/components/RadioPortDialog.vue', 'utf8');
 
-    expect(readDialog).toContain('RadioTransferTargetHeader');
-    expect(readDialog).toContain('radioTransferDialogTitle');
-    expect(writeDialog).toContain('RadioTransferTargetHeader');
-    expect(writeDialog).toContain(':guest="transferGuest"');
-
-    const reviewIndex = portDialog.indexOf('name="review"');
-    const targetIndex = portDialog.indexOf('name="target"');
-    const serialIndex = portDialog.indexOf('label="Serial port"');
-
-    expect(reviewIndex).toBeGreaterThan(-1);
-    expect(targetIndex).toBeGreaterThan(reviewIndex);
-    expect(serialIndex).toBeGreaterThan(targetIndex);
-    expect(portDialog).not.toContain('Choose another adapter if this cable is plugged in somewhere else.');
-  });
-
-  it('restores description sentences that name the target radio', () => {
-    expect(radioTransferDialogDescription('write', "Rob's TH-F6")).toContain("Rob's TH-F6");
-    expect(radioTransferDialogDescription('read', "Rob's TH-F6")).toContain("Rob's TH-F6");
+    expect(readDialog).toContain('resolveRadioTransferTarget');
+    expect(readDialog).toContain('radioTransferModalSubtitle');
+    expect(readDialog).not.toContain('RadioTransferTargetHeader');
+    expect(writeDialog).not.toContain('RadioTransferTargetHeader');
+    expect(portDialog).not.toContain('name="target"');
+    expect(readDialog).toContain('UBadge');
   });
 });
