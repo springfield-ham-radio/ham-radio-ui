@@ -39,13 +39,17 @@ export interface RadioErrorReport {
   environment: RadioErrorEnvironment;
 }
 
-const HOME_PATH_PATTERN =
-  /(?:\/Users\/[^/\s]+|\/home\/[^/\s]+|C:\\Users\\[^\\\s]+)(?:\/|\\)[^\s)]*/gi;
+/**
+ * Home-directory prefixes on macOS, Linux, and Windows (backslash or slash),
+ * including usernames that contain spaces. The match runs to the end of the
+ * line so a later segment is not left behind.
+ */
+const HOME_PATH_PATTERN = /(?:\/Users\/|\/home\/|C:[\\/]Users[\\/])[^\n)]+/gi;
 
 let cachedEnvironment: RadioErrorEnvironment | undefined;
 
 export function sanitizeErrorText(text: string): string {
-  return text.replace(HOME_PATH_PATTERN, '[path]').replace(/\s+/g, (match) => (match.includes('\n') ? match : ' '));
+  return text.replace(HOME_PATH_PATTERN, '[path]');
 }
 
 /** Reduce a port path to a device name for reports. */
@@ -84,21 +88,50 @@ export function serialPortDeviceName(port: string | undefined): string | undefin
   return last;
 }
 
-function serializeError(error: unknown, depth = 0): SerializedError {
+function serializeError(error: unknown, seen: WeakSet<object>, depth = 0): SerializedError {
   if (depth > 8) {
     return { name: 'Error', message: '[cause chain truncated]' };
   }
 
+  if (typeof error === 'object' && error !== null) {
+    if (seen.has(error)) {
+      return { name: 'Error', message: '[cause cycle]' };
+    }
+
+    seen.add(error);
+  }
+
   if (error instanceof Error) {
-    const cause = error.cause;
     const serialized: SerializedError = {
-      name: error.name,
+      name: error.name || 'Error',
       message: sanitizeErrorText(error.message),
       stack: error.stack ? sanitizeErrorText(error.stack) : undefined,
     };
 
-    if (cause !== undefined) {
-      serialized.cause = serializeError(cause, depth + 1);
+    if (error.cause !== undefined) {
+      serialized.cause = serializeError(error.cause, seen, depth + 1);
+    }
+
+    return serialized;
+  }
+
+  if (typeof error === 'string' || typeof error === 'number' || typeof error === 'boolean') {
+    return {
+      name: 'Error',
+      message: sanitizeErrorText(String(error)),
+    };
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const record = error as { message?: unknown; name?: unknown; cause?: unknown };
+    const message = typeof record.message === 'string' ? record.message : 'Unknown error';
+    const serialized: SerializedError = {
+      name: typeof record.name === 'string' ? record.name : 'Error',
+      message: sanitizeErrorText(message),
+    };
+
+    if (record.cause !== undefined) {
+      serialized.cause = serializeError(record.cause, seen, depth + 1);
     }
 
     return serialized;
@@ -106,7 +139,7 @@ function serializeError(error: unknown, depth = 0): SerializedError {
 
   return {
     name: 'Error',
-    message: sanitizeErrorText(String(error)),
+    message: 'Unknown error',
   };
 }
 
@@ -151,7 +184,7 @@ export async function createRadioErrorReport(
   cause: unknown,
   options?: { summary?: string },
 ): Promise<RadioErrorReport> {
-  const errors = serializeError(cause);
+  const errors = serializeError(cause, new WeakSet());
   const environment = await readRadioErrorEnvironment();
 
   const port = serialPortDeviceName(context.port);

@@ -58,8 +58,44 @@ describe('createRadioErrorReport', () => {
 });
 
 describe('sanitizeErrorText', () => {
-  it('replaces home directory segments', () => {
-    expect(sanitizeErrorText('failed at C:\\Users\\bryan\\file')).toContain('[path]');
+  it('redacts macOS, Linux, and Windows home paths including spaces', () => {
+    for (const sample of [
+      'at /Users/bryan/proj/file.ts:1',
+      'at /Users/Bryan Hunt/proj/file.ts',
+      'at /home/bryan/proj/file.ts:1',
+      'at C:\\Users\\bryan\\file.ts:1',
+      'at C:/Users/Bryan Hunt/file.ts:1',
+    ]) {
+      const redacted = sanitizeErrorText(sample);
+      expect(redacted).toContain('[path]');
+      expect(redacted).not.toMatch(/\/Users\/|\/home\/|C:[\\/]Users/i);
+    }
+
+    const multiline = sanitizeErrorText('line one\n  at /home/ada/app.ts');
+    expect(multiline.startsWith('line one\n')).toBe(true);
+    expect(multiline).not.toContain('/home/ada');
+  });
+});
+
+describe('cause chain', () => {
+  it('stops on a cause cycle and keeps a non-Error cause', async () => {
+    const outer = new Error('outer');
+    const inner = new Error('inner at /home/ada/secret.ts');
+    outer.cause = inner;
+    inner.cause = outer;
+
+    const cycled = await createRadioErrorReport({ operation: 'read', step: 'read radio' }, outer);
+    const text = formatRadioErrorReportText(cycled);
+    expect(text).toContain('[cause cycle]');
+    expect(text).not.toContain('/home/ada');
+    expect(text.match(/outer/g)?.length).toBeLessThan(5);
+
+    const stringCause = new Error('wrapped');
+    stringCause.cause = 'plain /Users/ada/file.ts';
+    const fromString = await createRadioErrorReport({ operation: 'write', step: 'write radio' }, stringCause);
+    expect(fromString.errors.cause?.message).toBe('plain [path]');
+    expect(formatRadioErrorReportText(fromString)).not.toContain('serial');
+    expect(formatRadioErrorReportText(fromString)).not.toContain('callsign');
   });
 });
 
