@@ -110,6 +110,14 @@ export function useChannelPrint() {
   }
 
   function requestPrintFromMenu(routePath: string): void {
+    if (dialog.value.open) {
+      return;
+    }
+
+    if (typeof document !== 'undefined' && document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+      return;
+    }
+
     if (routePath === '/channels') {
       const context = libraryProvider.value?.();
 

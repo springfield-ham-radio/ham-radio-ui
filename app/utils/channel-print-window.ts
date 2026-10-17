@@ -1,18 +1,31 @@
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import type { ChannelPrintDocument } from '~/utils/channel-print';
 
-export const CHANNEL_PRINT_STORAGE_PREFIX = 'ham-radio-channel-print:';
+/** One payload. A new print replaces it, and the print window deletes it when done. */
+export const CHANNEL_PRINT_STORAGE_KEY = 'ham-radio-channel-print';
 
-export function channelPrintStorageKey(id: string): string {
-  return `${CHANNEL_PRINT_STORAGE_PREFIX}${id}`;
+/** Stable label so a second print focuses this window instead of opening another. */
+export const CHANNEL_PRINT_WINDOW_LABEL = 'channel-print';
+
+export function storeChannelPrintDocument(document: ChannelPrintDocument): void {
+  const json = JSON.stringify(document);
+
+  try {
+    localStorage.setItem(CHANNEL_PRINT_STORAGE_KEY, json);
+  } catch (cause) {
+    const quota =
+      cause instanceof DOMException && (cause.name === 'QuotaExceededError' || cause.code === 22);
+
+    if (quota) {
+      throw new Error('This channel list is too large to print in one pass.');
+    }
+
+    throw cause;
+  }
 }
 
-export function storeChannelPrintDocument(id: string, document: ChannelPrintDocument): void {
-  sessionStorage.setItem(channelPrintStorageKey(id), JSON.stringify(document));
-}
-
-export function readChannelPrintDocument(id: string): ChannelPrintDocument | undefined {
-  const raw = sessionStorage.getItem(channelPrintStorageKey(id));
+export function readChannelPrintDocument(): ChannelPrintDocument | undefined {
+  const raw = localStorage.getItem(CHANNEL_PRINT_STORAGE_KEY);
 
   if (!raw) {
     return undefined;
@@ -25,45 +38,68 @@ export function readChannelPrintDocument(id: string): ChannelPrintDocument | und
   }
 }
 
-export function clearChannelPrintDocument(id: string): void {
-  sessionStorage.removeItem(channelPrintStorageKey(id));
+export function clearChannelPrintDocument(): void {
+  localStorage.removeItem(CHANNEL_PRINT_STORAGE_KEY);
 }
 
-function printRouteUrl(id: string): string {
-  const path = `/print/channels?id=${encodeURIComponent(id)}`;
-  return `${window.location.origin}${path}`;
+function printRouteUrl(): string {
+  return `${window.location.origin}/print/channels`;
 }
+
+let opening = false;
 
 export async function openChannelPrintWindow(document: ChannelPrintDocument): Promise<void> {
-  const id = crypto.randomUUID();
-  storeChannelPrintDocument(id, document);
-  const url = printRouteUrl(id);
-
-  if (isTauriRuntime()) {
-    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-    const label = `channel-print-${id}`;
-
-    const window = new WebviewWindow(label, {
-      url,
-      title: 'Print channels',
-      width: 900,
-      height: 700,
-      center: true,
-      resizable: true,
-      decorations: true,
-    });
-
-    window.once('tauri://error', () => {
-      clearChannelPrintDocument(id);
-    });
-
+  if (opening) {
     return;
   }
 
-  const popup = window.open(url, '_blank', 'noopener,noreferrer,width=900,height=700');
+  opening = true;
 
-  if (!popup) {
-    clearChannelPrintDocument(id);
-    throw new Error('Allow pop-ups to print channels in the browser.');
+  try {
+    const url = printRouteUrl();
+
+    if (isTauriRuntime()) {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const existing = await WebviewWindow.getByLabel(CHANNEL_PRINT_WINDOW_LABEL);
+
+      if (existing) {
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, 1000);
+          void existing.once('tauri://destroyed', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          void existing.close();
+        });
+      }
+
+      storeChannelPrintDocument(document);
+
+      const printWindow = new WebviewWindow(CHANNEL_PRINT_WINDOW_LABEL, {
+        url,
+        title: 'Print channels',
+        width: 900,
+        height: 700,
+        center: true,
+        resizable: true,
+        decorations: true,
+      });
+
+      printWindow.once('tauri://error', () => {
+        clearChannelPrintDocument();
+      });
+
+      return;
+    }
+
+    storeChannelPrintDocument(document);
+    const popup = window.open(url, CHANNEL_PRINT_WINDOW_LABEL, 'width=900,height=700');
+
+    if (!popup) {
+      clearChannelPrintDocument();
+      throw new Error('Allow pop-ups to print channels in the browser.');
+    }
+  } finally {
+    opening = false;
   }
 }

@@ -69,7 +69,10 @@ export interface BuildLibraryPrintDocumentInput {
   callSign?: string;
   printedOn: string;
   rows: ChannelPrintLibraryRow[];
-  visibleColumnIds: string[];
+  /** TanStack visibility map. Missing ids are visible. */
+  columnVisibility: Record<string, boolean>;
+  /** True when the Distance column exists (a start point is set). */
+  includeDistance: boolean;
   matchVisibleColumns: boolean;
 }
 
@@ -360,8 +363,11 @@ export function buildRadioPrintDocument(input: BuildRadioPrintDocumentInput): Ch
 }
 
 export function buildLibraryPrintDocument(input: BuildLibraryPrintDocumentInput): ChannelPrintDocument {
-  const includeDistance = input.visibleColumnIds.includes('distance');
-  const columnIds = libraryPrintColumnIds(input.visibleColumnIds, includeDistance, input.matchVisibleColumns);
+  const columnIds = libraryPrintColumnIds(
+    input.columnVisibility,
+    input.includeDistance,
+    input.matchVisibleColumns,
+  );
   const columns = columnIds.map((id) => ({ id, header: LIBRARY_COLUMN_HEADERS[id] ?? id }));
 
   const headerLines = [{ label: 'Group', value: input.groupLabel }];

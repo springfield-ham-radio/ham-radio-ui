@@ -12,7 +12,7 @@ Operators want a paper channel list for a programmed radio or a channel library 
 
 - Add **Print…** on the Radio Channels toolbar, the Channels library toolbar, and **File › Print…** (`CmdOrCtrl+P` in the Tauri shell).
 - Build a **print document** in `app/utils/channel-print.ts` (unit tested). Full-page layout uses table columns; **wallet** layout uses three CSS columns on letter paper with a fixed compact field set (RX, offset, tone; library **notes** only on wallet).
-- Open a **dedicated print window** (`WebviewWindow` in Tauri, `window.open` in the browser) at `/print/channels`, then call **`window.print()`** so the system dialog handles Save as PDF. Do not use hidden iframes (unreliable on macOS WKWebView).
+- Open one **dedicated print window** labeled `channel-print` (`WebviewWindow` in Tauri, a named `window.open` in the browser) at `/print/channels`, then call **`window.print()`** so the system dialog handles Save as PDF. Do not use hidden iframes (unreliable on macOS WKWebView). The payload lives in `localStorage` under one key (a new webview does not share `sessionStorage`) and is removed when printing finishes. A second print closes that window and opens it again with the new card, so windows do not stack. The print window’s capability allows only `core:window:allow-close`.
 - Library print defaults to **rows currently shown** in the table, with optional **whole tab** and **selected rows only**. Radio print uses **programmed slots** on the **focused** card only.
 - No in-app print preview and no PDF library in v1.
 

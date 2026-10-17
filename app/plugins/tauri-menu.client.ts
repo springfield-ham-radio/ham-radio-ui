@@ -58,7 +58,15 @@ export default defineNuxtPlugin(() => {
         void runImportExport(IMPORT_EXPORT_IDS.writeToRadio);
       });
       await listen('print-channels', () => {
-        requestPrintFromMenu(router.currentRoute.value.path);
+        void (async () => {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+
+          if (getCurrentWindow().label !== 'main') {
+            return;
+          }
+
+          requestPrintFromMenu(router.currentRoute.value.path);
+        })();
       });
       await listen('show-backups', () => {
         void showRadioImageBackups().catch((cause: unknown) => {

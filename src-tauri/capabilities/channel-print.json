@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "channel-print",
+  "description": "Print window may close itself. It cannot create windows or use radio, SQL, or updater commands.",
+  "windows": ["channel-print"],
+  "permissions": ["core:window:allow-close"]
+}

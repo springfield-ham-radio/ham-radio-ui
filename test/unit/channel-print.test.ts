@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Frequency, RadioToneType } from '@springfield/ham-radio-api';
 import {
   buildLibraryPrintDocument,
@@ -10,6 +10,12 @@ import {
   libraryPrintColumnIds,
   libraryRowCells,
 } from '../../app/utils/channel-print.ts';
+import {
+  CHANNEL_PRINT_STORAGE_KEY,
+  clearChannelPrintDocument,
+  readChannelPrintDocument,
+  storeChannelPrintDocument,
+} from '../../app/utils/channel-print-window.ts';
 import type { ChannelPrintLibraryRow, ChannelPrintRadioRow } from '../../app/utils/channel-print.ts';
 
 const radioRows: ChannelPrintRadioRow[] = [
@@ -152,18 +158,81 @@ describe('channel-print', () => {
     expect(cells.onAir).toBe('On-air');
     expect(cells.callsign).toBe('W5KA');
 
+    const hiddenBand = buildLibraryPrintDocument({
+      layout: 'full',
+      groupLabel: 'Repeaters',
+      printedOn: 'Oct 17, 2026',
+      rows: [channel],
+      columnVisibility: { band: false },
+      includeDistance: false,
+      matchVisibleColumns: true,
+    });
+    expect(hiddenBand.columns.map((column) => column.id)).not.toContain('band');
+    expect(hiddenBand.columns.map((column) => column.id)).toContain('name');
+
+    const allColumns = buildLibraryPrintDocument({
+      layout: 'full',
+      groupLabel: 'Repeaters',
+      printedOn: 'Oct 17, 2026',
+      rows: [channel],
+      columnVisibility: { band: false },
+      includeDistance: false,
+      matchVisibleColumns: false,
+    });
+    expect(allColumns.columns.map((column) => column.id)).toContain('band');
+
     const document = buildLibraryPrintDocument({
       layout: 'wallet',
       groupLabel: 'Repeaters',
       printedOn: 'Oct 17, 2026',
       rows: [channel],
-      visibleColumnIds: ['name'],
+      columnVisibility: { name: true },
+      includeDistance: false,
       matchVisibleColumns: true,
     });
 
     expect(document.columns).toEqual([]);
     expect(document.walletLines[0]?.notes).toBe('Club net');
     expect(document.walletLines[0]?.offset).toBe('-0.600');
+  });
+
+  it('stores one print payload in localStorage and clears it', () => {
+    const memory = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        memory.set(key, value);
+      },
+      removeItem: (key: string) => {
+        memory.delete(key);
+      },
+    });
+
+    storeChannelPrintDocument({
+      layout: 'full',
+      title: 'HamBench channel card',
+      headerLines: [],
+      columns: [],
+      rows: [{ name: '<b>not html</b>' }],
+      walletLines: [],
+    });
+
+    expect(memory.get(CHANNEL_PRINT_STORAGE_KEY)).toContain('<b>not html</b>');
+    expect(readChannelPrintDocument()?.rows[0]?.name).toBe('<b>not html</b>');
+
+    storeChannelPrintDocument({
+      layout: 'wallet',
+      title: 'HamBench channel card',
+      headerLines: [],
+      columns: [],
+      rows: [],
+      walletLines: [],
+    });
+    expect([...memory.keys()]).toEqual([CHANNEL_PRINT_STORAGE_KEY]);
+
+    clearChannelPrintDocument();
+    expect(memory.has(CHANNEL_PRINT_STORAGE_KEY)).toBe(false);
+    vi.unstubAllGlobals();
   });
 
   it('formats offset and tone helpers', () => {

@@ -22,8 +22,6 @@ import {
   channelsForLibraryPrint,
   emptyPrintReason,
   formatChannelPrintDate,
-  libraryColumnIsVisible,
-  libraryPrintColumnIds,
   type ChannelPrintLibraryRow,
 } from '~/utils/channel-print';
 import {
@@ -1057,10 +1055,6 @@ const libraryHasActiveFilters = computed(() => {
   );
 });
 
-const libraryVisibleColumnIds = computed(() =>
-  libraryPrintColumnIds(columnVisibility.value, Boolean(distanceStartPoint.value), true),
-);
-
 const amateurCallSignOptions = computed(() =>
   directory.value.licenses
     .filter((license) => license.kind === 'amateur')
@@ -1107,7 +1101,8 @@ function buildLibraryPrintContext() {
         callSign: options.callSign,
         printedOn: formatChannelPrintDate(new Date()),
         rows,
-        visibleColumnIds: libraryVisibleColumnIds.value,
+        columnVisibility: columnVisibility.value,
+        includeDistance: Boolean(distanceStartPoint.value),
         matchVisibleColumns: options.matchVisibleColumns,
       });
     },

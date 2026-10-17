@@ -1964,6 +1964,10 @@ export function useRadio() {
    * Uses the fixture serial port only; never reads or writes a radio.
    */
   async function seedChannelPrintDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
     await seedUndoMemoryDevFixture();
   }
 
