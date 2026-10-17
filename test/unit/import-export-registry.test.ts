@@ -188,6 +188,7 @@ describe('import/export registry', () => {
     expect(registry.matching({ fileName: 'log.adi' })).toEqual([]);
     expect(registry.matching({ mimeType: 'text/csv; charset=utf-8', kind: 'target' }).map((entry) => entry.id)).toEqual([
       IMPORT_EXPORT_IDS.exportChannelsCsv,
+      IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
     ]);
     expect(registry.matching({ fileName: 'notes.txt', mimeType: 'text/csv' })).toEqual([]);
   });
@@ -260,6 +261,39 @@ describe('import/export registry', () => {
     expect(imported.document?.callsigns[1]).toBe('W1AW');
   });
 
+  it('round-trips CHIRP CSV through the CHIRP export handler and import source', async () => {
+    const imported = await importExportDataHandler(IMPORT_EXPORT_IDS.importChannelsCsv)({
+      file: { name: 'chirp.csv', text: chirpCsv },
+    });
+    const channels = (imported.document?.channels ?? []).map((channel, index) => ({
+      id: RadioChannelId(`aaaaaaaa-aaaa-aaaa-aaaa-${String(index).padStart(12, '0')}`),
+      kind: 'repeater' as const,
+      name: channel.name,
+      transmitFrequency: channel.transmitFrequency,
+      receiveFrequency: channel.receiveFrequency,
+      transmitTone: channel.transmitTone,
+      receiveTone: channel.receiveTone,
+      notes: imported.document?.notes[index],
+      sourceKey: imported.document?.sourceKeys[index],
+      sourceFormat: imported.document?.sourceFormats[index],
+      modes: imported.document?.modes[index],
+      createdAt: 0,
+      updatedAt: 0,
+    }));
+    const exported = await importExportDataHandler(IMPORT_EXPORT_IDS.exportChannelsChirpCsv)({
+      savedChannels: channels,
+    });
+    const roundTrip = await importExportDataHandler(IMPORT_EXPORT_IDS.importChannelsCsv)({
+      file: { name: 'chirp-round-trip.csv', text: exported.text },
+    });
+
+    expect(exported.document?.source).toBe('chirp');
+    expect(roundTrip.document?.source).toBe('chirp');
+    expect(roundTrip.document?.channels[0]?.name).toBe('W1AW');
+    expect(roundTrip.document?.channels[0]?.receiveFrequency).toBe(Frequency(146_640_000));
+    expect(roundTrip.document?.channels[0]?.transmitFrequency).toBe(Frequency(146_040_000));
+  });
+
   it('imports CHIRP CSV through the channel CSV source', async () => {
     const imported = await importExportDataHandler(IMPORT_EXPORT_IDS.importChannelsCsv)({
       file: { name: 'chirp.csv', text: chirpCsv },
@@ -277,5 +311,6 @@ describe('import/export registry', () => {
     expect(() => read({})).toThrow(/file text/);
     expect(() => read({ file: { text: 'name,tx_mhz\nA,146.52\n' } })).toThrow(/missing required column/);
     expect(() => importExportDataHandler(IMPORT_EXPORT_IDS.exportChannelsCsv)({})).toThrow(/saved channels/);
+    expect(() => importExportDataHandler(IMPORT_EXPORT_IDS.exportChannelsChirpCsv)({})).toThrow(/saved channels/);
   });
 });

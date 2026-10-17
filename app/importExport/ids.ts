@@ -2,6 +2,7 @@
 export const IMPORT_EXPORT_IDS = {
   importChannelsCsv: 'import-channels-csv',
   exportChannelsCsv: 'export-channels-csv',
+  exportChannelsChirpCsv: 'export-channels-chirp-csv',
   readFromRadio: 'read-from-radio',
   writeToRadio: 'write-to-radio',
   openMemory: 'open-memory',

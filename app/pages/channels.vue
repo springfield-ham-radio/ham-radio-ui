@@ -95,12 +95,14 @@ watch(addToRadioFixtureActive, (active) => {
 const { entry, run } = useImportExportRunner();
 const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
 const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
+const exportChirpChannels = entry(IMPORT_EXPORT_IDS.exportChannelsChirpCsv);
 const addToRadio = entry(IMPORT_EXPORT_IDS.addToRadio);
 const { focusedCardId } = useRadioBoard();
 const { stations, selectedStationId } = useStationAntennas();
 const { unit: distanceUnit } = useDistanceUnit();
 
 const isExporting = ref(false);
+const isExportingChirp = ref(false);
 const isImporting = ref(false);
 const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
@@ -1010,6 +1012,18 @@ async function onExportCsv(): Promise<void> {
   }
 }
 
+async function onExportChirpCsv(): Promise<void> {
+  isExportingChirp.value = true;
+
+  try {
+    await run(exportChirpChannels.id);
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    isExportingChirp.value = false;
+  }
+}
+
 async function onImportCsv(): Promise<void> {
   isImporting.value = true;
 
@@ -1042,6 +1056,17 @@ async function onImportCsv(): Promise<void> {
             aria-label="Export channel library to CSV"
             :loading="isExporting"
             @click="onExportCsv"
+          />
+        </UTooltip>
+        <UTooltip :text="exportChirpChannels.label">
+          <UButton
+            :icon="exportChirpChannels.icon"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            aria-label="Export channels as CHIRP CSV"
+            :loading="isExportingChirp"
+            @click="onExportChirpCsv"
           />
         </UTooltip>
         <UTooltip :text="importTooltip">

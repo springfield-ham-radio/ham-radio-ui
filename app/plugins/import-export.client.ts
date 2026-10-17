@@ -46,4 +46,8 @@ export default defineNuxtPlugin(() => {
     await channels.exportLibraryCsv(input);
     return {};
   });
+  bindImportExportAction(IMPORT_EXPORT_IDS.exportChannelsChirpCsv, async (input) => {
+    await channels.exportChirpLibraryCsv(input);
+    return {};
+  });
 });
