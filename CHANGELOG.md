@@ -1,3 +1,9 @@
+## [1.24.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.23.0...v1.24.0) (2026-10-17)
+
+### Features
+
+* **channels:** channel pack import and export UI (closes [#66](https://github.com/springfield-ham-radio/ham-radio-ui/issues/66)) ([#148](https://github.com/springfield-ham-radio/ham-radio-ui/issues/148)) ([799ddcd](https://github.com/springfield-ham-radio/ham-radio-ui/commit/799ddcd5da825175f3d727e6315a617290eaa382))
+
 ## [1.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.22.0...v1.23.0) (2026-10-17)
 
 ### Features
