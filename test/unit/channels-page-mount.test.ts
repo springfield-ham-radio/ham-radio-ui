@@ -168,6 +168,14 @@ describe('Channels page mount', () => {
     expect(headerToolbar).not.toContain('label="Delete"');
     expect(headerToolbar).not.toContain(':label="addToRadio.label"');
     expect(headerToolbar).not.toContain('label="New group"');
+    expect(headerToolbar).toContain('label="Import / Export"');
+    expect(headerToolbar).not.toContain('onImportCsv');
+    expect(headerToolbar).not.toContain('onExportCsv');
+    expect(headerToolbar).not.toContain('onExportChirpCsv');
+    expect(headerToolbar).not.toContain('IMPORT_EXPORT_IDS.importChannelsCsv');
+    expect(source).toContain('<ChannelImportExportDialog');
+    expect(source).toContain("fixture === 'import-export'");
+    expect(source).toContain('exportScopeChannels');
     expect(source).toContain('grid-rows-[0fr]');
     expect(source).toContain('grid-rows-[1fr]');
   });

@@ -3,7 +3,9 @@ import type { RadioChannel } from '@springfield/ham-radio-api';
 import type { DropdownMenuItem, SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
 import { h, resolveComponent } from 'vue';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
+import { importExportContext } from '~/importExport/registry';
 import { useImportExportRunner } from '~/importExport/runner';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { HOME_STATION_ID } from '~/utils/antenna-station';
 import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-location';
 import { addToRadioDevFixture } from '~/utils/add-to-radio-dev-fixture';
@@ -86,6 +88,7 @@ const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
 const { choiceForRadio, assessmentFor } = useOperatorLicense();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
+const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
 
 watch(addToRadioFixtureActive, (active) => {
   if (active) {
@@ -93,17 +96,23 @@ watch(addToRadioFixtureActive, (active) => {
   }
 });
 const { entry, run } = useImportExportRunner();
-const importChannels = entry(IMPORT_EXPORT_IDS.importChannelsCsv);
-const exportChannels = entry(IMPORT_EXPORT_IDS.exportChannelsCsv);
-const exportChirpChannels = entry(IMPORT_EXPORT_IDS.exportChannelsChirpCsv);
 const addToRadio = entry(IMPORT_EXPORT_IDS.addToRadio);
 const { focusedCardId } = useRadioBoard();
 const { stations, selectedStationId } = useStationAntennas();
 const { unit: distanceUnit } = useDistanceUnit();
 
-const isExporting = ref(false);
-const isExportingChirp = ref(false);
-const isImporting = ref(false);
+const importExportOpen = ref(false);
+const importExportPendingId = ref<string | undefined>();
+
+watch(
+  importExportFixtureActive,
+  (active) => {
+    if (active) {
+      importExportOpen.value = true;
+    }
+  },
+  { immediate: true },
+);
 const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
@@ -340,12 +349,30 @@ const deleteChannelsDescription = computed(() => {
 
   return `Delete ${count} channels from the library? They are also removed from every group.`;
 });
-const importTooltip = computed(() => {
-  if (builtinGroup.value) {
-    return 'Built-in groups cannot be changed';
+const channelImportExportContext = computed(() =>
+  importExportContext({
+    tauri: isTauriRuntime(),
+    libraryLocked: builtinGroup.value,
+  }),
+);
+const exportScopeChannels = computed(() =>
+  selectedCount.value > 0 ? selectedLibraryChannels.value : scopedChannels.value,
+);
+const exportScopeSummary = computed(() => {
+  const count = exportScopeChannels.value.length;
+  const noun = count === 1 ? 'channel' : 'channels';
+  const where =
+    selectedCount.value > 0
+      ? selectedCountLabel.value.toLowerCase()
+      : activeGroup.value
+        ? `group “${activeGroup.value.name}”`
+        : 'the library';
+
+  if (count === 0) {
+    return `No ${noun} in ${where} to export.`;
   }
 
-  return activeGroup.value ? `Import CSV into ${activeGroup.value.name}` : 'Import channel library, RepeaterBook, or CHIRP CSV';
+  return `Exports ${count} ${noun} from ${where}.`;
 });
 const addChannelTooltip = computed(() =>
   builtinGroup.value ? 'Add a channel from All or a group you created' : 'Add a channel',
@@ -1000,39 +1027,18 @@ async function onSave(payload: {
   }
 }
 
-async function onExportCsv(): Promise<void> {
-  isExporting.value = true;
+async function onChannelImportExportSelect(id: string): Promise<void> {
+  importExportPendingId.value = id;
 
   try {
-    await run(exportChannels.id);
+    const isExport =
+      id === IMPORT_EXPORT_IDS.exportChannelsCsv || id === IMPORT_EXPORT_IDS.exportChannelsChirpCsv;
+    await run(id, isExport ? { savedChannels: exportScopeChannels.value } : {});
+    importExportOpen.value = false;
   } catch {
     // Toast is shown by the composable.
   } finally {
-    isExporting.value = false;
-  }
-}
-
-async function onExportChirpCsv(): Promise<void> {
-  isExportingChirp.value = true;
-
-  try {
-    await run(exportChirpChannels.id);
-  } catch {
-    // Toast is shown by the composable.
-  } finally {
-    isExportingChirp.value = false;
-  }
-}
-
-async function onImportCsv(): Promise<void> {
-  isImporting.value = true;
-
-  try {
-    await run(importChannels.id);
-  } catch {
-    // Toast is shown by the composable.
-  } finally {
-    isImporting.value = false;
+    importExportPendingId.value = undefined;
   }
 }
 </script>
@@ -1047,40 +1053,16 @@ async function onImportCsv(): Promise<void> {
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
-        <UTooltip :text="exportChannels.label">
-          <UButton
-            :icon="exportChannels.icon"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Export channel library to CSV"
-            :loading="isExporting"
-            @click="onExportCsv"
-          />
-        </UTooltip>
-        <UTooltip :text="exportChirpChannels.label">
-          <UButton
-            :icon="exportChirpChannels.icon"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            aria-label="Export channels as CHIRP CSV"
-            :loading="isExportingChirp"
-            @click="onExportChirpCsv"
-          />
-        </UTooltip>
-        <UTooltip :text="importTooltip">
-          <UButton
-            :icon="importChannels.icon"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            :aria-label="importTooltip"
-            :disabled="builtinGroup"
-            :loading="isImporting"
-            @click="onImportCsv"
-          />
-        </UTooltip>
+        <UButton
+          icon="i-lucide-arrow-left-right"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          label="Import / Export"
+          aria-label="Import or export channel library files"
+          :loading="Boolean(importExportPendingId)"
+          @click="importExportOpen = true"
+        />
         <UFieldGroup size="sm" role="group" aria-label="Create channel or group">
           <UTooltip :text="channelCreatePrimaryTooltip">
             <UButton
@@ -1479,6 +1461,13 @@ async function onImportCsv(): Promise<void> {
       :pending="isAddingToRadio"
       :license-for-target="licenseForAddTarget"
       @confirm="confirmAddToRadio"
+    />
+    <ChannelImportExportDialog
+      v-model:open="importExportOpen"
+      :context="channelImportExportContext"
+      :export-scope-summary="exportScopeSummary"
+      :pending-id="importExportPendingId"
+      @select="onChannelImportExportSelect"
     />
   </div>
 </template>

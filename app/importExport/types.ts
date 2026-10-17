@@ -120,6 +120,8 @@ export interface ImportExportDefinition {
   id: string;
   /** Short label. Buttons use this when it is already the visible text. */
   label: string;
+  /** One line for import/export pickers. */
+  description?: string;
   icon: string;
   kind: ImportExportKind;
   category: ImportExportCategory;
