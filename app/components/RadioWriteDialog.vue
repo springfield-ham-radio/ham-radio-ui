@@ -15,6 +15,11 @@ import {
   type WriteReviewCapabilitySummary,
   type WriteReviewDiff,
 } from '~/utils/radio-write-review';
+import {
+  radioTransferDialogDescription,
+  radioTransferDialogTitle,
+  resolveRadioTransferTarget,
+} from '~/utils/radio-transfer-target';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
@@ -28,12 +33,15 @@ const toast = useToast();
 
 const validationErrorsAcknowledged = ref(false);
 
-const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
+const saved = computed(() =>
+  resolveRadioTransferTarget(transferCardId.value, (id) => radioById(id), (id) => cardById(id)),
+);
 const transferGuest = computed(() => {
   const card = cardById(transferCardId.value);
 
   return Boolean(card?.guest && !card.savedRadioId);
 });
+const title = computed(() => radioTransferDialogTitle('write', saved.value?.name));
 const config = computed(() => {
   if (!saved.value) {
     return undefined;
@@ -42,13 +50,7 @@ const config = computed(() => {
   return configurations.value.find((item) => String(item.id.model) === saved.value?.model);
 });
 
-const description = computed(() => {
-  if (!saved.value) {
-    return 'Choose the serial port for this radio.';
-  }
-
-  return 'The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else.';
-});
+const description = computed(() => radioTransferDialogDescription('write', saved.value?.name));
 
 const backupsEnabled = ref(false);
 const reading = ref(false);
@@ -238,7 +240,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
 <template>
   <RadioPortDialog
     v-model:open="writeOpen"
-    title="Write to Radio"
+    :title="title"
     :description="description"
     confirm-label="Write"
     confirm-color="warning"

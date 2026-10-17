@@ -140,7 +140,6 @@ watch(
     :class="panelClass ?? 'max-w-lg'"
   >
     <template #body>
-      <slot name="target" />
       <UAlert
         v-if="warningTitle"
         color="warning"
@@ -151,10 +150,8 @@ watch(
         class="mb-4"
       />
       <slot name="review" :selected-port="selectedPort" />
-      <UFormField
-        label="Serial port"
-        description="The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else."
-      >
+      <slot name="target" />
+      <UFormField label="Serial port">
         <div class="flex gap-2">
           <USelectMenu
             v-model="selectedPort"

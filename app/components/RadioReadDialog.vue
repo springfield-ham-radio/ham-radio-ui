@@ -2,6 +2,11 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { importExportEntry } from '~/importExport/registry';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
+import {
+  radioTransferDialogDescription,
+  radioTransferDialogTitle,
+  resolveRadioTransferTarget,
+} from '~/utils/radio-transfer-target';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
@@ -12,20 +17,17 @@ const { radioById } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
 
-const saved = computed(() => radioById(transferCardId.value) ?? cardById(transferCardId.value)?.guest);
+const saved = computed(() =>
+  resolveRadioTransferTarget(transferCardId.value, (id) => radioById(id), (id) => cardById(id)),
+);
 const transferGuest = computed(() => {
   const card = cardById(transferCardId.value);
 
   return Boolean(card?.guest && !card.savedRadioId);
 });
 
-const description = computed(() => {
-  if (!saved.value) {
-    return 'Choose the serial port for this radio.';
-  }
-
-  return 'The saved port is selected when it is available. Choose another adapter if this cable is plugged in somewhere else.';
-});
+const title = computed(() => radioTransferDialogTitle('read', saved.value?.name));
+const description = computed(() => radioTransferDialogDescription('read', saved.value?.name));
 
 watch(readOpen, (open) => {
   if (!open) {
@@ -63,7 +65,7 @@ async function importRadio(serialPortPath: string): Promise<void> {
 <template>
   <RadioPortDialog
     v-model:open="readOpen"
-    title="Read from Radio"
+    :title="title"
     :description="description"
     confirm-label="Read"
     :confirm-loading="transferInFlight"
