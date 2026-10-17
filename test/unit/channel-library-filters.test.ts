@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  channelsForLibraryExport,
   matchesLibraryBandFilter,
   matchesLibraryLinkedFilter,
   matchesLibraryOnAirFilter,
@@ -52,6 +53,32 @@ describe('channel-library-filters', () => {
 
     expect(visible).toEqual({ 'on-2m': true });
     expect(Object.keys(visible)).toEqual(['on-2m']);
+  });
+
+  it('exports the visible library rows, or the visible selection, and skips hidden rows', () => {
+    const library = [
+      { id: '2m' },
+      { id: '70cm' },
+      { id: 'hidden' },
+    ];
+    const visible = library.filter((channel) => channel.id !== 'hidden');
+    const libraryIds = library.map((channel) => channel.id);
+
+    expect(channelsForLibraryExport({ selected: [], visible, libraryIds })).toEqual(visible);
+    expect(
+      channelsForLibraryExport({
+        selected: [{ id: '2m' }, { id: 'fixture-only' }],
+        visible: [...visible, { id: 'fixture-only' }],
+        libraryIds,
+      }),
+    ).toEqual([{ id: '2m' }]);
+    expect(
+      channelsForLibraryExport({
+        selected: [{ id: 'hidden' }],
+        visible,
+        libraryIds,
+      }),
+    ).toEqual([]);
   });
 });
 

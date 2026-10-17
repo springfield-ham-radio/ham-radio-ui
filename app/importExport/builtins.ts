@@ -22,8 +22,6 @@ const MEMORY_FILE = {
  * CSV import is one source. It accepts the HamBench library CSV and the
  * RepeaterBook and CHIRP CSV dialects that `parseSavedChannelsCsv` already detects.
  *
- * TODO(phase-3): Import Channels… / Export Channels… list `registry.list()` and
- * call the data handler with the file the dialog picked. Do not add that UI here.
  * TODO(phase-5): register an `online` RepeaterBook source that reads `input.token`
  * and returns a reason from `available` when `context.token` is absent.
  */
@@ -31,6 +29,7 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
   const csvSource: ImportExportDefinition = {
     id: IMPORT_EXPORT_IDS.importChannelsCsv,
     label: 'Import CSV',
+    description: 'HamBench library CSV, RepeaterBook export, or CHIRP CSV.',
     icon: 'i-lucide-file-up',
     kind: 'source',
     category: 'file',
@@ -50,6 +49,7 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
   const csvTarget: ImportExportDefinition = {
     id: IMPORT_EXPORT_IDS.exportChannelsCsv,
     label: 'Export CSV',
+    description: 'Portable HamBench library CSV with notes and repeater fields.',
     icon: 'i-lucide-file-down',
     kind: 'target',
     category: 'file',
@@ -67,6 +67,7 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
   const chirpCsvTarget: ImportExportDefinition = {
     id: IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
     label: 'Export CHIRP CSV',
+    description: 'CHIRP generic CSV for programming software.',
     icon: 'i-lucide-file-down',
     kind: 'target',
     category: 'file',
