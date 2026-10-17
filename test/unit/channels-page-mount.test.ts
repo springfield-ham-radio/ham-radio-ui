@@ -133,11 +133,14 @@ describe('Channels page mount', () => {
 
     expect(filterRow).toContain('flex flex-wrap items-end');
     expect(filterRow).not.toContain('flex-nowrap');
-    expect(filterRow).toContain('<ChannelLibraryFilterCheckbox v-model="linkedOnly" label="Linked only"');
-    expect(filterRow.indexOf('Range (mi)')).toBeLessThan(
-      filterRow.indexOf('<ChannelLibraryFilterCheckbox v-model="linkedOnly"'),
-    );
-    expect(filterRow).toContain('<ChannelLibraryFilterCheckbox v-if="isTripGroup" v-model="tripOpenOnly"');
+    expect(filterRow).toContain('label="Linked"');
+    expect(filterRow).toContain('v-model="linkedFilter"');
+    expect(filterRow.indexOf('Range (mi)')).toBeLessThan(filterRow.indexOf('label="Linked"'));
+    expect(filterRow).toContain('v-if="isTripGroup"');
+    expect(filterRow).toContain('v-model="tripOpenFilter"');
+    expect(source).toContain("label: 'Linked only', value: 'linked-only'");
+    expect(source).toContain("label: 'Open use only', value: 'open-only'");
+    expect(filterRow).not.toContain('ChannelLibraryFilterCheckbox');
     expect(filterRow).toContain('placeholder="All bands"');
     expect(filterRow).toContain('label="On-air"');
     expect(source).toContain('writeChannelLibraryFilterSettings');

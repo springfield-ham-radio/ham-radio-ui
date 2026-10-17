@@ -1,3 +1,4 @@
+import { channelHasLinkedNode } from '~/utils/linked-nodes';
 import { adifBandFromFrequencyHz } from '~/utils/station-log-db';
 
 /** ADIF band tokens, longest / highest first for stable sort. */
@@ -32,6 +33,10 @@ const BAND_TOKEN_ORDER = [
 ] as const;
 
 export type ChannelOnAirFilter = 'all' | 'on-air' | 'off-air';
+
+export type ChannelLinkedFilter = 'all' | 'linked-only';
+
+export type ChannelTripOpenFilter = 'all' | 'open-only';
 
 export interface ChannelLibraryFilterSettings {
   /** Empty means all bands. */
@@ -114,4 +119,15 @@ export function matchesLibraryOnAirFilter(channel: { onAir?: boolean }, filter: 
   }
 
   return filter === 'on-air' ? channel.onAir === true : channel.onAir === false;
+}
+
+export function matchesLibraryLinkedFilter(
+  channel: Parameters<typeof channelHasLinkedNode>[0],
+  filter: ChannelLinkedFilter,
+): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+
+  return channelHasLinkedNode(channel);
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   matchesLibraryBandFilter,
+  matchesLibraryLinkedFilter,
   matchesLibraryOnAirFilter,
   selectionVisibleOnly,
   uniqueLibraryBandTokens,
@@ -25,6 +26,14 @@ describe('channel-library-filters', () => {
     expect(matchesLibraryBandFilter(channel, ['2m'])).toBe(true);
     expect(matchesLibraryBandFilter(channel, ['70cm'])).toBe(false);
     expect(matchesLibraryBandFilter({ transmitFrequency: 999 }, ['2m'])).toBe(false);
+  });
+
+  it('filters linked repeaters when Linked only is selected', () => {
+    const linked = { echolink: true };
+
+    expect(matchesLibraryLinkedFilter(linked, 'all')).toBe(true);
+    expect(matchesLibraryLinkedFilter(linked, 'linked-only')).toBe(true);
+    expect(matchesLibraryLinkedFilter({}, 'linked-only')).toBe(false);
   });
 
   it('filters on-air status and keeps unknown status on All only', () => {

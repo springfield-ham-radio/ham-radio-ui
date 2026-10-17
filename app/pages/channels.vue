@@ -22,9 +22,12 @@ import {
 import {
   libraryBandFilterItems,
   matchesLibraryBandFilter,
+  matchesLibraryLinkedFilter,
   matchesLibraryOnAirFilter,
   selectionVisibleOnly,
+  type ChannelLinkedFilter,
   type ChannelOnAirFilter,
+  type ChannelTripOpenFilter,
   uniqueLibraryBandTokens,
 } from '~/utils/channel-library-filters';
 import {
@@ -123,7 +126,7 @@ const table = useTemplateRef<{
     getColumn: (id: string) => { toggleVisibility: (visible: boolean) => void } | undefined;
   };
 }>('table');
-const tripOpenOnly = ref(false);
+const tripOpenFilter = ref<ChannelTripOpenFilter>('all');
 const isSavingGroup = shallowRef(false);
 const removeGroupOpen = shallowRef(false);
 const isRemovingGroup = shallowRef(false);
@@ -152,7 +155,15 @@ const onAirFilterItems = [
   { label: 'On air', value: 'on-air' as const },
   { label: 'Off air', value: 'off-air' as const },
 ];
-const linkedOnly = ref(false);
+const linkedFilter = ref<ChannelLinkedFilter>('all');
+const linkedFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'Linked only', value: 'linked-only' as const },
+];
+const tripOpenFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'Open use only', value: 'open-only' as const },
+];
 const channelMapSettings = ref(readChannelMapSettings());
 const showMap = computed({
   get: () => channelMapSettings.value.open,
@@ -228,7 +239,7 @@ const libraryBandFilterOptions = computed(() =>
   libraryBandFilterItems(uniqueLibraryBandTokens(scopedChannels.value)),
 );
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
-  let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
+  let rows = filteredChannels.value.filter((channel) => matchesLibraryLinkedFilter(channel, linkedFilter.value));
   rows = rows.filter((channel) => matchesLibraryBandFilter(channel, selectedBandTokens.value));
   rows = rows.filter((channel) => matchesLibraryOnAirFilter(channel, onAirFilter.value));
 
@@ -239,7 +250,7 @@ const displayChannels = computed<DisplaySavedChannel[]>(() => {
   if (isTripGroup.value) {
     rows = trimTripChannels(rows, {
       band: '',
-      openOnly: tripOpenOnly.value,
+      openOnly: tripOpenFilter.value === 'open-only',
       onAirOnly: false,
     });
   }
@@ -404,8 +415,8 @@ const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
   ],
 ]);
 const emptyMessage = computed(() => {
-  if (linkedOnly.value) {
-    return 'No linked repeaters match. Turn off Linked only to see every channel.';
+  if (linkedFilter.value === 'linked-only') {
+    return 'No linked repeaters match. Set Linked to All to see every channel.';
   }
 
   if (builtinGroup.value) {
@@ -1133,8 +1144,26 @@ async function onImportCsv(): Promise<void> {
             aria-label="Map range ring radius"
           />
         </UFormField>
-        <ChannelLibraryFilterCheckbox v-model="linkedOnly" label="Linked only" />
-        <ChannelLibraryFilterCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" />
+        <UFormField label="Linked" class="w-32 shrink-0">
+          <USelect
+            v-model="linkedFilter"
+            :items="linkedFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
+        <UFormField v-if="isTripGroup" label="Open use" class="w-32 shrink-0">
+          <USelect
+            v-model="tripOpenFilter"
+            :items="tripOpenFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
         <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
           <UButton
             icon="i-lucide-map"
