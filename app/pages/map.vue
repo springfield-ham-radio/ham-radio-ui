@@ -8,12 +8,12 @@ import {
   type MapGeoJSONFeature,
 } from 'maplibre-gl';
 import {
-  CHANNEL_MAP_EMPTY_STYLE,
   channelMapBandColor,
   channelMapBandColorExpression,
   channelMapBounds,
   channelMapLegendBands,
 } from '~/utils/channel-map';
+import { CHANNEL_MAP_EMPTY_STYLE } from '~/utils/map-canvas';
 import { mapDevFixture } from '~/utils/map-dev-fixture';
 import {
   mapChannelFeatures,

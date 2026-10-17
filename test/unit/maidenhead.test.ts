@@ -4,12 +4,14 @@ import {
   dmsToDecimalDegrees,
   formatLatitude,
   formatLongitude,
+  parseDmsInput,
+} from '../../app/utils/location-format.ts';
+import {
   isMaidenheadGrid,
   haversineDistanceKm,
   latLonToMaidenhead,
   maidenheadToLatLon,
   normalizeMaidenhead,
-  parseDmsInput,
 } from '../../app/utils/maidenhead.ts';
 
 describe('maidenhead', () => {

@@ -13,11 +13,9 @@ import {
   installPickedLocalModuleFile,
   updateInstalledModule,
   isModuleInstallPath,
-  isBetaZipFileName,
   parseModuleInstallPath,
   pickLocalModuleFile,
   sha256HexForLocalFile,
-  versionFromZipName,
 } from '~/utils/radio-module-install';
 import {
   buildAvailableManufacturerGroups,
@@ -25,11 +23,11 @@ import {
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   installedRadiosEligibleForVerifiedSwitch,
-  isBetaDriverRecord,
   radioDisplayName,
   type AvailableRadioModelItem,
   type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
+import { isBetaDriverRecord, isBetaZipFileName, versionFromZipName } from '~/utils/radio-module-semver';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const toast = useToast();

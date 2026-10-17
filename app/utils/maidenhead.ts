@@ -147,26 +147,6 @@ export function haversineDistanceKm(from: GeoPoint, to: GeoPoint): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
-export type {
-  CoordinateAxis,
-  DmsHemisphere,
-  DmsInput,
-  DmsParseResult,
-  DmsParts,
-  LatitudeHemisphere,
-  LongitudeHemisphere,
-} from '~/utils/location-format';
-
-export {
-  decimalDegreesToDms,
-  dmsInputFromDecimal,
-  dmsToDecimalDegrees,
-  emptyDmsInput,
-  formatLatitude,
-  formatLongitude,
-  parseDmsInput,
-} from '~/utils/location-format';
-
 function wrapLongitude(longitude: number): number {
   const wrapped = ((((longitude + 180) % 360) + 360) % 360) - 180;
 
