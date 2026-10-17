@@ -174,8 +174,21 @@ describe('Channels page mount', () => {
     expect(headerToolbar).not.toContain('onExportChirpCsv');
     expect(headerToolbar).not.toContain('IMPORT_EXPORT_IDS.importChannelsCsv');
     expect(source).toContain('<ChannelImportExportDialog');
-    expect(source).toContain("fixture === 'import-export'");
-    expect(source).toContain('exportScopeChannels');
+    expect(source).toContain('channelsForLibraryExport');
+    expect(source).toContain('libraryLocked: builtinGroup.value');
+    const fixtureWatch = source.slice(
+      source.indexOf('watch(\n  importExportFixtureActive'),
+      source.indexOf('const isAddingToRadio'),
+    );
+    expect(fixtureWatch).toContain('importExportOpen.value = true');
+    expect(fixtureWatch).not.toContain('seedAddToRadioDevFixture');
+    expect(fixtureWatch).not.toContain('readFromRadio');
+    expect(fixtureWatch).not.toContain('serial');
+    const dialog = readFileSync(new URL('../../app/components/ChannelImportExportDialog.vue', import.meta.url), 'utf8');
+    expect(dialog).toContain('dismissible');
+    expect(dialog).toContain('<UModal');
+    expect(dialog).not.toContain('read-from-radio');
+    expect(dialog).not.toContain('write-to-radio');
     expect(source).toContain('grid-rows-[0fr]');
     expect(source).toContain('grid-rows-[1fr]');
   });

@@ -109,6 +109,27 @@ export function selectionVisibleOnly(
 
   return next;
 }
+
+/**
+ * Channels an export should write.
+ * A selection exports those rows. Otherwise the visible table.
+ * Rows that are filtered out, or that are not in the library, are left out.
+ */
+export function channelsForLibraryExport<T extends { id: string | number }>(input: {
+  selected: readonly T[];
+  visible: readonly T[];
+  libraryIds: readonly string[];
+}): T[] {
+  const library = new Set(input.libraryIds);
+  const visibleIds = new Set(input.visible.map((channel) => String(channel.id)));
+  const inLibrary = (channel: T) => library.has(String(channel.id)) && visibleIds.has(String(channel.id));
+
+  if (input.selected.length > 0) {
+    return input.selected.filter(inLibrary);
+  }
+
+  return input.visible.filter(inLibrary);
+}
 export function matchesLibraryOnAirFilter(channel: { onAir?: boolean }, filter: ChannelOnAirFilter): boolean {
   if (filter === 'all') {
     return true;

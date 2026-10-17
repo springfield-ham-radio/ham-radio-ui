@@ -47,6 +47,8 @@ function choose(id: string, available: boolean): void {
     v-model:open="open"
     title="Import / Export"
     description="Move channel library files. Read from Radio and Write to Radio stay on the Radio menu."
+    modal
+    dismissible
     :ui="{ content: 'sm:max-w-lg', footer: 'justify-end' }"
   >
     <template #body>

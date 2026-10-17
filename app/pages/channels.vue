@@ -26,6 +26,7 @@ import {
   matchesLibraryBandFilter,
   matchesLibraryLinkedFilter,
   matchesLibraryOnAirFilter,
+  channelsForLibraryExport,
   selectionVisibleOnly,
   type ChannelLinkedFilter,
   type ChannelOnAirFilter,
@@ -356,7 +357,11 @@ const channelImportExportContext = computed(() =>
   }),
 );
 const exportScopeChannels = computed(() =>
-  selectedCount.value > 0 ? selectedLibraryChannels.value : scopedChannels.value,
+  channelsForLibraryExport({
+    selected: selectedLibraryChannels.value,
+    visible: displayChannels.value,
+    libraryIds: scopedChannels.value.map((channel) => String(channel.id)),
+  }),
 );
 const exportScopeSummary = computed(() => {
   const count = exportScopeChannels.value.length;

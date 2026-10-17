@@ -329,17 +329,29 @@ export function useSavedChannels() {
     }
   }
 
+  function refuseEmptyChannelExport(fromCurrentView: boolean, count: number): boolean {
+    if (count > 0) {
+      return false;
+    }
+
+    toast.add({
+      title: 'Nothing to export',
+      description: fromCurrentView
+        ? 'No channels in the current view to export.'
+        : activeGroup.value
+          ? `${activeGroup.value.name} has no channels.`
+          : 'There are no channels to export.',
+      color: 'warning',
+      icon: 'i-lucide-file-down',
+    });
+    return true;
+  }
+
   async function exportChirpLibraryCsv(input: ImportExportHandlerInput = {}): Promise<void> {
     try {
       const exporting = input.savedChannels ? [...input.savedChannels] : scopedChannels.value;
 
-      if (!input.savedChannels && activeGroup.value && exporting.length === 0) {
-        toast.add({
-          title: 'Nothing to export',
-          description: `${activeGroup.value.name} has no channels.`,
-          color: 'warning',
-          icon: 'i-lucide-file-down',
-        });
+      if (refuseEmptyChannelExport(Boolean(input.savedChannels), exporting.length)) {
         return;
       }
 
@@ -384,13 +396,7 @@ export function useSavedChannels() {
     try {
       const exporting = input.savedChannels ? [...input.savedChannels] : scopedChannels.value;
 
-      if (!input.savedChannels && activeGroup.value && exporting.length === 0) {
-        toast.add({
-          title: 'Nothing to export',
-          description: `${activeGroup.value.name} has no channels.`,
-          color: 'warning',
-          icon: 'i-lucide-file-down',
-        });
+      if (refuseEmptyChannelExport(Boolean(input.savedChannels), exporting.length)) {
         return;
       }
 
