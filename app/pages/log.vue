@@ -75,7 +75,14 @@
       :ui="{ handle: 'h-3' }"
     >
       <template #map>
-        <StationLogMap class="h-full min-h-0" :qsos="filteredQsos" :stations="stations" @select="openEdit" />
+        <StationLogMap
+          ref="stationLogMapRef"
+          class="h-full min-h-0"
+          :qsos="filteredQsos"
+          :stations="stations"
+          :selected-qso-ids="[...selectedQsoIds]"
+          @pick="onMapPick"
+        />
       </template>
       <template #contacts>
         <div class="h-full min-h-0 w-full overflow-auto">
@@ -83,6 +90,8 @@
             v-model:sorting="sorting"
             :data="displayQsos"
             :columns="columns"
+            :meta="tableMeta"
+            :get-row-id="(row) => row.id"
             :sorting-options="{ enableSortingRemoval: false }"
             :loading="isLoading"
             sticky
@@ -95,7 +104,7 @@
               tr: 'cursor-pointer',
             }"
             empty="No contacts yet. Add one here, or import an ADIF file."
-            @select="(row) => openEdit(row.original)"
+            @select="onSelectContact"
           >
             <template #startedAt-header="{ column }">
               <button
@@ -109,6 +118,9 @@
                   class="size-3.5 text-muted"
                 />
               </button>
+            </template>
+            <template #theirCallsign-cell="{ row }">
+              <span :data-qso-row-id="row.original.id">{{ row.original.theirCallsign }}</span>
             </template>
             <template #qrzStatus-cell="{ row }">
               <UIcon
@@ -132,7 +144,7 @@
                   color="neutral"
                   variant="ghost"
                   size="xs"
-                  aria-label="Edit contact"
+                  :aria-label="`Edit ${row.original.theirCallsign}`"
                   @click="openEdit(row.original)"
                 />
                 <UButton
@@ -162,12 +174,12 @@
 </template>
 
 <script setup lang="ts">
-import type { SplitterItem, TableColumn } from '@nuxt/ui';
+import type { SplitterItem, TableColumn, TableRow } from '@nuxt/ui';
 import { contactAntennaLabel } from '~/utils/antenna-station';
 import { myCoordinatesFromSavedStation } from '~/utils/station-log-qso-location';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
-import { qslTableLabel } from '~/utils/station-log-map';
+import { locationKeyForQso, qslTableLabel } from '~/utils/station-log-map';
 import {
   formatStationLogLocalTime,
   stationLogBandLabel,
@@ -212,6 +224,19 @@ const splitterItems = computed(() => (showMap.value ? mapPanes : tablePanes));
 const editorOpen = ref(false);
 const editingQso = ref<StationLogQso | undefined>();
 const sorting = ref([{ id: 'startedAt', desc: true }]);
+const selectedQsoIds = ref<Set<string>>(new Set());
+const stationLogMapRef = useTemplateRef('stationLogMapRef');
+
+const tableMeta = computed(() => {
+  void selectedQsoIds.value;
+
+  return {
+    class: {
+      tr: (row: TableRow<DisplayQso>) =>
+        selectedQsoIds.value.has(row.original.id) ? 'bg-primary/15 dark:bg-primary/25' : '',
+    },
+  };
+});
 
 interface DisplayQso extends StationLogQso {
   startedLabel: string;
@@ -337,6 +362,77 @@ const columns: TableColumn<DisplayQso>[] = [
   },
 ];
 
+function selectionMatches(ids: readonly string[]): boolean {
+  if (ids.length !== selectedQsoIds.value.size) {
+    return false;
+  }
+
+  return ids.every((id) => selectedQsoIds.value.has(id));
+}
+
+function clearContactSelection(): void {
+  selectedQsoIds.value = new Set();
+}
+
+function scrollSelectedContactsIntoView(): void {
+  nextTick(() => {
+    for (const id of selectedQsoIds.value) {
+      const row = document.querySelector(`[data-qso-row-id="${CSS.escape(id)}"]`);
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+}
+
+function applyContactSelection(ids: readonly string[]): void {
+  selectedQsoIds.value = new Set(ids);
+
+  if (ids.length === 0) {
+    return;
+  }
+
+  scrollSelectedContactsIntoView();
+
+  if (!showMap.value) {
+    return;
+  }
+
+  const first = filteredQsos.value.find((qso) => qso.id === ids[0]);
+  const locationKey = first ? locationKeyForQso(first) : undefined;
+
+  if (locationKey) {
+    void stationLogMapRef.value?.revealLocationKey(locationKey);
+  }
+}
+
+function toggleContactSelection(ids: readonly string[]): void {
+  if (ids.length > 0 && selectionMatches(ids)) {
+    clearContactSelection();
+    return;
+  }
+
+  applyContactSelection(ids);
+}
+
+function onSelectContact(event: Event, row: TableRow<DisplayQso>): void {
+  const target = event.target;
+
+  if (target instanceof Element && target.closest('button, a, input, [role="checkbox"]')) {
+    return;
+  }
+
+  toggleContactSelection([row.original.id]);
+}
+
+function onMapPick(payload: { qsoIds: string[] }): void {
+  toggleContactSelection(payload.qsoIds);
+}
+
+function onLogKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    clearContactSelection();
+  }
+}
+
 function openCreate(): void {
   editingQso.value = undefined;
   editorOpen.value = true;
@@ -417,5 +513,10 @@ async function onImportAdif(): Promise<void> {
 
 onMounted(() => {
   void refresh();
+  window.addEventListener('keydown', onLogKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onLogKeydown);
 });
 </script>

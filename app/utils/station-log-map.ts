@@ -175,6 +175,7 @@ export interface StationLogMapFeature {
     locationKind: StationLogMapLocationKind;
     status: QslMarkerStatus;
     count: number;
+    mapSelected: number;
   };
 }
 
@@ -347,7 +348,43 @@ export function stationLogUnmappedCount(qsos: readonly StationLogQso[]): number 
 /**
  * GeoJSON for MapLibre. Coordinates are longitude, then latitude.
  */
-export function stationLogMapFeatureCollection(points: readonly StationLogMapPoint[]): StationLogMapFeatureCollection {
+export function locationKeyForQso(qso: StationLogQso): string | undefined {
+  return resolveStationLogMapLocation(qso)?.locationKey;
+}
+
+export function qsoIdsAtLocationKey(qsos: readonly StationLogQso[], locationKey: string): string[] {
+  const point = stationLogMapPoints(qsos).find((candidate) => candidate.locationKey === locationKey);
+
+  return point?.qsos.map((qso) => qso.id) ?? [];
+}
+
+export function selectedLocationKeysForQsoIds(
+  qsos: readonly StationLogQso[],
+  selectedIds: ReadonlySet<string>,
+): Set<string> {
+  const keys = new Set<string>();
+
+  for (const qso of qsos) {
+    if (!selectedIds.has(qso.id)) {
+      continue;
+    }
+
+    const key = locationKeyForQso(qso);
+
+    if (key) {
+      keys.add(key);
+    }
+  }
+
+  return keys;
+}
+
+export function stationLogMapFeatureCollection(
+  points: readonly StationLogMapPoint[],
+  options?: { selectedLocationKeys?: ReadonlySet<string> },
+): StationLogMapFeatureCollection {
+  const selected = options?.selectedLocationKeys;
+
   return {
     type: 'FeatureCollection',
     features: points.map((point) =>
@@ -359,6 +396,7 @@ export function stationLogMapFeatureCollection(points: readonly StationLogMapPoi
           locationKind: point.locationKind,
           status: point.status,
           count: point.qsos.length,
+          mapSelected: selected?.has(point.locationKey) ? 1 : 0,
         },
       ),
     ),

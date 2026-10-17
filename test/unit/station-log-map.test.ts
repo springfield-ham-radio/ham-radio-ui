@@ -6,6 +6,9 @@ import {
   qslMarkerStatus,
   qslStatusLabel,
   qslTableLabel,
+  locationKeyForQso,
+  qsoIdsAtLocationKey,
+  selectedLocationKeysForQsoIds,
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
@@ -157,8 +160,29 @@ describe('stationLogMapFeatureCollection', () => {
       locationKind: 'grid-center',
       status: 'sent',
       count: 1,
+      mapSelected: 0,
     });
     expect(collection.features[0]?.properties.locationKey).toBe('grid:FN31');
+  });
+
+  it('marks selected map pins in GeoJSON properties', () => {
+    const points = stationLogMapPoints([contact()]);
+    const collection = stationLogMapFeatureCollection(points, {
+      selectedLocationKeys: new Set(['grid:FN31']),
+    });
+
+    expect(collection.features[0]?.properties.mapSelected).toBe(1);
+  });
+});
+
+describe('station log map selection helpers', () => {
+  it('resolves location keys and ids for a shared grid pin', () => {
+    const qsos = [contact(), contact({ theirCallsign: 'K1ABC' })];
+    const key = locationKeyForQso(qsos[0]);
+
+    expect(key).toBe('grid:FN31');
+    expect(qsoIdsAtLocationKey(qsos, key!)).toHaveLength(2);
+    expect(selectedLocationKeysForQsoIds(qsos, new Set([qsos[0]!.id]))).toEqual(new Set(['grid:FN31']));
   });
 });
 
