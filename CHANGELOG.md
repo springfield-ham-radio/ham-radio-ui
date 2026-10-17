@@ -1,3 +1,9 @@
+## [1.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.18.0...v1.19.0) (2026-10-17)
+
+### Features
+
+* **radio:** show target card on read and write dialogs ([#142](https://github.com/springfield-ham-radio/ham-radio-ui/issues/142)) ([9fbe61e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9fbe61e38ec8c2cfa7d4e080651be75b3e527814))
+
 ## [1.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.17.0...v1.18.0) (2026-10-17)
 
 ### Features
