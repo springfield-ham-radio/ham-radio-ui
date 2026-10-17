@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ChannelPackDocument } from '~/utils/channel-pack';
+import { formatChannelPackUpdated } from '~/utils/format-date';
 import {
   CHANNEL_PACK_DIFF_PREVIEW_LIMIT,
   type ChannelPackDiffEntry,
@@ -30,6 +31,11 @@ const hiddenDiffCount = computed(() => Math.max(0, props.plan.diff.length - CHAN
 const summaryLine = computed(
   () => `${props.plan.added} added · ${props.plan.changed} changed · ${props.plan.removed} removed`,
 );
+const headerDescription = computed(() => {
+  const author = props.pack.author ? `${props.pack.author} · ` : '';
+
+  return `${author}version ${props.pack.version} · updated ${formatChannelPackUpdated(props.pack.updated)}`;
+});
 
 function diffPrefix(kind: ChannelPackDiffEntry['kind']): string {
   if (kind === 'add') {
@@ -68,7 +74,7 @@ function apply(): void {
   <UModal
     v-model:open="open"
     title="Import channel pack"
-    :description="`${pack.author ? `${pack.author} · ` : ''}version ${pack.version} · updated ${pack.updated}`"
+    :description="headerDescription"
     modal
     dismissible
     :ui="{ content: 'sm:max-w-lg', footer: 'justify-end' }"
