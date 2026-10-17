@@ -1038,15 +1038,6 @@ async function onImportCsv(): Promise<void> {
             />
           </span>
         </UTooltip>
-        <UButton
-          icon="i-lucide-map"
-          color="neutral"
-          :variant="showMap ? 'soft' : 'outline'"
-          size="sm"
-          label="Map"
-          :aria-pressed="showMap"
-          @click="showMap = !showMap"
-        />
         <div role="group" aria-label="Create channel or group" class="inline-flex">
           <UFieldGroup size="sm">
             <UTooltip :text="channelCreatePrimaryTooltip">
@@ -1119,16 +1110,27 @@ async function onImportCsv(): Promise<void> {
         </UFormField>
         <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" class="shrink-0 pb-2" />
         <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" class="shrink-0 pb-2" />
-        <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }" class="ml-auto shrink-0 pb-0.5">
+        <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
           <UButton
-            label="Columns"
+            icon="i-lucide-map"
             color="neutral"
-            variant="outline"
+            :variant="showMap ? 'soft' : 'outline'"
             size="sm"
-            trailing-icon="i-lucide-chevron-down"
-            aria-label="Choose visible columns"
+            label="Map"
+            :aria-pressed="showMap"
+            @click="showMap = !showMap"
           />
-        </UDropdownMenu>
+          <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }">
+            <UButton
+              label="Columns"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              trailing-icon="i-lucide-chevron-down"
+              aria-label="Choose visible columns"
+            />
+          </UDropdownMenu>
+        </div>
       </div>
       <p v-if="distanceStartPoint" class="text-xs text-muted">
         Straight-line distance. Rows without coordinates show — and stay last when this column is sorted.
