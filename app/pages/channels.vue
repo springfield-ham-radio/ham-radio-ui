@@ -1086,7 +1086,6 @@ async function onImportCsv(): Promise<void> {
           size="sm"
           class="w-full min-w-0 sm:w-72 sm:max-w-sm"
         />
-        <UCheckbox v-model="linkedOnly" label="Linked only" class="shrink-0 pb-2" />
         <UFormField label="Band" class="w-36 shrink-0">
           <USelectMenu
             v-model="selectedBandTokens"
@@ -1133,6 +1132,11 @@ async function onImportCsv(): Promise<void> {
             inputmode="decimal"
             aria-label="Map range ring radius"
           />
+        </UFormField>
+        <UFormField label="Linked only" class="shrink-0">
+          <div class="flex h-8 items-center">
+            <UCheckbox v-model="linkedOnly" aria-label="Linked only" />
+          </div>
         </UFormField>
         <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" class="shrink-0 pb-2" />
         <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
