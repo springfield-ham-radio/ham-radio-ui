@@ -1045,30 +1045,28 @@ async function onImportCsv(): Promise<void> {
             @click="onImportCsv"
           />
         </UTooltip>
-        <div role="group" aria-label="Create channel or group" class="inline-flex">
-          <UFieldGroup size="sm">
-            <UTooltip :text="channelCreatePrimaryTooltip">
-              <span class="inline-flex">
-                <UButton
-                  :icon="channelCreatePrimaryIcon"
-                  color="primary"
-                  size="sm"
-                  :label="channelCreatePrimaryLabel"
-                  :disabled="channelCreatePrimaryDisabled"
-                  @click="runChannelCreateAction(channelCreateAction)"
-                />
-              </span>
-            </UTooltip>
-            <UDropdownMenu :items="channelCreateMenuItems" :content="{ align: 'end' }">
-              <UButton
-                color="primary"
-                size="sm"
-                icon="i-lucide-chevron-down"
-                aria-label="Choose create action"
-              />
-            </UDropdownMenu>
-          </UFieldGroup>
-        </div>
+        <UFieldGroup size="sm" role="group" aria-label="Create channel or group">
+          <UTooltip :text="channelCreatePrimaryTooltip">
+            <UButton
+              :icon="channelCreatePrimaryIcon"
+              color="primary"
+              size="sm"
+              :label="channelCreatePrimaryLabel"
+              :disabled="channelCreatePrimaryDisabled"
+              @click="runChannelCreateAction(channelCreateAction)"
+            />
+          </UTooltip>
+          <UDropdownMenu :items="channelCreateMenuItems" :content="{ align: 'end' }">
+            <UButton
+              color="primary"
+              size="sm"
+              square
+              icon="i-lucide-chevron-down"
+              aria-label="Choose create action"
+              :ui="{ base: 'border-s border-white/20' }"
+            />
+          </UDropdownMenu>
+        </UFieldGroup>
       </div>
     </div>
 

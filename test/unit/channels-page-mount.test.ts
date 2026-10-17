@@ -143,6 +143,11 @@ describe('Channels page mount', () => {
     expect(filterRow).toContain('Straight-line distance');
     expect(source).toContain("useState<ChannelLibraryCreateAction>('channel-library-create-action'");
     expect(source).toContain('aria-label="Choose create action"');
+    const createSplitStart = source.lastIndexOf('<UFieldGroup', source.indexOf('aria-label="Create channel or group"'));
+    const createSplit = source.slice(createSplitStart, source.indexOf('aria-label="Choose create action"') + 40);
+    expect(createSplit).toContain('aria-label="Create channel or group"');
+    expect(createSplit).not.toContain('<span class="inline-flex">');
+    expect(createSplit).toContain('square');
     expect(source).toContain("runChannelCreateAction('empty-group')");
     expect(source).toContain("runChannelCreateAction('trip-group')");
     const createMenu = source.slice(
