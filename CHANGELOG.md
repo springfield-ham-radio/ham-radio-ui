@@ -1,3 +1,9 @@
+## [1.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.11.0...v1.12.0) (2026-10-17)
+
+### Features
+
+* **log:** ADIF LAT/LON location parse and format (part 1 of [#81](https://github.com/springfield-ham-radio/ham-radio-ui/issues/81)) ([#131](https://github.com/springfield-ham-radio/ham-radio-ui/issues/131)) ([dfadb56](https://github.com/springfield-ham-radio/ham-radio-ui/commit/dfadb5675bfd70e641cb554583420466829e416a))
+
 ## [1.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.10.0...v1.11.0) (2026-10-16)
 
 ### Features
