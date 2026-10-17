@@ -1133,12 +1133,8 @@ async function onImportCsv(): Promise<void> {
             aria-label="Map range ring radius"
           />
         </UFormField>
-        <UFormField label="Linked only" class="shrink-0">
-          <div class="flex h-8 items-center">
-            <UCheckbox v-model="linkedOnly" aria-label="Linked only" />
-          </div>
-        </UFormField>
-        <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" class="shrink-0 pb-2" />
+        <ChannelLibraryFilterCheckbox v-model="linkedOnly" label="Linked only" />
+        <ChannelLibraryFilterCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" />
         <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
           <UButton
             icon="i-lucide-map"
