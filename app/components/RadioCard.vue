@@ -18,7 +18,7 @@ const emit = defineEmits<{
 const cardId = computed(() => props.radio.id);
 provide(radioCardIdKey, cardId);
 
-const { configurations } = useRadio();
+const { configurations, memoryUnsaved } = useRadio();
 const driverInstalled = computed(() =>
   configurations.value.some((config) => String(config.id.model) === props.radio.model),
 );
@@ -54,7 +54,10 @@ const cardClass = computed(() => ({
         <UIcon name="i-lucide-radio" class="size-4 text-highlighted" />
       </div>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium text-highlighted">{{ radio.name }}</p>
+        <p class="truncate text-sm font-medium text-highlighted">
+          {{ radio.name }}
+          <span v-if="memoryUnsaved" class="font-normal text-warning">· Unsaved</span>
+        </p>
         <p class="truncate text-xs text-muted">{{ detail }}</p>
       </div>
       <UButton

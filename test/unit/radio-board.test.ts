@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   focusedCardAfterHydrate,
@@ -63,5 +64,18 @@ describe('radio board', () => {
         { savedRadioId: 'mobile' },
       ]),
     ).toEqual(['base', 'mobile']);
+  });
+
+  it('opens the undo-memory dev fixture without calling read from radio', () => {
+    const source = readFileSync(new URL('../../app/components/RadioBoard.vue', import.meta.url), 'utf8');
+    const fixtureBlock = source.slice(
+      source.indexOf('function maybeOpenUndoMemoryFixture'),
+      source.indexOf('function maybeOpenUndoMemoryFixture') + 280,
+    );
+
+    expect(fixtureBlock).toContain("fixture === 'undo-memory'");
+    expect(fixtureBlock).toContain('seedUndoMemoryDevFixture');
+    expect(fixtureBlock).not.toContain('readFromRadio');
+    expect(fixtureBlock).not.toContain('writeToRadio');
   });
 });
