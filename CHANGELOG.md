@@ -1,3 +1,9 @@
+## [1.21.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.20.0...v1.21.0) (2026-10-17)
+
+### Features
+
+* **radio:** enrich error reports with context and copy details ([#144](https://github.com/springfield-ham-radio/ham-radio-ui/issues/144)) ([087d638](https://github.com/springfield-ham-radio/ham-radio-ui/commit/087d638fd36e839149cd3c6cde14343694dd9fe2)), closes [#139](https://github.com/springfield-ham-radio/ham-radio-ui/issues/139)
+
 ## [1.20.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.19.0...v1.20.0) (2026-10-17)
 
 ### Features
