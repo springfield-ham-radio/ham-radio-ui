@@ -1,3 +1,9 @@
+## [1.13.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.12.0...v1.13.0) (2026-10-17)
+
+### Features
+
+* **log:** store QSO coordinates and ADIF LAT/LON (part 2 of [#81](https://github.com/springfield-ham-radio/ham-radio-ui/issues/81)) ([#132](https://github.com/springfield-ham-radio/ham-radio-ui/issues/132)) ([90186a5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/90186a5992220228e462b3e1a6135e23122fb894))
+
 ## [1.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.11.0...v1.12.0) (2026-10-17)
 
 ### Features

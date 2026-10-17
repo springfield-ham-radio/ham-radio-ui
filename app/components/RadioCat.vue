@@ -15,6 +15,7 @@ import {
   createBlankStationLogQso,
   type StationLogQsoInput,
 } from '~/utils/station-log-db';
+import { myCoordinatesFromSavedStation } from '~/utils/station-log-qso-location';
 
 const props = defineProps<{
   savedRadioId?: string;
@@ -24,7 +25,7 @@ const { configurations, openModulesInstall } = useRadio();
 const { radioById } = useSavedRadios();
 const { cardById, setCatPort } = useRadioBoard();
 const { choiceForRadio, identityFor } = useOperatorLicense();
-const { antennas, selected: selectedAntenna, stations } = useStationAntennas();
+const { antennas, selected: selectedAntenna, selectedStation, stations } = useStationAntennas();
 const {
   liveRadios,
   connecting,
@@ -249,11 +250,14 @@ function openLog(vfo: CatVfo): void {
   const identity = identityFor(choiceForRadio(savedRadio.value));
   const draft = stationLogDraftFromCatVfo(vfo);
   const rig = savedRadio.value?.name.trim();
+  const myStation = myCoordinatesFromSavedStation(selectedStation.value);
   logDefaults.value = {
     ...createBlankStationLogQso({
       operatorCallsign: identity.callSign,
       stationCallsign: identity.callSign,
       myGridsquare: identity.gridsquare,
+      myLatitude: myStation.myLatitude,
+      myLongitude: myStation.myLongitude,
     }),
     ...draft,
     myRig: rig || undefined,
