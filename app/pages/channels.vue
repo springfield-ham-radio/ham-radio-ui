@@ -996,55 +996,56 @@ async function onImportCsv(): Promise<void> {
       @remove="removeGroupOpen = true"
     />
 
-    <div class="flex flex-wrap items-center gap-3">
-      <UInput
-        v-model="search"
-        icon="i-lucide-search"
-        placeholder="Search by name, frequency, node, or repeater"
-        size="sm"
-        class="w-full max-w-sm"
-      />
-      <UCheckbox v-model="linkedOnly" label="Linked only" />
-    </div>
-
-    <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
-      <ChannelDistanceFrom
-        v-model:start-id="distanceStartId"
-        v-model:latitude-text="distanceLatitudeText"
-        v-model:longitude-text="distanceLongitudeText"
-        :stations="stations"
-        @update:start-id="distanceStartChosen = true"
-      />
-      <UFormField
-        v-if="distanceStartPoint"
-        :label="distanceUnit === 'km' ? 'Range (km)' : 'Range (mi)'"
-        class="w-28"
-      >
+    <div class="flex flex-col gap-1">
+      <div class="flex flex-wrap items-end gap-x-3 gap-y-2 md:flex-nowrap">
         <UInput
-          v-model="mapRangeText"
-          placeholder="Off"
+          v-model="search"
+          icon="i-lucide-search"
+          placeholder="Search by name, frequency, node, or repeater"
           size="sm"
-          class="w-full"
-          inputmode="decimal"
-          aria-label="Map range ring radius"
+          class="w-full min-w-[12rem] md:max-w-sm md:flex-1"
         />
-      </UFormField>
-      <UFormField v-if="isTripGroup" label="Band" class="w-36">
-        <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
-      </UFormField>
-      <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" />
-      <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" />
-      <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }" class="ml-auto">
-        <UButton
-          label="Columns"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          trailing-icon="i-lucide-chevron-down"
-          aria-label="Choose visible columns"
-        />
-      </UDropdownMenu>
-      <p v-if="distanceStartPoint" class="basis-full text-xs text-muted">
+        <UCheckbox v-model="linkedOnly" label="Linked only" class="shrink-0 pb-2" />
+        <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <ChannelDistanceFrom
+            v-model:start-id="distanceStartId"
+            v-model:latitude-text="distanceLatitudeText"
+            v-model:longitude-text="distanceLongitudeText"
+            :stations="stations"
+            @update:start-id="distanceStartChosen = true"
+          />
+        </div>
+        <UFormField
+          v-if="distanceStartPoint"
+          :label="distanceUnit === 'km' ? 'Range (km)' : 'Range (mi)'"
+          class="w-28 shrink-0"
+        >
+          <UInput
+            v-model="mapRangeText"
+            placeholder="Off"
+            size="sm"
+            class="w-full"
+            inputmode="decimal"
+            aria-label="Map range ring radius"
+          />
+        </UFormField>
+        <UFormField v-if="isTripGroup" label="Band" class="w-36 shrink-0">
+          <USelect v-model="tripBand" :items="tripBandItems" value-key="value" color="neutral" size="sm" class="w-full" />
+        </UFormField>
+        <UCheckbox v-if="isTripGroup" v-model="tripOpenOnly" label="Open use" class="shrink-0 pb-2" />
+        <UCheckbox v-if="isTripGroup" v-model="tripOnAirOnly" label="On-air" class="shrink-0 pb-2" />
+        <UDropdownMenu :items="columnMenuItems" :content="{ align: 'end' }" class="ml-auto shrink-0 pb-0.5">
+          <UButton
+            label="Columns"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            trailing-icon="i-lucide-chevron-down"
+            aria-label="Choose visible columns"
+          />
+        </UDropdownMenu>
+      </div>
+      <p v-if="distanceStartPoint" class="text-xs text-muted">
         Straight-line distance. Rows without coordinates show — and stay last when this column is sorted.
       </p>
     </div>
