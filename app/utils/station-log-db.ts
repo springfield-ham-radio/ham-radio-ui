@@ -1,6 +1,8 @@
 import Database from '@tauri-apps/plugin-sql';
 import { findBandByFrequency, displayBandName } from '~/utils/transmit-privileges';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import { locatedPoint } from '~/utils/location-format';
+import { coordinatePromotionNeedsPersist, promoteAdifExtraCoordinates } from '~/utils/station-log-qso-location';
 
 export const STATION_LOG_DATABASE = 'sqlite:ham-radio.db';
 
@@ -18,11 +20,15 @@ export interface StationLogQsoRow {
   their_name: string | null;
   their_qth: string | null;
   their_gridsquare: string | null;
+  latitude: number | null;
+  longitude: number | null;
   tx_power_watts: number | null;
   comment: string | null;
   operator_callsign: string | null;
   station_callsign: string | null;
   my_gridsquare: string | null;
+  my_latitude: number | null;
+  my_longitude: number | null;
   my_rig: string | null;
   my_antenna: string | null;
   qsl_sent: number;
@@ -46,11 +52,15 @@ export interface StationLogQso {
   theirName?: string;
   theirQth?: string;
   theirGridsquare?: string;
+  latitude?: number;
+  longitude?: number;
   txPowerWatts?: number;
   comment?: string;
   operatorCallsign?: string;
   stationCallsign?: string;
   myGridsquare?: string;
+  myLatitude?: number;
+  myLongitude?: number;
   /** ADIF MY_RIG. The saved radio name, or free text from an import. */
   myRig?: string;
   /** ADIF MY_ANTENNA. Station and antenna label, or free text from an import. */
@@ -165,8 +175,60 @@ function parseAdifExtra(raw: string | null): Record<string, string> | undefined 
   }
 }
 
-export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
+function normalizeStoredCoordinates(input: {
+  latitude?: number;
+  longitude?: number;
+  myLatitude?: number;
+  myLongitude?: number;
+}): Pick<StationLogQso, 'latitude' | 'longitude' | 'myLatitude' | 'myLongitude'> {
+  const contact = locatedPoint(input.latitude, input.longitude);
+  const my = locatedPoint(input.myLatitude, input.myLongitude);
+
   return {
+    latitude: contact?.latitude,
+    longitude: contact?.longitude,
+    myLatitude: my?.latitude,
+    myLongitude: my?.longitude,
+  };
+}
+
+function finalizeStationLogQso(
+  base: Omit<StationLogQso, 'latitude' | 'longitude' | 'myLatitude' | 'myLongitude' | 'adifExtra'> & {
+    latitude?: number;
+    longitude?: number;
+    myLatitude?: number;
+    myLongitude?: number;
+    adifExtra?: Record<string, string>;
+  },
+): StationLogQso {
+  const coords = normalizeStoredCoordinates(base);
+  const promoted = promoteAdifExtraCoordinates(base.adifExtra, coords);
+
+  return {
+    ...base,
+    latitude: promoted.latitude,
+    longitude: promoted.longitude,
+    myLatitude: promoted.myLatitude,
+    myLongitude: promoted.myLongitude,
+    adifExtra: promoted.adifExtra,
+  };
+}
+
+function rowNeedsCoordinatePromotionPersist(row: StationLogQsoRow, qso: StationLogQso): boolean {
+  return coordinatePromotionNeedsPersist(
+    {
+      latitude: row.latitude,
+      longitude: row.longitude,
+      myLatitude: row.my_latitude,
+      myLongitude: row.my_longitude,
+      adifExtra: parseAdifExtra(row.adif_extra),
+    },
+    qso,
+  );
+}
+
+export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
+  return finalizeStationLogQso({
     id: row.id,
     startedAt: row.started_at,
     endedAt: row.ended_at ?? undefined,
@@ -180,6 +242,12 @@ export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
     theirName: optionalText(row.their_name),
     theirQth: optionalText(row.their_qth),
     theirGridsquare: optionalText(row.their_gridsquare),
+    ...normalizeStoredCoordinates({
+      latitude: row.latitude ?? undefined,
+      longitude: row.longitude ?? undefined,
+      myLatitude: row.my_latitude ?? undefined,
+      myLongitude: row.my_longitude ?? undefined,
+    }),
     txPowerWatts: row.tx_power_watts ?? undefined,
     comment: optionalText(row.comment),
     operatorCallsign: optionalText(row.operator_callsign),
@@ -192,7 +260,7 @@ export function stationLogQsoRowToModel(row: StationLogQsoRow): StationLogQso {
     adifExtra: parseAdifExtra(row.adif_extra),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 /**
@@ -203,7 +271,7 @@ export function createStationLogQso(input: StationLogQsoInput): StationLogQso {
   const frequencyHz = input.frequencyHz;
   const band = optionalText(input.band) ?? adifBandFromFrequencyHz(frequencyHz);
 
-  return {
+  return finalizeStationLogQso({
     id: input.id ?? crypto.randomUUID(),
     startedAt: input.startedAt,
     endedAt: input.endedAt,
@@ -217,6 +285,7 @@ export function createStationLogQso(input: StationLogQsoInput): StationLogQso {
     theirName: optionalText(input.theirName),
     theirQth: optionalText(input.theirQth),
     theirGridsquare: optionalText(input.theirGridsquare)?.toUpperCase(),
+    ...normalizeStoredCoordinates(input),
     txPowerWatts: input.txPowerWatts,
     comment: optionalText(input.comment),
     operatorCallsign: optionalText(input.operatorCallsign)?.toUpperCase(),
@@ -229,13 +298,15 @@ export function createStationLogQso(input: StationLogQsoInput): StationLogQso {
     adifExtra: input.adifExtra,
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
-  };
+  });
 }
 
 export function createBlankStationLogQso(options: {
   operatorCallsign?: string;
   stationCallsign?: string;
   myGridsquare?: string;
+  myLatitude?: number;
+  myLongitude?: number;
 } = {}): StationLogQsoInput {
   return {
     startedAt: Date.now(),
@@ -244,6 +315,10 @@ export function createBlankStationLogQso(options: {
     operatorCallsign: options.operatorCallsign,
     stationCallsign: options.stationCallsign ?? options.operatorCallsign,
     myGridsquare: options.myGridsquare,
+    ...normalizeStoredCoordinates({
+      myLatitude: options.myLatitude,
+      myLongitude: options.myLongitude,
+    }),
   };
 }
 
@@ -252,13 +327,25 @@ export async function listStationLogQsos(): Promise<StationLogQso[]> {
   const rows = await database.select<StationLogQsoRow[]>(
     `SELECT id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
             rst_sent, rst_received, their_name, their_qth, their_gridsquare,
-            tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-            my_rig, my_antenna, qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
+            latitude, longitude, tx_power_watts, comment, operator_callsign, station_callsign,
+            my_gridsquare, my_latitude, my_longitude, my_rig, my_antenna, qsl_sent, qsl_rcvd,
+            adif_extra, created_at, updated_at
      FROM station_log_qsos
      ORDER BY started_at DESC`,
   );
 
-  return rows.map(stationLogQsoRowToModel);
+  const models = rows.map(stationLogQsoRowToModel);
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!;
+    const qso = models[index]!;
+
+    if (rowNeedsCoordinatePromotionPersist(row, qso)) {
+      models[index] = await updateStationLogQso(qso);
+    }
+  }
+
+  return models;
 }
 
 export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<StationLogQso[]> {
@@ -273,9 +360,10 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
       `INSERT INTO station_log_qsos (
          id, started_at, ended_at, their_callsign, frequency_hz, band, mode, submode,
          rst_sent, rst_received, their_name, their_qth, their_gridsquare,
-         tx_power_watts, comment, operator_callsign, station_callsign, my_gridsquare,
-         my_rig, my_antenna, qsl_sent, qsl_rcvd, adif_extra, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
+         latitude, longitude, tx_power_watts, comment, operator_callsign, station_callsign,
+         my_gridsquare, my_latitude, my_longitude, my_rig, my_antenna, qsl_sent, qsl_rcvd,
+         adif_extra, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
       [
         qso.id,
         qso.startedAt,
@@ -290,11 +378,15 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
         qso.theirName ?? null,
         qso.theirQth ?? null,
         qso.theirGridsquare ?? null,
+        qso.latitude ?? null,
+        qso.longitude ?? null,
         qso.txPowerWatts ?? null,
         qso.comment ?? null,
         qso.operatorCallsign ?? null,
         qso.stationCallsign ?? null,
         qso.myGridsquare ?? null,
+        qso.myLatitude ?? null,
+        qso.myLongitude ?? null,
         qso.myRig ?? null,
         qso.myAntenna ?? null,
         qso.qslSent ? 1 : 0,
@@ -311,15 +403,16 @@ export async function insertStationLogQsos(qsos: StationLogQso[]): Promise<Stati
 
 export async function updateStationLogQso(qso: StationLogQso): Promise<StationLogQso> {
   const database = await getStationLogDatabase();
-  const updated: StationLogQso = {
+  const updated = finalizeStationLogQso({
     ...qso,
     theirCallsign: qso.theirCallsign.trim().toUpperCase(),
     mode: qso.mode.trim().toUpperCase(),
     band: optionalText(qso.band) ?? adifBandFromFrequencyHz(qso.frequencyHz),
     myRig: optionalText(qso.myRig),
     myAntenna: optionalText(qso.myAntenna),
+    ...normalizeStoredCoordinates(qso),
     updatedAt: Date.now(),
-  };
+  });
 
   await database.execute(
     `UPDATE station_log_qsos SET
@@ -335,18 +428,22 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
        their_name = $10,
        their_qth = $11,
        their_gridsquare = $12,
-       tx_power_watts = $13,
-       comment = $14,
-       operator_callsign = $15,
-       station_callsign = $16,
-       my_gridsquare = $17,
-       my_rig = $18,
-       my_antenna = $19,
-       qsl_sent = $20,
-       qsl_rcvd = $21,
-       adif_extra = $22,
-       updated_at = $23
-     WHERE id = $24`,
+       latitude = $13,
+       longitude = $14,
+       tx_power_watts = $15,
+       comment = $16,
+       operator_callsign = $17,
+       station_callsign = $18,
+       my_gridsquare = $19,
+       my_latitude = $20,
+       my_longitude = $21,
+       my_rig = $22,
+       my_antenna = $23,
+       qsl_sent = $24,
+       qsl_rcvd = $25,
+       adif_extra = $26,
+       updated_at = $27
+     WHERE id = $28`,
     [
       updated.startedAt,
       updated.endedAt ?? null,
@@ -360,11 +457,15 @@ export async function updateStationLogQso(qso: StationLogQso): Promise<StationLo
       updated.theirName ?? null,
       updated.theirQth ?? null,
       updated.theirGridsquare ?? null,
+      updated.latitude ?? null,
+      updated.longitude ?? null,
       updated.txPowerWatts ?? null,
       updated.comment ?? null,
       updated.operatorCallsign ?? null,
       updated.stationCallsign ?? null,
       updated.myGridsquare ?? null,
+      updated.myLatitude ?? null,
+      updated.myLongitude ?? null,
       updated.myRig ?? null,
       updated.myAntenna ?? null,
       updated.qslSent ? 1 : 0,

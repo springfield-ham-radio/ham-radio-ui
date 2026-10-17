@@ -50,8 +50,10 @@ describe('saved channel migrations', () => {
   const source = readFileSync(new URL('../../src-tauri/src/lib.rs', import.meta.url), 'utf8');
   const migrations = readSqlMigrations(source);
 
-  it('numbers migrations 1 through 14 and stores repeater records without new coordinate columns', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  it('numbers migrations 1 through 15 and stores repeater records without new coordinate columns', () => {
+    expect(migrations.map((migration) => migration.version)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
 
     const record = migrations.find((migration) => migration.version === 14);
     expect(record?.description).toBe('add_saved_channel_repeater_record');

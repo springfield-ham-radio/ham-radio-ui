@@ -535,6 +535,17 @@ CREATE INDEX idx_saved_channels_source_key ON saved_channels(source_key);
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "add_station_log_qso_coordinates",
+            sql: r#"
+ALTER TABLE station_log_qsos ADD COLUMN latitude REAL;
+ALTER TABLE station_log_qsos ADD COLUMN longitude REAL;
+ALTER TABLE station_log_qsos ADD COLUMN my_latitude REAL;
+ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

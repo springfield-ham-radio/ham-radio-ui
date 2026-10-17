@@ -84,8 +84,36 @@
             </div>
           </UFormField>
 
-          <UFormField label="Grid">
-            <UInput v-model="theirGridsquare" class="w-full uppercase" placeholder="FN31" :loading="isLookingUp" />
+          <UFormField label="Grid" :description="theirGridDescription">
+            <UInput
+              :model-value="theirGridsquare"
+              class="w-full uppercase"
+              placeholder="FN31"
+              :loading="isLookingUp"
+              @update:model-value="onTheirGridInput"
+            />
+          </UFormField>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <UFormField label="Latitude" description="Decimal degrees. Fills grid when grid is empty.">
+            <UInput
+              v-model="latitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              placeholder="30.2672"
+              @blur="fillTheirGridFromCoordinates"
+            />
+          </UFormField>
+
+          <UFormField label="Longitude" description="Decimal degrees. Fills grid when grid is empty.">
+            <UInput
+              v-model="longitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              placeholder="-97.7431"
+              @blur="fillTheirGridFromCoordinates"
+            />
           </UFormField>
         </div>
 
@@ -113,6 +141,26 @@
               :search-input="false"
               :content="{ side: 'top' }"
               class="w-full"
+            />
+          </UFormField>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <UFormField label="My latitude" :description="myGridDescription">
+            <UInput
+              v-model="myLatitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              @blur="fillMyGridFromCoordinates"
+            />
+          </UFormField>
+
+          <UFormField label="My longitude" description="Decimal degrees. Fills my grid when it is empty.">
+            <UInput
+              v-model="myLongitude"
+              inputmode="decimal"
+              class="w-full tabular-nums"
+              @blur="fillMyGridFromCoordinates"
             />
           </UFormField>
         </div>
@@ -152,6 +200,8 @@
 import { contactAntennaLabel, formatAntennaBands, formatStationAntennaLogLabel } from '~/utils/antenna-station';
 import { formatFrequencyMHz, frequencyMHzFieldError, parseFrequencyMHz } from '~/utils/channel-edit';
 import { fetchCallookLicense, qthFromCallook, resolveCallookGrid } from '~/utils/callook';
+import { parseLocatedPoint } from '~/utils/location-format';
+import { coordinatesOutsideGrid, gridsquareFromCoordinatesIfEmpty } from '~/utils/station-log-qso-location';
 import {
   equipmentCoversAdifBand,
   equipmentListedForBand,
@@ -213,6 +263,8 @@ const rstReceived = ref('');
 const theirName = ref('');
 const theirQth = ref('');
 const theirGridsquare = ref('');
+const latitude = ref('');
+const longitude = ref('');
 const qslSent = ref(false);
 const qslReceived = ref(false);
 const txPowerWatts = ref('');
@@ -222,6 +274,8 @@ const comment = ref('');
 const operatorCallsign = ref<string | undefined>();
 const stationCallsign = ref<string | undefined>();
 const myGridsquare = ref<string | undefined>();
+const myLatitude = ref('');
+const myLongitude = ref('');
 const adifExtra = ref<Record<string, string> | undefined>();
 
 const startDateError = ref<string | undefined>();
@@ -505,6 +559,9 @@ watch(
     theirName.value = source.theirName ?? '';
     theirQth.value = source.theirQth ?? '';
     theirGridsquare.value = source.theirGridsquare ?? '';
+    latitude.value = source.latitude !== undefined ? String(source.latitude) : '';
+    longitude.value = source.longitude !== undefined ? String(source.longitude) : '';
+    fillTheirGridFromCoordinates();
     qslSent.value = source.qslSent === true;
     qslReceived.value = source.qslReceived === true;
     myRig.value = source.myRig ?? '';
@@ -519,12 +576,53 @@ watch(
     operatorCallsign.value = source.operatorCallsign ?? identity.callSign;
     stationCallsign.value = source.stationCallsign ?? identity.callSign;
     myGridsquare.value = source.myGridsquare ?? identity.gridsquare;
+    myLatitude.value = source.myLatitude !== undefined ? String(source.myLatitude) : '';
+    myLongitude.value = source.myLongitude !== undefined ? String(source.myLongitude) : '';
+    fillMyGridFromCoordinates();
     adifExtra.value = source.adifExtra;
     resetErrors();
     isSaving.value = false;
     isLookingUp.value = false;
   },
 );
+
+const theirGridDescription = computed(() =>
+  coordinatesOutsideGrid(theirGridsquare.value, parseLocatedPoint(latitude.value, longitude.value))
+    ? 'Logged coordinates are outside this grid.'
+    : undefined,
+);
+
+const myGridDescription = computed(() =>
+  coordinatesOutsideGrid(myGridsquare.value, parseLocatedPoint(myLatitude.value, myLongitude.value))
+    ? 'Logged coordinates are outside this grid.'
+    : 'Decimal degrees for this QSO. Fills my grid when it is empty.',
+);
+
+function onTheirGridInput(value: string): void {
+  theirGridsquare.value = value;
+}
+
+function fillTheirGridFromCoordinates(): void {
+  const next = gridsquareFromCoordinatesIfEmpty(
+    theirGridsquare.value,
+    parseLocatedPoint(latitude.value, longitude.value),
+  );
+
+  if (next !== undefined) {
+    theirGridsquare.value = next;
+  }
+}
+
+function fillMyGridFromCoordinates(): void {
+  const next = gridsquareFromCoordinatesIfEmpty(
+    myGridsquare.value,
+    parseLocatedPoint(myLatitude.value, myLongitude.value),
+  );
+
+  if (next !== undefined) {
+    myGridsquare.value = next;
+  }
+}
 
 function close(): void {
   emit('update:open', false);
@@ -672,6 +770,13 @@ function save(): void {
       theirName: theirName.value.trim() || undefined,
       theirQth: theirQth.value.trim() || undefined,
       theirGridsquare: theirGridsquare.value.trim() || undefined,
+      ...(() => {
+        const point = parseLocatedPoint(latitude.value, longitude.value);
+
+        return point
+          ? { latitude: point.latitude, longitude: point.longitude }
+          : { latitude: undefined, longitude: undefined };
+      })(),
       qslSent: qslSent.value,
       qslReceived: qslReceived.value,
       txPowerWatts: power,
@@ -681,6 +786,13 @@ function save(): void {
       operatorCallsign: operatorCallsign.value,
       stationCallsign: stationCallsign.value,
       myGridsquare: myGridsquare.value,
+      ...(() => {
+        const point = parseLocatedPoint(myLatitude.value, myLongitude.value);
+
+        return point
+          ? { myLatitude: point.latitude, myLongitude: point.longitude }
+          : { myLatitude: undefined, myLongitude: undefined };
+      })(),
       adifExtra: adifExtraForSave(),
       createdAt: props.qso?.createdAt,
     });

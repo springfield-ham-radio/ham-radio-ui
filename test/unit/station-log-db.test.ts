@@ -6,6 +6,7 @@ import {
   stationLogQsoRowToModel,
   type StationLogQsoRow,
 } from '../../app/utils/station-log-db.ts';
+import { promoteAdifExtraCoordinates } from '../../app/utils/station-log-qso-location.ts';
 
 describe('station-log-db', () => {
   describe('adifBandFromFrequencyHz', () => {
@@ -37,11 +38,15 @@ describe('station-log-db', () => {
         their_name: 'Hiram',
         their_qth: null,
         their_gridsquare: 'FN31',
+        latitude: null,
+        longitude: null,
         tx_power_watts: 5,
         comment: null,
         operator_callsign: 'K1ABC',
         station_callsign: null,
         my_gridsquare: 'FN42',
+        my_latitude: null,
+        my_longitude: null,
         my_rig: 'Handheld',
         my_antenna: 'Home · Whip',
         qsl_sent: 1,
@@ -61,6 +66,62 @@ describe('station-log-db', () => {
       expect(model.myAntenna).toBe('Home · Whip');
       expect(model.qslSent).toBe(true);
       expect(model.qslReceived).toBe(false);
+    });
+
+    it('promotes ADIF location tags from adif_extra into coordinate fields', () => {
+      const row: StationLogQsoRow = {
+        id: '22222222-2222-2222-2222-222222222222',
+        started_at: 1_000,
+        ended_at: null,
+        their_callsign: 'W1AW',
+        frequency_hz: null,
+        band: null,
+        mode: 'FM',
+        submode: null,
+        rst_sent: null,
+        rst_received: null,
+        their_name: null,
+        their_qth: null,
+        their_gridsquare: null,
+        latitude: null,
+        longitude: null,
+        tx_power_watts: null,
+        comment: null,
+        operator_callsign: null,
+        station_callsign: null,
+        my_gridsquare: null,
+        my_latitude: null,
+        my_longitude: null,
+        my_rig: null,
+        my_antenna: null,
+        qsl_sent: 0,
+        qsl_rcvd: 0,
+        adif_extra: '{"LAT":"N030 16.032","LON":"W097 44.586","DXCC":"291"}',
+        created_at: 1_000,
+        updated_at: 1_000,
+      };
+
+      const model = stationLogQsoRowToModel(row);
+
+      expect(model.latitude).toBeCloseTo(30.2672, 4);
+      expect(model.longitude).toBeCloseTo(-97.7431, 4);
+      expect(model.adifExtra).toEqual({ DXCC: '291' });
+    });
+  });
+
+  describe('promoteAdifExtraCoordinates integration', () => {
+    it('drops null island coordinates from createStationLogQso', () => {
+      const qso = createStationLogQso({
+        startedAt: 1,
+        theirCallsign: 'W1AW',
+        mode: 'FM',
+        latitude: 0,
+        longitude: 0,
+      });
+
+      expect(qso.latitude).toBeUndefined();
+      expect(qso.longitude).toBeUndefined();
+      expect(promoteAdifExtraCoordinates(qso.adifExtra, qso).latitude).toBeUndefined();
     });
   });
 
