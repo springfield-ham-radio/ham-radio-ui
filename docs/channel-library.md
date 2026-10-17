@@ -40,7 +40,7 @@ The **Map** tab plots located repeaters and ordinary channels from your stored l
 
 ## Trip lists
 
-**New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
+The **Add channel** split button defaults to adding a channel. Open its menu to choose **New empty group** or **New trip group**; the last choice stays for the session. **New trip group** names a library group for a road trip, then opens **Import CSV**. Import a route export you already made, such as RepeaterBook Plus Route Search or Highway Repeater Search. HamBench does not search RepeaterBook for routes.
 
 Trip groups use the same **Distance from** control. Filter by band, **Open use**, and **On-air** when the import included those fields. Select the rows you want and use **Add to radio**.
 

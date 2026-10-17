@@ -126,4 +126,26 @@ describe('Channels page mount', () => {
     expect(source).toContain(':groups="groups"');
     expect(source).toMatch(/\brefresh,\s*\n/);
   });
+
+  it('keeps library filters on a wrapping row and a session split create button', () => {
+    const source = readFileSync(new URL('../../app/pages/channels.vue', import.meta.url), 'utf8');
+    const filterRow = source.slice(source.indexOf('flex flex-col gap-1'), source.indexOf('Could not load channel library'));
+
+    expect(filterRow).toContain('flex flex-wrap items-end');
+    expect(filterRow).not.toContain('flex-nowrap');
+    expect(filterRow).toContain('label="Linked only"');
+    expect(filterRow).toContain('<ChannelDistanceFrom');
+    expect(filterRow).toContain('Range (mi)');
+    expect(filterRow.indexOf('label="Map"')).toBeLessThan(filterRow.indexOf('label="Columns"'));
+    expect(filterRow).toContain('Straight-line distance');
+    expect(source).toContain("useState<ChannelLibraryCreateAction>('channel-library-create-action'");
+    expect(source).toContain('aria-label="Choose create action"');
+    expect(source).toContain("runChannelCreateAction('empty-group')");
+    expect(source).toContain("runChannelCreateAction('trip-group')");
+    const createMenu = source.slice(
+      source.indexOf('const channelCreateMenuItems'),
+      source.indexOf('const emptyMessage'),
+    );
+    expect(createMenu).not.toContain("type: 'checkbox'");
+  });
 });

@@ -5,7 +5,7 @@ import { ALL_CHANNELS_TAB_ID, type ChannelGroup } from '~/utils/channel-groups';
 const props = withDefaults(
   defineProps<{
     groups: ChannelGroup[];
-    /** Show create, rename, and remove. The picker lists groups without those actions. */
+    /** Show rename and remove. The picker lists groups without those actions. */
     manage?: boolean;
   }>(),
   { manage: true },

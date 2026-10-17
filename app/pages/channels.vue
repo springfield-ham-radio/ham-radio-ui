@@ -340,9 +340,12 @@ const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
     {
       label: 'Add channel',
       icon: 'i-lucide-plus',
-      type: 'checkbox',
-      checked: channelCreateAction.value === 'add-channel',
       disabled: builtinGroup.value,
+      description: builtinGroup.value
+        ? 'Built-in groups cannot be changed'
+        : channelCreateAction.value === 'add-channel'
+          ? 'Current'
+          : undefined,
       onSelect() {
         runChannelCreateAction('add-channel');
       },
@@ -350,8 +353,7 @@ const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
     {
       label: 'New empty group',
       icon: 'i-lucide-folder-plus',
-      type: 'checkbox',
-      checked: channelCreateAction.value === 'empty-group',
+      description: channelCreateAction.value === 'empty-group' ? 'Current' : undefined,
       onSelect() {
         runChannelCreateAction('empty-group');
       },
@@ -359,8 +361,7 @@ const channelCreateMenuItems = computed<DropdownMenuItem[][]>(() => [
     {
       label: 'New trip group',
       icon: 'i-lucide-route',
-      type: 'checkbox',
-      checked: channelCreateAction.value === 'trip-group',
+      description: channelCreateAction.value === 'trip-group' ? 'Current' : undefined,
       onSelect() {
         runChannelCreateAction('trip-group');
       },
@@ -1073,13 +1074,13 @@ async function onImportCsv(): Promise<void> {
     />
 
     <div class="flex flex-col gap-1">
-      <div class="flex flex-wrap items-end gap-x-3 gap-y-2 md:flex-nowrap">
+      <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
         <UInput
           v-model="search"
           icon="i-lucide-search"
           placeholder="Search by name, frequency, node, or repeater"
           size="sm"
-          class="w-full min-w-[12rem] md:max-w-sm md:flex-1"
+          class="w-full min-w-0 sm:w-72 sm:max-w-sm"
         />
         <UCheckbox v-model="linkedOnly" label="Linked only" class="shrink-0 pb-2" />
         <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
