@@ -50,9 +50,9 @@ describe('saved channel migrations', () => {
   const source = readFileSync(new URL('../../src-tauri/src/lib.rs', import.meta.url), 'utf8');
   const migrations = readSqlMigrations(source);
 
-  it('numbers migrations 1 through 15 and stores repeater records without new coordinate columns', () => {
+  it('numbers migrations 1 through 16 and stores repeater records without new coordinate columns', () => {
     expect(migrations.map((migration) => migration.version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     ]);
 
     const record = migrations.find((migration) => migration.version === 14);
@@ -141,5 +141,23 @@ describe('saved channel migrations', () => {
       modes: null,
       last_update: null,
     });
+  });
+
+  it('adds channel pack metadata columns in migration 16', () => {
+    const migration = migrations.find((entry) => entry.version === 16);
+    expect(migration?.description).toBe('add_channel_pack_metadata');
+    expect(migration?.sql).toContain('ADD COLUMN pack_id');
+    expect(migration?.sql).toContain('ADD COLUMN pack_channel_id');
+
+    const database = new DatabaseSync(':memory:');
+
+    for (const entry of migrations.filter((migrationEntry) => migrationEntry.version <= 16)) {
+      database.exec(entry.sql);
+    }
+
+    expect(columnNames(database, 'channel_groups')).toEqual(
+      expect.arrayContaining(['pack_id', 'description', 'author', 'pack_version', 'pack_updated', 'pack_source_url']),
+    );
+    expect(columnNames(database, 'saved_channels')).toContain('pack_channel_id');
   });
 });

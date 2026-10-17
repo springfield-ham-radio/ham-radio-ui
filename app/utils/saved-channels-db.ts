@@ -11,6 +11,7 @@ import Database from '@tauri-apps/plugin-sql';
 import { linkedNodeSearchText, linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
 import { locatedPoint } from '~/utils/location-format';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import type { SqlExecutor } from '~/utils/sql-transaction';
 
 export const SAVED_CHANNELS_DATABASE = 'sqlite:ham-radio.db';
 
@@ -73,6 +74,7 @@ export interface SavedChannelRow {
   landmark: string | null;
   modes: string | null;
   last_update: string | null;
+  pack_channel_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -107,6 +109,8 @@ export interface SavedChannel extends RadioChannel, LinkedNodes {
    * row was imported or last changed by an import.
    */
   lastUpdate?: string;
+  /** Stable slug within a channel pack file. */
+  packChannelId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -278,6 +282,7 @@ export function savedChannelRowToModel(row: SavedChannelRow): SavedChannel {
       modes: textFromDb(row.modes),
       lastUpdate: textFromDb(row.last_update),
     }),
+    packChannelId: textFromDb(row.pack_channel_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -355,6 +360,7 @@ export function radioChannelToSavedChannel(
     landmark?: string;
     modes?: string;
     lastUpdate?: string;
+    packChannelId?: string;
     createdAt?: number;
     updatedAt?: number;
   } = {},
@@ -376,6 +382,7 @@ export function radioChannelToSavedChannel(
     ...coordinatesFromPair(options.latitude, options.longitude),
     ...linkedNodesForKind(kind, options),
     ...repeaterRecordForKind(kind, options),
+    packChannelId: options.packChannelId,
     createdAt: options.createdAt ?? now,
     updatedAt: options.updatedAt ?? now,
   };
@@ -390,7 +397,7 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
             allstar_node, echolink_node, irlp_node, wires_node,
             allstar_linked, echolink_linked, irlp_linked, wires_linked,
             source_key, source_format, city, county, state, country, landmark, modes, last_update,
-            created_at, updated_at
+            pack_channel_id, created_at, updated_at
      FROM saved_channels
      ORDER BY name COLLATE NOCASE ASC, receive_frequency ASC`,
   );
@@ -398,12 +405,15 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
   return rows.map(savedChannelRowToModel);
 }
 
-export async function insertSavedChannelModels(channels: SavedChannel[]): Promise<SavedChannel[]> {
+export async function insertSavedChannelModels(
+  channels: SavedChannel[],
+  executor?: SqlExecutor,
+): Promise<SavedChannel[]> {
   if (channels.length === 0) {
     return [];
   }
 
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
 
   for (const channel of channels) {
     const point = coordinateColumnsForDb(channel);
@@ -416,8 +426,8 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
          allstar_node, echolink_node, irlp_node, wires_node,
          allstar_linked, echolink_linked, irlp_linked, wires_linked,
          source_key, source_format, city, county, state, country, landmark, modes, last_update,
-         created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)`,
+         pack_channel_id, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)`,
       [
         channel.id,
         channel.name ?? null,
@@ -451,6 +461,7 @@ export async function insertSavedChannelModels(channels: SavedChannel[]): Promis
         channel.landmark ?? null,
         channel.modes ?? null,
         channel.lastUpdate ?? null,
+        channel.packChannelId ?? null,
         channel.createdAt,
         channel.updatedAt,
       ],
@@ -472,8 +483,8 @@ export async function insertSavedChannels(channels: RadioChannel[]): Promise<Sav
   return insertSavedChannelModels(channels.map((channel) => radioChannelToSavedChannel(channel)));
 }
 
-export async function updateSavedChannel(channel: SavedChannel): Promise<SavedChannel> {
-  const database = await getSavedChannelsDatabase();
+export async function updateSavedChannel(channel: SavedChannel, executor?: SqlExecutor): Promise<SavedChannel> {
+  const database = executor ?? (await getSavedChannelsDatabase());
   const status = repeaterStatusForKind(channel.kind, channel.use, channel.onAir);
   const nodes = linkedNodesForKind(channel.kind, channel);
   const point = coordinatesFromPair(channel.latitude, channel.longitude);
@@ -530,8 +541,9 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
        landmark = $29,
        modes = $30,
        last_update = $31,
-       updated_at = $32
-     WHERE id = $33`,
+       pack_channel_id = $32,
+       updated_at = $33
+     WHERE id = $34`,
     [
       updated.name ?? null,
       updated.kind,
@@ -564,6 +576,7 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
       updated.landmark ?? null,
       updated.modes ?? null,
       updated.lastUpdate ?? null,
+      updated.packChannelId ?? null,
       updated.updatedAt,
       updated.id,
     ],
@@ -572,14 +585,14 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
   return updated;
 }
 
-export async function deleteSavedChannels(ids: readonly RadioChannelId[]): Promise<void> {
+export async function deleteSavedChannels(ids: readonly RadioChannelId[], executor?: SqlExecutor): Promise<void> {
   const unique = [...new Set(ids)];
 
   if (unique.length === 0) {
     return;
   }
 
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
   const placeholders = unique.map((_, index) => `$${index + 1}`).join(', ');
 
   await database.execute(`DELETE FROM channel_group_members WHERE channel_id IN (${placeholders})`, [...unique]);

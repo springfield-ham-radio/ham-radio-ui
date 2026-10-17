@@ -15,6 +15,7 @@
       :required="modulesInstallRequired"
       @installed="onModulesInstalled"
     />
+    <ChannelPrintDialog />
   </UApp>
 </template>
 

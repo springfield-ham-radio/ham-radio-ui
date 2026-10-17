@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Print channels</title>
+  <style>
+    html, body {
+      height: auto;
+      overflow: visible;
+      margin: 0;
+      background: #fff;
+      color: #000;
+      color-scheme: light;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 11pt;
+      padding: 0.4in;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    header {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-size: 14pt;
+      font-weight: 650;
+      margin: 0 0 0.4rem;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      column-gap: 1rem;
+      row-gap: 0.15rem;
+      font-size: 10pt;
+      margin: 0;
+    }
+
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 8pt;
+      line-height: 1.15;
+    }
+
+    th, td {
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      padding: 1px 3px;
+      text-align: left;
+      vertical-align: top;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th { font-weight: 650; }
+
+    tr, .line {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .wallet {
+      column-count: 3;
+      column-gap: 1rem;
+      font-size: 8pt;
+      line-height: 1.2;
+    }
+
+    .line { margin-bottom: 0.25rem; }
+    .name { font-weight: 650; }
+    .notes { font-size: 7pt; }
+
+    #close {
+      position: fixed;
+      top: 0.45rem;
+      right: 0.5rem;
+      z-index: 1;
+      font: inherit;
+      font-size: 11pt;
+      padding: 0.2rem 0.7rem;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    @media print {
+      body { padding: 0; }
+      #close { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <button id="close" type="button">Close</button>
+  <div id="root"></div>
+  <script>
+    (function () {
+      var STORAGE_KEY = 'ham-radio-channel-print';
+      var ERROR_EVENT = 'channel-print-error';
+      var SHOW_EVENT = 'channel-print-show';
+      var COLUMN_WIDTH = {
+        name: '14%',
+        callsign: '9%',
+        location: '16%',
+        band: '10%',
+        transmit: '8%',
+        receive: '8%',
+        txTone: '8%',
+        rxTone: '8%',
+        distance: '7%',
+        use: '6%',
+        onAir: '6%',
+        linked: '8%',
+        channelNumber: '4%',
+        toneType: '7%'
+      };
+      var closed = false;
+
+      function text(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function messageFrom(cause) {
+        if (cause && typeof cause === 'object' && typeof cause.message === 'string' && cause.message) {
+          return cause.message;
+        }
+
+        if (typeof cause === 'string' && cause) {
+          return cause;
+        }
+
+        return 'Printing is not allowed in this window.';
+      }
+
+      function closeWindow() {
+        if (closed) {
+          return;
+        }
+
+        closed = true;
+
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (ignored) {
+          // The card is already on paper.
+        }
+
+        var tauri = window.__TAURI__;
+
+        if (tauri && tauri.window && typeof tauri.window.getCurrentWindow === 'function') {
+          tauri.window.getCurrentWindow().close();
+          return;
+        }
+
+        window.close();
+      }
+
+      function fail(cause) {
+        var message = messageFrom(cause);
+        var tauri = window.__TAURI__;
+        var report = tauri && tauri.event && typeof tauri.event.emit === 'function'
+          ? tauri.event.emit(ERROR_EVENT, { message: message })
+          : Promise.resolve();
+
+        Promise.resolve(report).then(closeWindow, closeWindow);
+      }
+
+      function render(doc) {
+        var page = document.createElement('style');
+        page.textContent = doc.layout === 'wallet'
+          ? '@page { size: letter portrait; margin: 0.4in; }'
+          : '@page { size: letter landscape; margin: 0.35in; }';
+        document.head.appendChild(page);
+
+        var html = '<header><h1>' + text(doc.title) + '</h1><dl>';
+        var lines = doc.headerLines || [];
+
+        for (var i = 0; i < lines.length; i++) {
+          html += '<dt>' + text(lines[i].label) + '</dt><dd>' + text(lines[i].value) + '</dd>';
+        }
+
+        html += '</dl></header>';
+
+        if (doc.layout === 'full') {
+          var columns = doc.columns || [];
+          var rows = doc.rows || [];
+          html += '<table><thead><tr>';
+
+          for (var c = 0; c < columns.length; c++) {
+            var width = COLUMN_WIDTH[columns[c].id];
+            html += '<th' + (width ? ' style="width:' + width + '"' : '') + '>' + text(columns[c].header) + '</th>';
+          }
+
+          html += '</tr></thead><tbody>';
+
+          for (var r = 0; r < rows.length; r++) {
+            html += '<tr>';
+
+            for (var cell = 0; cell < columns.length; cell++) {
+              html += '<td>' + text(rows[r][columns[cell].id]) + '</td>';
+            }
+
+            html += '</tr>';
+          }
+
+          html += '</tbody></table>';
+        } else {
+          var wallet = doc.walletLines || [];
+          html += '<div class="wallet">';
+
+          for (var w = 0; w < wallet.length; w++) {
+            var line = wallet[w];
+            html += '<div class="line">';
+
+            if (line.slot) {
+              html += '<span>' + text(line.slot) + '</span> ';
+            }
+
+            html += '<span class="name">' + text(line.name) + '</span> '
+              + text(line.rx) + ' ' + text(line.offset) + ' ' + text(line.tone);
+
+            if (line.notes) {
+              html += '<div class="notes">' + text(line.notes) + '</div>';
+            }
+
+            html += '</div>';
+          }
+
+          html += '</div>';
+        }
+
+        document.getElementById('root').innerHTML = html;
+      }
+
+      var raw = null;
+
+      try {
+        raw = localStorage.getItem(STORAGE_KEY);
+      } catch (ignored) {
+        raw = null;
+      }
+
+      if (!raw) {
+        closeWindow();
+        return;
+      }
+
+      var doc;
+
+      try {
+        doc = JSON.parse(raw);
+      } catch (cause) {
+        fail('The print card could not be read.');
+        return;
+      }
+
+      // WKWebView fires afterprint, and Tauri's print promise settles, as the
+      // sheet opens. Closing then destroys the webview and dismisses the panel.
+      // The operator closes this window with the button or Cmd/Ctrl+W.
+      document.getElementById('close').addEventListener('click', closeWindow);
+      document.addEventListener('keydown', function (event) {
+        var key = event.key || '';
+
+        if ((event.metaKey || event.ctrlKey) && (key === 'w' || key === 'W')) {
+          event.preventDefault();
+          closeWindow();
+        }
+      });
+
+      function schedulePrint() {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            try {
+              var printed = window.print();
+
+              if (printed && typeof printed.then === 'function') {
+                printed.catch(fail);
+              }
+            } catch (cause) {
+              fail(cause);
+            }
+          });
+        });
+      }
+
+      function reprint() {
+        var next = null;
+
+        try {
+          next = localStorage.getItem(STORAGE_KEY);
+        } catch (ignored) {
+          next = null;
+        }
+
+        if (!next) {
+          return;
+        }
+
+        try {
+          render(JSON.parse(next));
+        } catch (ignored) {
+          fail('The print card could not be read.');
+          return;
+        }
+
+        schedulePrint();
+      }
+
+      render(doc);
+
+      var tauri = window.__TAURI__;
+
+      if (tauri && tauri.event && typeof tauri.event.listen === 'function') {
+        tauri.event.listen(SHOW_EVENT, reprint);
+      } else {
+        window.addEventListener('storage', function (event) {
+          if (event.key === STORAGE_KEY && event.newValue) {
+            reprint();
+          }
+        });
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(schedulePrint, schedulePrint);
+      } else {
+        schedulePrint();
+      }
+    })();
+  </script>
+</body>
+</html>

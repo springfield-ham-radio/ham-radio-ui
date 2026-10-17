@@ -1,6 +1,12 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import type { ImportExportRegistry } from '~/importExport/registry';
 import type { ImportExportDefinition, ImportExportHandler } from '~/importExport/types';
+import {
+  buildChannelPackDocument,
+  CHANNEL_PACK_FILE_EXTENSION,
+  parseChannelPack,
+  serializeChannelPack,
+} from '~/utils/channel-pack';
 import { serializeSavedChannelsChirpCsv } from '~/utils/chirp-csv';
 import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
 
@@ -13,6 +19,12 @@ const CSV_FILE = {
 const MEMORY_FILE = {
   description: 'Radio Memory',
   extensions: ['json'],
+  mimeTypes: ['application/json'],
+} as const;
+
+const PACK_FILE = {
+  description: 'Channel pack',
+  extensions: [CHANNEL_PACK_FILE_EXTENSION],
   mimeTypes: ['application/json'],
 } as const;
 
@@ -64,6 +76,55 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
     },
   };
 
+  const packSource: ImportExportDefinition = {
+    id: IMPORT_EXPORT_IDS.importChannelsPack,
+    label: 'Import pack',
+    description: 'HamBench channel pack (.hpack) for one library group.',
+    icon: 'i-lucide-package-open',
+    kind: 'source',
+    category: 'file',
+    fileTypes: [PACK_FILE],
+    handler: (input) => {
+      const text = input.file?.text;
+
+      if (text === undefined) {
+        throw new Error('Channel pack import needs file text');
+      }
+
+      return { channelPack: parseChannelPack(text), text };
+    },
+  };
+
+  const packTarget: ImportExportDefinition = {
+    id: IMPORT_EXPORT_IDS.exportChannelsPack,
+    label: 'Export pack',
+    description: 'Versioned HamBench channel pack for one library group.',
+    icon: 'i-lucide-package',
+    kind: 'target',
+    category: 'file',
+    fileTypes: [PACK_FILE],
+    available: (context) =>
+      context.packExportLocked ? 'Open a group you created to export a channel pack' : true,
+    handler: (input) => {
+      if (!input.savedChannels) {
+        throw new Error('Channel pack export needs saved channels');
+      }
+
+      const exportInput = input.channelPackExport;
+
+      if (!exportInput) {
+        throw new Error('Channel pack export needs metadata');
+      }
+
+      const document = buildChannelPackDocument(exportInput.metadata, [...input.savedChannels], {
+        includeRepeaterBook: exportInput.includeRepeaterBook,
+      });
+      const text = serializeChannelPack(document);
+
+      return { text, channelPack: document };
+    },
+  };
+
   const chirpCsvTarget: ImportExportDefinition = {
     id: IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
     label: 'Export CHIRP CSV',
@@ -83,8 +144,10 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
   };
 
   registry.register(csvSource);
+  registry.register(packSource);
   registry.register(csvTarget);
   registry.register(chirpCsvTarget);
+  registry.register(packTarget);
   registry.register(radioSource(IMPORT_EXPORT_IDS.readFromRadio, 'Read from Radio', 'i-hambench-radio-read', 'meta_shift_d'));
   registry.register({
     id: IMPORT_EXPORT_IDS.writeToRadio,

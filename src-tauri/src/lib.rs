@@ -1,6 +1,7 @@
 mod radio_image_backup;
 mod radio_modules;
 mod sniffer_ssh;
+mod sqlite_transaction;
 mod zoom;
 
 #[cfg(target_os = "macos")]
@@ -127,6 +128,13 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
         Some("CmdOrCtrl+Shift+U"),
     )?;
     let show_backups = MenuItem::with_id(app, "show-backups", "Show Backups", true, None::<&str>)?;
+    let print_channels = MenuItem::with_id(
+        app,
+        "print-channels",
+        "Print...",
+        true,
+        Some("CmdOrCtrl+P"),
+    )?;
     // Alt chords keep Edit → Undo/Redo on CmdOrCtrl+Z for text fields. The webview
     // handles plain CmdOrCtrl+Z outside fields; these accelerators mirror memory undo.
     let undo_memory = MenuItem::with_id(
@@ -247,6 +255,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &PredefinedMenuItem::separator(app)?,
                 &show_backups,
                 &PredefinedMenuItem::separator(app)?,
+                &print_channels,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::close_window(app, None)?,
             ],
         )?;
@@ -289,6 +299,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
                 &save_memory_as,
                 &PredefinedMenuItem::separator(app)?,
                 &show_backups,
+                &PredefinedMenuItem::separator(app)?,
+                &print_channels,
                 &PredefinedMenuItem::separator(app)?,
                 &preferences,
                 &check_updates,
@@ -638,6 +650,22 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
 "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "add_channel_pack_metadata",
+            sql: r#"
+ALTER TABLE channel_groups ADD COLUMN pack_id TEXT;
+ALTER TABLE channel_groups ADD COLUMN description TEXT;
+ALTER TABLE channel_groups ADD COLUMN author TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_version TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_updated TEXT;
+ALTER TABLE channel_groups ADD COLUMN pack_source_url TEXT;
+ALTER TABLE saved_channels ADD COLUMN pack_channel_id TEXT;
+CREATE INDEX idx_channel_groups_pack_id ON channel_groups(pack_id);
+CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_id);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -673,6 +701,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
             zoom::zoom_by_command,
             save_text_file,
             load_text_file,
+            sqlite_transaction::execute_sqlite_transaction,
             radio_image_backup::radio_image_backups_directory,
             radio_image_backup::open_radio_image_backups_directory,
             radio_image_backup::list_radio_image_backups,
@@ -704,6 +733,7 @@ ALTER TABLE station_log_qsos ADD COLUMN my_longitude REAL;
             "read-from-radio" => emit_menu_event(app, "read-from-radio"),
             "write-to-radio" => emit_menu_event(app, "write-to-radio"),
             "show-backups" => emit_menu_event(app, "show-backups"),
+            "print-channels" => emit_menu_event(app, "print-channels"),
             "edit-undo" => emit_menu_event(app, "edit-undo"),
             "edit-redo" => emit_menu_event(app, "edit-redo"),
             "undo-memory" => emit_menu_event(app, "undo-memory"),

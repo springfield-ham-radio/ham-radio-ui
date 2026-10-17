@@ -11,6 +11,7 @@ import {
 import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import { h, resolveComponent } from 'vue';
 import type { ChannelRow } from '~/composables/useRadio';
+import { radioCardIdKey } from '~/composables/radio-card-context';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
@@ -27,11 +28,23 @@ import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
 import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { privilegeValue } from '~/utils/license-people';
+import {
+  buildRadioPrintDocument,
+  emptyPrintReason,
+  formatChannelPrintDate,
+  printScopeSummary,
+  resolvePrintRows,
+  type ChannelPrintRadioRow,
+} from '~/utils/channel-print';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const UCheckbox = resolveComponent('UCheckbox');
+
+const injectedCardId = inject(radioCardIdKey);
+const { focusedCardId } = useRadioBoard();
+const { openPrintDialog, registerRadioProvider, unregisterRadioProvider } = useChannelPrint();
 
 const {
   channels,
@@ -65,6 +78,8 @@ const {
   privilegeGroups,
   privilegeChoices,
   choiceForRadio,
+  amateurCallSignOptions,
+  identityFor,
   setRadioPrivilege,
   assessmentFor,
   getTransmitPrivilegeWarning,
@@ -757,6 +772,102 @@ const debugSummary = computed(() => {
 
 const savingSerialLog = ref(false);
 
+const radioPrintRows = computed<ChannelPrintRadioRow[]>(() =>
+  displayChannels.value.map((channel) => ({
+    channelNumber: channel.channelNumber,
+    name: channel.name,
+    band: channel.band,
+    transmit: channel.transmit,
+    receive: channel.receive,
+    txTone: channel.txTone,
+    rxTone: channel.rxTone,
+    toneType: channel.toneType,
+    transmitFrequencyHz: channel.transmitFrequencyHz,
+    receiveFrequencyHz: channel.receiveFrequencyHz,
+    settings: channel.settings,
+    extras: channel.extras,
+  })),
+);
+
+function radioPrintSelection() {
+  const visible = radioPrintRows.value;
+  const selectedNumbers = new Set(selectedChannelNumbers.value);
+
+  return resolvePrintRows({
+    selected: visible.filter((row) => selectedNumbers.has(row.channelNumber)),
+    visible,
+    id: (row) => String(row.channelNumber),
+  });
+}
+
+function buildRadioPrintContext() {
+  const resolved = radioPrintSelection();
+  const radioName = cardRadio.value?.name ?? activeRadioId.value?.name ?? 'Radio';
+  const manufacturer = String(activeRadioId.value?.manufacturer ?? '');
+  const model = String(activeRadioId.value?.model ?? '');
+  const identity = identityFor(choiceForRadio(savedRadio.value));
+
+  return {
+    surface: 'radio' as const,
+    title: 'Print channels',
+    subtitle: printScopeSummary(resolved.rows.length, resolved.scope),
+    rowCount: resolved.rows.length,
+    callSignOptions: amateurCallSignOptions.value,
+    defaultCallSign: identity.callSign,
+    buildDocument: (options: {
+      layout: 'full' | 'wallet';
+      matchVisibleColumns: boolean;
+      callSign?: string;
+    }) => {
+      const channels = radioPrintSelection().rows;
+
+      if (emptyPrintReason(channels.length)) {
+        return undefined;
+      }
+
+      return buildRadioPrintDocument({
+        layout: options.layout,
+        cardName: radioName,
+        manufacturer,
+        model,
+        callSign: options.callSign,
+        printedOn: formatChannelPrintDate(new Date()),
+        channels,
+        extraFields: channelUiFields.value.map((field) => ({
+          fieldId: field.fieldId,
+          label: field.ui.label,
+        })),
+      });
+    },
+  };
+}
+
+function radioPrintProvider() {
+  if (route.path !== '/' || injectedCardId?.value !== focusedCardId.value) {
+    return null;
+  }
+
+  return buildRadioPrintContext();
+}
+
+function openRadioPrintDialog(): void {
+  const context = buildRadioPrintContext();
+
+  if (!context || emptyPrintReason(context.rowCount)) {
+    return;
+  }
+
+  openPrintDialog(context);
+}
+
+onMounted(() => {
+  registerRadioProvider(radioPrintProvider);
+});
+
+onUnmounted(() => {
+  unregisterRadioProvider(radioPrintProvider);
+});
+
 async function onSaveSerialLog(): Promise<void> {
   savingSerialLog.value = true;
 
@@ -957,6 +1068,15 @@ async function onSaveSerialLog(): Promise<void> {
                 :disabled="selectedCount === 0 || isSavingToLibrary"
                 :loading="isSavingToLibrary"
                 @click="saveSelectedToLibrary"
+              />
+              <UButton
+                icon="i-lucide-printer"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                label="Print"
+                :disabled="radioPrintRows.length === 0"
+                @click="openRadioPrintDialog"
               />
             </div>
           </div>

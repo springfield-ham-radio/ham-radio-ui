@@ -11,7 +11,8 @@ import { formatChannelLocation, sortChannelsByLocation } from '~/utils/channel-l
 import { addToRadioDevFixture } from '~/utils/add-to-radio-dev-fixture';
 import { addToRadioRowsWithoutErrors, addToRadioValidationRows } from '~/utils/channel-validation';
 import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
-import { isTripChannelGroup } from '~/utils/channel-groups';
+import { ALL_CHANNELS_TAB_ID, isTripChannelGroup } from '~/utils/channel-groups';
+import type { ChannelPackDocument, ChannelPackMetadata } from '~/utils/channel-pack';
 import {
   anchorIdIfStillVisible,
   applyMacRowSelection,
@@ -21,6 +22,14 @@ import { isPredefinedChannelId } from '~/utils/predefined-channel-groups';
 import { channelHasLinkedNode, linkedNodeBadges } from '~/utils/linked-nodes';
 import { formatSavedTone, type RepeaterUse, type SavedChannel } from '~/utils/saved-channels-db';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
+import {
+  buildLibraryPrintDocument,
+  emptyPrintReason,
+  formatChannelPrintDate,
+  printScopeSummary,
+  resolvePrintRows,
+  type ChannelPrintLibraryRow,
+} from '~/utils/channel-print';
 import {
   channelMapRangeRadiusKm,
   formatChannelMapRangeDisplay,
@@ -79,22 +88,20 @@ const {
   createGroup,
   renameGroup,
   removeGroup,
+  defaultPackMetadataForGroup,
+  computePackImportPreview,
+  exportChannelPack,
+  applyChannelPackImport,
 } = useSavedChannels();
-
-onMounted(() => {
-  void refresh();
-
-  if (addToRadioFixtureActive.value) {
-    void seedAddToRadioDevFixture();
-  }
-});
 
 const route = useRoute();
 const { addTargets, seedAddToRadioDevFixture } = useRadio();
 const { radios } = useSavedRadios();
-const { choiceForRadio, assessmentFor } = useOperatorLicense();
+const { choiceForRadio, assessmentFor, amateurIdentity, amateurCallSignOptions } = useOperatorLicense();
+const { openPrintDialog, registerLibraryProvider, unregisterLibraryProvider } = useChannelPrint();
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
+const channelPackFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'channel-pack-import');
 
 watch(addToRadioFixtureActive, (active) => {
   if (active) {
@@ -109,6 +116,12 @@ const { unit: distanceUnit } = useDistanceUnit();
 
 const importExportOpen = ref(false);
 const importExportPendingId = ref<string | undefined>();
+const packExportOpen = ref(false);
+const packExportSaving = ref(false);
+const packPreviewOpen = ref(false);
+const packApplying = ref(false);
+const pendingPack = shallowRef<ChannelPackDocument | null>(null);
+const packImportGroupName = ref('');
 
 watch(
   importExportFixtureActive,
@@ -118,6 +131,40 @@ watch(
     }
   },
   { immediate: true },
+);
+
+async function openSamplePackFixture(): Promise<void> {
+  const response = await fetch('/fixtures/sample-club.hpack');
+
+  if (!response.ok) {
+    return;
+  }
+
+  const { parseChannelPack } = await import('~/utils/channel-pack');
+  const pack = parseChannelPack(await response.text());
+  pendingPack.value = pack;
+  packImportGroupName.value = pack.name;
+  packPreviewOpen.value = true;
+}
+
+watch(
+  channelPackFixtureActive,
+  (active) => {
+    if (active) {
+      void openSamplePackFixture();
+    }
+  },
+  { immediate: true },
+);
+
+const packExportMetadata = computed(() =>
+  activeGroup.value && !activeGroup.value.builtin ? defaultPackMetadataForGroup(activeGroup.value) : null,
+);
+const packExportChannels = computed(() =>
+  activeGroup.value && !activeGroup.value.builtin ? channelsForGroup(activeGroup.value.id) : [],
+);
+const packImportPreview = computed(() =>
+  pendingPack.value ? computePackImportPreview(pendingPack.value, packImportGroupName.value) : null,
 );
 const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
@@ -362,6 +409,8 @@ const channelImportExportContext = computed(() =>
   importExportContext({
     tauri: isTauriRuntime(),
     libraryLocked: builtinGroup.value,
+    packExportLocked:
+      activeGroupId.value === ALL_CHANNELS_TAB_ID || !activeGroup.value || Boolean(activeGroup.value.builtin),
   }),
 );
 const exportScopeChannels = computed(() =>
@@ -812,7 +861,7 @@ async function confirmGroupName(name: string): Promise<void> {
   }
 
   if (importRoute) {
-    await onImportCsv();
+    await run(IMPORT_EXPORT_IDS.importChannelsCsv, {});
   }
 }
 
@@ -1121,10 +1170,115 @@ async function onSave(payload: {
   }
 }
 
+function toLibraryPrintRow(channel: SavedChannel): ChannelPrintLibraryRow {
+  const distanceKm = tripDistanceKm(channel, distanceStartPoint.value);
+
+  return {
+    ...channel,
+    band: bandNameForFrequency(channel.transmitFrequency),
+    distanceLabel: formatTripDistance(distanceKm, distanceUnit.value),
+  };
+}
+
+function libraryPrintSelection() {
+  const visible = displayChannels.value.map((channel) => toLibraryPrintRow(channel));
+  const selected = selectedLibraryChannels.value.map((channel) => toLibraryPrintRow(channel));
+
+  return resolvePrintRows({
+    selected,
+    visible,
+    id: (row) => String(row.id),
+  });
+}
+
+function buildLibraryPrintContext() {
+  const resolved = libraryPrintSelection();
+  const groupLabel = activeGroup.value?.name ?? 'All';
+  const defaultCallSign = amateurIdentity.value.callSign;
+
+  return {
+    surface: 'library' as const,
+    title: 'Print channels',
+    subtitle: printScopeSummary(resolved.rows.length, resolved.scope),
+    rowCount: resolved.rows.length,
+    callSignOptions: amateurCallSignOptions.value,
+    defaultCallSign,
+    buildDocument: (options: {
+      layout: 'full' | 'wallet';
+      matchVisibleColumns: boolean;
+      callSign?: string;
+    }) => {
+      const rows = libraryPrintSelection().rows;
+
+      if (emptyPrintReason(rows.length)) {
+        return undefined;
+      }
+
+      return buildLibraryPrintDocument({
+        layout: options.layout,
+        groupLabel,
+        callSign: options.callSign,
+        printedOn: formatChannelPrintDate(new Date()),
+        rows,
+        columnVisibility: columnVisibility.value,
+        includeDistance: Boolean(distanceStartPoint.value),
+        matchVisibleColumns: options.matchVisibleColumns,
+      });
+    },
+  };
+}
+
+function libraryPrintProvider() {
+  return buildLibraryPrintContext();
+}
+
+function openLibraryPrintDialog(): void {
+  const context = buildLibraryPrintContext();
+
+  if (emptyPrintReason(context.rowCount)) {
+    return;
+  }
+
+  openPrintDialog(context);
+}
+
+onMounted(() => {
+  void refresh();
+
+  if (addToRadioFixtureActive.value) {
+    void seedAddToRadioDevFixture();
+  }
+
+  registerLibraryProvider(libraryPrintProvider);
+});
+
+onUnmounted(() => {
+  unregisterLibraryProvider(libraryPrintProvider);
+});
+
 async function onChannelImportExportSelect(id: string): Promise<void> {
+  if (id === IMPORT_EXPORT_IDS.exportChannelsPack) {
+    importExportOpen.value = false;
+    packExportOpen.value = true;
+    return;
+  }
+
   importExportPendingId.value = id;
 
   try {
+    if (id === IMPORT_EXPORT_IDS.importChannelsPack) {
+      const result = await run(id, {});
+      importExportOpen.value = false;
+
+      if (result.channelPack) {
+        pendingPack.value = result.channelPack;
+        packImportGroupName.value = result.channelPack.name;
+        packPreviewOpen.value = true;
+      }
+
+      return;
+    }
+
     const isExport =
       id === IMPORT_EXPORT_IDS.exportChannelsCsv || id === IMPORT_EXPORT_IDS.exportChannelsChirpCsv;
     await run(id, isExport ? { savedChannels: exportScopeChannels.value } : {});
@@ -1133,6 +1287,49 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
     // Toast is shown by the composable.
   } finally {
     importExportPendingId.value = undefined;
+  }
+}
+
+async function onPackExportSave(payload: {
+  metadata: ChannelPackMetadata;
+  includeRepeaterBook: boolean;
+}): Promise<void> {
+  if (!activeGroup.value || activeGroup.value.builtin) {
+    return;
+  }
+
+  packExportSaving.value = true;
+
+  try {
+    await exportChannelPack({
+      groupId: activeGroup.value.id,
+      metadata: payload.metadata,
+      includeRepeaterBook: payload.includeRepeaterBook,
+      channels: packExportChannels.value,
+    });
+    packExportOpen.value = false;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    packExportSaving.value = false;
+  }
+}
+
+async function onPackImportApply(): Promise<void> {
+  if (!pendingPack.value || packImportPreview.value?.resolution.action === 'blocked') {
+    return;
+  }
+
+  packApplying.value = true;
+
+  try {
+    await applyChannelPackImport(pendingPack.value, packImportGroupName.value);
+    packPreviewOpen.value = false;
+    pendingPack.value = null;
+  } catch {
+    // Toast is shown by the composable.
+  } finally {
+    packApplying.value = false;
   }
 }
 </script>
@@ -1285,6 +1482,15 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
               aria-label="Choose visible columns"
             />
           </UDropdownMenu>
+          <UButton
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            label="Print"
+            :disabled="displayChannels.length === 0"
+            @click="openLibraryPrintDialog"
+          />
         </div>
       </div>
       <p v-if="distanceStartPoint" class="text-xs text-muted">
@@ -1562,6 +1768,26 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
       :export-scope-summary="exportScopeSummary"
       :pending-id="importExportPendingId"
       @select="onChannelImportExportSelect"
+    />
+    <ChannelPackExportDialog
+      v-if="packExportMetadata"
+      v-model:open="packExportOpen"
+      :group-name="activeGroup?.name ?? ''"
+      :channel-count="packExportChannels.length"
+      :channels="packExportChannels"
+      :initial="packExportMetadata"
+      :saving="packExportSaving"
+      @save="onPackExportSave"
+    />
+    <ChannelPackPreviewDialog
+      v-if="pendingPack && packImportPreview"
+      v-model:open="packPreviewOpen"
+      v-model:group-name="packImportGroupName"
+      :pack="packImportPreview.pack"
+      :plan="packImportPreview.plan"
+      :resolution="packImportPreview.resolution"
+      :applying="packApplying"
+      @apply="onPackImportApply"
     />
   </div>
 </template>
