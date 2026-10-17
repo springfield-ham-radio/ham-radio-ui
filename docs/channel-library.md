@@ -24,7 +24,7 @@ The **Location** column shows city and state (`Austin, Texas`) when those are kn
 
 ## Map
 
-Use **Map** above the channel table to open a collapsible repeater map. The map shows the same rows as the table after group, search, **Linked only**, and trip filters. Open or closed state and the splitter size are remembered; the map starts **closed** on first visit.
+Use **Map** above the channel table to open a collapsible repeater map. The map shows the same rows as the table after group, search, **Band**, **On-air**, **Linked only**, and trip filters. **Band** and **On-air** choices are remembered in the browser. Repeater on-air status comes from imported repeater records; channels without that field appear only when **On-air** is **All**. Open or closed state and the splitter size are remembered; the map starts **closed** on first visit.
 
 Markers use band colors with a legend for the bands in view. Click a pin to highlight the row, scroll it into view, and open a popup with call sign, frequencies, tones, and location. When **Distance from** has a start point, the popup also shows straight-line distance and compass bearing. Row hover highlights the matching pin without changing checkbox selection.
 

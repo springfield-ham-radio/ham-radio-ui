@@ -134,6 +134,9 @@ describe('Channels page mount', () => {
     expect(filterRow).toContain('flex flex-wrap items-end');
     expect(filterRow).not.toContain('flex-nowrap');
     expect(filterRow).toContain('label="Linked only"');
+    expect(filterRow).toContain('placeholder="All bands"');
+    expect(filterRow).toContain('label="On-air"');
+    expect(source).toContain('writeChannelLibraryFilterSettings');
     expect(filterRow).toContain('<ChannelDistanceFrom');
     expect(filterRow).toContain('Range (mi)');
     expect(filterRow.indexOf('label="Map"')).toBeLessThan(filterRow.indexOf('label="Columns"'));

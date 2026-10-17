@@ -20,6 +20,17 @@ import {
   parseChannelMapRangeRadius,
 } from '~/utils/channel-map';
 import {
+  libraryBandFilterItems,
+  matchesLibraryBandFilter,
+  matchesLibraryOnAirFilter,
+  type ChannelOnAirFilter,
+  uniqueLibraryBandTokens,
+} from '~/utils/channel-library-filters';
+import {
+  readChannelLibraryFilterSettings,
+  writeChannelLibraryFilterSettings,
+} from '~/utils/channel-library-filter-settings';
+import {
   readChannelMapSettings,
   writeChannelMapSettings,
 } from '~/utils/channel-map-settings';
@@ -42,6 +53,7 @@ const UCheckbox = resolveComponent('UCheckbox');
 
 const {
   filteredChannels,
+  channelsForGroup,
   isLoading,
   error,
   search,
@@ -122,6 +134,26 @@ const isDeletingChannels = shallowRef(false);
 type ChannelLibraryCreateAction = 'add-channel' | 'empty-group' | 'trip-group';
 
 const channelCreateAction = useState<ChannelLibraryCreateAction>('channel-library-create-action', () => 'add-channel');
+const libraryFilterSettings = ref(readChannelLibraryFilterSettings());
+const selectedBandTokens = computed({
+  get: () => libraryFilterSettings.value.bands,
+  set: (bands: string[]) => {
+    libraryFilterSettings.value = { ...libraryFilterSettings.value, bands };
+    writeChannelLibraryFilterSettings(libraryFilterSettings.value);
+  },
+});
+const onAirFilter = computed({
+  get: () => libraryFilterSettings.value.onAir,
+  set: (onAir: ChannelOnAirFilter) => {
+    libraryFilterSettings.value = { ...libraryFilterSettings.value, onAir };
+    writeChannelLibraryFilterSettings(libraryFilterSettings.value);
+  },
+});
+const onAirFilterItems = [
+  { label: 'All', value: 'all' as const },
+  { label: 'On air', value: 'on-air' as const },
+  { label: 'Off air', value: 'off-air' as const },
+];
 const linkedOnly = ref(false);
 const channelMapSettings = ref(readChannelMapSettings());
 const showMap = computed({
@@ -193,12 +225,18 @@ const distanceStartPoint = computed(() => {
   const station = stations.value.find((entry) => entry.id === distanceStartId.value);
   return station ? stationStartPoint(station) : undefined;
 });
+const scopedChannels = computed(() => channelsForGroup(activeGroupId.value));
+const libraryBandFilterOptions = computed(() =>
+  libraryBandFilterItems(uniqueLibraryBandTokens(scopedChannels.value)),
+);
 const tripBandItems = computed(() => [
   { label: 'All bands', value: 'all' },
   ...uniqueTripBands(filteredChannels.value).map((band) => ({ label: band, value: band })),
 ]);
 const displayChannels = computed<DisplaySavedChannel[]>(() => {
   let rows = filteredChannels.value.filter((channel) => !linkedOnly.value || channelHasLinkedNode(channel));
+  rows = rows.filter((channel) => matchesLibraryBandFilter(channel, selectedBandTokens.value));
+  rows = rows.filter((channel) => matchesLibraryOnAirFilter(channel, onAirFilter.value));
 
   if (addToRadioFixtureActive.value) {
     rows = [...addToRadioDevFixture(), ...rows];
@@ -1051,6 +1089,30 @@ async function onImportCsv(): Promise<void> {
           class="w-full min-w-0 sm:w-72 sm:max-w-sm"
         />
         <UCheckbox v-model="linkedOnly" label="Linked only" class="shrink-0 pb-2" />
+        <UFormField label="Band" class="w-36 shrink-0">
+          <USelectMenu
+            v-model="selectedBandTokens"
+            :items="libraryBandFilterOptions"
+            value-key="value"
+            multiple
+            placeholder="All bands"
+            color="neutral"
+            size="sm"
+            class="w-full"
+            :disabled="libraryBandFilterOptions.length === 0"
+            :search-input="libraryBandFilterOptions.length > 8"
+          />
+        </UFormField>
+        <UFormField label="On-air" class="w-32 shrink-0">
+          <USelect
+            v-model="onAirFilter"
+            :items="onAirFilterItems"
+            value-key="value"
+            color="neutral"
+            size="sm"
+            class="w-full"
+          />
+        </UFormField>
         <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
           <ChannelDistanceFrom
             v-model:start-id="distanceStartId"
