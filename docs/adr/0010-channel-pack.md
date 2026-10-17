@@ -20,7 +20,13 @@ RepeaterBook data is for personal use; redistribution requires written permissio
 
 **RepeaterBook.** Rows with `sourceFormat === 'repeaterbook'` are omitted from export unless the operator explicitly opts in at export time. There is no stored permission flag in the file. Included rows carry `provenance: "repeaterbook"` so importers and later exports treat them as RepeaterBook-sourced again. Hand-entered and CHIRP-sourced rows are unaffected.
 
-**Import merge (pack only).** Match library rows by pack channel id, then by `source_key`. Do not use the legacy `kind | callsign-or-name | tx | rx` key. Applying a pack overwrites **name** and **notes** and all portable fields from the file. Rows present in the group but absent from the pack are removed from that group. A library row is deleted only when it belongs to no other group after removal. HamBench CSV import keeps the policy in ADR 0002 (preserve name and notes; no deletion on absence).
+**Import merge (pack only).** This is an exception to [0002](./0002-repeater-record-reimport.md). Match library rows by pack channel id, then by `source_key`. Do not use the legacy `kind | callsign-or-name | tx | rx` key, and do not call `planLibraryImport` for a pack. Applying a pack overwrites **name** and **notes** and the portable fields in the file. Rows present in the group but absent from the pack are removed from that group. A library row is deleted only when it belongs to no other group after removal. A library row is matched at most once per file; a later pack row with the same source key is a new channel. HamBench CSV import is unchanged: it still preserves name and notes and does not delete rows that are absent from the file.
+
+**Group target.** `resolveChannelPackGroup` updates the group whose stored pack id matches. Otherwise it adopts a same-name group that is not already a different pack. A reserved name (`All`, `Weather`, `FRS`, `GMRS`), a name longer than 40 characters, a built-in group, or a name owned by a different pack blocks apply.
+
+**CHIRP-sourced RepeaterBook rows.** `sourceFormat === 'chirp'` is not RepeaterBook provenance. A RepeaterBook listing that arrived through a CHIRP CSV is exported with no warning and no `provenance` field. The exporter does not guess from call sign, coordinates, or notes.
+
+**Parser limits.** Documents longer than 1,000,000 characters or with more than 5,000 channels are rejected before the rows are applied. The parser copies known fields onto new objects and does not merge JSON into existing objects.
 
 **Pack and group identity.** Pack `id` is a UUID stored on the group. Pack channel ids are slugs stored per channel. Re-export keeps both.
 
@@ -32,5 +38,6 @@ RepeaterBook data is for personal use; redistribution requires written permissio
 
 - PR 2 adds UI, registry entries, SQLite columns for pack metadata, and apply logic using `planChannelPackImport` in `app/utils/channel-pack-import.ts`.
 - Club repos can commit `.hpack` files and diff them in git.
-- Operators must not share RepeaterBook-derived packs without permission; the export gate is the primary control.
+- Operators must not share RepeaterBook-derived packs without permission; the export gate is the primary control. CHIRP-imported RepeaterBook listings are outside that gate.
+- CSV re-import behavior from ADR 0002 stays as it is. Pack apply is a separate planner.
 - A future breaking format bumps `schemaVersion`; readers reject unknown versions.

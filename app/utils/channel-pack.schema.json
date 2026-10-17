@@ -39,6 +39,7 @@
     },
     "channels": {
       "type": "array",
+      "maxItems": 5000,
       "items": {
         "$ref": "#/$defs/channel"
       }

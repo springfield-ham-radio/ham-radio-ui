@@ -1,5 +1,5 @@
 import { RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
-import type { ChannelGroupMembership } from '~/utils/channel-groups';
+import { normalizeChannelGroupName, validateChannelGroupName, type ChannelGroupMembership } from '~/utils/channel-groups';
 import type { ChannelPackDocument, SavedChannelWithPackId } from '~/utils/channel-pack';
 import { packChannelsToSavedChannels } from '~/utils/channel-pack';
 import { linkedNodesEqual } from '~/utils/linked-nodes';
@@ -27,6 +27,71 @@ export interface ChannelPackImportPlan {
   diff: ChannelPackDiffEntry[];
 }
 
+export interface ChannelPackGroupCandidate {
+  id: string;
+  name: string;
+  packId?: string;
+  builtin?: boolean;
+}
+
+export type ChannelPackGroupResolution =
+  | { action: 'update'; groupId: string }
+  | { action: 'create' }
+  | { action: 'blocked'; reason: string };
+
+/**
+ * Pick the library group a pack updates.
+ *
+ * Match the stored pack id first. Otherwise adopt a same-name group that is not
+ * already a different pack. A name collision, a reserved name, or a built-in
+ * group blocks apply.
+ */
+export function resolveChannelPackGroup(
+  pack: Pick<ChannelPackDocument, 'id' | 'name'>,
+  groups: readonly ChannelPackGroupCandidate[],
+): ChannelPackGroupResolution {
+  const stored = groups.filter((group) => !group.builtin);
+  const byPack = stored.find((group) => group.packId === pack.id);
+
+  if (byPack) {
+    const nameError = groupNameError(pack.name, groups, byPack.id);
+
+    if (nameError) {
+      return { action: 'blocked', reason: nameError };
+    }
+
+    return { action: 'update', groupId: byPack.id };
+  }
+
+  const normalized = normalizeChannelGroupName(pack.name).toLowerCase();
+  const byName = stored.find((group) => normalizeChannelGroupName(group.name).toLowerCase() === normalized);
+
+  if (byName) {
+    if (byName.packId && byName.packId !== pack.id) {
+      return { action: 'blocked', reason: 'That group already belongs to a different channel pack' };
+    }
+
+    return { action: 'update', groupId: byName.id };
+  }
+
+  const nameError = groupNameError(pack.name, groups);
+
+  if (nameError) {
+    return { action: 'blocked', reason: nameError };
+  }
+
+  return { action: 'create' };
+}
+
+function groupNameError(
+  name: string,
+  groups: readonly ChannelPackGroupCandidate[],
+  exceptId?: string,
+): string | undefined {
+  const existingNames = groups.filter((group) => group.id !== exceptId).map((group) => group.name);
+  return validateChannelGroupName(name, existingNames);
+}
+
 export interface ChannelPackImportContext {
   groupId: string;
   /** Channels currently in the target group (with optional pack slugs). */
@@ -52,15 +117,33 @@ export function planChannelPackImport(
   const byPackId = new Map<string, SavedChannelWithPackId>();
   const bySourceKey = new Map<string, SavedChannelWithPackId>();
 
-  for (const channel of context.libraryChannels) {
-    if (channel.packChannelId) {
+  const indexChannel = (channel: SavedChannelWithPackId): void => {
+    if (channel.packChannelId && !byPackId.has(channel.packChannelId)) {
       byPackId.set(channel.packChannelId, channel);
     }
 
-    if (channel.sourceKey) {
+    if (channel.sourceKey && !bySourceKey.has(channel.sourceKey)) {
       bySourceKey.set(channel.sourceKey, channel);
     }
+  };
+
+  for (const channel of context.libraryChannels) {
+    indexChannel(channel);
   }
+
+  for (const channel of context.groupChannels) {
+    indexChannel(channel);
+  }
+
+  const unindex = (channel: SavedChannelWithPackId): void => {
+    if (channel.packChannelId && byPackId.get(channel.packChannelId)?.id === channel.id) {
+      byPackId.delete(channel.packChannelId);
+    }
+
+    if (channel.sourceKey && bySourceKey.get(channel.sourceKey)?.id === channel.id) {
+      bySourceKey.delete(channel.sourceKey);
+    }
+  };
 
   const insert: SavedChannelWithPackId[] = [];
   const update: SavedChannelWithPackId[] = [];
@@ -84,6 +167,7 @@ export function planChannelPackImport(
       continue;
     }
 
+    unindex(match);
     const merged = mergePackChannel(match, model);
     memberIds.push(merged.id);
 
@@ -144,7 +228,8 @@ function mergePackChannel(match: SavedChannelWithPackId, model: SavedChannelWith
     ...match,
     ...model,
     id: match.id,
-    packChannelId: model.packChannelId,
+    packChannelId: model.packChannelId ?? match.packChannelId,
+    lastUpdate: model.lastUpdate ?? match.lastUpdate,
     createdAt: match.createdAt,
     updatedAt: Date.now(),
   };

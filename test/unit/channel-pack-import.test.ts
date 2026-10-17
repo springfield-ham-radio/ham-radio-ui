@@ -7,7 +7,7 @@ import {
   type ChannelPackDocument,
   type SavedChannelWithPackId,
 } from '~/utils/channel-pack';
-import { planChannelPackImport } from '~/utils/channel-pack-import';
+import { planChannelPackImport, resolveChannelPackGroup } from '~/utils/channel-pack-import';
 import type { ChannelGroupMembership } from '~/utils/channel-groups';
 import { radioChannelToSavedChannel } from '~/utils/saved-channels-db';
 
@@ -144,5 +144,64 @@ describe('planChannelPackImport', () => {
     expect(plan.added).toBe(0);
     expect(plan.changed).toBe(0);
     expect(plan.memberIds).toEqual([outsider.id]);
+  });
+
+  it('does not match a row by frequency when pack id and source key differ', () => {
+    const existing = saved('ch-1', { name: 'Net', tx: 146_520_000, rx: 146_520_000 });
+    const incoming = saved('ch-2', { packChannelId: 'other', name: 'Net', tx: 146_520_000, rx: 146_520_000 });
+    const pack = buildChannelPackDocument(packMeta, [incoming]);
+    const plan = planForPack(pack, [existing], [existing], [{ groupId, channelId: existing.id }]);
+
+    expect(plan.added).toBe(1);
+    expect(plan.changed).toBe(0);
+    expect(plan.removed).toBe(1);
+    expect(plan.deleteOrphans.map(String)).toEqual([String(existing.id)]);
+  });
+
+  it('uses a library row only once when a later pack row repeats its source key', () => {
+    const existing = saved('ch-rb', { sourceKey: 'rb:48:1', kind: 'repeater', name: 'KA' });
+    const first = saved('ch-a', { packChannelId: 'first', sourceKey: 'rb:48:1', kind: 'repeater', name: 'KA' });
+    const second = saved('ch-b', { packChannelId: 'second', sourceKey: 'rb:48:1', kind: 'repeater', name: 'Other' });
+    const pack = buildChannelPackDocument(packMeta, [first, second]);
+    const plan = planForPack(pack, [existing], [existing], [{ groupId, channelId: existing.id }]);
+
+    expect(plan.changed).toBe(1);
+    expect(plan.added).toBe(1);
+    expect(plan.update[0]?.id).toBe(existing.id);
+  });
+});
+
+describe('resolveChannelPackGroup', () => {
+  const pack = { id: '8f1c0b2e-7a4d-4c1e-9b6a-1d2e3f4a5b6c', name: 'ARES Weekly Net' };
+
+  it('updates the group with the same pack id', () => {
+    const resolution = resolveChannelPackGroup(pack, [
+      { id: 'other', name: 'Club', packId: 'different' },
+      { id: 'ares', name: 'Old name', packId: pack.id },
+    ]);
+    expect(resolution).toEqual({ action: 'update', groupId: 'ares' });
+  });
+
+  it('adopts a same-name group that has no pack id', () => {
+    const resolution = resolveChannelPackGroup(pack, [{ id: 'ares', name: 'ares weekly net' }]);
+    expect(resolution).toEqual({ action: 'update', groupId: 'ares' });
+  });
+
+  it('blocks a name owned by a different pack, reserved names, and long names', () => {
+    expect(
+      resolveChannelPackGroup(pack, [{ id: 'ares', name: 'ARES Weekly Net', packId: 'other-pack' }]).action,
+    ).toBe('blocked');
+    expect(resolveChannelPackGroup({ ...pack, name: 'Weather' }, []).action).toBe('blocked');
+    expect(resolveChannelPackGroup({ ...pack, name: 'All' }, []).action).toBe('blocked');
+    expect(resolveChannelPackGroup({ ...pack, name: 'N'.repeat(41) }, []).action).toBe('blocked');
+  });
+
+  it('blocks renaming onto another group and creates when the name is free', () => {
+    const collision = resolveChannelPackGroup(pack, [
+      { id: 'ares', name: 'Old', packId: pack.id },
+      { id: 'club', name: 'ARES Weekly Net' },
+    ]);
+    expect(collision.action).toBe('blocked');
+    expect(resolveChannelPackGroup(pack, [{ id: 'club', name: 'Other' }])).toEqual({ action: 'create' });
   });
 });

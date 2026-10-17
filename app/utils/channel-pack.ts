@@ -1,4 +1,5 @@
 import { RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
+import { CHANNEL_GROUP_NAME_MAX_LENGTH } from '~/utils/channel-groups';
 import {
   coordinatesFromPair,
   type RepeaterUse,
@@ -9,6 +10,12 @@ import {
 
 export const CHANNEL_PACK_SCHEMA_VERSION = 1;
 export const CHANNEL_PACK_FILE_EXTENSION = 'hpack';
+/** Checked before JSON.parse so a hostile file cannot force a huge allocation. */
+export const CHANNEL_PACK_MAX_CHARS = 1_000_000;
+export const CHANNEL_PACK_MAX_CHANNELS = 5_000;
+/** Above any amateur allocation, and still a safe integer. */
+const MAX_FREQUENCY_HZ = 10_000_000_000_000;
+const PACK_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ChannelPackTone {
   type: 'ctcss' | 'dcs';
@@ -143,6 +150,7 @@ export function buildChannelPackDocument(
     }
 
     packChannels.push(savedChannelToPackChannel(channel, usedIds));
+    usedIds.add(packChannels[packChannels.length - 1]!.id);
   }
 
   return {
@@ -164,6 +172,10 @@ export function serializeChannelPack(document: ChannelPackDocument): string {
 }
 
 export function parseChannelPack(text: string): ChannelPackDocument {
+  if (text.length > CHANNEL_PACK_MAX_CHARS) {
+    throw new Error(`Channel pack is too large (maximum ${CHANNEL_PACK_MAX_CHARS} characters)`);
+  }
+
   let raw: unknown;
 
   try {
@@ -185,13 +197,22 @@ export function parseChannelPack(text: string): ChannelPackDocument {
     );
   }
 
-  const id = requireNonEmptyString(record.id, 'id');
+  const id = requirePackId(record.id);
   const name = requireNonEmptyString(record.name, 'name');
+
+  if (name.length > CHANNEL_GROUP_NAME_MAX_LENGTH) {
+    throw new Error(`Channel pack name must be ${CHANNEL_GROUP_NAME_MAX_LENGTH} characters or fewer`);
+  }
+
   const version = requireNonEmptyString(record.version, 'version');
   const updated = requireNonEmptyString(record.updated, 'updated');
 
   if (!Array.isArray(record.channels)) {
     throw new Error('Channel pack channels must be an array');
+  }
+
+  if (record.channels.length > CHANNEL_PACK_MAX_CHANNELS) {
+    throw new Error(`Channel pack has too many channels (maximum ${CHANNEL_PACK_MAX_CHANNELS})`);
   }
 
   const seenChannelIds = new Set<string>();
@@ -231,7 +252,7 @@ export function packChannelsToSavedChannels(
 }
 
 function savedChannelToPackChannel(channel: SavedChannelWithPackId, usedIds: Set<string>): ChannelPackChannel {
-  const packId = channel.packChannelId?.trim() || mintPackChannelId(channel, usedIds);
+  const packId = takePackChannelId(channel, usedIds);
   const point = coordinatesFromPair(channel.latitude, channel.longitude);
   const pack: ChannelPackChannel = {
     id: packId,
@@ -312,6 +333,10 @@ function packChannelToSavedChannel(channel: ChannelPackChannel, id: RadioChannel
     updatedAt: now,
   };
 
+  if (sourceFormat) {
+    saved.sourceFormat = sourceFormat;
+  }
+
   if (kind === 'repeater') {
     saved.callsign = trimOptional(channel.callsign);
     saved.use = channel.use;
@@ -325,11 +350,6 @@ function packChannelToSavedChannel(channel: ChannelPackChannel, id: RadioChannel
     saved.landmark = trimOptional(channel.landmark);
     saved.modes = trimOptional(channel.modes);
     saved.sourceKey = trimOptional(channel.sourceKey);
-
-    if (sourceFormat) {
-      saved.sourceFormat = sourceFormat;
-    }
-
     saved.allstarNode = trimOptional(channel.allstarNode);
     saved.echolinkNode = trimOptional(channel.echolinkNode);
     saved.irlpNode = trimOptional(channel.irlpNode);
@@ -433,10 +453,7 @@ function parsePackChannel(raw: unknown, index: number): ChannelPackChannel {
   const txHz = requirePositiveInteger(record.txHz, `channels[${index}].txHz`);
   const latitude = optionalFiniteNumber(record.latitude);
   const longitude = optionalFiniteNumber(record.longitude);
-
-  if (latitude === 0 && longitude === 0) {
-    throw new Error(`Channel pack channels[${index}] cannot use the coordinate pair (0, 0)`);
-  }
+  assertCoordinatePair(latitude, longitude, index);
 
   const channel: ChannelPackChannel = { id, kind, rxHz, txHz };
   channel.name = optionalString(record.name);
@@ -469,25 +486,30 @@ function parsePackChannel(raw: unknown, index: number): ChannelPackChannel {
 }
 
 function packDocumentToJsonObject(document: ChannelPackDocument): Record<string, unknown> {
-  const root: Record<string, unknown> = {
+  const values: Record<keyof ChannelPackDocument, unknown> = {
     schemaVersion: document.schemaVersion,
     id: document.id,
     name: document.name,
+    description: document.description,
+    author: document.author,
     version: document.version,
     updated: document.updated,
+    source: document.source,
     channels: document.channels.map((channel) => packChannelToJsonObject(channel)),
   };
+  const root: Record<string, unknown> = {};
 
-  if (document.description) {
-    root.description = document.description;
-  }
+  for (const key of PACK_ROOT_KEYS) {
+    const value = values[key];
 
-  if (document.author) {
-    root.author = document.author;
-  }
+    if (key === 'schemaVersion' || key === 'channels') {
+      root[key] = value;
+      continue;
+    }
 
-  if (document.source) {
-    root.source = document.source;
+    if (typeof value === 'string' && value.length > 0) {
+      root[key] = value;
+    }
   }
 
   return root;
@@ -507,6 +529,16 @@ function packChannelToJsonObject(channel: ChannelPackChannel): Record<string, un
   }
 
   return object;
+}
+
+function takePackChannelId(channel: SavedChannelWithPackId, usedIds: Set<string>): string {
+  const stored = channel.packChannelId?.trim();
+
+  if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored) && stored.length <= 64 && !usedIds.has(stored)) {
+    return stored;
+  }
+
+  return mintPackChannelId(channel, usedIds);
 }
 
 function mintPackChannelId(channel: SavedChannel, usedIds: Set<string>): string {
@@ -637,8 +669,39 @@ function trimOptional(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function requirePackId(value: unknown): string {
+  const id = requireNonEmptyString(value, 'id');
+
+  if (!PACK_ID_PATTERN.test(id)) {
+    throw new Error('Channel pack id must be a UUID');
+  }
+
+  return id;
+}
+
+function assertCoordinatePair(latitude: number | undefined, longitude: number | undefined, index: number): void {
+  const hasLatitude = latitude !== undefined;
+  const hasLongitude = longitude !== undefined;
+
+  if (hasLatitude !== hasLongitude) {
+    throw new Error(`Channel pack channels[${index}] latitude and longitude must both be set`);
+  }
+
+  if (!hasLatitude || !hasLongitude || latitude === undefined || longitude === undefined) {
+    return;
+  }
+
+  if (latitude === 0 && longitude === 0) {
+    throw new Error(`Channel pack channels[${index}] cannot use the coordinate pair (0, 0)`);
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new Error(`Channel pack channels[${index}] coordinates are out of range`);
+  }
+}
+
 function requirePositiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0 || value > MAX_FREQUENCY_HZ) {
     throw new Error(`Channel pack ${label} must be a positive integer`);
   }
 
