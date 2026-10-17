@@ -94,6 +94,14 @@ import {
   undoLabelForHistory,
   undoRadioMemoryHistory,
 } from '~/utils/radio-memory-history';
+import { showRadioErrorToast } from '~/composables/useRadioErrorToast';
+import { radioErrorContextFromRadio } from '~/utils/radio-error-context';
+import {
+  createRadioErrorReport,
+  logRadioErrorReport,
+  sampleRadioErrorReport,
+  type RadioErrorReport,
+} from '~/utils/radio-error-report';
 
 const logger = new LogLayer({
   transport: [
@@ -183,7 +191,7 @@ export function useRadio() {
   const progressOpen = useState('radio-progress-open', () => false);
   const progressKind = useState<'import' | 'write' | 'backup'>('radio-progress-kind', () => 'import');
   const progress = useState('radio-progress', () => 0);
-  const progressError = useState<string | null>('radio-progress-error', () => null);
+  const progressError = useState<RadioErrorReport | null>('radio-progress-error', () => null);
   const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
   const canceled = useState('radio-canceled', () => false);
   const transferInFlight = useState('radio-transfer-in-flight', () => false);
@@ -517,6 +525,20 @@ export function useRadio() {
     return configurations.value.find((config) => config.id.model === radioId.model);
   }
 
+  async function assignProgressError(
+    context: ReturnType<typeof radioErrorContextFromRadio>,
+    cause: unknown,
+    logMessage: string,
+  ): Promise<void> {
+    const report = await createRadioErrorReport(
+      context,
+      cause instanceof Error ? cause : new Error(String(cause)),
+    );
+    progressError.value = report;
+    logger.withError(cause).error(logMessage);
+    logRadioErrorReport(logger, report, logMessage);
+  }
+
   async function getCodec(radioId: RadioId): Promise<RadioCodec | undefined> {
     const config = getConfiguration(radioId);
     const memoryMap = config ? memoryMapFromConfig(config) : undefined;
@@ -690,19 +712,36 @@ export function useRadio() {
       } else {
         importedBytes = memoryData.length;
         importedImage = memoryData.slice();
-        await applyLoadedMemory(memoryData, radioId, sessionId);
+        const undoWarning = await applyLoadedMemory(memoryData, radioId, sessionId, serialPortPath);
         patchSession(sessionId, { memoryFilePath: undefined, radioBaseline: importedImage });
         clearBrowserFileHandle();
+
+        if (undoWarning) {
+          showRadioErrorToast(toast, logger, {
+            title: 'Undo unavailable for this read',
+            report: undoWarning,
+            color: 'warning',
+            icon: 'i-lucide-triangle-alert',
+            logMessage: 'Undo snapshot failed after read',
+          });
+        }
       }
     } catch (cause) {
       if (isCancelledTransfer(cause)) {
         outcome = 'canceled';
       } else {
         outcome = 'error';
-        const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
-        progressError.value = message;
         console.error('Failed to read radio', cause);
-        logger.withError(cause).error('Failed to read radio');
+        await assignProgressError(
+          radioErrorContextFromRadio('read', 'read radio', {
+            radioId,
+            cardName: boundRadio(sessionId)?.name,
+            config,
+            port: serialPortPath,
+          }),
+          cause,
+          'Failed to read radio',
+        );
       }
     } finally {
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
@@ -847,10 +886,17 @@ export function useRadio() {
           outcome = 'canceled';
         } else {
           outcome = 'error';
-          const message = cause instanceof Error ? cause.message : 'Unknown error occurred while writing radio';
-          progressError.value = message;
           console.error('Failed to write radio', cause);
-          logger.withError(cause).error('Failed to write radio');
+          await assignProgressError(
+            radioErrorContextFromRadio('write', 'write radio', {
+              radioId,
+              cardName: boundRadio(sessionId)?.name,
+              config,
+              port: serialPortPath,
+            }),
+            cause,
+            'Failed to write radio',
+          );
         }
       } finally {
         captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
@@ -978,14 +1024,20 @@ export function useRadio() {
         return;
       }
 
-      const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
-      logger.withError(cause).error('Failed to read radio for write review');
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
-      toast.add({
+      const report = await createRadioErrorReport(
+        radioErrorContextFromRadio('write', 'read for review', {
+          radioId,
+          cardName: boundRadio(sessionId)?.name,
+          config,
+          port: serialPortPath,
+        }),
+        cause,
+      );
+      showRadioErrorToast(toast, logger, {
         title: 'Could not read radio',
-        description: message,
-        color: 'error',
-        icon: 'i-lucide-circle-alert',
+        report,
+        logMessage: 'Failed to read radio for write review',
       });
     }
   }
@@ -1035,7 +1087,16 @@ export function useRadio() {
 
     logger.error(`Failed to back up radio image before write: ${captured.message}`);
     startProgress('backup');
-    progressError.value = captured.message;
+    await assignProgressError(
+      radioErrorContextFromRadio('backup', 'save backup file', {
+        radioId,
+        cardName: boundRadio(sessionId)?.name,
+        config,
+        port: serialPortPath,
+      }),
+      new Error(captured.message),
+      'Failed to back up radio image before write',
+    );
     const choice = await waitForBackupFailureDecision();
     progressError.value = null;
 
@@ -1101,7 +1162,16 @@ export function useRadio() {
       }
 
       if (memoryData.length === 0) {
-        progressError.value = 'The radio returned an empty memory image.';
+        await assignProgressError(
+          radioErrorContextFromRadio('backup', 'read radio for backup', {
+            radioId,
+            cardName: boundRadio(sessionId)?.name,
+            config,
+            port: serialPortPath,
+          }),
+          new Error('The radio returned an empty memory image.'),
+          'Backup read returned empty image',
+        );
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         const choice = await waitForBackupFailureDecision();
         progressError.value = null;
@@ -1129,10 +1199,17 @@ export function useRadio() {
         return 'abort';
       }
 
-      const message = cause instanceof Error ? cause.message : 'Unknown error occurred while reading radio';
-      logger.withError(cause).error('Failed to read radio for backup');
-      progressError.value = message;
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      await assignProgressError(
+        radioErrorContextFromRadio('backup', 'read radio for backup', {
+          radioId,
+          cardName: boundRadio(sessionId)?.name,
+          config,
+          port: serialPortPath,
+        }),
+        cause,
+        'Failed to read radio for backup',
+      );
       const choice = await waitForBackupFailureDecision();
       progressError.value = null;
 
@@ -1767,7 +1844,12 @@ export function useRadio() {
     }
   }
 
-  async function applyLoadedMemory(memoryData: Uint8Array, radioId: RadioId, sessionId?: string): Promise<void> {
+  async function applyLoadedMemory(
+    memoryData: Uint8Array,
+    radioId: RadioId,
+    sessionId?: string,
+    port?: string,
+  ): Promise<RadioErrorReport | undefined> {
     const id = sessionId ?? actingCardId();
 
     if (!id) {
@@ -1792,10 +1874,36 @@ export function useRadio() {
 
     writeRememberedRadio(radioId);
     const codec = await getCodec(radioId);
-    const decoded = codec?.decode({
-      radioModel: radioId.model,
-      contents: memoryData,
-    });
+    let decoded: RadioProgram | undefined;
+
+    try {
+      decoded = codec?.decode({
+        radioModel: radioId.model,
+        contents: memoryData,
+      });
+    } catch (cause) {
+      throw new Error('Decode memory image failed', { cause });
+    }
+
+    let memoryHistory: RadioMemoryHistory | undefined;
+    let undoWarning: RadioErrorReport | undefined;
+
+    if (decoded) {
+      try {
+        memoryHistory = resetRadioMemoryHistory(decoded);
+      } catch (cause) {
+        undoWarning = await createRadioErrorReport(
+          radioErrorContextFromRadio('read', 'undo snapshot', {
+            radioId,
+            cardName: saved?.name,
+            config,
+            port,
+          }),
+          new Error('Undo snapshot failed after read', { cause }),
+        );
+        logRadioErrorReport(logger, undoWarning, 'Undo snapshot failed after read');
+      }
+    }
 
     patchSession(id, {
       memory: memoryData,
@@ -1803,8 +1911,10 @@ export function useRadio() {
       program: decoded,
       settingsMemoryMap: memoryMapFromConfig(config),
       channels: rowsFromProgram(decoded),
-      memoryHistory: decoded ? resetRadioMemoryHistory(decoded) : undefined,
+      memoryHistory,
     });
+
+    return undoWarning;
   }
 
   async function waitForRadioCatalog(): Promise<void> {
@@ -1903,6 +2013,18 @@ export function useRadio() {
   /**
    * Dev-only: inject a config with readMessage and writeMessage and open Read from Radio.
    */
+  async function seedErrorReportDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    progressError.value = await sampleRadioErrorReport();
+    progressKind.value = 'import';
+    progress.value = 0;
+    progressStartedAt.value = Date.now();
+    progressOpen.value = true;
+  }
+
   async function seedDialogMessageDevFixture(): Promise<void> {
     if (!import.meta.dev) {
       return;
@@ -2079,6 +2201,7 @@ export function useRadio() {
     seedUndoMemoryDevFixture,
     seedWriteReviewDevFixture,
     seedDialogMessageDevFixture,
+    seedErrorReportDevFixture,
     memoryUnsaved,
     memoryUndoLabel,
     memoryRedoLabel,

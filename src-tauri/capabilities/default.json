@@ -15,6 +15,7 @@
     "sql:allow-execute",
     "updater:default",
     "process:default",
+    "os:default",
     "window-state:default"
   ]
 }
