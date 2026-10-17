@@ -4,6 +4,8 @@
 **Date:** 2026-10-17  
 **Related:** [#64](https://github.com/springfield-ham-radio/ham-radio-ui/issues/64)
 
+This is a ham-radio-ui record. It does not share a number with [ham-radio-docs ADR 0010](https://github.com/springfield-ham-radio/ham-radio-docs/blob/main/docs/developer/adr/0010-local-beta-driver-zips.md). The docs catalog lists repository ADRs by example, so this record stays here.
+
 ## Context
 
 Edits to an open radio’s clone memory (channels, settings, reorder, library replace) go through `persistProgram` in `useRadio.ts`. There is no way to step backward without re-reading the radio or re-opening a file. The native Edit → Undo menu item only affects text fields in the webview.

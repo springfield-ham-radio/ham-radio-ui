@@ -7,7 +7,11 @@ export interface RadioMemoryHistory {
   index: number;
   /** Edit that produced `timeline[index + 1]` from `timeline[index]`. */
   labels: string[];
-  cleanIndex: number;
+  /**
+   * Index of the last loaded or saved program.
+   * Missing when that snapshot has fallen off the 100-step cap.
+   */
+  cleanIndex?: number;
 }
 
 export function cloneRadioProgram(program: RadioProgram): RadioProgram {
@@ -191,7 +195,10 @@ export function recordRadioMemoryEdit(history: RadioMemoryHistory, nextProgram: 
     timeline = timeline.slice(removed);
     labels = labels.slice(Math.max(0, labels.length - (maxStates - 1)));
     index = timeline.length - 1;
-    cleanIndex = Math.max(0, cleanIndex - removed);
+
+    if (cleanIndex !== undefined) {
+      cleanIndex = cleanIndex < removed ? undefined : cleanIndex - removed;
+    }
   }
 
   return { timeline, index, labels, cleanIndex };

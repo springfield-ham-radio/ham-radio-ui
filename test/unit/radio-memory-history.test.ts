@@ -77,4 +77,24 @@ describe('radio-memory-history', () => {
     const undone = undoRadioMemoryHistory(history);
     expect(isRadioMemoryHistoryUnsaved(undone.history)).toBe(false);
   });
+
+  it('stays unsaved after the clean snapshot falls off the cap', () => {
+    let history = createRadioMemoryHistory(program([]));
+
+    for (let step = 0; step < RADIO_MEMORY_HISTORY_MAX_STEPS + 2; step += 1) {
+      history = recordRadioMemoryEdit(
+        history,
+        program([{ channelNumber: step, radioChannel: { receiveFrequency: step, transmitFrequency: step } }]),
+      );
+    }
+
+    expect(history.cleanIndex).toBeUndefined();
+    expect(isRadioMemoryHistoryUnsaved(history)).toBe(true);
+
+    while (history.index > 0) {
+      history = undoRadioMemoryHistory(history).history;
+    }
+
+    expect(isRadioMemoryHistoryUnsaved(history)).toBe(true);
+  });
 });
