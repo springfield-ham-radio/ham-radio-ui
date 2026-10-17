@@ -139,4 +139,38 @@ describe('station-log-adif', () => {
     expect(adi).toMatch(/<PROGRAMID:8>HamBench/i);
     expect(adi).toMatch(/<EOH>/i);
   });
+
+  it('round-trips ADIF LAT/LON and MY_LAT/MY_LON through stored coordinates', () => {
+    const located = {
+      ...sample,
+      theirGridsquare: undefined,
+      latitude: 30.2672,
+      longitude: -97.7431,
+      myLatitude: 42.3,
+      myLongitude: -71.8,
+    };
+    const adi = serializeStationLogAdif([located]);
+
+    expect(adi).toMatch(/<LAT:11>N030 16\.032/);
+    expect(adi).toMatch(/<LON:11>W097 44\.586/);
+    expect(adi).toMatch(/<MY_LAT:11>N042 18\.000/);
+    expect(adi).toMatch(/<MY_LON:11>W071 48\.000/);
+
+    const parsed = parseStationLogAdif(adi).qsos[0]!;
+
+    expect(parsed.latitude).toBeCloseTo(30.2672, 4);
+    expect(parsed.longitude).toBeCloseTo(-97.7431, 4);
+    expect(parsed.myLatitude).toBeCloseTo(42.3, 4);
+    expect(parsed.myLongitude).toBeCloseTo(-71.8, 4);
+    expect(parsed.adifExtra).toEqual({ DXCC: '291' });
+  });
+
+  it('keeps a lone LAT tag in adifExtra on import', () => {
+    const adi =
+      '<CALL:4>W1AW<QSO_DATE:8>20240615<TIME_ON:6>143045<MODE:2>FM<LAT:12>N030 16.032<DXCC:3>291<EOR>';
+    const parsed = parseStationLogAdif(adi).qsos[0]!;
+
+    expect(parsed.latitude).toBeUndefined();
+    expect(parsed.adifExtra).toEqual({ LAT: 'N030 16.032', DXCC: '291' });
+  });
 });

@@ -164,6 +164,7 @@
 <script setup lang="ts">
 import type { SplitterItem, TableColumn } from '@nuxt/ui';
 import { contactAntennaLabel } from '~/utils/antenna-station';
+import { locatedPoint } from '~/utils/location-format';
 import { formatFrequencyMHz } from '~/utils/channel-edit';
 import type { StationLogQso, StationLogQsoInput } from '~/utils/station-log-db';
 import { qslTableLabel } from '~/utils/station-log-map';
@@ -190,7 +191,7 @@ const {
   importAdif,
 } = useStationLog();
 
-const { antennas, stations, selected: selectedAntenna } = useStationAntennas();
+const { antennas, stations, selected: selectedAntenna, selectedStation } = useStationAntennas();
 const { radios } = useSavedRadios();
 
 const isExporting = ref(false);
@@ -247,6 +248,7 @@ const displayQsos = computed<DisplayQso[]>(() => {
 
 const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
   const radio = radios.value.length === 1 ? radios.value[0] : undefined;
+  const myStation = locatedPoint(selectedStation.value?.latitude, selectedStation.value?.longitude);
 
   return {
     myRig: radio?.name,
@@ -256,6 +258,8 @@ const logDefaults = computed<Partial<StationLogQsoInput>>(() => {
       radio,
       selectedStationAntenna: selectedAntenna.value,
     }),
+    myLatitude: myStation?.latitude,
+    myLongitude: myStation?.longitude,
   };
 });
 
@@ -360,11 +364,15 @@ async function onSave(payload: StationLogQsoInput & { id?: string }): Promise<vo
         theirName: payload.theirName,
         theirQth: payload.theirQth,
         theirGridsquare: payload.theirGridsquare,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
         txPowerWatts: payload.txPowerWatts,
         comment: payload.comment,
         operatorCallsign: payload.operatorCallsign,
         stationCallsign: payload.stationCallsign,
         myGridsquare: payload.myGridsquare,
+        myLatitude: payload.myLatitude,
+        myLongitude: payload.myLongitude,
         myRig: payload.myRig,
         myAntenna: payload.myAntenna,
         qslSent: payload.qslSent === true,

@@ -4,6 +4,11 @@ import {
   type StationLogQso,
   type StationLogQsoInput,
 } from '~/utils/station-log-db';
+import { locatedPoint } from '~/utils/location-format';
+import {
+  formatAdifLocationPair,
+  parseAdifLocationPair,
+} from '~/utils/station-log-adif-location';
 
 export {
   canonicalizeAdifLocationField,
@@ -12,6 +17,9 @@ export {
   formatAdifLocationPair,
   parseAdifLocationPair,
 } from '~/utils/station-log-adif-location';
+
+const CONTACT_LOCATION_TAGS = new Set(['LAT', 'LON']);
+const MY_LOCATION_TAGS = new Set(['MY_LAT', 'MY_LON']);
 
 /** ADIF field names we map to first-class QSO columns. */
 const MAPPED_TAGS = new Set([
@@ -201,6 +209,8 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
   const txPowerRaw = fields.get('TX_PWR')?.trim();
   const txPowerWatts = txPowerRaw && Number.isFinite(Number(txPowerRaw)) ? Number(txPowerRaw) : undefined;
 
+  const contactLocation = parseAdifLocationPair(fields.get('LAT'), fields.get('LON'));
+  const myLocation = parseAdifLocationPair(fields.get('MY_LAT'), fields.get('MY_LON'));
   const adifExtra: Record<string, string> = {};
 
   for (const [tag, value] of fields) {
@@ -209,6 +219,14 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
         adifExtra[tag] = value;
       }
 
+      continue;
+    }
+
+    if (CONTACT_LOCATION_TAGS.has(tag) && contactLocation) {
+      continue;
+    }
+
+    if (MY_LOCATION_TAGS.has(tag) && myLocation) {
       continue;
     }
 
@@ -230,11 +248,15 @@ function recordToQsoInput(fields: Map<string, string>): StationLogQsoInput | und
     theirName: fields.get('NAME')?.trim(),
     theirQth: fields.get('QTH')?.trim(),
     theirGridsquare: fields.get('GRIDSQUARE')?.trim(),
+    latitude: contactLocation?.latitude,
+    longitude: contactLocation?.longitude,
     txPowerWatts,
     comment: fields.get('COMMENT')?.trim(),
     operatorCallsign: fields.get('OPERATOR')?.trim(),
     stationCallsign: fields.get('STATION_CALLSIGN')?.trim(),
     myGridsquare: fields.get('MY_GRIDSQUARE')?.trim(),
+    myLatitude: myLocation?.latitude,
+    myLongitude: myLocation?.longitude,
     myRig: fields.get('MY_RIG')?.trim() || fields.get('MY_RIG_INTL')?.trim(),
     myAntenna: fields.get('MY_ANTENNA')?.trim() || fields.get('MY_ANTENNA_INTL')?.trim(),
     qslSent: isConfirmedQsl(fields.get('QSL_SENT')),
@@ -332,6 +354,17 @@ export function serializeStationLogAdif(qsos: StationLogQso[]): string {
       fields.push(emitField('GRIDSQUARE', qso.theirGridsquare));
     }
 
+    const contactPoint = locatedPoint(qso.latitude, qso.longitude);
+
+    if (contactPoint) {
+      const formatted = formatAdifLocationPair(contactPoint);
+
+      if (formatted) {
+        fields.push(emitField('LAT', formatted.latitude));
+        fields.push(emitField('LON', formatted.longitude));
+      }
+    }
+
     if (qso.txPowerWatts !== undefined) {
       fields.push(emitField('TX_PWR', String(qso.txPowerWatts)));
     }
@@ -350,6 +383,17 @@ export function serializeStationLogAdif(qsos: StationLogQso[]): string {
 
     if (qso.myGridsquare) {
       fields.push(emitField('MY_GRIDSQUARE', qso.myGridsquare));
+    }
+
+    const myPoint = locatedPoint(qso.myLatitude, qso.myLongitude);
+
+    if (myPoint) {
+      const formatted = formatAdifLocationPair(myPoint);
+
+      if (formatted) {
+        fields.push(emitField('MY_LAT', formatted.latitude));
+        fields.push(emitField('MY_LON', formatted.longitude));
+      }
     }
 
     if (qso.myRig) {
@@ -373,6 +417,14 @@ export function serializeStationLogAdif(qsos: StationLogQso[]): string {
         const normalized = tag.toUpperCase();
 
         if ((normalized === 'QSL_SENT' && qso.qslSent) || (normalized === 'QSL_RCVD' && qso.qslReceived)) {
+          continue;
+        }
+
+        if (contactPoint && CONTACT_LOCATION_TAGS.has(normalized)) {
+          continue;
+        }
+
+        if (myPoint && MY_LOCATION_TAGS.has(normalized)) {
           continue;
         }
 
