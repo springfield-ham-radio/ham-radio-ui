@@ -329,6 +329,57 @@ export function useSavedChannels() {
     }
   }
 
+  async function exportChirpLibraryCsv(input: ImportExportHandlerInput = {}): Promise<void> {
+    try {
+      const exporting = input.savedChannels ? [...input.savedChannels] : scopedChannels.value;
+
+      if (!input.savedChannels && activeGroup.value && exporting.length === 0) {
+        toast.add({
+          title: 'Nothing to export',
+          description: `${activeGroup.value.name} has no channels.`,
+          color: 'warning',
+          icon: 'i-lucide-file-down',
+        });
+        return;
+      }
+
+      const rendered = await importExportEntry(IMPORT_EXPORT_IDS.exportChannelsChirpCsv).handler({
+        savedChannels: exporting,
+      });
+      const csv = rendered.text;
+
+      if (!csv) {
+        return;
+      }
+
+      const destination = await saveChannelLibraryCsvWithPicker(csv);
+
+      if (!destination) {
+        return;
+      }
+
+      const scope = activeGroup.value ? activeGroup.value.name : 'the library';
+      toast.add({
+        title: 'CHIRP CSV exported',
+        description:
+          exporting.length === 1
+            ? `1 channel from ${scope} was exported as CHIRP CSV.`
+            : `${exporting.length} channels from ${scope} were exported as CHIRP CSV.`,
+        color: 'success',
+        icon: 'i-lucide-file-down',
+      });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to export CHIRP CSV';
+      toast.add({
+        title: 'Could not export CHIRP CSV',
+        description: message,
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      throw cause;
+    }
+  }
+
   async function exportLibraryCsv(input: ImportExportHandlerInput = {}): Promise<void> {
     try {
       const exporting = input.savedChannels ? [...input.savedChannels] : scopedChannels.value;
@@ -606,6 +657,7 @@ export function useSavedChannels() {
     removeChannel,
     removeChannels,
     exportLibraryCsv,
+    exportChirpLibraryCsv,
     importLibraryCsv,
     createGroup,
     renameGroup,

@@ -1,6 +1,7 @@
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import type { ImportExportRegistry } from '~/importExport/registry';
 import type { ImportExportDefinition, ImportExportHandler } from '~/importExport/types';
+import { serializeSavedChannelsChirpCsv } from '~/utils/chirp-csv';
 import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
 
 const CSV_FILE = {
@@ -23,8 +24,6 @@ const MEMORY_FILE = {
  *
  * TODO(phase-3): Import Channels… / Export Channels… list `registry.list()` and
  * call the data handler with the file the dialog picked. Do not add that UI here.
- * TODO(phase-4): register a CHIRP `.img` source (`chirp-img`, category `file`,
- * extensions `img`) beside `restore-radio-image`, which already matches `.img`.
  * TODO(phase-5): register an `online` RepeaterBook source that reads `input.token`
  * and returns a reason from `available` when `context.token` is absent.
  */
@@ -65,8 +64,26 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
     },
   };
 
+  const chirpCsvTarget: ImportExportDefinition = {
+    id: IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
+    label: 'Export CHIRP CSV',
+    icon: 'i-lucide-file-down',
+    kind: 'target',
+    category: 'file',
+    fileTypes: [CSV_FILE],
+    handler: (input) => {
+      if (!input.savedChannels) {
+        throw new Error('CHIRP CSV export needs saved channels');
+      }
+
+      const text = serializeSavedChannelsChirpCsv([...input.savedChannels]);
+      return { text, document: parseSavedChannelsCsv(text) };
+    },
+  };
+
   registry.register(csvSource);
   registry.register(csvTarget);
+  registry.register(chirpCsvTarget);
   registry.register(radioSource(IMPORT_EXPORT_IDS.readFromRadio, 'Read from Radio', 'i-hambench-radio-read', 'meta_shift_d'));
   registry.register({
     id: IMPORT_EXPORT_IDS.writeToRadio,
