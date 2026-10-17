@@ -259,7 +259,14 @@ function parseChirpRow(header: string[], row: string[]): ParsedRepeater | undefi
   const transmitHz = chirpTransmitFrequency(receiveHz, duplex, offsetHz, cell('offset'));
   const location = cell('location');
   const callsign = cell('name') || cell('callsign');
-  const tones = chirpTones(cell('tone'), cell('rtonefreq'), cell('ctonefreq'), cell('dtcscode'));
+  const tones = chirpTones(
+    cell('tone'),
+    cell('rtonefreq'),
+    cell('ctonefreq'),
+    cell('dtcscode'),
+    cell('rxdtcscode'),
+    cell('crossmode'),
+  );
 
   return {
     sourceKey: `chirp:${location || receiveHz}:${receiveHz}`,
@@ -287,10 +294,21 @@ function chirpTransmitFrequency(receiveHz: number, duplex: string, offsetHz: num
     return parseFrequencyMHz(offsetRaw) ?? receiveHz;
   }
 
+  if (duplex === 'off') {
+    return 0;
+  }
+
   return receiveHz;
 }
 
-function chirpTones(toneModeRaw: string, txCtcssRaw: string, rxCtcssRaw: string, dtcsRaw: string): {
+function chirpTones(
+  toneModeRaw: string,
+  txCtcssRaw: string,
+  rxCtcssRaw: string,
+  dtcsRaw: string,
+  rxDtcsRaw = '',
+  crossModeRaw = '',
+): {
   transmitTone: RadioTone;
   receiveTone: RadioTone;
 } {
@@ -314,12 +332,51 @@ function chirpTones(toneModeRaw: string, txCtcssRaw: string, rxCtcssRaw: string,
     };
   }
 
-  if (toneMode === 'dtcs' || toneMode === 'dcs') {
+  if (toneMode === 'dtcs' || toneMode === 'dcs' || toneMode === 'dtcs-r') {
     const code = parseDcsCode(dtcsRaw);
     return { transmitTone: code, receiveTone: code };
   }
 
+  if (toneMode === 'cross') {
+    return chirpCrossTones(crossModeRaw, txCtcssRaw, rxCtcssRaw, dtcsRaw, rxDtcsRaw);
+  }
+
   return { transmitTone: NONE_TONE, receiveTone: NONE_TONE };
+}
+
+function chirpCrossTones(
+  crossModeRaw: string,
+  txCtcssRaw: string,
+  rxCtcssRaw: string,
+  dtcsRaw: string,
+  rxDtcsRaw: string,
+): { transmitTone: RadioTone; receiveTone: RadioTone } {
+  const cross = crossModeRaw.trim().toLowerCase();
+  const txCtcss = parseCtcssHz(txCtcssRaw);
+  const rxCtcss = parseCtcssHz(rxCtcssRaw);
+  const txDcs = parseDcsCode(dtcsRaw);
+  const rxDcs = parseDcsCode(rxDtcsRaw || dtcsRaw);
+
+  switch (cross) {
+    case 'tone->tone':
+      return { transmitTone: txCtcss, receiveTone: rxCtcss };
+    case 'tone->':
+      return { transmitTone: txCtcss, receiveTone: NONE_TONE };
+    case '->tone':
+      return { transmitTone: NONE_TONE, receiveTone: rxCtcss };
+    case 'dtcs->':
+      return { transmitTone: txDcs, receiveTone: NONE_TONE };
+    case '->dtcs':
+      return { transmitTone: NONE_TONE, receiveTone: rxDcs };
+    case 'tone->dtcs':
+      return { transmitTone: txCtcss, receiveTone: rxDcs };
+    case 'dtcs->tone':
+      return { transmitTone: txDcs, receiveTone: rxCtcss };
+    case 'dtcs->dtcs':
+      return { transmitTone: txDcs, receiveTone: rxDcs };
+    default:
+      return { transmitTone: NONE_TONE, receiveTone: NONE_TONE };
+  }
 }
 
 function parseRepeaterTone(raw: string): RadioTone {
