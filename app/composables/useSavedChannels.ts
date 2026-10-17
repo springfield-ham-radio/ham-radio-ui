@@ -33,6 +33,7 @@ import {
   type SavedChannelWithPackId,
 } from '~/utils/channel-pack';
 import { readChannelPackWithPicker, saveChannelPackWithPicker } from '~/utils/channel-pack-io';
+import { commitSqlTransaction, recordingSqlExecutor, type SqlStatement } from '~/utils/sql-transaction';
 import {
   planChannelPackImport,
   resolveChannelPackGroup,
@@ -642,15 +643,6 @@ export function useSavedChannels() {
 
     try {
       const stamped = ensurePackChannelIds([...input.channels]);
-
-      for (const channel of stamped) {
-        const existing = channels.value.find((candidate) => candidate.id === channel.id);
-
-        if (existing?.packChannelId !== channel.packChannelId) {
-          await updateSavedChannel(channel);
-        }
-      }
-
       const rendered = await importExportEntry(IMPORT_EXPORT_IDS.exportChannelsPack).handler({
         savedChannels: stamped,
         channelPackExport: {
@@ -670,13 +662,29 @@ export function useSavedChannels() {
         return;
       }
 
-      await updateChannelGroupPackFields(input.groupId, {
-        ...packFieldsFromDocument({
-          ...input.metadata,
-          schemaVersion: 1,
-          channels: [],
-        }),
-      });
+      const statements: SqlStatement[] = [];
+      const executor = recordingSqlExecutor(statements);
+
+      for (const channel of stamped) {
+        const existing = channels.value.find((candidate) => candidate.id === channel.id);
+
+        if (existing?.packChannelId !== channel.packChannelId) {
+          await updateSavedChannel(channel, executor);
+        }
+      }
+
+      await updateChannelGroupPackFields(
+        input.groupId,
+        {
+          ...packFieldsFromDocument({
+            ...input.metadata,
+            schemaVersion: 1,
+            channels: [],
+          }),
+        },
+        executor,
+      );
+      await commitSqlTransaction(statements);
       await reloadLibrary();
       toast.add({
         title: 'Channel pack exported',
@@ -714,10 +722,12 @@ export function useSavedChannels() {
     }
 
     try {
+      const statements: SqlStatement[] = [];
+      const executor = recordingSqlExecutor(statements);
       let groupId: string;
 
       if (preview.resolution.action === 'create') {
-        const created = await insertChannelGroup(groupName, [], 'group', packFieldsFromDocument(preview.pack));
+        const created = await insertChannelGroup(groupName, [], 'group', packFieldsFromDocument(preview.pack), executor);
         groupId = created.id;
       } else {
         groupId = preview.resolution.groupId;
@@ -726,20 +736,28 @@ export function useSavedChannels() {
       const plan = preview.plan;
 
       for (const row of plan.update) {
-        await updateSavedChannel(row);
+        await updateSavedChannel(row, executor);
       }
 
-      await insertSavedChannelModels(plan.insert);
-      await replaceChannelGroupMembers(groupId, plan.memberIds);
+      await insertSavedChannelModels(plan.insert, executor);
+      await replaceChannelGroupMembers(groupId, plan.memberIds, executor);
 
       if (plan.deleteOrphans.length > 0) {
-        await deleteSavedChannels(plan.deleteOrphans);
+        await deleteSavedChannels(plan.deleteOrphans, executor);
       }
 
-      await updateChannelGroupPackFields(groupId, {
-        name: groupName,
-        ...packFieldsFromDocument(preview.pack),
-      });
+      if (preview.resolution.action === 'update') {
+        await updateChannelGroupPackFields(
+          groupId,
+          {
+            name: groupName,
+            ...packFieldsFromDocument(preview.pack),
+          },
+          executor,
+        );
+      }
+
+      await commitSqlTransaction(statements);
       await reloadLibrary();
       activeGroupId.value = groupId;
 

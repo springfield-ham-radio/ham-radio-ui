@@ -109,6 +109,10 @@ async function readPackInBrowser(): Promise<string | undefined> {
         ],
       });
 
+      if (!handle) {
+        return undefined;
+      }
+
       const file = await handle.getFile();
       return await file.text();
     } catch {

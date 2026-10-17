@@ -1,6 +1,7 @@
 mod radio_image_backup;
 mod radio_modules;
 mod sniffer_ssh;
+mod sqlite_transaction;
 mod zoom;
 
 #[cfg(target_os = "macos")]
@@ -689,6 +690,7 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             zoom::zoom_by_command,
             save_text_file,
             load_text_file,
+            sqlite_transaction::execute_sqlite_transaction,
             radio_image_backup::radio_image_backups_directory,
             radio_image_backup::open_radio_image_backups_directory,
             radio_image_backup::list_radio_image_backups,

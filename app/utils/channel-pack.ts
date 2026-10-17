@@ -1,4 +1,4 @@
-import { RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
+import { Frequency, RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
 import { CHANNEL_GROUP_NAME_MAX_LENGTH } from '~/utils/channel-groups';
 import {
   coordinatesFromPair,
@@ -131,7 +131,7 @@ const PACK_CHANNEL_KEYS: readonly (keyof ChannelPackChannel)[] = [
   'wires',
 ];
 
-export function countRepeaterBookChannels(channels: readonly SavedChannel[]): number {
+export function countRepeaterBookChannels(channels: readonly { sourceFormat?: string | null }[]): number {
   return channels.filter((channel) => channel.sourceFormat === 'repeaterbook').length;
 }
 
@@ -360,8 +360,8 @@ function packChannelToSavedChannel(channel: ChannelPackChannel, id: RadioChannel
     packChannelId: channel.id,
     kind,
     name: channel.name,
-    transmitFrequency: channel.txHz,
-    receiveFrequency: channel.rxHz,
+    transmitFrequency: Frequency(channel.txHz),
+    receiveFrequency: Frequency(channel.rxHz),
     transmitTone: radioToneFromPack(channel.txTone),
     receiveTone: radioToneFromPack(channel.rxTone),
     notes: trimOptional(channel.notes),

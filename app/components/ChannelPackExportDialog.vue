@@ -9,6 +9,7 @@ const props = defineProps<{
   channelCount: number;
   channels: readonly { sourceFormat?: string }[];
   initial: ChannelPackMetadata;
+  saving?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,15 +22,11 @@ const author = ref('');
 const version = ref('');
 const source = ref('');
 const includeRepeaterBook = ref(false);
-const saving = ref(false);
 
-const repeaterBookCount = computed(() => countRepeaterBookChannels(props.channels as never));
+const repeaterBookCount = computed(() => countRepeaterBookChannels(props.channels));
 
-watch(
-  () => props.open,
-  (isOpen) => {
+watch(open, (isOpen) => {
     if (!isOpen) {
-      saving.value = false;
       return;
     }
 
@@ -43,7 +40,10 @@ watch(
 );
 
 function submit(): void {
-  saving.value = true;
+  if (props.saving) {
+    return;
+  }
+
   emit('save', {
     metadata: {
       id: props.initial.id,
@@ -102,7 +102,7 @@ function submit(): void {
     </template>
     <template #footer="{ close }">
       <UButton color="neutral" variant="outline" label="Cancel" @click="close" />
-      <UButton color="primary" label="Save .hpack" :loading="saving" @click="submit" />
+      <UButton color="primary" label="Save .hpack" :loading="saving" :disabled="saving" @click="submit" />
     </template>
   </UModal>
 </template>

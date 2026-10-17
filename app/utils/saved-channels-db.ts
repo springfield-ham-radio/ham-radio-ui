@@ -11,6 +11,7 @@ import Database from '@tauri-apps/plugin-sql';
 import { linkedNodeSearchText, linkedNodesForKind, type LinkedNodes } from '~/utils/linked-nodes';
 import { locatedPoint } from '~/utils/location-format';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+import type { SqlExecutor } from '~/utils/sql-transaction';
 
 export const SAVED_CHANNELS_DATABASE = 'sqlite:ham-radio.db';
 
@@ -404,12 +405,15 @@ export async function listSavedChannels(): Promise<SavedChannel[]> {
   return rows.map(savedChannelRowToModel);
 }
 
-export async function insertSavedChannelModels(channels: SavedChannel[]): Promise<SavedChannel[]> {
+export async function insertSavedChannelModels(
+  channels: SavedChannel[],
+  executor?: SqlExecutor,
+): Promise<SavedChannel[]> {
   if (channels.length === 0) {
     return [];
   }
 
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
 
   for (const channel of channels) {
     const point = coordinateColumnsForDb(channel);
@@ -479,8 +483,8 @@ export async function insertSavedChannels(channels: RadioChannel[]): Promise<Sav
   return insertSavedChannelModels(channels.map((channel) => radioChannelToSavedChannel(channel)));
 }
 
-export async function updateSavedChannel(channel: SavedChannel): Promise<SavedChannel> {
-  const database = await getSavedChannelsDatabase();
+export async function updateSavedChannel(channel: SavedChannel, executor?: SqlExecutor): Promise<SavedChannel> {
+  const database = executor ?? (await getSavedChannelsDatabase());
   const status = repeaterStatusForKind(channel.kind, channel.use, channel.onAir);
   const nodes = linkedNodesForKind(channel.kind, channel);
   const point = coordinatesFromPair(channel.latitude, channel.longitude);
@@ -581,14 +585,14 @@ export async function updateSavedChannel(channel: SavedChannel): Promise<SavedCh
   return updated;
 }
 
-export async function deleteSavedChannels(ids: readonly RadioChannelId[]): Promise<void> {
+export async function deleteSavedChannels(ids: readonly RadioChannelId[], executor?: SqlExecutor): Promise<void> {
   const unique = [...new Set(ids)];
 
   if (unique.length === 0) {
     return;
   }
 
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
   const placeholders = unique.map((_, index) => `$${index + 1}`).join(', ');
 
   await database.execute(`DELETE FROM channel_group_members WHERE channel_id IN (${placeholders})`, [...unique]);

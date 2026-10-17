@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
   "name": "Sample Club Net",
-  "description": "Sample pack for manual import testing in HamBench.",
+  "description": "Hand-entered sample pack for manual import testing.",
   "author": "W5XYZ",
   "version": "1.0.0",
   "updated": "2026-10-17T21:00:00.000Z",
@@ -16,24 +16,24 @@
       "notes": "Weekly net check-in"
     },
     {
-      "id": "w5ka",
-      "name": "W5KA",
+      "id": "club-repeater",
+      "name": "Club Repeater",
       "kind": "repeater",
-      "callsign": "W5KA",
-      "rxHz": 146940000,
-      "txHz": 146340000,
+      "callsign": "N0CLB",
+      "rxHz": 147555000,
+      "txHz": 147155000,
       "rxTone": {
         "type": "ctcss",
-        "hz": 110.9
+        "hz": 100
       },
       "txTone": {
         "type": "ctcss",
-        "hz": 110.9
+        "hz": 100
       },
       "use": "open",
       "onAir": true,
-      "city": "Austin",
-      "state": "Texas"
+      "city": "Clubhouse",
+      "state": "Test"
     }
   ]
 }

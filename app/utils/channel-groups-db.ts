@@ -8,6 +8,7 @@ import {
   type ChannelGroupMembership,
 } from '~/utils/channel-groups';
 import { getSavedChannelsDatabase } from '~/utils/saved-channels-db';
+import type { SqlExecutor } from '~/utils/sql-transaction';
 
 interface ChannelGroupRow {
   id: string;
@@ -90,6 +91,7 @@ export async function insertChannelGroup(
   channelIds: readonly RadioChannelId[],
   kind: ChannelGroupKind = 'group',
   pack?: ChannelGroupPackFields,
+  executor?: SqlExecutor,
 ): Promise<ChannelGroup> {
   const groups = await listChannelGroups();
   const error = validateChannelGroupName(name, groups.map((group) => group.name));
@@ -113,7 +115,7 @@ export async function insertChannelGroup(
     createdAt: now,
     updatedAt: now,
   };
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
 
   await database.execute(
     `INSERT INTO channel_groups (
@@ -134,17 +136,21 @@ export async function insertChannelGroup(
       group.updatedAt,
     ],
   );
-  await addChannelsToGroup(group.id, channelIds);
+  await addChannelsToGroup(group.id, channelIds, executor);
 
   return group;
 }
 
-export async function addChannelsToGroup(groupId: string, channelIds: readonly RadioChannelId[]): Promise<void> {
+export async function addChannelsToGroup(
+  groupId: string,
+  channelIds: readonly RadioChannelId[],
+  executor?: SqlExecutor,
+): Promise<void> {
   if (channelIds.length === 0) {
     return;
   }
 
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
   const uniqueIds = [...new Set(channelIds)];
 
   for (const channelId of uniqueIds) {
@@ -158,15 +164,17 @@ export async function addChannelsToGroup(groupId: string, channelIds: readonly R
 export async function replaceChannelGroupMembers(
   groupId: string,
   channelIds: readonly RadioChannelId[],
+  executor?: SqlExecutor,
 ): Promise<void> {
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
   await database.execute('DELETE FROM channel_group_members WHERE group_id = $1', [groupId]);
-  await addChannelsToGroup(groupId, channelIds);
+  await addChannelsToGroup(groupId, channelIds, executor);
 }
 
 export async function updateChannelGroupPackFields(
   id: string,
   fields: ChannelGroupPackFields & { name?: string },
+  executor?: SqlExecutor,
 ): Promise<ChannelGroup> {
   const groups = await listChannelGroups();
   const current = groups.find((group) => group.id === id);
@@ -199,7 +207,7 @@ export async function updateChannelGroupPackFields(
     packSourceUrl: fields.packSourceUrl ?? current.packSourceUrl,
     updatedAt: Date.now(),
   };
-  const database = await getSavedChannelsDatabase();
+  const database = executor ?? (await getSavedChannelsDatabase());
 
   await database.execute(
     `UPDATE channel_groups SET

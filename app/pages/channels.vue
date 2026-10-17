@@ -851,7 +851,7 @@ async function confirmGroupName(name: string): Promise<void> {
   }
 
   if (importRoute) {
-    await onImportCsv();
+    await run(IMPORT_EXPORT_IDS.importChannelsCsv, {});
   }
 }
 
@@ -1591,6 +1591,7 @@ async function onPackImportApply(): Promise<void> {
       :channel-count="packExportChannels.length"
       :channels="packExportChannels"
       :initial="packExportMetadata"
+      :saving="packExportSaving"
       @save="onPackExportSave"
     />
     <ChannelPackPreviewDialog
