@@ -11,8 +11,7 @@ import type { StationLogQso } from '~/utils/station-log-db';
 import {
   QSL_MARKER_COLOR,
   STATION_PIN_COLOR,
-  qslMarkerStatus,
-  qslStatusLabel,
+  selectedLocationKeysForQsoIds,
   stationLogMapFeatureCollection,
   stationLogMapPoints,
   stationLogUnmappedCount,
@@ -23,7 +22,9 @@ import {
 } from '~/utils/station-log-map';
 
 const SOURCE_ID = 'station-log-contacts';
-const LAYER_ID = 'station-log-contacts';
+const CLUSTER_LAYER_ID = 'station-log-contacts-clusters';
+const CLUSTER_COUNT_LAYER_ID = 'station-log-contacts-cluster-count';
+const UNCLUSTERED_LAYER_ID = 'station-log-contacts-unclustered';
 const STATION_SOURCE_ID = 'station-log-stations';
 const STATION_LAYER_ID = 'station-log-stations';
 const STATION_PIN_IMAGE_ID = 'station-log-pin';
@@ -31,10 +32,11 @@ const STATION_PIN_IMAGE_ID = 'station-log-pin';
 const props = defineProps<{
   qsos: StationLogQso[];
   stations: StationMapPinInput[];
+  selectedQsoIds?: readonly string[];
 }>();
 
 const emit = defineEmits<{
-  select: [qso: StationLogQso];
+  pick: [payload: { qsoIds: string[] }];
 }>();
 
 const colorMode = useColorMode();
@@ -47,15 +49,41 @@ const styleUrl = computed(() => resolveMapStyleUrl(mapStyle.value, colorMode.val
 const points = computed(() => stationLogMapPoints(props.qsos));
 const pins = computed(() => stationMapPins(props.stations));
 
+const selectedLocationKeys = computed(() =>
+  selectedLocationKeysForQsoIds(props.qsos, new Set(props.selectedQsoIds ?? [])),
+);
+
+function contactFeatureData() {
+  return stationLogMapFeatureCollection(points.value, {
+    selectedLocationKeys: selectedLocationKeys.value,
+  });
+}
+
 const unmappedCount = computed(() => stationLogUnmappedCount(props.qsos));
 
 const unmappedMessage = computed(() => {
   if (unmappedCount.value === 1) {
-    return '1 contact has no grid and is not on the map.';
+    return '1 contact has no grid or coordinates and is not on the map.';
   }
 
-  return `${unmappedCount.value} contacts have no grid and are not on the map.`;
+  return `${unmappedCount.value} contacts have no grid or coordinates and are not on the map.`;
 });
+
+function qslCircleColorExpression(): ['match', ...unknown[]] {
+  return [
+    'match',
+    ['get', 'status'],
+    'sent',
+    QSL_MARKER_COLOR.sent,
+    'received',
+    QSL_MARKER_COLOR.received,
+    'both',
+    QSL_MARKER_COLOR.both,
+    'mixed',
+    QSL_MARKER_COLOR.mixed,
+    QSL_MARKER_COLOR.none,
+  ];
+}
 
 const legend = computed(() => {
   const items: { key: string; label: string; color: string; pin: boolean }[] = [
@@ -148,30 +176,51 @@ function ensureLayers(instance: MapLibreMap): void {
   if (!instance.getSource(SOURCE_ID)) {
     instance.addSource(SOURCE_ID, {
       type: 'geojson',
-      data: stationLogMapFeatureCollection(points.value),
+      data: contactFeatureData(),
+      cluster: true,
+      clusterMaxZoom: 12,
+      clusterRadius: 50,
     });
 
     instance.addLayer({
-      id: LAYER_ID,
+      id: CLUSTER_LAYER_ID,
       type: 'circle',
       source: SOURCE_ID,
+      filter: ['has', 'point_count'],
       paint: {
-        'circle-color': [
-          'match',
-          ['get', 'status'],
-          'sent',
-          QSL_MARKER_COLOR.sent,
-          'received',
-          QSL_MARKER_COLOR.received,
-          'both',
-          QSL_MARKER_COLOR.both,
-          'mixed',
-          QSL_MARKER_COLOR.mixed,
-          QSL_MARKER_COLOR.none,
-        ],
-        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
+        'circle-color': '#334155',
+        'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 25, 22],
         'circle-stroke-width': 1.5,
         'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.92,
+      },
+    });
+
+    instance.addLayer({
+      id: CLUSTER_COUNT_LAYER_ID,
+      type: 'symbol',
+      source: SOURCE_ID,
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': '#f8fafc',
+      },
+    });
+
+    instance.addLayer({
+      id: UNCLUSTERED_LAYER_ID,
+      type: 'circle',
+      source: SOURCE_ID,
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': qslCircleColorExpression(),
+        'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 6, 8, 14],
+        'circle-stroke-width': ['case', ['==', ['get', 'mapSelected'], 1], 3, 1.5],
+        'circle-stroke-color': ['case', ['==', ['get', 'mapSelected'], 1], '#f59e0b', '#ffffff'],
         'circle-opacity': 0.95,
       },
     });
@@ -218,7 +267,7 @@ function ensureStationSource(instance: MapLibreMap): void {
 function syncMap(instance: MapLibreMap, fit: boolean): void {
   ensureLayers(instance);
 
-  geoJsonSource(instance, SOURCE_ID)?.setData(stationLogMapFeatureCollection(points.value));
+  geoJsonSource(instance, SOURCE_ID)?.setData(contactFeatureData());
   geoJsonSource(instance, STATION_SOURCE_ID)?.setData(stationMapFeatureCollection(pins.value));
 
   if (!fit) {
@@ -293,47 +342,68 @@ function stationIdsAt(event: { features?: { properties?: { id?: unknown } | null
   return ids;
 }
 
-function openPoint(grid: string, lngLat: LngLatLike): void {
-  const point = points.value.find((candidate) => candidate.grid === grid);
+function openPoint(locationKey: string): void {
+  const point = points.value.find((candidate) => candidate.locationKey === locationKey);
+
+  if (!point) {
+    return;
+  }
+
+  setPopup(undefined);
+  emit('pick', { qsoIds: point.qsos.map((qso) => qso.id) });
+}
+
+async function revealLocationKey(locationKey: string): Promise<void> {
   const instance = mapInstance();
+  const point = points.value.find((candidate) => candidate.locationKey === locationKey);
 
-  if (!point || !instance) {
+  if (!instance || !point) {
     return;
   }
 
-  const [only] = point.qsos;
+  const coordinate: [number, number] = [point.longitude, point.latitude];
 
-  if (point.qsos.length === 1 && only) {
-    setPopup(undefined);
-    emit('select', only);
-    return;
-  }
+  const reveal = async (attempt = 0): Promise<void> => {
+    if (attempt > 10) {
+      instance.easeTo({ center: coordinate, zoom: 14, duration: 300 });
+      return;
+    }
 
-  const root = document.createElement('div');
-  root.style.color = '#0f172a';
+    const pixel = instance.project(coordinate);
+    const visible = instance.queryRenderedFeatures(pixel, { layers: [UNCLUSTERED_LAYER_ID] });
 
-  for (const qso of point.qsos) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = `${qso.theirCallsign} · ${qslStatusLabel(qslMarkerStatus(qso))}`;
-    button.addEventListener('click', () => {
-      setPopup(undefined);
-      emit('select', qso);
+    if (visible.some((feature) => feature.properties?.locationKey === locationKey)) {
+      instance.easeTo({ center: coordinate, zoom: Math.max(instance.getZoom(), 12), duration: 300 });
+      return;
+    }
+
+    const clustered = instance.queryRenderedFeatures(pixel, { layers: [CLUSTER_LAYER_ID] });
+    const cluster = clustered[0];
+    const clusterId = Number(cluster?.properties?.cluster_id);
+    const source = geoJsonSource(instance, SOURCE_ID);
+
+    if (cluster && Number.isInteger(clusterId) && source) {
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        await new Promise<void>((resolve) => {
+          instance.easeTo({ center: coordinate, zoom, duration: 300 });
+          instance.once('moveend', () => resolve());
+        });
+        await reveal(attempt + 1);
+        return;
+      } catch {
+        // Cluster disappeared before expansion.
+      }
+    }
+
+    instance.easeTo({ center: coordinate, zoom: Math.min(instance.getZoom() + 2, 14), duration: 300 });
+    await new Promise<void>((resolve) => {
+      instance.once('moveend', () => resolve());
     });
-    button.style.display = 'block';
-    button.style.width = '100%';
-    button.style.padding = '0.2rem 0';
-    button.style.textAlign = 'left';
-    button.style.background = 'transparent';
-    button.style.border = 'none';
-    button.style.cursor = 'pointer';
-    button.style.font = 'inherit';
-    root.append(button);
-  }
+    await reveal(attempt + 1);
+  };
 
-  setPopup(
-    new Popup({ closeButton: true, maxWidth: '260px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
-  );
+  await reveal();
 }
 
 function bindPointer(instance: MapLibreMap): void {
@@ -353,7 +423,32 @@ function bindPointer(instance: MapLibreMap): void {
     openStations(ids, event.lngLat);
   });
 
-  instance.on('click', LAYER_ID, (event) => {
+  instance.on('click', CLUSTER_LAYER_ID, (event) => {
+    void (async () => {
+      const feature = event.features?.[0];
+      const clusterId = Number(feature?.properties?.cluster_id);
+      const source = geoJsonSource(instance, SOURCE_ID);
+
+      if (feature === undefined || !Number.isInteger(clusterId) || !source) {
+        return;
+      }
+
+      const coordinates = (feature.geometry as { coordinates?: [number, number] }).coordinates;
+
+      if (!coordinates) {
+        return;
+      }
+
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        instance.easeTo({ center: coordinates, zoom });
+      } catch {
+        // Cluster went away between click and worker reply.
+      }
+    })();
+  });
+
+  instance.on('click', UNCLUSTERED_LAYER_ID, (event) => {
     if (instance.getLayer(STATION_LAYER_ID)) {
       const stationsHere = instance.queryRenderedFeatures(event.point, { layers: [STATION_LAYER_ID] });
 
@@ -362,16 +457,16 @@ function bindPointer(instance: MapLibreMap): void {
       }
     }
 
-    const grid = event.features?.[0]?.properties?.grid;
+    const locationKey = event.features?.[0]?.properties?.locationKey;
 
-    if (typeof grid !== 'string') {
+    if (typeof locationKey !== 'string') {
       return;
     }
 
-    openPoint(grid, event.lngLat);
+    openPoint(locationKey);
   });
 
-  for (const layerId of [LAYER_ID, STATION_LAYER_ID]) {
+  for (const layerId of [CLUSTER_LAYER_ID, UNCLUSTERED_LAYER_ID, STATION_LAYER_ID]) {
     instance.on('mouseenter', layerId, () => {
       instance.getCanvas().style.cursor = 'pointer';
     });
@@ -409,6 +504,20 @@ watch([points, pins], () => {
   }
 
   syncMap(instance, true);
+});
+
+watch(selectedLocationKeys, () => {
+  const instance = mapInstance();
+
+  if (!instance?.isStyleLoaded() || !geoJsonSource(instance, SOURCE_ID)) {
+    return;
+  }
+
+  syncMap(instance, false);
+});
+
+defineExpose({
+  revealLocationKey,
 });
 </script>
 

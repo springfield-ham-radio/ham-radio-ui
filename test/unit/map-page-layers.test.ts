@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseAdifLocationPair } from '../../app/utils/station-log-adif-location.ts';
 import { RadioChannelId } from '@springfield/ham-radio-api';
 import { CHANNEL_MAP_BAND_COLORS, CHANNEL_MAP_BAND_FALLBACK } from '../../app/utils/channel-map.ts';
 import { MAP_PAGE_ALL_STORED_GROUPS } from '../../app/utils/map-page-settings.ts';
@@ -214,7 +215,8 @@ describe('mapQsoFeatures', () => {
 
     expect(collection.features).toHaveLength(1);
     expect(feature?.geometry.coordinates).toEqual([center?.longitude, center?.latitude]);
-    expect(feature?.properties).toEqual({
+    expect(feature?.properties).toMatchObject({
+      locationKey: 'grid:FN31',
       grid: 'FN31',
       status: 'none',
       count: 1,
@@ -226,6 +228,22 @@ describe('mapQsoFeatures', () => {
     for (const value of Object.values(feature?.properties ?? {})) {
       expect(['string', 'number']).toContain(typeof value);
     }
+  });
+
+  it('uses stored coordinates for the map pin when present', () => {
+    const adif = parseAdifLocationPair('N030 16.200', 'W097 44.580');
+    const feature = mapQsoFeatures([
+      contact({
+        theirCallsign: 'K5TST',
+        theirGridsquare: 'EM10',
+        latitude: adif?.latitude,
+        longitude: adif?.longitude,
+      }),
+    ]).features[0];
+
+    expect(feature?.properties.locationKind).toBe('coordinates');
+    expect(feature?.properties.precisionLabel).toBe('Exact coordinates');
+    expect(feature?.geometry.coordinates).toEqual([adif!.longitude, adif!.latitude]);
   });
 
   it('labels a 2-character field and a 6-character subsquare', () => {
@@ -287,6 +305,7 @@ describe('mapQsoFeatures', () => {
   });
 
   it('lists the three cell spans in the standing note', () => {
+    expect(MAP_QSO_GRID_CENTER_NOTE).toContain('stored coordinates');
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('field center · about 20° × 10°');
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('square center · about 2° × 1°');
     expect(MAP_QSO_GRID_CENTER_NOTE).toContain('subsquare center · about 5′ × 2.5′');
