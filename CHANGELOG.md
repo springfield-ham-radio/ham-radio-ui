@@ -1,3 +1,9 @@
+## [1.24.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.1...v1.24.2) (2026-10-18)
+
+### Bug Fixes
+
+* **deps:** patch vulnerable transitive dependencies ([#152](https://github.com/springfield-ham-radio/ham-radio-ui/issues/152)) ([4e8acc2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4e8acc2ac685b0994704f3905df0fcfdd70f6307))
+
 ## [1.24.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.0...v1.24.1) (2026-10-17)
 
 ### Bug Fixes
