@@ -1,3 +1,9 @@
+## [1.24.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.2...v1.24.3) (2026-10-18)
+
+### Bug Fixes
+
+* **radio:** add write-failed dev fixture and serial log tests for [#107](https://github.com/springfield-ham-radio/ham-radio-ui/issues/107) ([#153](https://github.com/springfield-ham-radio/ham-radio-ui/issues/153)) ([eebd275](https://github.com/springfield-ham-radio/ham-radio-ui/commit/eebd275f35cb38b2e52224d5aa4b79fe70cb7333))
+
 ## [1.24.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.1...v1.24.2) (2026-10-18)
 
 ### Bug Fixes
