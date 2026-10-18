@@ -1,4 +1,5 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+use std::sync::Arc;
 use std::time::Duration;
 
 use url::Url;
@@ -22,11 +23,33 @@ fn hambench_user_agent() -> String {
     )
 }
 
+/// Resolves at connect time and drops private, loopback, and link-local answers.
+/// Literal checks alone miss names such as `127.0.0.1.nip.io`.
+struct PublicDns;
+
+impl reqwest::dns::Resolve for PublicDns {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        Box::pin(async move {
+            let resolved = (host.as_str(), 0u16).to_socket_addrs().map_err(|error| {
+                Box::new(error) as Box<dyn std::error::Error + Send + Sync>
+            })?;
+            let public = public_socket_addrs(resolved).map_err(|message| {
+                Box::new(std::io::Error::new(std::io::ErrorKind::Other, message))
+                    as Box<dyn std::error::Error + Send + Sync>
+            })?;
+            let addrs: reqwest::dns::Addrs = Box::new(public.into_iter());
+            Ok(addrs)
+        })
+    }
+}
+
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(hambench_user_agent())
         .timeout(FETCH_TIMEOUT)
         .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(Arc::new(PublicDns))
         .build()
         .map_err(|error| error.to_string())
 }
@@ -43,29 +66,26 @@ pub fn validate_channel_pack_fetch_url(url: &str) -> Result<Url, String> {
         return Err("Channel pack URL cannot include credentials".into());
     }
 
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| "Channel pack URL is missing a host".to_string())?;
-
-    if is_forbidden_host(host) {
-        return Err("Channel pack URL host is not allowed".into());
+    match parsed.host() {
+        Some(url::Host::Domain(domain)) if is_forbidden_domain(domain) => {
+            return Err("Channel pack URL host is not allowed".into());
+        }
+        Some(url::Host::Ipv4(ip)) if is_forbidden_ipv4(ip) => {
+            return Err("Channel pack URL host is not allowed".into());
+        }
+        Some(url::Host::Ipv6(ip)) if is_forbidden_ipv6(ip) => {
+            return Err("Channel pack URL host is not allowed".into());
+        }
+        Some(_) => {}
+        None => return Err("Channel pack URL is missing a host".into()),
     }
 
     Ok(parsed)
 }
 
-fn is_forbidden_host(host: &str) -> bool {
+fn is_forbidden_domain(host: &str) -> bool {
     let lower = host.to_ascii_lowercase();
-
-    if lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") {
-        return true;
-    }
-
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        return is_forbidden_ip(ip);
-    }
-
-    false
+    lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local")
 }
 
 fn is_forbidden_ip(ip: IpAddr) -> bool {
@@ -75,20 +95,41 @@ fn is_forbidden_ip(ip: IpAddr) -> bool {
     }
 }
 
+fn is_forbidden_ipv6(ip: Ipv6Addr) -> bool {
+    if let Some(mapped) = ip.to_ipv4_mapped().or_else(|| ip.to_ipv4()) {
+        return is_forbidden_ipv4(mapped);
+    }
+
+    ip.is_loopback()
+        || ip.is_unspecified()
+        || ip.is_unique_local()
+        || ip.is_multicast()
+        || (ip.segments()[0] & 0xfe00) == 0xfe80
+}
+
 fn is_forbidden_ipv4(ip: Ipv4Addr) -> bool {
     ip.is_loopback()
         || ip.is_private()
         || ip.is_link_local()
         || ip.is_unspecified()
         || ip.is_broadcast()
+        || ip.is_multicast()
+        || ip.octets()[0] == 0
         || ip.octets()[0] == 169 && ip.octets()[1] == 254
 }
 
-fn is_forbidden_ipv6(ip: Ipv6Addr) -> bool {
-    ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_unique_local()
-        || (ip.segments()[0] & 0xfe00) == 0xfe80
+/// Keep public answers. An empty result means every address was private or loopback.
+pub fn public_socket_addrs(addrs: impl IntoIterator<Item = SocketAddr>) -> Result<Vec<SocketAddr>, String> {
+    let public: Vec<SocketAddr> = addrs
+        .into_iter()
+        .filter(|addr| !is_forbidden_ip(addr.ip()))
+        .collect();
+
+    if public.is_empty() {
+        return Err("Channel pack URL host is not allowed".into());
+    }
+
+    Ok(public)
 }
 
 /// After a redirect, the next URL must pass the same rules.
@@ -132,27 +173,28 @@ fn content_type_allowed(content_type: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-async fn read_limited_body(response: reqwest::Response) -> Result<Vec<u8>, String> {
+async fn read_limited_body(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
     if let Some(length) = response.content_length() {
-        if length as usize > MAX_BODY_BYTES {
+        if length > MAX_BODY_BYTES as u64 {
             return Err(format!(
                 "Channel pack is too large (maximum {MAX_BODY_BYTES} characters)"
             ));
         }
     }
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut body = Vec::new();
 
-    if bytes.len() > MAX_BODY_BYTES {
-        return Err(format!(
-            "Channel pack is too large (maximum {MAX_BODY_BYTES} characters)"
-        ));
+    while let Some(chunk) = response.chunk().await.map_err(|error| error.to_string())? {
+        if body.len().saturating_add(chunk.len()) > MAX_BODY_BYTES {
+            return Err(format!(
+                "Channel pack is too large (maximum {MAX_BODY_BYTES} characters)"
+            ));
+        }
+
+        body.extend_from_slice(&chunk);
     }
 
-    Ok(bytes.to_vec())
+    Ok(body)
 }
 
 #[tauri::command]
@@ -244,6 +286,27 @@ mod tests {
         assert!(validate_redirect_location("https://evil.local/b.hpack", &base).is_err());
         let next = validate_redirect_location("/b.hpack", &base).expect("relative redirect");
         assert_eq!(next.path(), "/b.hpack");
+    }
+
+    #[test]
+    fn redirect_rejects_private_literals_and_http() {
+        let base = validate_channel_pack_fetch_url("https://example.com/a.hpack").unwrap();
+        assert!(validate_redirect_location("http://example.com/b.hpack", &base).is_err());
+        assert!(validate_redirect_location("https://10.1.2.3/b.hpack", &base).is_err());
+        assert!(validate_redirect_location("https://[::ffff:127.0.0.1]/b.hpack", &base).is_err());
+        assert!(validate_redirect_location("https://192.168.1.1/b.hpack", &base).is_err());
+    }
+
+    #[test]
+    fn dns_answers_drop_private_and_loopback() {
+        let private = "10.1.2.3:443".parse().unwrap();
+        let loopback = "[::1]:443".parse().unwrap();
+        let mapped = "[::ffff:192.168.0.8]:443".parse().unwrap();
+        let public = "1.1.1.1:443".parse().unwrap();
+
+        assert!(public_socket_addrs([private, loopback, mapped]).is_err());
+        let kept = public_socket_addrs([private, public]).unwrap();
+        assert_eq!(kept, vec![public]);
     }
 
     #[test]

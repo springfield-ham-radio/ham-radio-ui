@@ -8,9 +8,12 @@ import { parseChannelPack } from '~/utils/channel-pack';
 import {
   assessChannelPackUpdate,
   ChannelPackFetchError,
+  channelPackDevFixturePath,
+  channelPackFetchRejection,
   compareChannelPackRevision,
   fetchChannelPack,
   isChannelPackFixtureUrl,
+  isUsableChannelPackSourceUrl,
   setChannelPackFetchImpl,
 } from '~/utils/channel-pack-fetch';
 
@@ -102,7 +105,62 @@ describe('channel pack fetch', () => {
     expect(rows.map((row) => row.id)).toContain(IMPORT_EXPORT_IDS.importChannelsPackUrl);
   });
 
+  it('channels page destructures only fields useSavedChannels returns', () => {
+    const page = readFileSync(new URL('../../app/pages/channels.vue', import.meta.url), 'utf8');
+    const composable = readFileSync(new URL('../../app/composables/useSavedChannels.ts', import.meta.url), 'utf8');
+    const destructure = page.match(/const \{([\s\S]*?)\} = useSavedChannels\(\)/);
+    expect(destructure?.[1]).toBeTruthy();
+    const used = destructure![1]!
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    const start = composable.lastIndexOf('return {');
+    const block = composable.slice(start, composable.indexOf('};', start));
+    const returned = [...block.matchAll(/^\s+(\w+),?\s*$/gm)].map((match) => match[1]);
+
+    expect(used.length).toBeGreaterThan(0);
+    expect(returned).toEqual(expect.arrayContaining(used));
+
+    for (const file of [
+      '../../app/components/ChannelPackFetchAlert.vue',
+      '../../app/components/ChannelPackUpdateDialog.vue',
+      '../../app/components/ChannelPackUrlDialog.vue',
+      '../../app/components/ChannelGroupTabs.vue',
+    ]) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+      expect(source).not.toContain('useSavedChannels');
+    }
+  });
+
   it('recognizes the dev fixture token', () => {
     expect(isChannelPackFixtureUrl('fixture:sample-club')).toBe(true);
+  });
+
+  it('rejects the fixture token and ignores packRev outside development', () => {
+    expect(channelPackFetchRejection('fixture:sample-club', false)).toBe('Enter an https URL');
+    expect(channelPackFetchRejection('fixture:sample-club', true)).toBeUndefined();
+    expect(channelPackFetchRejection('http://example.com/pack.hpack', false)).toMatch(/https/);
+    expect(channelPackDevFixturePath('newer', false)).toBeUndefined();
+    expect(channelPackDevFixturePath('error', false)).toBeUndefined();
+    expect(channelPackDevFixturePath('newer', true)).toBe('/fixtures/sample-club-newer.hpack');
+    expect(channelPackDevFixturePath('other', true)).toBe('/fixtures/sample-club-other.hpack');
+    expect(isUsableChannelPackSourceUrl('fixture:sample-club', false)).toBe(false);
+    expect(isUsableChannelPackSourceUrl('fixture:sample-club', true)).toBe(true);
+    expect(isUsableChannelPackSourceUrl('https://example.com/club.hpack', false)).toBe(true);
+  });
+
+  it('keeps the fetched URL unless the operator adopts a different https source', () => {
+    const group = {
+      packId: samplePack.id,
+      packUpdated: '2026-10-17T21:00:00.000Z',
+      packSourceUrl: 'https://example.com/stored.hpack',
+    };
+    const remote = { ...samplePack, source: 'http://example.com/declared.hpack', updated: '2026-10-18T12:00:00.000Z' };
+    const assessment = assessChannelPackUpdate(group, remote);
+
+    expect(assessment.packIdMismatch).toBe(false);
+    expect(assessment.compare).toBe('newer');
+    expect(assessment.declaredSourceHttps).toBe(false);
+    expect(assessment.declaredSourceUrl).toBe('http://example.com/declared.hpack');
   });
 });

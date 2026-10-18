@@ -57,25 +57,19 @@ export function isChannelPackFixtureUrl(url: string): boolean {
   return trimUrl(url) === CHANNEL_PACK_FIXTURE_URL;
 }
 
-function assertHttpsUrl(url: string): void {
+/**
+ * Returns an error message when the URL must not be fetched.
+ * The fixture token is accepted only when `dev` is true.
+ */
+export function channelPackFetchRejection(url: string, dev: boolean): string | undefined {
   const trimmed = trimUrl(url);
 
   if (!trimmed) {
-    throw new ChannelPackFetchError({
-      summary: 'Enter a channel pack URL',
-      requestedUrl: url,
-    });
+    return 'Enter a channel pack URL';
   }
 
   if (isChannelPackFixtureUrl(trimmed)) {
-    if (!import.meta.dev) {
-      throw new ChannelPackFetchError({
-        summary: 'Enter an https URL',
-        requestedUrl: url,
-      });
-    }
-
-    return;
+    return dev ? undefined : 'Enter an https URL';
   }
 
   let parsed: URL;
@@ -83,33 +77,36 @@ function assertHttpsUrl(url: string): void {
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw new ChannelPackFetchError({
-      summary: 'Channel pack URL is not valid',
-      requestedUrl: url,
-    });
+    return 'Channel pack URL is not valid';
   }
 
   if (parsed.protocol !== 'https:') {
-    throw new ChannelPackFetchError({
-      summary: 'Channel pack URL must use https',
-      requestedUrl: url,
-    });
+    return 'Channel pack URL must use https';
   }
 
   if (parsed.username || parsed.password) {
+    return 'Channel pack URL cannot include credentials';
+  }
+
+  return undefined;
+}
+
+function assertHttpsUrl(url: string): void {
+  const summary = channelPackFetchRejection(url, import.meta.dev);
+
+  if (summary) {
     throw new ChannelPackFetchError({
-      summary: 'Channel pack URL cannot include credentials',
+      summary,
       requestedUrl: url,
     });
   }
 }
 
-function devFixturePath(): string {
-  if (!import.meta.dev || typeof window === 'undefined') {
-    return '/fixtures/sample-club.hpack';
+/** Dev-only stub path. Production (`dev === false`) ignores `packRev` and returns nothing. */
+export function channelPackDevFixturePath(rev: string | null | undefined, dev: boolean): string | undefined {
+  if (!dev) {
+    return undefined;
   }
-
-  const rev = new URL(window.location.href).searchParams.get('packRev');
 
   switch (rev) {
     case 'newer':
@@ -123,6 +120,11 @@ function devFixturePath(): string {
     default:
       return '/fixtures/sample-club.hpack';
   }
+}
+
+function devFixturePath(): string {
+  const rev = typeof window === 'undefined' ? null : new URL(window.location.href).searchParams.get('packRev');
+  return channelPackDevFixturePath(rev, import.meta.dev) ?? '/fixtures/sample-club.hpack';
 }
 
 async function fetchFixturePack(requestedUrl: string): Promise<ChannelPackFetchSuccess> {
@@ -352,7 +354,7 @@ export function compareChannelPackRevision(
   return 'same';
 }
 
-export function isChannelPackSourceUrl(url: string | undefined): boolean {
+export function isUsableChannelPackSourceUrl(url: string | undefined, dev: boolean): boolean {
   if (!url?.trim()) {
     return false;
   }
@@ -361,7 +363,11 @@ export function isChannelPackSourceUrl(url: string | undefined): boolean {
     return true;
   }
 
-  return import.meta.dev && isChannelPackFixtureUrl(url);
+  return dev && isChannelPackFixtureUrl(url);
+}
+
+export function isChannelPackSourceUrl(url: string | undefined): boolean {
+  return isUsableChannelPackSourceUrl(url, import.meta.dev);
 }
 
 export function isHttpsSourceUrl(url: string | undefined): boolean {
