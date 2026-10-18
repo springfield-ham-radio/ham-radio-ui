@@ -21,6 +21,13 @@ export interface ChannelGroup {
   icon?: string;
   /** Omitted on built-in groups. Stored groups default to `group`. */
   kind?: ChannelGroupKind;
+  /** Stable pack file identity. Minted on first export. */
+  packId?: string;
+  description?: string;
+  author?: string;
+  packVersion?: string;
+  packUpdated?: string;
+  packSourceUrl?: string;
 }
 
 export function channelGroupKindFromDb(value: string | null | undefined): ChannelGroupKind {

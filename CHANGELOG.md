@@ -1,3 +1,16 @@
+## [1.24.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.0...v1.24.1) (2026-10-17)
+
+### Bug Fixes
+
+* **channels:** format channel pack updated date in the import preview ([#151](https://github.com/springfield-ham-radio/ham-radio-ui/issues/151)) ([386004d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/386004db819e05c98dadf815b037b72dd5467b6e))
+* shift-click a range of channels in the library ([#150](https://github.com/springfield-ham-radio/ham-radio-ui/issues/150)) ([e2e9290](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e2e929001623e5aba9282648b76bbea432518cd4)), closes [#149](https://github.com/springfield-ham-radio/ham-radio-ui/issues/149)
+
+## [1.24.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.23.0...v1.24.0) (2026-10-17)
+
+### Features
+
+* **channels:** channel pack import and export UI (closes [#66](https://github.com/springfield-ham-radio/ham-radio-ui/issues/66)) ([#148](https://github.com/springfield-ham-radio/ham-radio-ui/issues/148)) ([799ddcd](https://github.com/springfield-ham-radio/ham-radio-ui/commit/799ddcd5da825175f3d727e6315a617290eaa382))
+
 ## [1.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.22.0...v1.23.0) (2026-10-17)
 
 ### Features

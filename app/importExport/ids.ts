@@ -1,8 +1,10 @@
 /** Stable ids. Radio menu event names in `src-tauri/src/lib.rs` match the radio and memory ids. */
 export const IMPORT_EXPORT_IDS = {
   importChannelsCsv: 'import-channels-csv',
+  importChannelsPack: 'import-channels-pack',
   exportChannelsCsv: 'export-channels-csv',
   exportChannelsChirpCsv: 'export-channels-chirp-csv',
+  exportChannelsPack: 'export-channels-pack',
   readFromRadio: 'read-from-radio',
   writeToRadio: 'write-to-radio',
   openMemory: 'open-memory',
