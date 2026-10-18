@@ -78,4 +78,16 @@ describe('radio board', () => {
     expect(fixtureBlock).not.toContain('readFromRadio');
     expect(fixtureBlock).not.toContain('writeToRadio');
   });
+
+  it('opens the write-failed dev fixture without calling writeToRadio', () => {
+    const source = readFileSync(new URL('../../app/components/RadioBoard.vue', import.meta.url), 'utf8');
+    const fixtureBlock = source.slice(
+      source.indexOf('function maybeOpenWriteFailedFixture'),
+      source.indexOf('function maybeOpenWriteFailedFixture') + 260,
+    );
+
+    expect(fixtureBlock).toContain("fixture === 'write-failed'");
+    expect(fixtureBlock).toContain('seedWriteFailedDevFixture');
+    expect(fixtureBlock).not.toContain('writeToRadio');
+  });
 });

@@ -2033,6 +2033,65 @@ export function useRadio() {
     progressOpen.value = true;
   }
 
+  /**
+   * Dev-only: failed write after a backup read captured serial frames on the transfer card.
+   * Focuses a second card so Save serial log uses the pinned transfer session, not focus.
+   */
+  async function seedWriteFailedDevFixture(): Promise<void> {
+    if (!import.meta.dev) {
+      return;
+    }
+
+    const { writeFailedDevFixtureSerialLog } = await import('~/utils/write-failed-dev-fixture');
+
+    await seedAddToRadioDevFixtureInner({ quietToast: true });
+    const transferCardId = addToRadioFixtureCardId.value;
+
+    if (!transferCardId) {
+      return;
+    }
+
+    const session = readSession(transferCardId);
+    const radioId = session?.activeRadioId;
+
+    if (!radioId) {
+      return;
+    }
+
+    const serialLog = snapshotFromDriverSerialLog(
+      'import',
+      radioId,
+      DEV_FIXTURE_SERIAL_PORT,
+      writeFailedDevFixtureSerialLog(),
+    );
+
+    if (serialLog) {
+      patchSession(transferCardId, { serialLog });
+    }
+
+    const decoyCardId = openGuestCard({
+      name: 'Focused card (no log)',
+      manufacturer: String(radioId.manufacturer),
+      model: String(radioId.model),
+      serialPort: DEV_FIXTURE_SERIAL_PORT,
+    });
+    focusCard(decoyCardId);
+
+    progressTransferCardId.value = transferCardId;
+    progressKind.value = 'write';
+    progress.value = 0.18;
+    progressStartedAt.value = Date.now() - 8000;
+    progressError.value = await createRadioErrorReport(
+      radioErrorContextFromRadio('write', 'write radio', {
+        radioId,
+        cardName: 'Fixture UV-5R',
+        port: DEV_FIXTURE_SERIAL_PORT,
+      }),
+      new Error("Port '/dev/cu.usbserial-A703DBTL' not found"),
+    );
+    progressOpen.value = true;
+  }
+
   async function seedDialogMessageDevFixture(): Promise<void> {
     if (!import.meta.dev) {
       return;
@@ -2211,6 +2270,7 @@ export function useRadio() {
     seedWriteReviewDevFixture,
     seedDialogMessageDevFixture,
     seedErrorReportDevFixture,
+    seedWriteFailedDevFixture,
     memoryUnsaved,
     memoryUndoLabel,
     memoryRedoLabel,

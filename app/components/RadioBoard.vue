@@ -27,6 +27,7 @@ const {
   seedUndoMemoryDevFixture,
   seedDialogMessageDevFixture,
   seedErrorReportDevFixture,
+  seedWriteFailedDevFixture,
   seedChannelPrintDevFixture,
 } = useRadio();
 
@@ -54,6 +55,12 @@ function maybeOpenErrorReportFixture(): void {
   }
 }
 
+function maybeOpenWriteFailedFixture(): void {
+  if (import.meta.dev && route.query.fixture === 'write-failed') {
+    void seedWriteFailedDevFixture();
+  }
+}
+
 function maybeOpenChannelPrintFixture(): void {
   if (import.meta.dev && route.query.fixture === 'channel-print') {
     void seedChannelPrintDevFixture();
@@ -65,6 +72,7 @@ onMounted(() => {
   maybeOpenUndoMemoryFixture();
   maybeOpenDialogMessageFixture();
   maybeOpenErrorReportFixture();
+  maybeOpenWriteFailedFixture();
   maybeOpenChannelPrintFixture();
 });
 
@@ -73,6 +81,7 @@ watch(() => route.query.fixture, () => {
   maybeOpenUndoMemoryFixture();
   maybeOpenDialogMessageFixture();
   maybeOpenErrorReportFixture();
+  maybeOpenWriteFailedFixture();
   maybeOpenChannelPrintFixture();
 });
 
