@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { ALL_CHANNELS_TAB_ID, type ChannelGroup } from '~/utils/channel-groups';
+import { isChannelPackSourceUrl } from '~/utils/channel-pack-fetch';
 
 const props = withDefaults(
   defineProps<{
@@ -16,10 +17,14 @@ const activeId = defineModel<string>('activeId', { required: true });
 const emit = defineEmits<{
   rename: [];
   remove: [];
+  checkUpdates: [];
 }>();
 
 const activeGroup = computed(() => props.groups.find((group) => group.id === activeId.value));
 const canEditGroup = computed(() => Boolean(activeGroup.value) && activeGroup.value?.builtin !== true);
+const canCheckPackUpdates = computed(
+  () => props.manage && canEditGroup.value && isChannelPackSourceUrl(activeGroup.value?.packSourceUrl),
+);
 
 const items = computed<TabsItem[]>(() => [
   { label: 'All', value: ALL_CHANNELS_TAB_ID, icon: 'i-lucide-library' },
@@ -48,6 +53,16 @@ const items = computed<TabsItem[]>(() => [
         indicator: 'bg-primary bottom-0 h-0.5 rounded-full',
       }"
     />
+    <UTooltip v-if="canCheckPackUpdates" text="Download the pack from this group’s source URL and compare versions">
+      <UButton
+        icon="i-lucide-refresh-cw"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        label="Check for updates"
+        @click="emit('checkUpdates')"
+      />
+    </UTooltip>
     <UTooltip v-if="manage && canEditGroup" text="Rename this group">
       <UButton
         icon="i-lucide-folder-pen"

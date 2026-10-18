@@ -2,6 +2,7 @@
 export const IMPORT_EXPORT_IDS = {
   importChannelsCsv: 'import-channels-csv',
   importChannelsPack: 'import-channels-pack',
+  importChannelsPackUrl: 'import-channels-pack-url',
   exportChannelsCsv: 'export-channels-csv',
   exportChannelsChirpCsv: 'export-channels-chirp-csv',
   exportChannelsPack: 'export-channels-pack',

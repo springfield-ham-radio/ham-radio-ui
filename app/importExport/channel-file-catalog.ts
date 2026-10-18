@@ -56,7 +56,10 @@ export function channelLibraryFileExportRows(
 export function channelLibraryFileImportSources(
   context: ImportExportAvailabilityContext,
 ): ChannelFileImportExportRow[] {
-  return channelLibraryFileImportRows(context).filter(
+  const fileRows = channelLibraryFileImportRows(context).filter(
     (row) => row.id === IMPORT_EXPORT_IDS.importChannelsCsv || row.id === IMPORT_EXPORT_IDS.importChannelsPack,
   );
+  const urlRow = rowForEntry(channelImportExport.require(IMPORT_EXPORT_IDS.importChannelsPackUrl), context);
+
+  return [...fileRows, urlRow];
 }

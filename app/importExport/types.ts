@@ -86,6 +86,8 @@ export interface ImportExportHandlerInput {
    * Built-in entries ignore it.
    */
   token?: string;
+  /** Channel pack URL for `import-channels-pack-url`. */
+  url?: string;
 }
 
 /** File contents a source parses or a caller already picked. */

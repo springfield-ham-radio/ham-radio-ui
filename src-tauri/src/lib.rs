@@ -1,3 +1,4 @@
+mod channel_pack_fetch;
 mod radio_image_backup;
 mod radio_modules;
 mod sniffer_ssh;
@@ -709,6 +710,7 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             radio_image_backup::load_radio_image_backup,
             radio_image_backup::delete_radio_image_backups,
             fetch_repeaterbook_search,
+            channel_pack_fetch::fetch_channel_pack,
             radio_modules::download_and_install_radio_module,
             radio_modules::sha256_file,
             radio_modules::install_radio_module_from_zip,
