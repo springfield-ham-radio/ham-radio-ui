@@ -4,7 +4,8 @@ import {
   readProgressSerialLog,
   settleBackupFailureOnProgressClose,
 } from '../../app/utils/radio-progress-session.ts';
-import { snapshotFromDriverSerialLog } from '../../app/utils/serial-log-session.ts';
+import { mergeSessionSerialLog, snapshotFromDriverSerialLog } from '../../app/utils/serial-log-session.ts';
+import { writeFailedDevFixtureSerialLog } from '../../app/utils/write-failed-dev-fixture.ts';
 
 const radioId: RadioId = {
   model: RadioModelId('kenwood-th-f6'),
@@ -57,5 +58,47 @@ describe('readProgressSerialLog', () => {
     expect(progressLog?.entryCount).toBe(1);
     expect(progressLog?.fileName).toMatch(/kenwood-th-f6-write-serial-/);
     expect(progressLog?.operation).toBe('write');
+  });
+
+  it('keeps the import file name when a pre-write backup read failed', () => {
+    const transferCard = 'card-transfer';
+    const snapshot = snapshotFromDriverSerialLog('import', radioId, '/dev/cu.test', log);
+
+    expect(snapshot).toBeDefined();
+
+    const sessions = {
+      [transferCard]: { serialLog: snapshot },
+    };
+
+    const progressLog = readProgressSerialLog(
+      sessions,
+      transferCard,
+      'other-focus',
+      { context: { operation: 'backup', step: 'read' }, summary: 'fail', errors: { name: 'Error', message: 'fail' }, environment: { appVersion: '0', apiVersion: '0', driverVersion: '0', os: 'test' } },
+      'backup',
+    );
+
+    expect(progressLog?.fileName).toMatch(/kenwood-th-f6-import-serial-/);
+    expect(progressLog?.operation).toBe('import');
+  });
+});
+
+describe('write failure after backup read (#107)', () => {
+  it('keeps backup frames when the write driver captures nothing', () => {
+    const backup = snapshotFromDriverSerialLog('import', radioId, '/dev/cu.test', writeFailedDevFixtureSerialLog());
+    const afterWrite = mergeSessionSerialLog(backup, undefined);
+
+    expect(afterWrite?.entryCount).toBe(2);
+
+    const forSave = readProgressSerialLog(
+      { card: { serialLog: afterWrite } },
+      'card',
+      'focused',
+      { context: { operation: 'write', step: 'write' }, summary: 'fail', errors: { name: 'Error', message: 'Port not found' }, environment: { appVersion: '0', apiVersion: '0', driverVersion: '0', os: 'test' } },
+      'write',
+    );
+
+    expect(forSave?.fileName).toMatch(/kenwood-th-f6-write-serial-/);
+    expect(JSON.parse(forSave!.contents).operation).toBe('write');
   });
 });
