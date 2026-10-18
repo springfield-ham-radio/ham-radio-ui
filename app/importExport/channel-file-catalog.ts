@@ -5,8 +5,10 @@ import type { ImportExportAvailabilityContext, ImportExportDefinition } from '~/
 /** File transfers listed on the Channels Import / Export dialog. */
 export const CHANNEL_LIBRARY_FILE_IMPORT_EXPORT_IDS: readonly ImportExportId[] = [
   IMPORT_EXPORT_IDS.importChannelsCsv,
+  IMPORT_EXPORT_IDS.importChannelsPack,
   IMPORT_EXPORT_IDS.exportChannelsCsv,
   IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
+  IMPORT_EXPORT_IDS.exportChannelsPack,
 ];
 
 export interface ChannelFileImportExportRow {
@@ -39,14 +41,22 @@ export function channelLibraryFileImportRows(
   );
 }
 
+const CHANNEL_LIBRARY_FILE_EXPORT_IDS: readonly ImportExportId[] = [
+  IMPORT_EXPORT_IDS.exportChannelsCsv,
+  IMPORT_EXPORT_IDS.exportChannelsChirpCsv,
+  IMPORT_EXPORT_IDS.exportChannelsPack,
+];
+
 export function channelLibraryFileExportRows(
   context: ImportExportAvailabilityContext,
 ): ChannelFileImportExportRow[] {
-  return channelLibraryFileImportRows(context).filter((row) => row.id !== IMPORT_EXPORT_IDS.importChannelsCsv);
+  return CHANNEL_LIBRARY_FILE_EXPORT_IDS.map((id) => rowForEntry(channelImportExport.require(id), context));
 }
 
 export function channelLibraryFileImportSources(
   context: ImportExportAvailabilityContext,
 ): ChannelFileImportExportRow[] {
-  return channelLibraryFileImportRows(context).filter((row) => row.id === IMPORT_EXPORT_IDS.importChannelsCsv);
+  return channelLibraryFileImportRows(context).filter(
+    (row) => row.id === IMPORT_EXPORT_IDS.importChannelsCsv || row.id === IMPORT_EXPORT_IDS.importChannelsPack,
+  );
 }

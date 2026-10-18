@@ -1,4 +1,5 @@
 import type { RadioSettings } from '@springfield/ham-radio-api';
+import { formatShortDate } from '~/utils/format-date';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { duplexFromFrequencies, formatFrequencyMHz } from '~/utils/channel-edit';
 import { linkedNodeBadges } from '~/utils/linked-nodes';
@@ -454,7 +455,7 @@ export function buildLibraryPrintDocument(input: BuildLibraryPrintDocumentInput)
 }
 
 export function formatChannelPrintDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatShortDate(date);
 }
 
 export function emptyPrintReason(rowCount: number): string | undefined {

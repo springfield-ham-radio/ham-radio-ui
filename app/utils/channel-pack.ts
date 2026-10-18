@@ -1,4 +1,4 @@
-import { RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
+import { Frequency, RadioChannelId, RadioToneType, type RadioTone } from '@springfield/ham-radio-api';
 import { CHANNEL_GROUP_NAME_MAX_LENGTH } from '~/utils/channel-groups';
 import {
   coordinatesFromPair,
@@ -131,8 +131,44 @@ const PACK_CHANNEL_KEYS: readonly (keyof ChannelPackChannel)[] = [
   'wires',
 ];
 
-export function countRepeaterBookChannels(channels: readonly SavedChannel[]): number {
+export function countRepeaterBookChannels(channels: readonly { sourceFormat?: string | null }[]): number {
   return channels.filter((channel) => channel.sourceFormat === 'repeaterbook').length;
+}
+
+/** Mint missing pack channel slugs before export or database write. */
+export function ensurePackChannelIds(channels: readonly SavedChannelWithPackId[]): SavedChannelWithPackId[] {
+  const usedIds = new Set<string>();
+
+  for (const channel of channels) {
+    const stored = channel.packChannelId?.trim();
+
+    if (stored) {
+      usedIds.add(stored);
+    }
+  }
+
+  return channels.map((channel) => {
+    const stored = channel.packChannelId?.trim();
+
+    if (stored && /^[a-z0-9][a-z0-9-]*$/.test(stored) && stored.length <= 64) {
+      return { ...channel, packChannelId: stored };
+    }
+
+    const packChannelId = mintPackChannelId(channel, usedIds);
+    usedIds.add(packChannelId);
+    return { ...channel, packChannelId };
+  });
+}
+
+export function defaultPackFileName(groupName: string): string {
+  const slug = groupName
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 48);
+
+  return `${slug || 'channel-pack'}.${CHANNEL_PACK_FILE_EXTENSION}`;
 }
 
 export function buildChannelPackDocument(
@@ -324,8 +360,8 @@ function packChannelToSavedChannel(channel: ChannelPackChannel, id: RadioChannel
     packChannelId: channel.id,
     kind,
     name: channel.name,
-    transmitFrequency: channel.txHz,
-    receiveFrequency: channel.rxHz,
+    transmitFrequency: Frequency(channel.txHz),
+    receiveFrequency: Frequency(channel.rxHz),
     transmitTone: radioToneFromPack(channel.txTone),
     receiveTone: radioToneFromPack(channel.rxTone),
     notes: trimOptional(channel.notes),
