@@ -107,7 +107,7 @@ pub fn validate_redirect_location(location: &str, previous: &Url) -> Result<Url,
 fn content_type_allowed(content_type: Option<&str>) -> Result<(), String> {
     let raw = content_type.map(|value| value.split(';').next().unwrap_or(value).trim().to_ascii_lowercase());
 
-    if raw.is_none() || raw == Some("") {
+    if raw.as_deref().is_none_or(|value| value.is_empty()) {
         return Ok(());
     }
 
@@ -206,7 +206,7 @@ pub async fn fetch_channel_pack(url: String) -> Result<ChannelPackFetchResult, S
 
         content_type_allowed(content_type.as_deref())?;
 
-        let bytes = read_limited_body(response)?;
+        let bytes = read_limited_body(response).await?;
         let text = String::from_utf8(bytes).map_err(|_| "Channel pack body is not valid UTF-8".to_string())?;
 
         return Ok(ChannelPackFetchResult {
