@@ -94,8 +94,8 @@ function apply(): void {
           title="Source URL will change"
           :description="sourceUrlNotice"
         />
-        <UFormField label="Group name" :error="blockedReason">
-          <UInput v-model="groupName" maxlength="40" :disabled="Boolean(applying)" />
+        <UFormField label="Group name" :error="blockedReason" class="w-full">
+          <UInput v-model="groupName" class="w-full" maxlength="40" :disabled="Boolean(applying)" />
         </UFormField>
         <UAlert
           v-if="blockedReason"

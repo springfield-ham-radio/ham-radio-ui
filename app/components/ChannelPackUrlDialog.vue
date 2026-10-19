@@ -66,8 +66,15 @@ async function submit(): Promise<void> {
   >
     <template #body>
       <div class="space-y-4">
-        <UFormField label="Pack URL" required>
-          <UInput v-model="url" type="url" placeholder="https://" :disabled="loading || fetching" @keyup.enter="submit" />
+        <UFormField label="Pack URL" required class="w-full">
+          <UInput
+            v-model="url"
+            type="url"
+            class="w-full"
+            placeholder="https://"
+            :disabled="loading || fetching"
+            @keyup.enter="submit"
+          />
         </UFormField>
         <ChannelPackFetchAlert v-if="failure" :failure="failure" />
       </div>
