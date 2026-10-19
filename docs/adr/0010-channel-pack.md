@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Date:** 2026-10-17  
-**Related:** [#66](https://github.com/springfield-ham-radio/ham-radio-ui/issues/66), [0002-repeater-record-reimport.md](./0002-repeater-record-reimport.md)
+**Related:** [#66](https://github.com/springfield-ham-radio/ham-radio-ui/issues/66), [0002-repeater-record-reimport.md](./0002-repeater-record-reimport.md), [0011-channel-pack-url.md](./0011-channel-pack-url.md)
 
 ## Context
 

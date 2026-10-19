@@ -14,6 +14,14 @@ Open a stored group tab before exporting a pack. **All** and built-in groups can
 
 For local testing, open Channels with `?fixture=channel-pack-import` in a dev build, or import `public/fixtures/sample-club.hpack`.
 
+**Import from URL** downloads a pack on demand from an https link (desktop app recommended when the host does not allow browser CORS). **Check for updates** appears on a stored group that has a source URL; it compares the remote `updated` timestamp to the copy on the group and opens the same import preview when you choose to apply.
+
+Dev fixtures: `?fixture=channel-pack-url` opens the URL dialog with `fixture:sample-club` filled in. After you apply, **Check for updates** uses that token. Add `packRev=newer`, `older`, `other`, or `error` to the page query to change the stub response (development only).
+
+A public sample URL:
+
+`https://raw.githubusercontent.com/springfield-ham-radio/ham-radio-ui/main/public/fixtures/sample-club.hpack`
+
 ## Import
 
 Use **Import CSV** on the Channels page. HamBench accepts:

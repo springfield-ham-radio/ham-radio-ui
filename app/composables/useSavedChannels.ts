@@ -581,14 +581,14 @@ export function useSavedChannels() {
     return channels.value.map((channel) => ({ ...channel }));
   }
 
-  function packFieldsFromDocument(pack: ChannelPackDocument): ChannelGroupPackFields {
+  function packFieldsFromDocument(pack: ChannelPackDocument, sourceUrl?: string): ChannelGroupPackFields {
     return {
       packId: pack.id,
       description: pack.description,
       author: pack.author,
       packVersion: pack.version,
       packUpdated: pack.updated,
-      packSourceUrl: pack.source,
+      packSourceUrl: sourceUrl ?? pack.source,
     };
   }
 
@@ -714,12 +714,18 @@ export function useSavedChannels() {
     return parseChannelPack(picked.text);
   }
 
-  async function applyChannelPackImport(pack: ChannelPackDocument, groupName: string): Promise<void> {
+  async function applyChannelPackImport(
+    pack: ChannelPackDocument,
+    groupName: string,
+    options?: { sourceUrl?: string },
+  ): Promise<void> {
     const preview = computePackImportPreview(pack, groupName);
 
     if (preview.resolution.action === 'blocked') {
       throw new Error(preview.resolution.reason);
     }
+
+    const packFields = packFieldsFromDocument(preview.pack, options?.sourceUrl);
 
     try {
       const statements: SqlStatement[] = [];
@@ -727,7 +733,7 @@ export function useSavedChannels() {
       let groupId: string;
 
       if (preview.resolution.action === 'create') {
-        const created = await insertChannelGroup(groupName, [], 'group', packFieldsFromDocument(preview.pack), executor);
+        const created = await insertChannelGroup(groupName, [], 'group', packFields, executor);
         groupId = created.id;
       } else {
         groupId = preview.resolution.groupId;
@@ -751,7 +757,7 @@ export function useSavedChannels() {
           groupId,
           {
             name: groupName,
-            ...packFieldsFromDocument(preview.pack),
+            ...packFields,
           },
           executor,
         );

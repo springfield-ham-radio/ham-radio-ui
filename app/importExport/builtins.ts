@@ -7,6 +7,7 @@ import {
   parseChannelPack,
   serializeChannelPack,
 } from '~/utils/channel-pack';
+import { fetchChannelPack } from '~/utils/channel-pack-fetch';
 import { serializeSavedChannelsChirpCsv } from '~/utils/chirp-csv';
 import { parseSavedChannelsCsv, serializeSavedChannelsCsv } from '~/utils/saved-channels-csv';
 
@@ -73,6 +74,26 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
 
       const text = serializeSavedChannelsCsv([...input.savedChannels]);
       return { text, document: parseSavedChannelsCsv(text) };
+    },
+  };
+
+  const packUrlSource: ImportExportDefinition = {
+    id: IMPORT_EXPORT_IDS.importChannelsPackUrl,
+    label: 'Import from URL',
+    description: 'Download a HamBench channel pack (.hpack) from an https URL.',
+    icon: 'i-lucide-link',
+    kind: 'source',
+    category: 'online',
+    available: (context) => (context.libraryLocked ? 'Built-in groups cannot be changed' : true),
+    handler: async (input) => {
+      const url = input.url?.trim();
+
+      if (!url) {
+        throw new Error('Channel pack URL import needs a url');
+      }
+
+      const result = await fetchChannelPack(url);
+      return { channelPack: result.pack, text: JSON.stringify(result.pack) };
     },
   };
 
@@ -145,6 +166,7 @@ export function registerBuiltinImportExport(registry: ImportExportRegistry): voi
 
   registry.register(csvSource);
   registry.register(packSource);
+  registry.register(packUrlSource);
   registry.register(csvTarget);
   registry.register(chirpCsvTarget);
   registry.register(packTarget);

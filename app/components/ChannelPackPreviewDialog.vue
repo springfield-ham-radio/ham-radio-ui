@@ -17,6 +17,7 @@ const props = defineProps<{
   plan: ChannelPackImportPlan;
   resolution: ChannelPackGroupResolution;
   applying?: boolean;
+  sourceUrlNotice?: string;
 }>();
 
 const emit = defineEmits<{
@@ -85,8 +86,16 @@ function apply(): void {
           <p class="text-sm font-medium text-highlighted">{{ pack.name }}</p>
           <p v-if="pack.description" class="mt-1 text-sm text-muted">{{ pack.description }}</p>
         </div>
-        <UFormField label="Group name" :error="blockedReason">
-          <UInput v-model="groupName" maxlength="40" :disabled="Boolean(applying)" />
+        <UAlert
+          v-if="sourceUrlNotice"
+          color="info"
+          variant="subtle"
+          icon="i-lucide-link"
+          title="Source URL will change"
+          :description="sourceUrlNotice"
+        />
+        <UFormField label="Group name" :error="blockedReason" class="w-full">
+          <UInput v-model="groupName" class="w-full" maxlength="40" :disabled="Boolean(applying)" />
         </UFormField>
         <UAlert
           v-if="blockedReason"

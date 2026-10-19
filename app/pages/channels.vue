@@ -14,6 +14,11 @@ import { formatFrequencyMHz, programLibraryChannelsIntoSlots } from '~/utils/cha
 import { ALL_CHANNELS_TAB_ID, isTripChannelGroup } from '~/utils/channel-groups';
 import type { ChannelPackDocument, ChannelPackMetadata } from '~/utils/channel-pack';
 import {
+  CHANNEL_PACK_FIXTURE_URL,
+  isHttpsSourceUrl,
+} from '~/utils/channel-pack-fetch';
+import { formatChannelPackUpdated } from '~/utils/format-date';
+import {
   anchorIdIfStillVisible,
   applyMacRowSelection,
   type MacSelectionModifiers,
@@ -102,6 +107,7 @@ const { openPrintDialog, registerLibraryProvider, unregisterLibraryProvider } = 
 const addToRadioFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'add-to-radio');
 const importExportFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'import-export');
 const channelPackFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'channel-pack-import');
+const channelPackUrlFixtureActive = computed(() => import.meta.dev && route.query.fixture === 'channel-pack-url');
 
 watch(addToRadioFixtureActive, (active) => {
   if (active) {
@@ -122,6 +128,9 @@ const packPreviewOpen = ref(false);
 const packApplying = ref(false);
 const pendingPack = shallowRef<ChannelPackDocument | null>(null);
 const packImportGroupName = ref('');
+const packImportSourceUrl = ref<string | undefined>();
+const packUrlOpen = ref(false);
+const packUpdateOpen = ref(false);
 
 watch(
   importExportFixtureActive,
@@ -142,9 +151,7 @@ async function openSamplePackFixture(): Promise<void> {
 
   const { parseChannelPack } = await import('~/utils/channel-pack');
   const pack = parseChannelPack(await response.text());
-  pendingPack.value = pack;
-  packImportGroupName.value = pack.name;
-  packPreviewOpen.value = true;
+  beginPackImport(pack);
 }
 
 watch(
@@ -152,6 +159,16 @@ watch(
   (active) => {
     if (active) {
       void openSamplePackFixture();
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  channelPackUrlFixtureActive,
+  (active) => {
+    if (active) {
+      packUrlOpen.value = true;
     }
   },
   { immediate: true },
@@ -166,6 +183,40 @@ const packExportChannels = computed(() =>
 const packImportPreview = computed(() =>
   pendingPack.value ? computePackImportPreview(pendingPack.value, packImportGroupName.value) : null,
 );
+const activePackMetadataLine = computed(() => {
+  const group = activeGroup.value;
+
+  if (!group || group.builtin) {
+    return undefined;
+  }
+
+  if (!group.packVersion && !group.packUpdated) {
+    return undefined;
+  }
+
+  const version = group.packVersion ? `version ${group.packVersion}` : 'version —';
+  const updated = group.packUpdated ? `updated ${formatChannelPackUpdated(group.packUpdated)}` : 'updated —';
+
+  return `${version} · ${updated}`;
+});
+const packImportSourceUrlNotice = computed(() => {
+  const next = packImportSourceUrl.value?.trim();
+  const preview = packImportPreview.value;
+
+  if (!next || preview?.resolution.action !== 'update') {
+    return undefined;
+  }
+
+  const groupId = preview.resolution.groupId;
+  const group = groups.value.find((candidate) => candidate.id === groupId);
+  const previous = group?.packSourceUrl?.trim();
+
+  if (!previous || previous === next) {
+    return undefined;
+  }
+
+  return `Source URL will change from ${previous} to ${next}.`;
+});
 const isAddingToRadio = ref(false);
 const editorOpen = ref(false);
 const editingChannel = ref<SavedChannel | undefined>();
@@ -1256,10 +1307,48 @@ onUnmounted(() => {
   unregisterLibraryProvider(libraryPrintProvider);
 });
 
+function beginPackImport(pack: ChannelPackDocument, options?: { groupName?: string; sourceUrl?: string }): void {
+  pendingPack.value = pack;
+  packImportGroupName.value = options?.groupName ?? pack.name;
+  packImportSourceUrl.value = options?.sourceUrl;
+  packPreviewOpen.value = true;
+}
+
+function onPackUrlFetched(payload: { pack: ChannelPackDocument; requestedUrl: string }): void {
+  beginPackImport(payload.pack, { sourceUrl: payload.requestedUrl });
+}
+
+function onPackUpdatePreview(payload: {
+  pack: ChannelPackDocument;
+  requestedUrl: string;
+  adoptDeclaredSource: boolean;
+  packIdMismatch: boolean;
+}): void {
+  if (payload.packIdMismatch) {
+    beginPackImport(payload.pack, { sourceUrl: payload.requestedUrl });
+    return;
+  }
+
+  const declared = payload.pack.source?.trim();
+  const sourceUrl =
+    payload.adoptDeclaredSource && isHttpsSourceUrl(declared) ? declared : payload.requestedUrl;
+
+  beginPackImport(payload.pack, {
+    groupName: activeGroup.value?.name ?? payload.pack.name,
+    sourceUrl,
+  });
+}
+
 async function onChannelImportExportSelect(id: string): Promise<void> {
   if (id === IMPORT_EXPORT_IDS.exportChannelsPack) {
     importExportOpen.value = false;
     packExportOpen.value = true;
+    return;
+  }
+
+  if (id === IMPORT_EXPORT_IDS.importChannelsPackUrl) {
+    importExportOpen.value = false;
+    packUrlOpen.value = true;
     return;
   }
 
@@ -1271,9 +1360,7 @@ async function onChannelImportExportSelect(id: string): Promise<void> {
       importExportOpen.value = false;
 
       if (result.channelPack) {
-        pendingPack.value = result.channelPack;
-        packImportGroupName.value = result.channelPack.name;
-        packPreviewOpen.value = true;
+        beginPackImport(result.channelPack);
       }
 
       return;
@@ -1323,9 +1410,12 @@ async function onPackImportApply(): Promise<void> {
   packApplying.value = true;
 
   try {
-    await applyChannelPackImport(pendingPack.value, packImportGroupName.value);
+    await applyChannelPackImport(pendingPack.value, packImportGroupName.value, {
+      sourceUrl: packImportSourceUrl.value,
+    });
     packPreviewOpen.value = false;
     pendingPack.value = null;
+    packImportSourceUrl.value = undefined;
   } catch {
     // Toast is shown by the composable.
   } finally {
@@ -1384,7 +1474,9 @@ async function onPackImportApply(): Promise<void> {
       :groups="groups"
       @rename="openRenameGroup"
       @remove="removeGroupOpen = true"
+      @check-updates="packUpdateOpen = true"
     />
+    <p v-if="activePackMetadataLine" class="text-xs text-muted">{{ activePackMetadataLine }}</p>
 
     <div class="flex flex-col gap-1">
       <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
@@ -1779,6 +1871,17 @@ async function onPackImportApply(): Promise<void> {
       :saving="packExportSaving"
       @save="onPackExportSave"
     />
+    <ChannelPackUrlDialog
+      v-model:open="packUrlOpen"
+      :initial-url="channelPackUrlFixtureActive ? CHANNEL_PACK_FIXTURE_URL : undefined"
+      @fetched="onPackUrlFetched"
+    />
+    <ChannelPackUpdateDialog
+      v-if="activeGroup && !activeGroup.builtin"
+      v-model:open="packUpdateOpen"
+      :group="activeGroup"
+      @preview="onPackUpdatePreview"
+    />
     <ChannelPackPreviewDialog
       v-if="pendingPack && packImportPreview"
       v-model:open="packPreviewOpen"
@@ -1787,6 +1890,7 @@ async function onPackImportApply(): Promise<void> {
       :plan="packImportPreview.plan"
       :resolution="packImportPreview.resolution"
       :applying="packApplying"
+      :source-url-notice="packImportSourceUrlNotice"
       @apply="onPackImportApply"
     />
   </div>

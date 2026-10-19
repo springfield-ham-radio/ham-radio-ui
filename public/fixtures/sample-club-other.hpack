@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "b2c3d4e5-f6a7-4890-b123-456789abcdef",
+  "name": "Other Club Net",
+  "description": "Different pack id for mismatch testing.",
+  "author": "W5ABC",
+  "version": "2.0.0",
+  "updated": "2026-10-18T12:00:00.000Z",
+  "channels": [
+    {
+      "id": "other-net",
+      "name": "Other Net",
+      "kind": "channel",
+      "rxHz": 146520000,
+      "txHz": 146520000
+    }
+  ]
+}

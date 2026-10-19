@@ -28,6 +28,7 @@ describe('channel file import/export catalog', () => {
     expect(importRows.map((row) => row.id)).toEqual([
       IMPORT_EXPORT_IDS.importChannelsCsv,
       IMPORT_EXPORT_IDS.importChannelsPack,
+      IMPORT_EXPORT_IDS.importChannelsPackUrl,
     ]);
     expect(importRows[0]?.description).toContain('HamBench');
     expect(importRows.every((row) => row.available)).toBe(true);
