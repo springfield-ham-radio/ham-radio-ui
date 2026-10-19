@@ -5,7 +5,7 @@ description = "HamBench desktop app"
 authors = ["Bryan Hunt"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.94.0"
 autobins = false
 default-run = "HamBench"
 
