@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.25.0...v1.25.1) (2026-10-21)
+
+### Bug Fixes
+
+* **deps:** bump the production-npm group with 10 updates ([#158](https://github.com/springfield-ham-radio/ham-radio-ui/issues/158)) ([e16d327](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e16d327755bfe453efe662dd1b3846bf88548a6d))
+* **deps:** bump the rust-crates group in /src-tauri with 10 updates ([#156](https://github.com/springfield-ham-radio/ham-radio-ui/issues/156)) ([2f9f072](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2f9f0728a0e5a61a3b094ee04c234626d999fb1d))
+
 ## [1.25.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.24.3...v1.25.0) (2026-10-19)
 
 ### Features
