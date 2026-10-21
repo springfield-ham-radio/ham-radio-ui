@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::sqlite::{SqliteArguments, SqliteConnectOptions};
-use sqlx::{Arguments, Connection, SqliteConnection};
+use sqlx::{AssertSqlSafe, Arguments, Connection, SqliteConnection};
 use std::str::FromStr;
 use tauri::Manager;
 
@@ -58,7 +58,10 @@ async fn execute_statement(connection: &mut SqliteConnection, statement: &SqlSta
         bind_value(&mut arguments, value)?;
     }
 
-    sqlx::query_with(&sqlite_placeholders(&statement.sql), arguments)
+    // SQL text is supplied by the desktop UI with $N placeholders; values are bound below.
+    // `sqlite_placeholders` only rewrites those markers to `?` and does not embed user data.
+    let sql = sqlite_placeholders(&statement.sql);
+    sqlx::query_with(AssertSqlSafe(sql), arguments)
         .execute(&mut *connection)
         .await
         .map_err(|error| error.to_string())?;
@@ -66,7 +69,7 @@ async fn execute_statement(connection: &mut SqliteConnection, statement: &SqlSta
     Ok(())
 }
 
-fn bind_value<'a>(arguments: &mut SqliteArguments<'a>, value: &'a Value) -> Result<(), String> {
+fn bind_value(arguments: &mut SqliteArguments, value: &Value) -> Result<(), String> {
     match value {
         Value::Null => arguments.add(Option::<String>::None).map_err(|error| error.to_string()),
         Value::Bool(flag) => arguments.add(flag).map_err(|error| error.to_string()),
