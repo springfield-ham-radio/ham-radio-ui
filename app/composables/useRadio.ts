@@ -1,5 +1,4 @@
 import type {
-  Radio,
   RadioChannel,
   RadioCodec,
   RadioId,
@@ -94,6 +93,7 @@ import {
   undoLabelForHistory,
   undoRadioMemoryHistory,
 } from '~/utils/radio-memory-history';
+import { loadedRadioToRadio } from '~/utils/loaded-radio-to-radio';
 import { showRadioErrorToast } from '~/composables/useRadioErrorToast';
 import { radioErrorContextFromRadio } from '~/utils/radio-error-context';
 import {
@@ -699,7 +699,7 @@ export function useRadio() {
   ): Promise<void> {
     const progressIndicator = startProgress('import');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+    const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
     let importedBytes = 0;
     let importedImage: Uint8Array | undefined;
@@ -875,7 +875,7 @@ export function useRadio() {
       const imageToWrite = readSession(sessionId)?.memory ?? latest.memory;
       const progressIndicator = startProgress('write');
       const { RadioDriver } = await import('@springfield/ham-radio-driver');
-      const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+      const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
       let outcome: 'success' | 'canceled' | 'error' = 'success';
       const writtenBytes = imageToWrite.length;
 
@@ -974,7 +974,7 @@ export function useRadio() {
 
     const progressIndicator = startProgress('import');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+    const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
@@ -1144,7 +1144,7 @@ export function useRadio() {
   ): Promise<Uint8Array | 'skip' | 'abort'> {
     const progressIndicator = startProgress('backup');
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
-    const driver = new RadioDriver(toRadio(config, baudRate), logger, undefined, true);
+    const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
@@ -2317,20 +2317,6 @@ export function useRadio() {
     saveMemoryFile,
     saveMemoryFileAs,
     clearCardSession,
-  };
-}
-
-function toRadio(config: LoadedRadioConfig, baudRate?: number): Radio {
-  return {
-    id: config.id,
-    version: config.version,
-    description: config.description,
-    settingsSchema: config.settingsSchema,
-    memoryConfig: config.memoryConfig,
-    serialConfig: baudRate === undefined ? config.serialConfig : { ...config.serialConfig, baudRate },
-    readMemory: config.readMemory,
-    writeMemory: config.writeMemory,
-    memoryMap: config.memoryMap,
   };
 }
 

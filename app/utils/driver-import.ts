@@ -320,5 +320,10 @@ export function importDriverModule(value: unknown): DriverImportResult {
   draft.readSteps = draftSteps(value.readMemory, warnings);
   draft.writeSteps = draftSteps(value.writeMemory, warnings);
 
+  if (isRecord(value.onError)) {
+    draft.onErrorReadSteps = draftSteps(value.onError.readMemory, warnings);
+    draft.onErrorWriteSteps = draftSteps(value.onError.writeMemory, warnings);
+  }
+
   return { draft, warnings };
 }
