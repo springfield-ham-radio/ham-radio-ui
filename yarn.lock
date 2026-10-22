@@ -2965,7 +2965,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@serialport/parser-byte-length@npm:13.0.0, @serialport/parser-byte-length@npm:^13.0.0":
+"@serialport/parser-byte-length@npm:13.0.0":
   version: 13.0.0
   resolution: "@serialport/parser-byte-length@npm:13.0.0"
   checksum: 10c0/afae2488e2c7b143af0ecf98c8be7b0ac380c6130925f15e43ab7f5fa2b124162df499ec5a511b93ca03752f4090019105a57a17dabb63eda0279981e7555e19
@@ -3183,15 +3183,14 @@ __metadata:
   linkType: hard
 
 "@springfield/ham-radio-driver@npm:^3.6.0":
-  version: 3.6.0
-  resolution: "@springfield/ham-radio-driver@npm:3.6.0"
+  version: 3.6.1
+  resolution: "@springfield/ham-radio-driver@npm:3.6.1"
   dependencies:
-    "@serialport/parser-byte-length": "npm:^13.0.0"
     "@springfield/ham-radio-api": "npm:^18.3.0"
     "@springfield/ham-radio-utils": "npm:^4.15.4"
     loglayer: "npm:^9.4.0"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/98c8a0d1dd8219664e9304eaaf36812d9591bef1e12324a55082cd1dfc0fd8bd64cdfca4b5fc1a7adaced32ae29518c9bd7365d1c5c12c29c2fe5e721419efbe
+  checksum: 10c0/4c47ec0c5088a4b4bb19ba9cefca732cdb5108a574032af3d8ff11ce721b694968937fee7d3e0ad920bc03bc26a2a628bf460a2a970f05e1fa8191fe04e362a0
   languageName: node
   linkType: hard
 
