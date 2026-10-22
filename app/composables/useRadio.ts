@@ -132,6 +132,17 @@ interface RadioCardSession {
    * Edits in the app change `memory` and leave this copy alone.
    */
   radioBaseline?: Uint8Array;
+  /**
+   * Decoded program for `radioBaseline`.
+   * The channels view compares against this snapshot. A successful write stores
+   * the program that was written so the marks clear without another decode.
+   */
+  radioBaselineProgram?: RadioProgram;
+  /**
+   * Program captured when memory was loaded into the editor.
+   * Used when this session has no radio baseline, such as a file opened before any read.
+   */
+  loadedProgram?: RadioProgram;
   channels: ChannelRow[];
   program?: RadioProgram;
   settingsMemoryMap?: RadioMemoryMap;
@@ -170,6 +181,9 @@ export interface DirectReadRequest {
   baudRate?: number;
   serialPort: string;
 }
+
+/** What the open editor is compared with when marking unsaved channel and setting edits. */
+export type RadioComparisonSource = 'radio' | 'loaded' | 'editor';
 
 export interface ChannelRow {
   channelNumber: number;
@@ -328,6 +342,11 @@ export function useRadio() {
       patchSession(cardId.value, { program: value });
     },
   });
+  const comparison = computed(() => comparisonForSession(readSession(cardId.value)));
+  /** Program the open card is compared with. Radio image when this session has one, otherwise the loaded memory. */
+  const comparisonBaseline = computed(() => comparison.value.program);
+  /** `editor` means there is nothing to compare with, so the channels view shows no pending marks. */
+  const comparisonSource = computed(() => comparison.value.source);
   const settingsMemoryMap = computed({
     get: () => readSession(cardId.value)?.settingsMemoryMap,
     set: (value) => {
@@ -760,7 +779,12 @@ export function useRadio() {
         importedBytes = memoryData.length;
         importedImage = memoryData.slice();
         const undoWarning = await applyLoadedMemory(memoryData, radioId, sessionId, serialPortPath);
-        patchSession(sessionId, { memoryFilePath: undefined, radioBaseline: importedImage });
+        const loaded = readSession(sessionId);
+        patchSession(sessionId, {
+          memoryFilePath: undefined,
+          radioBaseline: importedImage,
+          radioBaselineProgram: loaded?.program ? cloneRadioProgram(loaded.program) : undefined,
+        });
         clearBrowserFileHandle();
 
         if (undoWarning) {
@@ -1018,8 +1042,12 @@ export function useRadio() {
       }
 
       if (outcome === 'success') {
-        const written = readSession(sessionId)?.memory ?? imageToWrite;
-        patchSession(sessionId, { radioBaseline: written.slice() });
+        const writtenSession = readSession(sessionId);
+        const written = writtenSession?.memory ?? imageToWrite;
+        patchSession(sessionId, {
+          radioBaseline: written.slice(),
+          radioBaselineProgram: writtenSession?.program ? cloneRadioProgram(writtenSession.program) : undefined,
+        });
         progressOpen.value = false;
         toast.add({
           title: 'Wrote to radio',
@@ -1031,7 +1059,7 @@ export function useRadio() {
       }
 
       // The radio may no longer match the last download. The next backup reads it again.
-      patchSession(sessionId, { radioBaseline: undefined });
+      patchSession(sessionId, { radioBaseline: undefined, radioBaselineProgram: undefined });
 
       if (outcome === 'canceled') {
         progressOpen.value = false;
@@ -1117,7 +1145,15 @@ export function useRadio() {
         return;
       }
 
-      patchSession(sessionId, { radioBaseline: memoryData.slice() });
+      const radioBaselineProgram = decodeRadioBaseline({
+        channels: [],
+        activeRadioId: radioId,
+        radioBaseline: memoryData,
+      });
+      patchSession(sessionId, {
+        radioBaseline: memoryData.slice(),
+        radioBaselineProgram: radioBaselineProgram ? cloneRadioProgram(radioBaselineProgram) : undefined,
+      });
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
       toast.add({
         title: 'Read radio',
@@ -2025,6 +2061,7 @@ export function useRadio() {
       memory: memoryData,
       activeRadioId: radioId,
       program: decoded,
+      loadedProgram: decoded ? cloneRadioProgram(decoded) : undefined,
       settingsMemoryMap: memoryMapFromConfig(config),
       channels: rowsFromProgram(decoded),
       memoryHistory,
@@ -2068,6 +2105,7 @@ export function useRadio() {
 
     patchSession(cardId, {
       program: nextProgram,
+      loadedProgram: cloneRadioProgram(nextProgram),
       channels: rowsFromProgram(nextProgram),
       memoryHistory: resetRadioMemoryHistory(nextProgram),
     });
@@ -2249,6 +2287,7 @@ export function useRadio() {
     patchSession(cardId, {
       memory: loaded.memory,
       program: loaded.program,
+      loadedProgram: cloneRadioProgram(loaded.program),
       activeRadioId: radioId,
       channels: loaded.program.channels,
       settingsMemoryMap: config.memoryMap,
@@ -2267,13 +2306,13 @@ export function useRadio() {
     const memoryMap = memoryMapFromConfig(config);
     const assignment = programLibraryChannelsIntoSlots(addToRadioDevFixture(), [0, 1], memoryMap);
 
-    persistProgram(
-      {
-        ...session.program,
-        channels: assignment.programmed,
-      },
-      cardId,
-    );
+    const nextProgram: RadioProgram = {
+      ...session.program,
+      channels: assignment.programmed,
+    };
+
+    patchSession(cardId, { loadedProgram: cloneRadioProgram(nextProgram) });
+    persistProgram(nextProgram, cardId);
   }
 
   async function seedAddToRadioDevFixtureInner(options?: {
@@ -2333,6 +2372,7 @@ export function useRadio() {
         memory: loaded.memory,
         activeRadioId: radioId,
         program: loaded.program,
+        loadedProgram: cloneRadioProgram(loaded.program),
         settingsMemoryMap: memoryMapFromConfig(config),
         channels: rowsFromProgram(loaded.program),
         memoryHistory: resetRadioMemoryHistory(loaded.program),
@@ -2361,6 +2401,62 @@ export function useRadio() {
     }
   }
 
+  function decodeRadioBaseline(session: RadioCardSession): RadioProgram | undefined {
+    const radioId = session.activeRadioId;
+    const image = session.radioBaseline;
+
+    if (!radioId || !image || image.length === 0) {
+      return undefined;
+    }
+
+    const config = getConfiguration(radioId);
+    const memoryMap = config ? memoryMapFromConfig(config) : undefined;
+
+    if (!config?.memoryConfig || !memoryMap) {
+      return undefined;
+    }
+
+    try {
+      const codec = createMemoryMapCodec({
+        radioModel: radioId.model,
+        memoryMap,
+        memoryConfig: config.memoryConfig,
+        logger,
+      });
+
+      return codec.decode({
+        radioModel: radioId.model,
+        contents: image,
+      });
+    } catch (cause) {
+      logger.withError(cause).error('Failed to decode radio baseline');
+      return undefined;
+    }
+  }
+
+  function comparisonForSession(session: RadioCardSession | undefined): {
+    program: RadioProgram | undefined;
+    source: RadioComparisonSource;
+  } {
+    if (!session?.program) {
+      return { program: undefined, source: 'editor' };
+    }
+
+    if (session.radioBaseline && session.radioBaseline.length > 0) {
+      const fromRadio = session.radioBaselineProgram ?? decodeRadioBaseline(session);
+
+      if (fromRadio) {
+        return { program: fromRadio, source: 'radio' };
+      }
+    }
+
+    if (session.loadedProgram) {
+      return { program: session.loadedProgram, source: 'loaded' };
+    }
+
+    return { program: session.program, source: 'editor' };
+  }
+
   return {
     configurations,
     manufacturers,
@@ -2377,6 +2473,8 @@ export function useRadio() {
     memory,
     channels,
     program,
+    comparisonBaseline,
+    comparisonSource,
     settingsMemoryMap,
     activeRadioId,
     addTargets,
@@ -2434,6 +2532,10 @@ export function useRadio() {
     saveMemoryFileAs,
     clearCardSession,
   };
+}
+
+export function channelRowsFromProgram(decoded: RadioProgram | undefined): ChannelRow[] {
+  return rowsFromProgram(decoded);
 }
 
 function rowsFromProgram(decoded: RadioProgram | undefined): ChannelRow[] {
