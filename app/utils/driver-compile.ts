@@ -3,6 +3,8 @@ import type {
   RadioExchange,
   RadioExpect,
   RadioMemoryConfig,
+  RadioOnError,
+  RadioProtocolExchangeStep,
   RadioProtocolStep,
   RadioSerialConfig,
 } from '@springfield/ham-radio-api';
@@ -53,6 +55,7 @@ export interface DriverModuleDocument {
   memoryConfig: RadioMemoryConfig;
   readMemory: RadioProtocolStep[];
   writeMemory: RadioProtocolStep[];
+  onError?: RadioOnError;
   settingsSchema?: {
     model: string;
     settingsSchema: { type: 'object'; additionalProperties: true };
@@ -780,6 +783,42 @@ export function explainProtocolStep(step: RadioProtocolStep, memory?: RadioMemor
   return lines.length > 0 ? lines : ['This exchange does not send or wait for anything yet.'];
 }
 
+function compileOnErrorExchangeSteps(
+  steps: DriverStepDraft[],
+  pathPrefix: string,
+  knownSegments: Set<string>,
+  chunkSize: number | undefined,
+): { exchanges: RadioProtocolExchangeStep[]; issues: DriverIssue[] } {
+  const issues: DriverIssue[] = [];
+  const exchanges: RadioProtocolExchangeStep[] = [];
+
+  for (const step of steps) {
+    if (step.kind !== 'exchange') {
+      issues.push({
+        level: 'warning',
+        path: `${pathPrefix}.${step.id}`,
+        message: 'onError cleanup must use exchange steps only.',
+      });
+      continue;
+    }
+
+    const compiled = compileStep(step, 'read', knownSegments, chunkSize);
+    issues.push(...compiled.issues);
+
+    if (
+      compiled.step &&
+      !('read' in compiled.step) &&
+      !('write' in compiled.step) &&
+      !('catRead' in compiled.step) &&
+      !('catWrite' in compiled.step)
+    ) {
+      exchanges.push(compiled.step);
+    }
+  }
+
+  return { exchanges, issues };
+}
+
 /**
  * Turn the form into protocol JSON and a list of syntax problems.
  * Invalid fields are left out of the JSON so the preview stays parseable.
@@ -792,6 +831,8 @@ export function compileDriverDraft(draft: DriverDraft): CompiledDriver {
   const known = new Set(memory ? Object.keys(memory.segments) : []);
   const read = draft.readSteps.map((step) => compileStep(step, 'read', known, memory?.chunkSize));
   const write = draft.writeSteps.map((step) => compileStep(step, 'write', known, memory?.chunkSize));
+  const onErrorRead = compileOnErrorExchangeSteps(draft.onErrorReadSteps, 'onError.readMemory', known, memory?.chunkSize);
+  const onErrorWrite = compileOnErrorExchangeSteps(draft.onErrorWriteSteps, 'onError.writeMemory', known, memory?.chunkSize);
 
   if (read.length === 0) {
     issues.push({ level: 'error', path: 'read', message: 'Add at least one read step.' });
@@ -883,8 +924,16 @@ export function compileDriverDraft(draft: DriverDraft): CompiledDriver {
     document.codec = { type: 'memoryMap' };
   }
 
+  if (onErrorRead.exchanges.length > 0 || onErrorWrite.exchanges.length > 0) {
+    document.onError = {
+      ...(onErrorRead.exchanges.length > 0 ? { readMemory: onErrorRead.exchanges } : {}),
+      ...(onErrorWrite.exchanges.length > 0 ? { writeMemory: onErrorWrite.exchanges } : {}),
+    };
+  }
+
   const stepIssues = [...read, ...write].flatMap((item) => item.issues);
-  const allIssues = [...issues, ...stepIssues];
+  const onErrorIssues = [...onErrorRead.issues, ...onErrorWrite.issues];
+  const allIssues = [...issues, ...stepIssues, ...onErrorIssues];
 
   return {
     document,

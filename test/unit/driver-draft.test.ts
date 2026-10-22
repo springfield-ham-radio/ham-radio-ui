@@ -191,4 +191,24 @@ describe('driver draft', () => {
     expect(parseDriverBaudRates('9600, fast')).toEqual([9600]);
     expect(formatDriverBaudRates([57600, 9600, 9600])).toBe('9600, 57600');
   });
+
+  it('round-trips onError cleanup exchanges through import and compile', () => {
+    const onError = {
+      readMemory: [{ setBaudRate: 57600 }, { send: ['E'] }],
+      writeMemory: [{ send: ['E'], expect: '0x06' }],
+    };
+    const compiled = compileDriverDraft(exampleDriverDraft());
+    const module = { ...compiled.document, onError };
+    const imported = importDriverModule(module);
+
+    expect(imported.draft?.onErrorReadSteps).toHaveLength(2);
+    expect(imported.draft?.onErrorWriteSteps).toHaveLength(1);
+    expect(imported.draft?.onErrorReadSteps[0]?.setBaudRate).toBe('57600');
+    expect(imported.draft?.onErrorReadSteps[1]?.send.map((token) => token.value)).toEqual(['E']);
+
+    const again = compileDriverDraft(imported.draft ?? createDriverDraft());
+
+    expect(again.document.onError).toEqual(onError);
+    expect(again.errorCount).toBe(0);
+  });
 });

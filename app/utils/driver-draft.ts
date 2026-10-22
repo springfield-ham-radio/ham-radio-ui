@@ -235,6 +235,10 @@ export interface DriverDraft {
   segments: DriverSegmentDraft[];
   readSteps: DriverStepDraft[];
   writeSteps: DriverStepDraft[];
+  /** Exchange-only cleanup after a failed or cancelled read. */
+  onErrorReadSteps: DriverStepDraft[];
+  /** Exchange-only cleanup after a failed or cancelled write. */
+  onErrorWriteSteps: DriverStepDraft[];
   channelSchema: DriverChannelSchemaDraft;
   memoryMap: DriverMemoryMapDraft;
 }
@@ -631,6 +635,8 @@ export function createDriverDraft(): DriverDraft {
     segments: [],
     readSteps: [],
     writeSteps: [],
+    onErrorReadSteps: [],
+    onErrorWriteSteps: [],
     channelSchema: createChannelSchemaDraft(),
     memoryMap: createMemoryMapDraft(),
   };
@@ -1173,6 +1179,8 @@ function coerceDraftRecord(record: Record<string, unknown>): DriverDraft {
     memoryMap: coerceMemoryMap(record.memoryMap),
     readSteps: coerceSteps(record.readSteps),
     writeSteps: coerceSteps(record.writeSteps),
+    onErrorReadSteps: coerceSteps(record.onErrorReadSteps),
+    onErrorWriteSteps: coerceSteps(record.onErrorWriteSteps),
   };
 }
 
