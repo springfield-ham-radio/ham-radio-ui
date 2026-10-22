@@ -15,12 +15,15 @@ export interface RadioBoardSettings {
   layout: RadioBoardLayout;
   /** Saved-radio ids currently shown as cards, in display order. */
   openIds: string[];
+  /** Card id (saved-radio id or guest clone id) that was focused last on the Radio page. */
+  focusedId?: string;
 }
 
 export function defaultRadioBoardSettings(): RadioBoardSettings {
   return {
     layout: 'tabs',
     openIds: [],
+    focusedId: undefined,
   };
 }
 
@@ -62,17 +65,29 @@ export function parseRadioBoardSettings(raw: string | null): RadioBoardSettings 
       }
     }
 
-    return { layout, openIds };
+    const focusedId = typeof record.focusedId === 'string' ? record.focusedId.trim() : undefined;
+
+    return {
+      layout,
+      openIds,
+      focusedId: focusedId && focusedId.length > 0 ? focusedId : undefined,
+    };
   } catch {
     return defaultRadioBoardSettings();
   }
 }
 
 export function serializeRadioBoardSettings(settings: RadioBoardSettings): string {
-  return JSON.stringify({
+  const payload: Record<string, unknown> = {
     layout: settings.layout === 'tile' ? 'tile' : 'tabs',
     openIds: settings.openIds,
-  });
+  };
+
+  if (settings.focusedId) {
+    payload.focusedId = settings.focusedId;
+  }
+
+  return JSON.stringify(payload);
 }
 
 export function readRadioBoardSettings(): RadioBoardSettings {

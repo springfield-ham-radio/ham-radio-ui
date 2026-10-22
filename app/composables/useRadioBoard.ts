@@ -38,6 +38,7 @@ export function useRadioBoard() {
     writeRadioBoardSettings({
       layout: layout.value,
       openIds: openIds.value,
+      focusedId: focusedCardId.value,
     });
   }
 
@@ -54,7 +55,7 @@ export function useRadioBoard() {
     const nextCards = hydratedBoardCards(cards.value, open);
     layout.value = stored.layout;
     cards.value = nextCards;
-    focusedCardId.value = focusedCardAfterHydrate(focusedCardId.value, nextCards);
+    focusedCardId.value = focusedCardAfterHydrate(stored.focusedId ?? focusedCardId.value, nextCards);
     hydrated.value = true;
   }
 
@@ -69,6 +70,7 @@ export function useRadioBoard() {
   function focusCard(id: string): void {
     if (cards.value.some((card) => card.id === id)) {
       focusedCardId.value = id;
+      persist();
     }
   }
 
@@ -77,6 +79,7 @@ export function useRadioBoard() {
 
     if (existing) {
       focusedCardId.value = existing.id;
+      persist();
       return;
     }
 
@@ -93,6 +96,7 @@ export function useRadioBoard() {
     const id = crypto.randomUUID();
     cards.value = [...cards.value, { id, guest }];
     focusedCardId.value = id;
+    persist();
     return id;
   }
 
