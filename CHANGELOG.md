@@ -1,3 +1,13 @@
+## [1.28.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.27.0...v1.28.0) (2026-10-22)
+
+### Features
+
+* **ui:** dismissible driver update banner ([#168](https://github.com/springfield-ham-radio/ham-radio-ui/issues/168)) ([1a2f3c8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1a2f3c849a0778e59caa01afd807fa9471b64ca9)), closes [#167](https://github.com/springfield-ham-radio/ham-radio-ui/issues/167)
+
+### Bug Fixes
+
+* **serial:** wait for TH-D74 port after clone read reboot ([#166](https://github.com/springfield-ham-radio/ham-radio-ui/issues/166)) ([41d8101](https://github.com/springfield-ham-radio/ham-radio-ui/commit/41d8101cb0fc1f0034252aef3078fa5d1f3d1150))
+
 ## [1.27.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.26.1...v1.27.0) (2026-10-22)
 
 ### Features
