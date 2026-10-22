@@ -1,3 +1,9 @@
+## [1.26.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.26.0...v1.26.1) (2026-10-22)
+
+### Bug Fixes
+
+* **deps:** clear Dependabot alerts for vite and simple-git ([#164](https://github.com/springfield-ham-radio/ham-radio-ui/issues/164)) ([d54105b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d54105bd0e4792df0614fe270a55f15ace1fafcd))
+
 ## [1.26.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.25.1...v1.26.0) (2026-10-22)
 
 ### Features
