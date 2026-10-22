@@ -13,6 +13,8 @@ const {
   onProgressDialogClosed,
 } = useRadio();
 
+const waitingForRadioReconnect = useState('serial-port-reconnect-waiting', () => false);
+
 const now = ref(Date.now());
 
 let tickTimer: ReturnType<typeof setInterval> | undefined;
@@ -45,8 +47,20 @@ onBeforeUnmount(() => {
   }
 });
 
+const postBackupWriteFailure = computed(
+  () => Boolean(progressError.value?.context.backupSavedBeforeWriteFailure),
+);
+
 const progressCopy = computed(() => {
   if (progressKind.value === 'write') {
+    if (progressError.value && postBackupWriteFailure.value) {
+      return {
+        title: 'Write failed after backup',
+        description: 'The pre-write backup was saved, but nothing was written to the radio.',
+        errorTitle: 'Backup completed; radio not written',
+      };
+    }
+
     return {
       title: progressError.value ? 'Write failed' : 'Writing to radio',
       description: progressError.value
@@ -138,6 +152,14 @@ function closeProgress(): void {
         {{ progressSerialLog.entryCount }} serial frame{{ progressSerialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
       <div v-else-if="!progressError" class="flex flex-col gap-3">
+        <UAlert
+          v-if="waitingForRadioReconnect"
+          color="info"
+          variant="soft"
+          icon="i-lucide-usb"
+          title="Waiting for radio to reconnect…"
+          description="The programming port disappeared while the radio restarted. HamBench will continue when it comes back."
+        />
         <div
           class="h-2 w-full overflow-hidden rounded-full bg-accented"
           role="progressbar"
