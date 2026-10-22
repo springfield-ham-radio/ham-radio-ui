@@ -222,6 +222,7 @@ async function hydrateConfigsIntoCatalog(
   sourcePath?: string,
   expectedModelId?: string,
   replaceUserCatalog = false,
+  moduleVersion?: string,
 ): Promise<RegistryRadio[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const radios: RegistryRadio[] = [];
@@ -237,11 +238,75 @@ async function hydrateConfigsIntoCatalog(
     await upsertRadioCatalogRecord(radio, source, {
       sourcePath: sourcePath ?? configPath,
       replaceUserCatalog,
+      ...(moduleVersion ? { moduleVersion } : {}),
     });
     radios.push(radio);
   }
 
   return radios;
+}
+
+export interface InstalledModuleIdentity {
+  modelId: string;
+  version: string;
+  installPath: string;
+  source: RadioCatalogSource;
+}
+
+function normalizedInstallPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * Why the catalog row does not describe the module that was just written to disk.
+ * Undefined when model id, source, module version, and install path all match.
+ */
+export function catalogInstallMismatch(
+  record: Pick<RadioCatalogRecord, 'modelId' | 'version' | 'source' | 'sourcePath'> | undefined,
+  expected: InstalledModuleIdentity,
+): string | undefined {
+  if (!record) {
+    return `Installed ${expected.modelId} ${expected.version}, but the catalog has no row for it.`;
+  }
+
+  const path = record.sourcePath ?? '';
+  const parsed = path ? parseModuleInstallPath(path) : undefined;
+  const problems: string[] = [];
+
+  if (record.modelId !== expected.modelId) {
+    problems.push(`model ${record.modelId}`);
+  }
+
+  if (record.source !== expected.source) {
+    problems.push(`source ${record.source}`);
+  }
+
+  if (record.version !== expected.version) {
+    problems.push(`version ${record.version}`);
+  }
+
+  if (normalizedInstallPath(path) !== normalizedInstallPath(expected.installPath)) {
+    problems.push(`path ${path || '(missing)'}`);
+  }
+
+  if (!parsed || parsed.moduleId !== expected.modelId || parsed.version !== expected.version) {
+    problems.push(`install folder ${parsed ? `${parsed.moduleId}/${parsed.version}` : 'unrecognized'}`);
+  }
+
+  if (problems.length === 0) {
+    return undefined;
+  }
+
+  return `Installed ${expected.modelId} ${expected.version} at ${expected.installPath}, but the catalog row still has ${problems.join(', ')}.`;
+}
+
+async function assertCatalogMatchesInstall(expected: InstalledModuleIdentity): Promise<void> {
+  const record = await getRadioCatalogRecord(expected.modelId);
+  const message = catalogInstallMismatch(record, expected);
+
+  if (message) {
+    throw new Error(message);
+  }
 }
 
 /**
@@ -274,7 +339,14 @@ export async function installOfficialModule(
       installed.installPath,
       entry.id,
       options.replaceUserCatalog ?? false,
+      installed.version,
     );
+    await assertCatalogMatchesInstall({
+      modelId: entry.id,
+      version: installed.version,
+      installPath: installed.installPath,
+      source: 'installed',
+    });
     catalogUpdated = true;
     await settleReplacedInstall(installed, true);
 
@@ -466,7 +538,20 @@ export async function installLocalModuleZip(
 
   try {
     await assertPackedConfigsApiCompatible(installed.configPaths, moduleId);
-    const radios = await hydrateConfigsIntoCatalog(installed.configPaths, 'user', installed.installPath, moduleId);
+    const radios = await hydrateConfigsIntoCatalog(
+      installed.configPaths,
+      'user',
+      installed.installPath,
+      moduleId,
+      false,
+      installed.version,
+    );
+    await assertCatalogMatchesInstall({
+      modelId: moduleId,
+      version: installed.version,
+      installPath: installed.installPath,
+      source: 'user',
+    });
     catalogUpdated = true;
     await settleReplacedInstall(installed, true);
     await removeUnverifiedModuleDirectory(previousSourcePath, installed.moduleId, installed.version);
@@ -605,6 +690,172 @@ export function parseModuleInstallPath(
     moduleId: match[1]!,
     version: match[2]!,
   };
+}
+
+/** Rewrite the version segment of a module install directory. */
+export function moduleInstallPathForVersion(sourcePath: string, version: string): string | undefined {
+  const parsed = parseModuleInstallPath(sourcePath);
+
+  if (!parsed) {
+    return undefined;
+  }
+
+  const normalized = normalizedInstallPath(sourcePath);
+  const marker = `/${parsed.moduleId}/${parsed.version}`;
+
+  if (!normalized.endsWith(marker)) {
+    return undefined;
+  }
+
+  return `${normalized.slice(0, -parsed.version.length)}${version}`;
+}
+
+export type ModuleInstallRepairPlan =
+  | { action: 'skip' }
+  | { action: 'ok' }
+  | { action: 'repair'; version: string }
+  | { action: 'flag'; message: string };
+
+export interface ModuleInstallFlag {
+  modelId: string;
+  message: string;
+}
+
+/**
+ * Decide how to line a catalog row up with the module directories on disk.
+ * The directory version is the installed module version. A missing recorded
+ * folder is repaired only when one other version directory exists.
+ */
+export function planModuleInstallRepair(
+  record: Pick<RadioCatalogRecord, 'modelId' | 'name' | 'version' | 'sourcePath'>,
+  versionsOnDisk: readonly string[],
+): ModuleInstallRepairPlan {
+  const parsed = record.sourcePath ? parseModuleInstallPath(record.sourcePath) : undefined;
+
+  if (!parsed) {
+    return { action: 'skip' };
+  }
+
+  const folderPresent = versionsOnDisk.includes(parsed.version);
+
+  if (folderPresent && parsed.version === record.version) {
+    return { action: 'ok' };
+  }
+
+  if (folderPresent && parsed.version !== record.version) {
+    return { action: 'repair', version: parsed.version };
+  }
+
+  if (versionsOnDisk.length === 1) {
+    return { action: 'repair', version: versionsOnDisk[0]! };
+  }
+
+  const label = record.name.trim() || record.modelId;
+
+  if (versionsOnDisk.length === 0) {
+    return {
+      action: 'flag',
+      message: `${label} catalog row points at ${parsed.version}, but that install folder is missing.`,
+    };
+  }
+
+  return {
+    action: 'flag',
+    message: `${label} catalog row points at ${parsed.version}, which is missing, and ${versionsOnDisk.length} other versions are on disk.`,
+  };
+}
+
+/**
+ * Repair installed module rows whose folder is missing or whose version column
+ * disagrees with that folder. Returns rows that could not be repaired.
+ */
+export async function reconcileInstalledRadioModules(): Promise<ModuleInstallFlag[]> {
+  if (!isTauriRuntime()) {
+    return [];
+  }
+
+  const flags: ModuleInstallFlag[] = [];
+  let records: RadioCatalogRecord[];
+
+  try {
+    records = await listRadioCatalogRecords();
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Could not read the radio catalog';
+    return [{ modelId: '', message }];
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+
+  for (const record of records) {
+    const parsed = record.sourcePath ? parseModuleInstallPath(record.sourcePath) : undefined;
+
+    if (!parsed || (record.source !== 'installed' && record.source !== 'user') || !record.sourcePath) {
+      continue;
+    }
+
+    let versionsOnDisk: string[] = [];
+
+    try {
+      versionsOnDisk = await invoke<string[]>('list_installed_radio_module_versions', {
+        moduleId: parsed.moduleId,
+      });
+    } catch (cause) {
+      flags.push({
+        modelId: record.modelId,
+        message: cause instanceof Error ? cause.message : `Could not list installs for ${record.modelId}`,
+      });
+      continue;
+    }
+
+    const plan = planModuleInstallRepair(record, versionsOnDisk);
+
+    if (plan.action === 'flag') {
+      flags.push({ modelId: record.modelId, message: plan.message });
+      continue;
+    }
+
+    if (plan.action !== 'repair') {
+      continue;
+    }
+
+    const installPath = moduleInstallPathForVersion(record.sourcePath, plan.version);
+
+    if (!installPath) {
+      flags.push({
+        modelId: record.modelId,
+        message: `Could not resolve an install path for ${record.modelId} ${plan.version}.`,
+      });
+      continue;
+    }
+
+    try {
+      const configPaths = await invoke<string[]>('list_installed_radio_module_configs', {
+        moduleId: parsed.moduleId,
+        version: plan.version,
+      });
+      await hydrateConfigsIntoCatalog(
+        configPaths,
+        record.source,
+        installPath,
+        record.modelId,
+        record.source === 'user',
+        plan.version,
+      );
+      await assertCatalogMatchesInstall({
+        modelId: record.modelId,
+        version: plan.version,
+        installPath,
+        source: record.source,
+      });
+    } catch (cause) {
+      flags.push({
+        modelId: record.modelId,
+        message: cause instanceof Error ? cause.message : `Could not repair ${record.modelId}`,
+      });
+    }
+  }
+
+  return flags;
 }
 
 /** True when the install directory used the pre-ADR-0009 manufacturer bundle layout. */

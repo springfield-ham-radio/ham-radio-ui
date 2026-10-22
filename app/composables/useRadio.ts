@@ -36,6 +36,7 @@ import {
 } from '~/utils/radio-catalog-db';
 import {
   migrateLegacyManufacturerRadioModules,
+  reconcileInstalledRadioModules,
   reloadUserJsonCatalogRecords,
   uninstallRadioCatalogRecord,
 } from '~/utils/radio-module-install';
@@ -186,6 +187,7 @@ export interface ChannelRow {
 
 export function useRadio() {
   const toast = useToast();
+  let lastModuleInstallFlagMessage = '';
   const configurations = useState<LoadedRadioConfig[]>('radio-configurations', () => []);
   const manufacturers = useState<string[]>('radio-manufacturers', () => []);
   const isLoading = useState('radio-loading', () => false);
@@ -449,9 +451,26 @@ export function useRadio() {
 
   async function refreshCatalogState(): Promise<void> {
     await reloadUserJsonCatalogRecords();
+    const flags = await reconcileInstalledRadioModules();
     const records = await listRadioCatalogRecords();
     configurations.value = records.map((record) => record.config);
     manufacturers.value = await listRadioManufacturers();
+
+    const flagMessage = flags.map((flag) => flag.message).join(' ');
+
+    if (flagMessage.length > 0 && flagMessage !== lastModuleInstallFlagMessage) {
+      lastModuleInstallFlagMessage = flagMessage;
+      toast.add({
+        title: 'Driver catalog needs attention',
+        description: flagMessage,
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+    }
+
+    if (flagMessage.length === 0) {
+      lastModuleInstallFlagMessage = '';
+    }
   }
 
   async function initialize(): Promise<void> {

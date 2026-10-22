@@ -113,10 +113,17 @@ function recordToRadioId(record: RadioCatalogRecord): RadioId {
 export async function upsertRadioCatalogRecord(
   radio: RegistryRadio,
   source: RadioCatalogSource,
-  options: { sourcePath?: string; contentHash?: string; replaceUserCatalog?: boolean } = {},
+  options: {
+    sourcePath?: string;
+    contentHash?: string;
+    replaceUserCatalog?: boolean;
+    /** Module directory version. This becomes `radio_models.version` for zip installs. */
+    moduleVersion?: string;
+  } = {},
 ): Promise<RadioCatalogRecord> {
   const contentHash = options.contentHash ?? hashRadioConfig(radio);
   const metadata = extractCatalogMetadata(radio, source, contentHash);
+  const version = options.moduleVersion ?? metadata.version;
   const now = Date.now();
   const existing = await getRadioCatalogRecord(metadata.modelId);
 
@@ -142,7 +149,9 @@ export async function upsertRadioCatalogRecord(
     existing &&
     source === 'installed' &&
     existing.source === 'installed' &&
-    existing.contentHash === contentHash
+    existing.contentHash === contentHash &&
+    existing.version === version &&
+    (options.sourcePath === undefined || existing.sourcePath === options.sourcePath)
   ) {
     return existing;
   }
@@ -151,7 +160,7 @@ export async function upsertRadioCatalogRecord(
     modelId: metadata.modelId,
     name: metadata.name,
     manufacturer: metadata.manufacturer,
-    version: metadata.version,
+    version,
     description: metadata.description,
     capabilities: metadata.capabilities,
     source,

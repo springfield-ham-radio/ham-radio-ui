@@ -77,4 +77,30 @@ describe('radio catalog hydrate', () => {
     expect(replaced.sourcePath).toContain('baofeng-uv5r');
     expect(replaced.createdAt).toBe(kept.createdAt);
   });
+
+  it('should rewrite an installed row when the content hash matches but the module path changed', async () => {
+    const config = readJson('configs/baofeng-uv5r.json');
+    const documentsByRef = {
+      '../src/shared/schemas/settings-schema.json': readJson('src/shared/schemas/settings-schema.json'),
+      '../src/shared/schemas/channel-schema.json': readJson('src/shared/schemas/channel-schema.json'),
+      '../src/shared/memory-maps/uv5r-settings.json': readJson('src/shared/memory-maps/uv5r-settings.json'),
+    };
+    const radio = hydrateRadioConfig(config, documentsByRef);
+
+    await upsertRadioCatalogRecord(radio, 'installed', {
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/1.11.0',
+      moduleVersion: '1.11.0',
+    });
+    const updated = await upsertRadioCatalogRecord(radio, 'installed', {
+      sourcePath: '/tmp/radio-modules/baofeng-uv5r/1.12.0',
+      moduleVersion: '1.12.0',
+    });
+
+    expect(updated.version).toBe('1.12.0');
+    expect(updated.sourcePath).toBe('/tmp/radio-modules/baofeng-uv5r/1.12.0');
+    expect(updated.config.version).toBe(radio.version);
+    const listed = (await listRadioCatalogRecords()).find((record) => record.modelId === 'baofeng-uv5r');
+    expect(listed?.version).toBe('1.12.0');
+    expect(listed?.sourcePath).toBe('/tmp/radio-modules/baofeng-uv5r/1.12.0');
+  });
 });

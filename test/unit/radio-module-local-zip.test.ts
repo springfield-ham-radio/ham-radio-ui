@@ -29,6 +29,7 @@ vi.mock('../../app/utils/radio-catalog-db.ts', () => ({
   listRadioCatalogRecords: vi.fn(async () => []),
 }));
 
+import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import { installLocalModuleZip, updateInstalledModule } from '../../app/utils/radio-module-install.ts';
 
 const entry = {
@@ -72,6 +73,10 @@ describe('local beta zip install', () => {
     getRadioCatalogRecord.mockReset();
     upsertRadioCatalogRecord.mockReset();
     upsertRadioCatalogRecord.mockImplementation(async () => userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1', '1.11.2-beta.1'));
+    vi.mocked(loadRadioConfigFromFile).mockResolvedValue({
+      id: { model: 'kenwood-th-d74', name: 'Kenwood TH-D74', manufacturer: 'Kenwood' },
+      version: '1.11.2-beta.1',
+    } as Awaited<ReturnType<typeof loadRadioConfigFromFile>>);
   });
 
   it('should roll back a blocked install and leave no catalog row', async () => {
@@ -141,12 +146,13 @@ describe('local beta zip install', () => {
 
   it('should delete the previous module directory only after the new catalog row succeeds', async () => {
     const order: string[] = [];
-    getRadioCatalogRecord.mockResolvedValue(
-      userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.1', '1.11.1-beta.1'),
-    );
+    const written = userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1', '1.11.2-beta.1');
+    let current = userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.1', '1.11.1-beta.1');
+    getRadioCatalogRecord.mockImplementation(async () => current);
     upsertRadioCatalogRecord.mockImplementation(async () => {
       order.push('upsert');
-      return userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.2-beta.1', '1.11.2-beta.1');
+      current = written;
+      return written;
     });
     invoke.mockImplementation(async (command: string, args?: { version?: string }) => {
       if (command === 'uninstall_radio_module') {
@@ -176,7 +182,13 @@ describe('local beta zip install', () => {
   });
 
   it('should not delete a user JSON path when a local zip replaces it', async () => {
-    getRadioCatalogRecord.mockResolvedValue(userRecord('/tmp/kenwood-th-d74.json', '1.11.1'));
+    const written = userRecord('/tmp/radio-modules/kenwood-th-d74/1.11.1-beta.1', '1.11.1-beta.1');
+    let current = userRecord('/tmp/kenwood-th-d74.json', '1.11.1');
+    getRadioCatalogRecord.mockImplementation(async () => current);
+    upsertRadioCatalogRecord.mockImplementation(async () => {
+      current = written;
+      return written;
+    });
     invoke.mockImplementation(async (command: string) => {
       if (command === 'install_radio_module_from_zip') {
         return {
@@ -316,5 +328,59 @@ describe('local beta zip install', () => {
       expect.objectContaining({ replaceUserCatalog: true }),
     );
     expect(invoke).not.toHaveBeenCalledWith('uninstall_radio_module', expect.anything());
+  });
+
+  it('should reject a kenwood-th-f6 update that leaves the catalog on 1.11.0', async () => {
+    const stalePath =
+      '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0';
+    const stale = {
+      ...userRecord(stalePath, '1.11.0'),
+      modelId: 'kenwood-th-f6',
+      name: 'TH-F6',
+      source: 'installed' as const,
+    };
+    getRadioCatalogRecord.mockResolvedValue(stale);
+    upsertRadioCatalogRecord.mockResolvedValue(stale);
+    vi.mocked(loadRadioConfigFromFile).mockResolvedValue({
+      id: { model: 'kenwood-th-f6', name: 'Kenwood TH-F6', manufacturer: 'Kenwood' },
+      version: '1.12.0',
+    } as Awaited<ReturnType<typeof loadRadioConfigFromFile>>);
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'download_and_install_radio_module') {
+        return {
+          moduleId: 'kenwood-th-f6',
+          version: '1.12.0',
+          installPath:
+            '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.12.0',
+          configPaths: [
+            '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.12.0/configs/kenwood-th-f6.json',
+          ],
+          replacedPrevious: false,
+        };
+      }
+
+      if (command === 'load_text_file') {
+        return JSON.stringify({ minApiVersion: '18.0.1' });
+      }
+
+      return undefined;
+    });
+
+    const f6 = {
+      ...entry,
+      id: 'kenwood-th-f6',
+      name: 'Kenwood TH-F6',
+      version: '1.12.0',
+    };
+
+    await expect(updateInstalledModule(f6, stale)).rejects.toThrow(/catalog row still has/);
+    expect(invoke).toHaveBeenCalledWith('uninstall_radio_module', {
+      moduleId: 'kenwood-th-f6',
+      version: '1.12.0',
+    });
+    expect(invoke).not.toHaveBeenCalledWith('uninstall_radio_module', {
+      moduleId: 'kenwood-th-f6',
+      version: '1.11.0',
+    });
   });
 });

@@ -1,7 +1,7 @@
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import { compareSemver, isApiVersionCompatible } from '@springfield/ham-radio-registry';
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
-import { APP_HAM_RADIO_API_VERSION, parseModuleInstallPath } from '~/utils/radio-module-install';
+import { APP_HAM_RADIO_API_VERSION } from '~/utils/radio-module-install';
 import { compareSemverWithPrerelease, isBetaDriverRecord } from '~/utils/radio-module-semver';
 
 const APP_UPDATE_REQUIRED = 'This radio module requires a newer version of HamBench.';
@@ -125,24 +125,29 @@ function formatModelIdPart(part: string): string {
 }
 
 /**
- * Zip version used to decide whether the official catalog has a newer download.
- * Installed rows show the radio config version instead.
+ * Installed module version. This is `radio_models.version`, which install and
+ * startup repair keep equal to the `radio-modules/<id>/<version>` directory.
  */
-function installedModuleVersion(record: RadioCatalogRecord): string {
-  if (record.sourcePath) {
-    const parsed = parseModuleInstallPath(record.sourcePath);
+export function installedModuleVersion(record: Pick<RadioCatalogRecord, 'version'>): string {
+  return record.version;
+}
 
-    if (parsed) {
-      return parsed.version;
-    }
+/** Driver config version stored inside the module JSON. */
+export function installedDriverConfigVersion(
+  record: Pick<RadioCatalogRecord, 'version' | 'config'>,
+): string {
+  const configVersion = record.config?.version;
+
+  if (typeof configVersion === 'string' && configVersion.length > 0) {
+    return configVersion;
   }
 
   return record.version;
 }
 
-/** Version label for an installed radio: the driver config version, not the module zip. */
+/** Version label for an installed radio: the module version, then the model id. */
 export function installedDriverVersionLabel(record: Pick<RadioCatalogRecord, 'version' | 'modelId'>): string {
-  return `v${record.version} · ${record.modelId}`;
+  return `v${installedModuleVersion(record)} · ${record.modelId}`;
 }
 
 /**

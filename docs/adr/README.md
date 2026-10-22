@@ -19,6 +19,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0009](./0009-per-radio-modules.md) | accepted | Per-radio module installs |
 | [0010](./0010-channel-pack.md) | accepted | Channel pack (.hpack) format |
 | [0011](./0011-channel-pack-url.md) | accepted | Channel pack URL import and manual updates |
+| [0012](./0012-installed-module-version.md) | accepted | Installed module version is the directory version |
 
 Numbers 0006–0008 are unused in this repository. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 

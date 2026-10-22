@@ -520,6 +520,48 @@ pub fn install_radio_module_from_zip(
     )
 }
 
+fn installed_version_directory_names(module_dir: &Path) -> Result<Vec<String>, String> {
+    if !module_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut versions = Vec::new();
+
+    for entry in fs::read_dir(module_dir).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+
+        if !entry
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_dir()
+        {
+            continue;
+        }
+
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+
+        if safe_install_segment(name).is_ok() {
+            versions.push(name.to_string());
+        }
+    }
+
+    versions.sort();
+    Ok(versions)
+}
+
+#[tauri::command]
+pub fn list_installed_radio_module_versions(
+    app: AppHandle,
+    module_id: String,
+) -> Result<Vec<String>, String> {
+    safe_install_segment(&module_id)?;
+    let module_dir = radio_modules_root(&app)?.join(&module_id);
+    installed_version_directory_names(&module_dir)
+}
+
 #[tauri::command]
 pub fn list_installed_radio_module_configs(
     app: AppHandle,
@@ -560,8 +602,9 @@ pub fn uninstall_radio_module(
 #[cfg(test)]
 mod tests {
     use super::{
-        commit_replaced_install, config_json_count_in_zip, install_verified_tree, is_direct_configs_json,
-        previous_install_backup, rollback_replaced_install, safe_install_segment, sha256_regular_file,
+        commit_replaced_install, config_json_count_in_zip, install_verified_tree, installed_version_directory_names,
+        is_direct_configs_json, previous_install_backup, rollback_replaced_install, safe_install_segment,
+        sha256_regular_file,
     };
     use std::fs;
     use std::io::{Cursor, Write};
@@ -583,6 +626,23 @@ mod tests {
         }
 
         cursor.into_inner()
+    }
+
+    #[test]
+    fn lists_only_version_directories_under_a_module() {
+        let root = std::env::temp_dir().join(format!(
+            "ham-radio-module-versions-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let module_dir = root.join("kenwood-th-f6");
+        fs::create_dir_all(module_dir.join("1.12.0")).expect("version dir");
+        fs::create_dir_all(module_dir.join("1.11.0")).expect("version dir");
+        fs::write(module_dir.join("notes.txt"), "ignore").expect("file");
+
+        let versions = installed_version_directory_names(&module_dir).expect("list");
+        assert_eq!(versions, vec!["1.11.0".to_string(), "1.12.0".to_string()]);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
