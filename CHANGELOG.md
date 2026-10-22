@@ -1,3 +1,9 @@
+## [1.27.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.26.1...v1.27.0) (2026-10-22)
+
+### Features
+
+* **radio:** persist last focused saved radio on the board ([#165](https://github.com/springfield-ham-radio/ham-radio-ui/issues/165)) ([6dbb59c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/6dbb59ca82c3b25df0340dd6703d64babde99be9)), closes [#163](https://github.com/springfield-ham-radio/ham-radio-ui/issues/163)
+
 ## [1.26.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.26.0...v1.26.1) (2026-10-22)
 
 ### Bug Fixes
