@@ -714,6 +714,7 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             radio_modules::download_and_install_radio_module,
             radio_modules::sha256_file,
             radio_modules::install_radio_module_from_zip,
+            radio_modules::list_installed_radio_module_versions,
             radio_modules::list_installed_radio_module_configs,
             radio_modules::uninstall_radio_module,
             radio_modules::commit_radio_module_replace,

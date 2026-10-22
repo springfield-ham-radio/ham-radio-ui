@@ -4,6 +4,7 @@ import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import {
   fetchOfficialModuleCatalog,
   officialCatalogFailureFromCause,
+  reconcileInstalledRadioModules,
   type OfficialModuleCatalogFailure,
 } from '~/utils/radio-module-install';
 import { buildInstalledRadioListItems } from '~/utils/radio-module-listing';
@@ -31,6 +32,7 @@ export function useRadioModuleCatalog() {
 
   async function refreshInstalledRadios(): Promise<void> {
     try {
+      await reconcileInstalledRadioModules();
       catalogRecords.value = await listRadioCatalogRecords();
     } catch {
       catalogRecords.value = [];
@@ -63,13 +65,9 @@ export function useRadioModuleCatalog() {
     reloadPromise = undefined;
   }
 
-  watch(
-    configurations,
-    () => {
-      void refreshInstalledRadios();
-    },
-    { deep: true },
-  );
+  watch(configurations, () => {
+    void refreshInstalledRadios();
+  });
 
   return {
     catalogRecords,

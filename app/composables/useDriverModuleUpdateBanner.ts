@@ -7,7 +7,6 @@ import {
   driverModuleUpdateAlertTitle,
   driverModuleUpdatesFromInstalledItems,
   filterVisibleDriverModuleUpdates,
-  type DriverModuleUpdate,
 } from '~/utils/driver-module-update-alert';
 
 export function useDriverModuleUpdateBanner() {

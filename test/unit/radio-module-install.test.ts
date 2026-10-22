@@ -5,6 +5,7 @@ import { isPathUnderDirectory } from '../../app/utils/radio-catalog-db.ts';
 import {
   APP_HAM_RADIO_API_VERSION,
   catalogConfigMatchesPath,
+  catalogInstallMismatch,
   fetchOfficialModuleCatalog,
   isLegacyManufacturerModulePath,
   isModuleInstallPath,
@@ -14,6 +15,7 @@ import {
   OfficialModuleCatalogError,
   officialCatalogFailureFromCause,
   parseModuleInstallPath,
+  planModuleInstallRepair,
   previousModuleDirectoryToRemove,
   switchAllToVerifiedModules,
   validatePackedConfigMinApiVersion,
@@ -232,5 +234,84 @@ describe('radio module install helpers', () => {
     expect(result.failures).toEqual([
       { id: 'baofeng-uv5r', message: 'Failed to download radio module: HTTP 503' },
     ]);
+  });
+
+  it('should describe a catalog row that stayed on kenwood-th-f6 1.11.0', () => {
+    const message = catalogInstallMismatch(
+      {
+        modelId: 'kenwood-th-f6',
+        version: '1.11.0',
+        source: 'installed',
+        sourcePath:
+          '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0',
+      },
+      {
+        modelId: 'kenwood-th-f6',
+        version: '1.12.0',
+        installPath:
+          '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.12.0',
+        source: 'installed',
+      },
+    );
+
+    expect(message).toContain('1.12.0');
+    expect(message).toContain('1.11.0');
+    expect(message).toContain('catalog row still has');
+  });
+
+  it('should repair a missing 1.11.0 folder when 1.12.0 is the only copy on disk', () => {
+    const record = {
+      modelId: 'kenwood-th-f6',
+      name: 'TH-F6',
+      version: '1.11.0',
+      sourcePath:
+        '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0',
+    };
+
+    expect(planModuleInstallRepair(record, ['1.12.0'])).toEqual({ action: 'repair', version: '1.12.0' });
+  });
+
+  it('should repair when the folder version disagrees with the catalog version', () => {
+    const record = {
+      modelId: 'kenwood-th-f6',
+      name: 'TH-F6',
+      version: '1.12.0',
+      sourcePath:
+        '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0',
+    };
+
+    expect(planModuleInstallRepair(record, ['1.11.0'])).toEqual({ action: 'repair', version: '1.11.0' });
+  });
+
+  it('should flag a missing install folder when several other versions exist', () => {
+    const record = {
+      modelId: 'kenwood-th-f6',
+      name: 'TH-F6',
+      version: '1.11.0',
+      sourcePath:
+        '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.11.0',
+    };
+    const plan = planModuleInstallRepair(record, ['1.10.0', '1.12.0']);
+
+    expect(plan.action).toBe('flag');
+    if (plan.action === 'flag') {
+      expect(plan.message).toContain('TH-F6');
+      expect(plan.message).toContain('1.11.0');
+    }
+  });
+
+  it('should leave a matching install folder alone', () => {
+    expect(
+      planModuleInstallRepair(
+        {
+          modelId: 'kenwood-th-f6',
+          name: 'TH-F6',
+          version: '1.12.0',
+          sourcePath:
+            '/Users/me/Library/Application Support/com.springfield.ham-radio/radio-modules/kenwood-th-f6/1.12.0',
+        },
+        ['1.12.0'],
+      ),
+    ).toEqual({ action: 'ok' });
   });
 });

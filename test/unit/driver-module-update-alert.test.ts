@@ -53,9 +53,10 @@ describe('driver module update alert', () => {
       modelId: 'baofeng-uv5r',
       name: 'UV-5R',
       manufacturer: 'Baofeng',
-      version: '3.4.0',
+      version: '3.0.0',
       source: 'installed',
       sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.0.0',
+      config: { version: '3.4.0' } as LoadedRadioConfig,
     });
     const items = buildInstalledRadioListItems([installed], [baofengEntry]);
     const updates = driverModuleUpdatesFromInstalledItems(items);

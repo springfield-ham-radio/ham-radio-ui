@@ -1,5 +1,9 @@
 import type { InstalledRadioListItem } from '~/utils/radio-module-listing';
-import { installedModuleVersion, radioDisplayName } from '~/utils/radio-module-listing';
+import {
+  installedDriverConfigVersion,
+  installedModuleVersion,
+  radioDisplayName,
+} from '~/utils/radio-module-listing';
 import {
   type DriverUpdateDismissals,
   isDriverUpdateDismissed,
@@ -28,7 +32,7 @@ export function driverModuleUpdatesFromInstalledItems(
         modelId: record.modelId,
         displayName: radioDisplayName(record.manufacturer, record.name),
         installedModuleVersion: installedModuleVersion(record),
-        configVersion: record.version,
+        configVersion: installedDriverConfigVersion(record),
         availableVersion: catalogEntry.version,
       },
     ];

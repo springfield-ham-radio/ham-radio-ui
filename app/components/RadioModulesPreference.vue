@@ -8,7 +8,6 @@ import {
   installPickedLocalModuleFile,
   updateInstalledModule,
   isModuleInstallPath,
-  parseModuleInstallPath,
   pickLocalModuleFile,
   sha256HexForLocalFile,
 } from '~/utils/radio-module-install';
@@ -104,10 +103,7 @@ const replaceOfficialMessage = computed(() => {
     return '';
   }
 
-  const installedVersion =
-    item.record.sourcePath ? parseModuleInstallPath(item.record.sourcePath)?.version : item.record.version;
-
-  return `Replace beta v${installedVersion ?? item.record.version} with official v${item.catalogEntry.version}? The beta files on this computer will be removed.`;
+  return `Replace beta v${item.record.version} with official v${item.catalogEntry.version}? The beta files on this computer will be removed.`;
 });
 
 const anyBusy = computed(() => busyKey.value !== undefined);
