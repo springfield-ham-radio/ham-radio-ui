@@ -1,3 +1,13 @@
+## [1.26.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.25.1...v1.26.0) (2026-10-22)
+
+### Features
+
+* **radio:** adopt protocol onError cleanup (API 18.3.0) ([#162](https://github.com/springfield-ham-radio/ham-radio-ui/issues/162)) ([da035f0](https://github.com/springfield-ham-radio/ham-radio-ui/commit/da035f04570a2bf487fcfa89dca42922c4f88287))
+
+### Bug Fixes
+
+* **deps:** bump launch-editor from 2.14.1 to 2.14.2 ([#161](https://github.com/springfield-ham-radio/ham-radio-ui/issues/161)) ([8ce0d20](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8ce0d202e7168ce9a424d09db07510c5aa440b6c))
+
 ## [1.25.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.25.0...v1.25.1) (2026-10-21)
 
 ### Bug Fixes
