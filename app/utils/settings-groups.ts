@@ -4,6 +4,7 @@ import {
   groupMemoryMapUiFields,
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
+import { resolveModuleIcon } from './module-icons';
 
 export interface SettingsGroupWarning {
   title: string;
@@ -143,7 +144,7 @@ function toUiGroup(id: string, label: string, fields: RadioMemoryMapUiField[], d
     id,
     label,
     description: declared?.description,
-    icon: declared?.icon,
+    icon: resolveModuleIcon(declared?.icon),
     warning: declared?.warning,
     fields: sortUiFields(fields),
     groups: collectUiSubgroups(declared, fields),

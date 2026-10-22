@@ -115,6 +115,21 @@ describe('memory map', () => {
     expect(compiled.issues.filter((issue) => issue.message === 'No settings group is named missing.')).toHaveLength(1);
   });
 
+  it('warns when a settings group icon is outside the bundled set and keeps the name', () => {
+    const map = createMemoryMapDraft();
+    map.groups[0]!.icon = 'i-lucide-not-a-real-icon';
+    const compiled = compileMemoryMap(map);
+    const document = JSON.parse(compiled.json) as { groups: Array<{ icon?: string }> };
+
+    expect(compiled.errorCount).toBe(0);
+    expect(compiled.issues.filter((issue) => issue.level === 'warning' && issue.path.endsWith('.icon'))).toEqual([
+      expect.objectContaining({
+        message: 'i-lucide-not-a-real-icon is not a bundled icon. The Settings tab shows i-lucide-sliders-horizontal instead.',
+      }),
+    ]);
+    expect(document.groups[0]?.icon).toBe('i-lucide-not-a-real-icon');
+  });
+
   it('leaves a settings group with no label out of the map', () => {
     const map = createMemoryMapDraft();
     map.groups[0]!.label = '';

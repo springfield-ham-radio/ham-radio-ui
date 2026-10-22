@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { moduleIconCollectionNames } from './app/utils/module-icons';
 
 const rootDirectory = fileURLToPath(new URL('.', import.meta.url));
 
@@ -34,6 +35,8 @@ export default defineNuxtConfig({
 
   // Tauri serves the generated SPA with no Nuxt server and may be offline.
   // Bundle every statically known icon and never call api.iconify.design.
+  // Module JSON is not part of the source scan, so clientBundle.icons also
+  // includes the curated Lucide set from app/utils/module-icons.ts.
   icon: {
     provider: 'none',
     fallbackToApi: false,
@@ -44,6 +47,7 @@ export default defineNuxtConfig({
       },
     ],
     clientBundle: {
+      icons: moduleIconCollectionNames(),
       scan: {
         // The default scan skips .ts, which is where toast and tab icons live.
         globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml,js,ts}'],

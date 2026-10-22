@@ -1,4 +1,5 @@
 import type { DriverIssue } from './driver-compile';
+import { moduleIconWarning } from './module-icons';
 import {
   formatDriverAddress,
   parseDriverAddress,
@@ -213,6 +214,11 @@ function compileSettingsGroup(group: DriverMemoryGroupDraft, issues: DriverIssue
 
   if (icon) {
     compiled.icon = icon;
+    const iconWarning = moduleIconWarning(icon);
+
+    if (iconWarning) {
+      issues.push({ level: 'warning', path: `${path}.icon`, message: iconWarning });
+    }
   }
 
   const warningTitle = group.warningTitle.trim();

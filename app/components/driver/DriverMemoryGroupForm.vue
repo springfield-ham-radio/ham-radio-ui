@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { driverFieldError } from '~/utils/driver-compile';
+import { moduleIconWarning, resolveModuleIcon } from '~/utils/module-icons';
 import {
   createMemoryField,
   createMemoryStruct,
@@ -17,6 +18,8 @@ const props = defineProps<{
 const { draft, memoryMap, patch } = useDriverDraft();
 
 const group = computed(() => draft.value.memoryMap.groups.find((item) => item.id === props.groupId));
+const settingsIcon = computed(() => resolveModuleIcon(group.value?.icon));
+const iconWarning = computed(() => (group.value ? moduleIconWarning(group.value.icon) : undefined));
 
 interface PlacedSetting {
   structId: string;
@@ -168,15 +171,19 @@ function addSetting(subgroupId: string): void {
       </UFormField>
       <UFormField label="Icon" :error="errorAt('icon')">
         <template #hint>
-          <HelpTooltip text="Iconify name, such as i-lucide-sliders-horizontal." />
+          <HelpTooltip text="Bundled Lucide name, such as i-lucide-sliders-horizontal. The allowed names are listed in docs/module-icons.md." />
         </template>
-        <UInput
-          :model-value="group.icon"
-          class="w-full font-mono"
-          placeholder="i-lucide-sliders-horizontal"
-          spellcheck="false"
-          @update:model-value="patchGroup({ icon: String($event ?? '') })"
-        />
+        <div class="flex items-center gap-2">
+          <UIcon :name="settingsIcon" class="size-4 shrink-0 text-muted" />
+          <UInput
+            :model-value="group.icon"
+            class="min-w-0 flex-1 font-mono"
+            placeholder="i-lucide-sliders-horizontal"
+            spellcheck="false"
+            @update:model-value="patchGroup({ icon: String($event ?? '') })"
+          />
+        </div>
+        <p v-if="iconWarning" class="mt-1 text-xs text-muted">{{ iconWarning }}</p>
       </UFormField>
       <UFormField label="Description">
         <UInput
