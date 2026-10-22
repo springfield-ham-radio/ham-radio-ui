@@ -538,7 +538,8 @@ fn installed_version_directory_names(module_dir: &Path) -> Result<Vec<String>, S
             continue;
         }
 
-        let Some(name) = entry.file_name().to_str() else {
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
             continue;
         };
 
