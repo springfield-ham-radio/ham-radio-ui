@@ -1,7 +1,7 @@
 import type { Radio, RadioProgressIndicator, RadioProtocolStep } from '@springfield/ham-radio-api';
 import type { ILogLayer } from 'loglayer';
 import { ProtocolInterpreter } from '@springfield/ham-radio-driver/dist/protocol-interpreter.js';
-import { SerialLogger, createLoggingSerialPort } from '@springfield/ham-radio-driver';
+import { SerialLogger, createLoggingSerialPort } from '@springfield/ham-radio-driver/dist/utils/serial-logger.js';
 import { SerialPort } from 'serialport';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
