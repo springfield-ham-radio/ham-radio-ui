@@ -1,11 +1,6 @@
 <script setup lang="ts">
-import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import type { RadioCatalogRecord } from '~/utils/radio-catalog-db';
-import { listRadioCatalogRecords } from '~/utils/radio-catalog-db';
 import {
-  fetchOfficialModuleCatalog,
-  officialCatalogFailureFromCause,
-  type OfficialModuleCatalogFailure,
   installOfficialModule,
   switchAllToVerifiedModules,
   switchToVerifiedModule,
@@ -19,7 +14,6 @@ import {
 } from '~/utils/radio-module-install';
 import {
   buildAvailableManufacturerGroups,
-  buildInstalledRadioListItems,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   installedRadiosEligibleForVerifiedSwitch,
@@ -31,12 +25,17 @@ import { isBetaDriverRecord, isBetaZipFileName, versionFromZipName } from '~/uti
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const toast = useToast();
-const { refreshCatalogState, uninstallRadio, configurations } = useRadio();
-
-const catalogRecords = ref<RadioCatalogRecord[]>([]);
-const catalogEntries = ref<RadioModuleCatalogEntry[]>([]);
-const catalogFailure = ref<OfficialModuleCatalogFailure | null>(null);
-const catalogLoading = ref(false);
+const { refreshCatalogState, uninstallRadio } = useRadio();
+const {
+  catalogRecords,
+  catalogEntries,
+  catalogFailure,
+  catalogLoading,
+  installedListItems,
+  refreshInstalledRadios,
+  loadOfficialCatalog,
+  reload,
+} = useRadioModuleCatalog();
 const busyKey = ref<string | undefined>();
 const removeConfirmOpen = ref(false);
 const pendingRemoveRecord = ref<RadioCatalogRecord | undefined>();
@@ -47,9 +46,6 @@ const pendingBetaSha256 = ref<string | undefined>();
 const replaceOfficialOpen = ref(false);
 const pendingReplaceItem = ref<InstalledRadioListItem | undefined>();
 
-const installedListItems = computed(() =>
-  buildInstalledRadioListItems(catalogRecords.value, catalogEntries.value),
-);
 const installedGroups = computed(() => groupInstalledRadiosByManufacturer(installedListItems.value));
 const availableGroups = computed(() =>
   buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
@@ -118,33 +114,6 @@ const anyBusy = computed(() => busyKey.value !== undefined);
 
 function isBusy(key: string): boolean {
   return busyKey.value === key;
-}
-
-async function refreshInstalledRadios(): Promise<void> {
-  try {
-    catalogRecords.value = await listRadioCatalogRecords();
-  } catch {
-    catalogRecords.value = [];
-  }
-}
-
-async function loadOfficialCatalog(): Promise<void> {
-  catalogLoading.value = true;
-  catalogFailure.value = null;
-
-  try {
-    const catalog = await fetchOfficialModuleCatalog();
-    catalogEntries.value = catalog.modules;
-  } catch (cause) {
-    catalogEntries.value = [];
-    catalogFailure.value = officialCatalogFailureFromCause(cause);
-  } finally {
-    catalogLoading.value = false;
-  }
-}
-
-async function reload(): Promise<void> {
-  await Promise.all([refreshInstalledRadios(), loadOfficialCatalog()]);
 }
 
 function requireDesktopApp(): boolean {
@@ -514,14 +483,6 @@ async function confirmReplaceWithOfficial(): Promise<void> {
     busyKey.value = undefined;
   }
 }
-
-watch(
-  configurations,
-  () => {
-    void refreshInstalledRadios();
-  },
-  { deep: true },
-);
 
 onMounted(() => {
   void reload();

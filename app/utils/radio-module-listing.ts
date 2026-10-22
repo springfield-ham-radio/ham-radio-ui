@@ -128,7 +128,7 @@ function formatModelIdPart(part: string): string {
  * Zip version used to decide whether the official catalog has a newer download.
  * Installed rows show the radio config version instead.
  */
-function installedModuleVersion(record: RadioCatalogRecord): string {
+export function installedModuleVersion(record: RadioCatalogRecord): string {
   if (record.sourcePath) {
     const parsed = parseModuleInstallPath(record.sourcePath);
 
