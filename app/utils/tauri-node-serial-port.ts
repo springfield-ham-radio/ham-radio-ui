@@ -10,6 +10,12 @@ import {
   type WatchHandle,
 } from 'tauri-plugin-serialplugin-api';
 import { trackSerialPathClose, waitForSerialPathClose } from '~/utils/serial-port-path-close';
+import {
+  formatSerialPortOpenError,
+  isPortMissingError,
+  isSerialPortPathAvailable,
+  waitForSerialPortPathAvailable,
+} from '~/utils/serial-port-reconnect';
 
 type WriteCallback = (error?: Error | null) => void;
 type PipedDestination = { write: (chunk: Buffer) => unknown };
@@ -225,7 +231,7 @@ export class TauriNodeSerialPort extends EventEmitter {
 
     try {
       await waitForSerialPathClose(this.path);
-      await this.tauriPort.open();
+      await this.waitForPathThenOpen(generation);
       await this.tauriPort.writeDataTerminalReady(this.dtr);
       await this.tauriPort.writeRequestToSend(this.rts);
       this.discardRx = true;
@@ -272,8 +278,38 @@ export class TauriNodeSerialPort extends EventEmitter {
         return;
       }
 
+      const openError = error instanceof Error ? error : new Error(String(error));
       this.discardRx = false;
-      this.emit('error', error instanceof Error ? error : new Error(String(error)));
+      this.emit(
+        'error',
+        isPortMissingError(openError) ? formatSerialPortOpenError(this.path, openError) : openError,
+      );
+    }
+  }
+
+  private async waitForPathThenOpen(generation: number): Promise<void> {
+    if (!(await isSerialPortPathAvailable(this.path))) {
+      await waitForSerialPortPathAvailable(this.path);
+    }
+
+    if (generation !== this.openGeneration) {
+      return;
+    }
+
+    try {
+      await this.tauriPort.open();
+    } catch (error) {
+      if (!isPortMissingError(error)) {
+        throw error;
+      }
+
+      await waitForSerialPortPathAvailable(this.path);
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      await this.tauriPort.open();
     }
   }
 

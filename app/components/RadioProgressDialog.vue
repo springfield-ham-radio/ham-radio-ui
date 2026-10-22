@@ -13,6 +13,8 @@ const {
   onProgressDialogClosed,
 } = useRadio();
 
+const waitingForRadioReconnect = useState('serial-port-reconnect-waiting', () => false);
+
 const now = ref(Date.now());
 
 let tickTimer: ReturnType<typeof setInterval> | undefined;
@@ -138,6 +140,14 @@ function closeProgress(): void {
         {{ progressSerialLog.entryCount }} serial frame{{ progressSerialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
       </p>
       <div v-else-if="!progressError" class="flex flex-col gap-3">
+        <UAlert
+          v-if="waitingForRadioReconnect"
+          color="info"
+          variant="soft"
+          icon="i-lucide-usb"
+          title="Waiting for radio to reconnect…"
+          description="The programming port disappeared while the radio restarted. HamBench will continue when it comes back."
+        />
         <div
           class="h-2 w-full overflow-hidden rounded-full bg-accented"
           role="progressbar"
