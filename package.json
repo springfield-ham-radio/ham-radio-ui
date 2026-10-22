@@ -50,7 +50,7 @@
     "katex": "^0.19.0",
     "loglayer": "^9.4.0",
     "maplibre-gl": "^6.13.0",
-    "nuxt": "^4.6.0",
+    "nuxt": "^4.6.2",
     "sortablejs": "^1.15.7",
     "tauri-plugin-serialplugin-api": "3.0.8",
     "vue": "^3.5.44",
@@ -78,7 +78,8 @@
   "resolutions": {
     "@springfield/ham-radio-api": "18.3.0",
     "conventional-changelog-conventionalcommits": "9.3.1",
-    "esbuild@npm:^0.27.0": "0.28.2"
+    "esbuild@npm:^0.27.0": "0.28.2",
+    "vite": "^8.2.4"
   },
   "release": {
     "branches": [
