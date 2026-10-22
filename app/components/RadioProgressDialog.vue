@@ -47,8 +47,20 @@ onBeforeUnmount(() => {
   }
 });
 
+const postBackupWriteFailure = computed(
+  () => Boolean(progressError.value?.context.backupSavedBeforeWriteFailure),
+);
+
 const progressCopy = computed(() => {
   if (progressKind.value === 'write') {
+    if (progressError.value && postBackupWriteFailure.value) {
+      return {
+        title: 'Write failed after backup',
+        description: 'The pre-write backup was saved, but nothing was written to the radio.',
+        errorTitle: 'Backup completed; radio not written',
+      };
+    }
+
     return {
       title: progressError.value ? 'Write failed' : 'Writing to radio',
       description: progressError.value
