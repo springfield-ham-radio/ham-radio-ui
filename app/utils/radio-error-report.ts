@@ -15,6 +15,8 @@ export interface RadioErrorContext {
   moduleVersion?: string;
   /** Serial device name only (COM3, cu.usbserial-1), not a filesystem path. */
   port?: string;
+  /** Pre-write backup file was saved but the write phase did not finish. */
+  backupSavedBeforeWriteFailure?: boolean;
 }
 
 export interface SerializedError {

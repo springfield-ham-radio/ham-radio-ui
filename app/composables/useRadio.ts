@@ -102,6 +102,11 @@ import {
   sampleRadioErrorReport,
   type RadioErrorReport,
 } from '~/utils/radio-error-report';
+import {
+  chainedPrewriteBackupAndWrite,
+  supportsChainedPrewriteBackupWrite,
+} from '~/utils/radio-chained-clone-write';
+import { isPostPrewriteBackupWriteError } from '~/utils/radio-prewrite-backup-write';
 
 const logger = new LogLayer({
   transport: [
@@ -525,6 +530,29 @@ export function useRadio() {
     return configurations.value.find((config) => config.id.model === radioId.model);
   }
 
+  async function assignWriteProgressError(
+    radioId: RadioId,
+    sessionId: string,
+    config: LoadedRadioConfig,
+    serialPortPath: string,
+    cause: unknown,
+    backupSavedBeforeWriteFailure: boolean,
+  ): Promise<void> {
+    await assignProgressError(
+      {
+        ...radioErrorContextFromRadio('write', 'write radio', {
+          radioId,
+          cardName: boundRadio(sessionId)?.name,
+          config,
+          port: serialPortPath,
+        }),
+        backupSavedBeforeWriteFailure,
+      },
+      cause,
+      backupSavedBeforeWriteFailure ? 'Write failed after pre-write backup' : 'Failed to write radio',
+    );
+  }
+
   async function assignProgressError(
     context: ReturnType<typeof radioErrorContextFromRadio>,
     cause: unknown,
@@ -866,40 +894,108 @@ export function useRadio() {
         return;
       }
 
-      const backupReady = await preparePrewriteBackup(sessionId, latest, radioId, serialPortPath, config, baudRate);
-
-      if (!backupReady) {
-        return;
-      }
-
       const imageToWrite = readSession(sessionId)?.memory ?? latest.memory;
-      const progressIndicator = startProgress('write');
-      const { RadioDriver } = await import('@springfield/ham-radio-driver');
-      const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
+      const radio = loadedRadioToRadio(config, baudRate);
+      const backupSettings = readRadioImageBackupSettings();
+      const needsPrewriteBackup = shouldCaptureRadioImageBackup(backupSettings, isTauriRuntime());
+      const hasBaseline = Boolean(latest.radioBaseline && latest.radioBaseline.length > 0);
+      const useChainedBackupWrite =
+        needsPrewriteBackup && !hasBaseline && supportsChainedPrewriteBackupWrite(radio);
+
+      let freshPrewriteBackupSaved = false;
       let outcome: 'success' | 'canceled' | 'error' = 'success';
       const writtenBytes = imageToWrite.length;
+      let serialLoggedDriver: SerialLoggedDriver | undefined;
 
-      try {
-        await driver.writeRadio(serialPortPath, imageToWrite, progressIndicator);
-      } catch (cause) {
-        if (isCancelledTransfer(cause)) {
-          outcome = 'canceled';
-        } else {
-          outcome = 'error';
-          console.error('Failed to write radio', cause);
-          await assignProgressError(
-            radioErrorContextFromRadio('write', 'write radio', {
+      if (useChainedBackupWrite) {
+        const progressIndicator = startProgress('backup');
+
+        try {
+          const serialLogger = await chainedPrewriteBackupAndWrite({
+            radio,
+            serialPortPath,
+            writeData: imageToWrite,
+            progressIndicator,
+            logger,
+            enableSerialLogging: true,
+            onBackupImageReady: async (backupImage) => {
+              const captured = await captureRadioImageBackup({
+                settings: backupSettings,
+                identity: { manufacturer: radioId.manufacturer, model: String(radioId.model) },
+                kind: 'prewrite',
+                image: backupImage,
+                store: createTauriRadioImageBackupStore(),
+              });
+
+              if (captured.status === 'failed') {
+                throw new Error(captured.message);
+              }
+
+              freshPrewriteBackupSaved = true;
+            },
+            onWritePhaseStart: () => {
+              progressKind.value = 'write';
+            },
+          });
+
+          if (serialLogger) {
+            serialLoggedDriver = {
+              getSerialLogData: () => serialLogger.getLogData(),
+            };
+          }
+        } catch (cause) {
+          if (isCancelledTransfer(cause)) {
+            outcome = 'canceled';
+          } else {
+            outcome = 'error';
+            console.error('Failed chained pre-write backup and write', cause);
+            await assignWriteProgressError(
               radioId,
-              cardName: boundRadio(sessionId)?.name,
+              sessionId,
               config,
-              port: serialPortPath,
-            }),
-            cause,
-            'Failed to write radio',
-          );
+              serialPortPath,
+              cause,
+              freshPrewriteBackupSaved || isPostPrewriteBackupWriteError(cause),
+            );
+          }
+        } finally {
+          if (serialLoggedDriver) {
+            captureSerialLog(sessionId, serialLoggedDriver, 'write', radioId, serialPortPath);
+          }
         }
-      } finally {
-        captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
+      } else {
+        const backup = await preparePrewriteBackup(sessionId, latest, radioId, serialPortPath, config, baudRate);
+
+        if (!backup.ready) {
+          return;
+        }
+
+        freshPrewriteBackupSaved = backup.freshBackupSaved;
+        const progressIndicator = startProgress('write');
+        const { RadioDriver } = await import('@springfield/ham-radio-driver');
+        const driver = new RadioDriver(radio, logger, undefined, true);
+        serialLoggedDriver = driver;
+
+        try {
+          await driver.writeRadio(serialPortPath, imageToWrite, progressIndicator);
+        } catch (cause) {
+          if (isCancelledTransfer(cause)) {
+            outcome = 'canceled';
+          } else {
+            outcome = 'error';
+            console.error('Failed to write radio', cause);
+            await assignWriteProgressError(
+              radioId,
+              sessionId,
+              config,
+              serialPortPath,
+              cause,
+              freshPrewriteBackupSaved || isPostPrewriteBackupWriteError(cause),
+            );
+          }
+        } finally {
+          captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
+        }
       }
 
       if (outcome === 'success') {
@@ -1056,21 +1152,22 @@ export function useRadio() {
     serialPortPath: string,
     config: LoadedRadioConfig,
     baudRate?: number,
-  ): Promise<boolean> {
+  ): Promise<{ ready: boolean; freshBackupSaved: boolean }> {
     const settings = readRadioImageBackupSettings();
 
     if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
-      return true;
+      return { ready: true, freshBackupSaved: false };
     }
 
+    const usedBaseline = Boolean(session.radioBaseline && session.radioBaseline.length > 0);
     const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
 
     if (image === 'abort') {
-      return false;
+      return { ready: false, freshBackupSaved: false };
     }
 
     if (image === 'skip') {
-      return true;
+      return { ready: true, freshBackupSaved: false };
     }
 
     const captured = await captureRadioImageBackup({
@@ -1082,7 +1179,7 @@ export function useRadio() {
     });
 
     if (captured.status !== 'failed') {
-      return true;
+      return { ready: true, freshBackupSaved: !usedBaseline };
     }
 
     logger.error(`Failed to back up radio image before write: ${captured.message}`);
@@ -1103,10 +1200,10 @@ export function useRadio() {
     if (choice === 'abort') {
       progressOpen.value = false;
       notifyWriteCanceledForBackupFailure();
-      return false;
+      return { ready: false, freshBackupSaved: false };
     }
 
-    return true;
+    return { ready: true, freshBackupSaved: false };
   }
 
   /**
