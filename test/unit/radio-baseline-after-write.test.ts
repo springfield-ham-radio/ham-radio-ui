@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Frequency, type RadioProgram, type RadioProgrammedChannel, RadioToneType } from '@springfield/ham-radio-api';
-import { radioBaselineAfterWriteAttempt } from '../../app/utils/radio-baseline-after-write.ts';
+import {
+  backupBaselineStaleAfterWrite,
+  prewriteBackupReusesRadioBaseline,
+  radioBaselineAfterWriteAttempt,
+} from '../../app/utils/radio-baseline-after-write.ts';
 import { diffPendingRadioState, pendingChangeCount } from '../../app/utils/radio-pending-diff.ts';
 
 function channel(channelNumber: number, name: string): RadioProgrammedChannel {
@@ -108,5 +112,46 @@ describe('radioBaselineAfterWriteAttempt', () => {
 
     expect(decision.image).toBe(previousImage);
     expect(Array.from(decision.image ?? [])).not.toEqual(Array.from(backupImage));
+  });
+});
+
+describe('backupBaselineStaleAfterWrite', () => {
+  it('clears the flag after a successful write', () => {
+    expect(
+      backupBaselineStaleAfterWrite({ previouslyStale: true, terminal: 'success', bytesSent: true }),
+    ).toBe(false);
+  });
+
+  it('sets the flag when a cancel or failure happens after bytes were sent', () => {
+    expect(
+      backupBaselineStaleAfterWrite({ previouslyStale: false, terminal: 'canceled', bytesSent: true }),
+    ).toBe(true);
+    expect(
+      backupBaselineStaleAfterWrite({ previouslyStale: false, terminal: 'failed', bytesSent: true }),
+    ).toBe(true);
+  });
+
+  it('leaves the flag alone when the radio was not opened or written', () => {
+    for (const terminal of ['canceled', 'failed', 'aborted'] as const) {
+      expect(
+        backupBaselineStaleAfterWrite({ previouslyStale: false, terminal, bytesSent: false }),
+      ).toBe(false);
+      expect(
+        backupBaselineStaleAfterWrite({ previouslyStale: true, terminal, bytesSent: false }),
+      ).toBe(true);
+    }
+  });
+});
+
+describe('prewriteBackupReusesRadioBaseline', () => {
+  it('reuses a baseline that still describes the radio', () => {
+    expect(prewriteBackupReusesRadioBaseline(previousImage, false)).toBe(true);
+    expect(prewriteBackupReusesRadioBaseline(previousImage, undefined)).toBe(true);
+  });
+
+  it('reads the radio when the baseline is missing or stale', () => {
+    expect(prewriteBackupReusesRadioBaseline(previousImage, true)).toBe(false);
+    expect(prewriteBackupReusesRadioBaseline(undefined, false)).toBe(false);
+    expect(prewriteBackupReusesRadioBaseline(new Uint8Array(), false)).toBe(false);
   });
 });

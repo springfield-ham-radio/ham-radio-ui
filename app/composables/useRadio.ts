@@ -69,7 +69,7 @@ import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { addToRadioDevFixture, DEV_FIXTURE_SERIAL_PORT, isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
-import { type SerialLogOperation } from '~/utils/serial-log-file';
+import { serialLogEntryCount, type SerialLogOperation } from '~/utils/serial-log-file';
 import {
   hasPendingBackupFailureDecision,
   resolveBackupFailureDecision,
@@ -109,6 +109,8 @@ import {
 } from '~/utils/radio-chained-clone-write';
 import { isPostPrewriteBackupWriteError } from '~/utils/radio-prewrite-backup-write';
 import {
+  backupBaselineStaleAfterWrite,
+  prewriteBackupReusesRadioBaseline,
   radioBaselineAfterWriteAttempt,
   type WriteAttemptTerminal,
 } from '~/utils/radio-baseline-after-write';
@@ -138,6 +140,12 @@ interface RadioCardSession {
    * Edits in the app change `memory` and leave this copy alone.
    */
   radioBaseline?: Uint8Array;
+  /**
+   * True when `radioBaseline` must not be reused as the pre-write backup.
+   * Set when a write is canceled or fails after bytes may have reached the radio.
+   * A successful read or write clears it. The channels view ignores this flag.
+   */
+  backupBaselineStale?: boolean;
   /**
    * Decoded program for `radioBaseline`.
    * The channels view compares against this snapshot. A successful write stores
@@ -791,6 +799,7 @@ export function useRadio() {
           memoryFilePath: undefined,
           radioBaseline: importedImage,
           radioBaselineProgram: loaded?.program ? cloneRadioProgram(loaded.program) : undefined,
+          backupBaselineStale: false,
         });
         clearBrowserFileHandle();
 
@@ -948,17 +957,35 @@ export function useRadio() {
       const radio = loadedRadioToRadio(config, baudRate);
       const backupSettings = readRadioImageBackupSettings();
       const needsPrewriteBackup = shouldCaptureRadioImageBackup(backupSettings, isTauriRuntime());
-      const hasBaseline = Boolean(latest.radioBaseline && latest.radioBaseline.length > 0);
+      const baselineReusable = prewriteBackupReusesRadioBaseline(latest.radioBaseline, latest.backupBaselineStale);
       const useChainedBackupWrite =
-        needsPrewriteBackup && !hasBaseline && supportsChainedPrewriteBackupWrite(radio);
+        needsPrewriteBackup && !baselineReusable && supportsChainedPrewriteBackupWrite(radio);
 
       let freshPrewriteBackupSaved = false;
       let outcome: WriteAttemptTerminal = 'aborted';
+      let writeBytesSent = false;
+      let countWriteProgress = false;
       const writtenBytes = imageToWrite.length;
       let serialLoggedDriver: SerialLoggedDriver | undefined;
 
+      const indicateWriteProgress = (indicator: RadioProgressIndicator): RadioProgressIndicator => ({
+        get isCanceled() {
+          return indicator.isCanceled;
+        },
+        set isCanceled(value: boolean) {
+          indicator.isCanceled = value;
+        },
+        setValue(value: number) {
+          indicator.setValue(value);
+
+          if (countWriteProgress && value > 0) {
+            writeBytesSent = true;
+          }
+        },
+      });
+
       if (useChainedBackupWrite) {
-        const progressIndicator = startProgress('backup');
+        const progressIndicator = indicateWriteProgress(startProgress('backup'));
 
         try {
           const serialLogger = await chainedPrewriteBackupAndWrite({
@@ -986,7 +1013,13 @@ export function useRadio() {
               freshPrewriteBackupSaved = true;
             },
             onWritePhaseStart: () => {
+              countWriteProgress = true;
               progressKind.value = 'write';
+            },
+            onWritePhaseEnd: (bytesSent) => {
+              if (bytesSent) {
+                writeBytesSent = true;
+              }
             },
           });
 
@@ -1025,7 +1058,8 @@ export function useRadio() {
         }
 
         freshPrewriteBackupSaved = backup.freshBackupSaved;
-        const progressIndicator = startProgress('write');
+        countWriteProgress = true;
+        const progressIndicator = indicateWriteProgress(startProgress('write'));
         const { RadioDriver } = await import('@springfield/ham-radio-driver');
         const driver = new RadioDriver(radio, logger, undefined, true);
         serialLoggedDriver = driver;
@@ -1049,6 +1083,10 @@ export function useRadio() {
             );
           }
         } finally {
+          if (serialLogEntryCount(driver.getSerialLogData()) > 0) {
+            writeBytesSent = true;
+          }
+
           captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
         }
       }
@@ -1066,10 +1104,17 @@ export function useRadio() {
         canceled: canceled.value,
       });
 
+      const backupBaselineStale = backupBaselineStaleAfterWrite({
+        previouslyStale: Boolean(writtenSession?.backupBaselineStale),
+        terminal: outcome,
+        bytesSent: writeBytesSent,
+      });
+
       if (baseline.commit && baseline.image) {
         patchSession(sessionId, {
           radioBaseline: baseline.image,
           radioBaselineProgram: baseline.program,
+          backupBaselineStale: false,
         });
         progressOpen.value = false;
         toast.add({
@@ -1079,6 +1124,10 @@ export function useRadio() {
           icon: 'i-hambench-radio-write',
         });
         return;
+      }
+
+      if (backupBaselineStale && !writtenSession?.backupBaselineStale) {
+        patchSession(sessionId, { backupBaselineStale: true });
       }
 
       if (outcome === 'canceled' || canceled.value) {
@@ -1173,6 +1222,7 @@ export function useRadio() {
       patchSession(sessionId, {
         radioBaseline: memoryData.slice(),
         radioBaselineProgram: radioBaselineProgram ? cloneRadioProgram(radioBaselineProgram) : undefined,
+        backupBaselineStale: false,
       });
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
       toast.add({
@@ -1217,7 +1267,8 @@ export function useRadio() {
    * Save the image currently on the radio before replacing it.
    *
    * Uses the last successful download or write when that still describes the
-   * radio. Otherwise reads the radio first. Returns false when the operator
+   * radio. Reads the radio again when that image is missing or marked stale
+   * by a write that stopped after sending bytes. Returns false when the operator
    * stops the write because that backup could not be made.
    */
   async function preparePrewriteBackup(
@@ -1234,7 +1285,7 @@ export function useRadio() {
       return { ready: true, freshBackupSaved: false };
     }
 
-    const usedBaseline = Boolean(session.radioBaseline && session.radioBaseline.length > 0);
+    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
     const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
 
     if (image === 'abort') {
@@ -1283,6 +1334,7 @@ export function useRadio() {
 
   /**
    * Bytes already known to be on the radio, or a fresh read when they are not.
+   * A stale baseline is not reused: a partial write may have changed the radio.
    */
   async function prewriteBackupImage(
     sessionId: string,
@@ -1292,10 +1344,8 @@ export function useRadio() {
     config: LoadedRadioConfig,
     baudRate?: number,
   ): Promise<Uint8Array | 'skip' | 'abort'> {
-    const baseline = session.radioBaseline;
-
-    if (baseline && baseline.length > 0) {
-      return baseline.slice();
+    if (prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale)) {
+      return session.radioBaseline!.slice();
     }
 
     return readRadioImageForBackup(sessionId, radioId, serialPortPath, config, baudRate);

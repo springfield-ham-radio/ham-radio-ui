@@ -49,9 +49,9 @@ export interface RadioBaselineDecision {
  * image captured on the way to the write is never adopted. The editor image
  * replaces the baseline only after a write that finished and was not canceled.
  *
- * A write that stops partway can leave the radio different from this snapshot.
- * The next pre-write backup still reuses it. Dropping the snapshot made a
- * canceled write look like the edit was already on the radio.
+ * A write that stops after bytes were sent can leave the radio different from
+ * this snapshot. That does not change the snapshot. `backupBaselineStale` tells
+ * the next pre-write backup to read the radio instead of reusing it.
  */
 export function radioBaselineAfterWriteAttempt(input: WriteAttemptBaselineInput): RadioBaselineDecision {
   const preserve: RadioBaselineDecision = {
@@ -73,4 +73,44 @@ export function radioBaselineAfterWriteAttempt(input: WriteAttemptBaselineInput)
     image: input.writtenImage.slice(),
     program: input.writtenProgram ? cloneRadioProgram(input.writtenProgram) : undefined,
   };
+}
+
+export interface BackupBaselineStaleInput {
+  /** Value already stored on the session. */
+  previouslyStale: boolean;
+  terminal: WriteAttemptTerminal;
+  /**
+   * True once the write put bytes on the open port.
+   * A cancel or port error before that leaves the flag unchanged.
+   */
+  bytesSent: boolean;
+}
+
+/**
+ * Whether the cached radio image must not be reused for the next pre-write backup.
+ *
+ * Set after a cancel or failure that may have left a mix of old and new bytes
+ * on the radio. A successful write clears it. Stopping before the radio is
+ * opened or written does not change it.
+ */
+export function backupBaselineStaleAfterWrite(input: BackupBaselineStaleInput): boolean {
+  if (input.terminal === 'success') {
+    return false;
+  }
+
+  if ((input.terminal === 'canceled' || input.terminal === 'failed') && input.bytesSent) {
+    return true;
+  }
+
+  return input.previouslyStale;
+}
+
+/**
+ * True when the pre-write backup can save `radioBaseline` instead of reading the radio.
+ */
+export function prewriteBackupReusesRadioBaseline(
+  image: Uint8Array | undefined,
+  backupBaselineStale: boolean | undefined,
+): boolean {
+  return Boolean(image && image.length > 0 && !backupBaselineStale);
 }

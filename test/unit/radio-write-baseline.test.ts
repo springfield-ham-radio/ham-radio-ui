@@ -4,6 +4,7 @@ import { Frequency, type RadioProgram, type RadioProgrammedChannel, RadioToneTyp
 
 const driver = vi.hoisted(() => ({
   writeRadio: vi.fn(),
+  getSerialLogData: vi.fn((): unknown => undefined),
 }));
 
 vi.mock('@springfield/ham-radio-driver', () => ({
@@ -13,7 +14,7 @@ vi.mock('@springfield/ham-radio-driver', () => ({
     }
 
     getSerialLogData() {
-      return undefined;
+      return driver.getSerialLogData();
     }
   },
 }));
@@ -98,12 +99,14 @@ function sessionRecord(): {
   radioBaselineProgram?: RadioProgram;
   memory?: Uint8Array;
   program?: RadioProgram;
+  backupBaselineStale?: boolean;
 } {
   const sessions = stateStore.get('radio-card-sessions')!.value as Record<string, {
     radioBaseline?: Uint8Array;
     radioBaselineProgram?: RadioProgram;
     memory?: Uint8Array;
     program?: RadioProgram;
+    backupBaselineStale?: boolean;
   }>;
 
   return sessions['card-1']!;
@@ -114,10 +117,12 @@ describe('writeToRadio baseline', () => {
     stateStore.clear();
     toasts.length = 0;
     driver.writeRadio.mockReset();
+    driver.getSerialLogData.mockReset();
+    driver.getSerialLogData.mockReturnValue(undefined);
     focusedCardId.value = 'card-1';
   });
 
-  async function openSession(options: { writable?: boolean } = {}) {
+  async function openSession(options: { writable?: boolean; stale?: boolean } = {}) {
     const { useRadio } = await import('../../app/composables/useRadio.ts');
     const radio = useRadio();
     const baseline = Uint8Array.from([9, 9, 9]);
@@ -132,6 +137,7 @@ describe('writeToRadio baseline', () => {
         program: edited,
         channels: [],
         activeRadioId: radioId,
+        backupBaselineStale: options.stale ? true : undefined,
       },
     };
     stateStore.get('radio-configurations')!.value = [
@@ -153,8 +159,24 @@ describe('writeToRadio baseline', () => {
     const session = sessionRecord();
     expect(session.radioBaseline).toBe(baseline);
     expect(session.radioBaselineProgram).toEqual(onRadio);
+    expect(session.backupBaselineStale).toBeUndefined();
     expect(toasts.some((toast) => toast.title === 'Write canceled')).toBe(true);
     expect(toasts.some((toast) => toast.title === 'Wrote to radio')).toBe(false);
+  });
+
+  it('keeps the diff baseline and marks the backup stale when cancel happens after bytes were sent', async () => {
+    const { radio, baseline } = await openSession();
+    driver.writeRadio.mockImplementation(async (_path, _data, progress: { setValue: (value: number) => void }) => {
+      progress.setValue(0.4);
+      throw Object.assign(new Error('stopped'), { name: 'CancelledException' });
+    });
+
+    await radio.writeToRadio('/dev/ttyUSB9');
+
+    const session = sessionRecord();
+    expect(session.radioBaseline).toBe(baseline);
+    expect(session.radioBaselineProgram).toEqual(onRadio);
+    expect(session.backupBaselineStale).toBe(true);
   });
 
   it('keeps the baseline when the driver returns after the operator canceled', async () => {
@@ -181,18 +203,43 @@ describe('writeToRadio baseline', () => {
     const session = sessionRecord();
     expect(session.radioBaseline).toBe(baseline);
     expect(session.radioBaselineProgram).toEqual(onRadio);
+    expect(session.backupBaselineStale).toBeUndefined();
     expect(toasts.some((toast) => toast.title === 'Wrote to radio')).toBe(false);
     expect(toasts.some((toast) => toast.title === 'Write canceled')).toBe(false);
   });
 
+  it('leaves a stale backup flag set when the port fails before any bytes are sent', async () => {
+    const { radio, baseline } = await openSession({ stale: true });
+    driver.writeRadio.mockRejectedValue(new Error('Failed to open serial port'));
+
+    await radio.writeToRadio('/dev/ttyUSB9');
+
+    expect(sessionRecord().radioBaseline).toBe(baseline);
+    expect(sessionRecord().backupBaselineStale).toBe(true);
+  });
+
+  it('marks the backup stale when a port error happens after bytes were sent', async () => {
+    const { radio, baseline } = await openSession();
+    driver.getSerialLogData.mockReturnValue({ entries: [{ direction: 'send', data: [1] }] });
+    driver.writeRadio.mockRejectedValue(new Error('port disconnected'));
+
+    await radio.writeToRadio('/dev/ttyUSB9');
+
+    const session = sessionRecord();
+    expect(session.radioBaseline).toBe(baseline);
+    expect(session.radioBaselineProgram).toEqual(onRadio);
+    expect(session.backupBaselineStale).toBe(true);
+  });
+
   it('keeps the baseline when the write is aborted before the radio is opened', async () => {
-    const { radio, baseline } = await openSession({ writable: false });
+    const { radio, baseline } = await openSession({ writable: false, stale: true });
 
     await radio.writeToRadio('/dev/ttyUSB9');
 
     expect(driver.writeRadio).not.toHaveBeenCalled();
     expect(sessionRecord().radioBaseline).toBe(baseline);
     expect(sessionRecord().radioBaselineProgram).toEqual(onRadio);
+    expect(sessionRecord().backupBaselineStale).toBe(true);
     expect(toasts.some((toast) => toast.title === 'Write not supported')).toBe(true);
   });
 
@@ -207,6 +254,16 @@ describe('writeToRadio baseline', () => {
     expect(session.radioBaseline).not.toBe(memory);
     expect(session.radioBaselineProgram).toEqual(edited);
     expect(session.radioBaselineProgram).not.toBe(edited);
+    expect(session.backupBaselineStale).toBe(false);
     expect(toasts.some((toast) => toast.title === 'Wrote to radio')).toBe(true);
+  });
+
+  it('clears a stale backup flag after a successful write', async () => {
+    const { radio } = await openSession({ stale: true });
+    driver.writeRadio.mockResolvedValue(undefined);
+
+    await radio.writeToRadio('/dev/ttyUSB9');
+
+    expect(sessionRecord().backupBaselineStale).toBe(false);
   });
 });
