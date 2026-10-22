@@ -11,12 +11,13 @@ import {
 
 describe('radio board', () => {
   it('should fall back to tabs when storage is empty, invalid, or the old stacked layout', () => {
-    expect(parseRadioBoardSettings(null)).toEqual({ layout: 'tabs', openIds: [] });
-    expect(parseRadioBoardSettings('{')).toEqual({ layout: 'tabs', openIds: [] });
-    expect(parseRadioBoardSettings('[]')).toEqual({ layout: 'tabs', openIds: [] });
+    expect(parseRadioBoardSettings(null)).toEqual({ layout: 'tabs', openIds: [], focusedId: undefined });
+    expect(parseRadioBoardSettings('{')).toEqual({ layout: 'tabs', openIds: [], focusedId: undefined });
+    expect(parseRadioBoardSettings('[]')).toEqual({ layout: 'tabs', openIds: [], focusedId: undefined });
     expect(parseRadioBoardSettings(JSON.stringify({ layout: 'stack', openIds: ['base'] }))).toEqual({
       layout: 'tabs',
       openIds: ['base'],
+      focusedId: undefined,
     });
   });
 
@@ -31,13 +32,40 @@ describe('radio board', () => {
     ).toEqual({
       layout: 'tile',
       openIds: ['base', 'mobile'],
+      focusedId: undefined,
     });
   });
 
   it('should round-trip board settings', () => {
-    const settings = { layout: 'tile' as const, openIds: ['mobile', 'base'] };
+    const settings = { layout: 'tile' as const, openIds: ['mobile', 'base'], focusedId: 'mobile' };
 
     expect(parseRadioBoardSettings(serializeRadioBoardSettings(settings))).toEqual(settings);
+  });
+
+  it('restores the last focused radio after restart', () => {
+    const stored = parseRadioBoardSettings(
+      JSON.stringify({ layout: 'tabs', openIds: ['uv5r', 'thd74'], focusedId: 'thd74' }),
+    );
+    const open = reconcileOpenRadioIds(stored.openIds, ['uv5r', 'thd74']);
+    const cards = hydratedBoardCards([], open);
+
+    expect(focusedCardAfterHydrate(stored.focusedId, cards)).toBe('thd74');
+  });
+
+  it('falls back to the first open radio when the saved focus was deleted', () => {
+    const stored = parseRadioBoardSettings(
+      JSON.stringify({ layout: 'tabs', openIds: ['uv5r', 'gone'], focusedId: 'gone' }),
+    );
+    const open = reconcileOpenRadioIds(stored.openIds, ['uv5r']);
+    const cards = hydratedBoardCards([], open);
+
+    expect(focusedCardAfterHydrate(stored.focusedId, cards)).toBe('uv5r');
+  });
+
+  it('focuses the only configured radio when nothing was saved', () => {
+    const cards = hydratedBoardCards([], ['handheld']);
+
+    expect(focusedCardAfterHydrate(undefined, cards)).toBe('handheld');
   });
 
   it('should drop open cards whose radio was deleted', () => {
