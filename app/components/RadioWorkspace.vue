@@ -10,7 +10,7 @@ import {
 } from '@springfield/ham-radio-utils';
 import { insertNodeAt, removeNode, useSortable } from '@vueuse/integrations/useSortable';
 import { h, resolveComponent } from 'vue';
-import type { ChannelRow } from '~/composables/useRadio';
+import { channelRowsFromProgram, type ChannelRow } from '~/composables/useRadio';
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
@@ -39,6 +39,13 @@ import {
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
+import {
+  diffPendingRadioState,
+  emptyPendingRadioDiff,
+  pendingChangeCount,
+  summarizePendingChanges,
+  type PendingChannelDiff,
+} from '~/utils/radio-pending-diff';
 
 const UCheckbox = resolveComponent('UCheckbox');
 
@@ -71,6 +78,8 @@ const {
   memoryRedoLabel,
   undoMemoryEdit,
   redoMemoryEdit,
+  comparisonBaseline,
+  comparisonSource,
 } = useRadio();
 const { cards } = useRadioBoard();
 const { radioById } = useSavedRadios();
@@ -97,7 +106,13 @@ interface DisplayChannelRow extends ChannelRow {
   band: string;
   /** Formatted memory-map channel extras keyed by field id. */
   extras: Record<string, string>;
+  pendingKind?: PendingChannelDiff['kind'];
+  changedColumnIds: string[];
+  /** Filled in the baseline and empty in the editor. Shown so a clear or move-out stays visible. */
+  baselineOnly: boolean;
 }
+
+const PLAIN_CHANNEL_COLUMNS = new Set(['drag', 'select', 'privilege', 'pending', 'actions']);
 
 function modelSupportsCat(model: string | undefined): boolean {
   if (!model) {
@@ -236,23 +251,188 @@ const privilegeSelection = computed({
   },
 });
 
-const displayChannels = computed<DisplayChannelRow[]>(() => {
-  return channels.value.map((channel) => {
-    const extras: Record<string, string> = {};
+const pendingDiff = computed(() => {
+  const baseline = comparisonBaseline.value;
+  const current = program.value;
 
-    for (const field of channelUiFields.value) {
-      const raw = channel.settings?.[field.fieldId] as RadioSettingValue | undefined;
-      extras[field.fieldId] = formatMemoryMapFieldValue(raw, field);
+  if (!baseline || !current || comparisonSource.value === 'editor') {
+    return emptyPendingRadioDiff();
+  }
+
+  return diffPendingRadioState(baseline, current, settingsMemoryMap.value);
+});
+const pendingBySlot = computed(() => {
+  const marks = new Map<number, PendingChannelDiff>();
+
+  for (const mark of pendingDiff.value.channels) {
+    marks.set(mark.channelNumber, mark);
+  }
+
+  return marks;
+});
+const pendingChangeTotal = computed(() => pendingChangeCount(pendingDiff.value));
+const pendingChangeSummary = computed(() => {
+  const source = comparisonSource.value;
+
+  if (source === 'editor') {
+    return '';
+  }
+
+  return summarizePendingChanges(pendingDiff.value, source);
+});
+const workspaceTabs = computed<TabsItem[]>(() => {
+  const settingsChanges = pendingDiff.value.settingsPaths.length;
+
+  if (settingsChanges === 0) {
+    return items.value;
+  }
+
+  return items.value.map((item) => {
+    if (item.value !== 'settings') {
+      return item;
     }
 
-    return {
-      ...channel,
-      privilegeWarning: getTransmitPrivilegeWarning(channel.transmitFrequencyHz, radioPrivilege.value),
-      band: bandNameForFrequency(channel.transmitFrequencyHz),
-      extras,
-    };
+    return { ...item, badge: settingsChanges };
   });
 });
+
+function toDisplayChannel(
+  channel: ChannelRow,
+  pending?: PendingChannelDiff,
+  baselineOnly = false,
+): DisplayChannelRow {
+  const extras: Record<string, string> = {};
+
+  for (const field of channelUiFields.value) {
+    const raw = channel.settings?.[field.fieldId] as RadioSettingValue | undefined;
+    extras[field.fieldId] = formatMemoryMapFieldValue(raw, field);
+  }
+
+  return {
+    ...channel,
+    privilegeWarning: baselineOnly
+      ? undefined
+      : getTransmitPrivilegeWarning(channel.transmitFrequencyHz, radioPrivilege.value),
+    band: bandNameForFrequency(channel.transmitFrequencyHz),
+    extras,
+    pendingKind: pending?.kind,
+    changedColumnIds: pending?.changedColumnIds ?? [],
+    baselineOnly,
+  };
+}
+
+const displayChannels = computed<DisplayChannelRow[]>(() => {
+  return channels.value.map((channel) => toDisplayChannel(channel, pendingBySlot.value.get(channel.channelNumber)));
+});
+
+const tableChannels = computed<DisplayChannelRow[]>(() => {
+  const rows = displayChannels.value.map((row) => ({ ...row, baselineOnly: false }));
+  const seen = new Set(rows.map((row) => row.channelNumber));
+  const baseline = comparisonBaseline.value;
+
+  if (baseline) {
+    for (const mark of pendingDiff.value.channels) {
+      if (seen.has(mark.channelNumber)) {
+        continue;
+      }
+
+      const [row] = channelRowsFromProgram({
+        channels: baseline.channels.filter((channel) => channel.channelNumber === mark.channelNumber),
+        settings: {},
+      });
+
+      if (!row) {
+        continue;
+      }
+
+      rows.push(toDisplayChannel(row, mark, true));
+    }
+  }
+
+  return rows.sort((left, right) => left.channelNumber - right.channelNumber);
+});
+
+const tableSlotKey = computed(() =>
+  tableChannels.value
+    .map((row) => `${row.channelNumber}:${row.pendingKind ?? ''}:${row.baselineOnly ? 'b' : 'l'}`)
+    .join(','),
+);
+
+function pendingEdgeClass(row: DisplayChannelRow): string {
+  if (row.pendingKind === 'added') {
+    return 'shadow-[inset_3px_0_0_0_var(--ui-success)]';
+  }
+
+  if (row.pendingKind === 'changed') {
+    return 'shadow-[inset_3px_0_0_0_var(--ui-warning)]';
+  }
+
+  if (row.pendingKind === 'cleared') {
+    return 'shadow-[inset_3px_0_0_0_var(--ui-error)]';
+  }
+
+  return '';
+}
+
+function pendingColumnClass(columnId: string, row: DisplayChannelRow): string {
+  const classes: string[] = [];
+
+  if (row.baselineOnly && !PLAIN_CHANNEL_COLUMNS.has(columnId)) {
+    classes.push('text-muted line-through');
+  }
+
+  if (row.pendingKind === 'changed' && row.changedColumnIds.includes(columnId)) {
+    classes.push('!bg-warning/25');
+  }
+
+  return classes.join(' ');
+}
+
+function pendingLabel(kind: DisplayChannelRow['pendingKind']): string {
+  if (kind === 'added') {
+    return 'Added';
+  }
+
+  if (kind === 'cleared') {
+    return 'Cleared';
+  }
+
+  return 'Changed';
+}
+
+function pendingBadgeColor(kind: DisplayChannelRow['pendingKind']): 'success' | 'warning' | 'error' {
+  if (kind === 'added') {
+    return 'success';
+  }
+
+  if (kind === 'cleared') {
+    return 'error';
+  }
+
+  return 'warning';
+}
+
+function pendingBadgeIcon(kind: DisplayChannelRow['pendingKind']): string {
+  if (kind === 'added') {
+    return 'i-lucide-plus';
+  }
+
+  if (kind === 'cleared') {
+    return 'i-lucide-minus';
+  }
+
+  return 'i-lucide-pencil';
+}
+
+const channelTableMeta = {
+  class: {
+    tr: (row: { original: DisplayChannelRow }) => (row.original.baselineOnly ? 'channel-row-baseline' : 'channel-row-live'),
+  },
+};
+
+function canSelectChannelRow(row: { original: DisplayChannelRow }): boolean {
+  return !row.original.baselineOnly;
+}
 
 const displayChannelSlotKey = computed(() =>
   displayChannels.value.map((channel) => channel.channelNumber).join(','),
@@ -270,7 +450,7 @@ function clearRowSelection(): void {
 
 function commitMacSelection(channelNumber: number, modifiers: MacSelectionModifiers): void {
   const next = applyMacRowSelection(
-    displayChannels.value.map((channel) => String(channel.channelNumber)),
+    tableChannels.value.filter((channel) => !channel.baselineOnly).map((channel) => String(channel.channelNumber)),
     {
       selected: rowSelection.value,
       anchorId: selectionAnchorId.value,
@@ -324,7 +504,7 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
       meta: {
         class: {
           th: 'w-6 px-1',
-          td: 'w-6 px-1',
+          td: ({ row }) => ['w-6 px-1', pendingEdgeClass(row.original)].filter(Boolean).join(' '),
         },
       },
     },
@@ -341,8 +521,12 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
             event.stopPropagation();
           },
         }),
-      cell: ({ row }) =>
-        h(UCheckbox, {
+      cell: ({ row }) => {
+        if (row.original.baselineOnly) {
+          return null;
+        }
+
+        return h(UCheckbox, {
           modelValue: row.getIsSelected(),
           'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
             onChannelCheckboxUpdate(row, value);
@@ -351,12 +535,27 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
           onClick: (event: Event) => {
             onChannelCheckboxClick(event, row.original.channelNumber);
           },
-        }),
+        });
+      },
     },
     {
       id: 'privilege',
       header: '',
     },
+    ...(pendingDiff.value.channels.length > 0
+      ? [
+          {
+            id: 'pending',
+            header: '',
+            meta: {
+              class: {
+                th: 'w-8 px-1',
+                td: 'w-8 px-1',
+              },
+            },
+          } satisfies TableColumn<DisplayChannelRow>,
+        ]
+      : []),
     { accessorKey: 'channelNumber', header: '#' },
     { accessorKey: 'name', header: 'Name' },
     { id: 'bandName', accessorKey: 'band', header: 'Band' },
@@ -373,9 +572,26 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
     accessorFn: (row) => row.extras[field.fieldId] ?? '',
   }));
 
+  const withCellMark = (column: TableColumn<DisplayChannelRow>): TableColumn<DisplayChannelRow> => {
+    const columnId = column.id ?? ('accessorKey' in column ? String(column.accessorKey) : '');
+
+    if (!columnId || PLAIN_CHANNEL_COLUMNS.has(columnId)) {
+      return column;
+    }
+
+    return {
+      ...column,
+      meta: {
+        class: {
+          td: ({ row }) => pendingColumnClass(columnId, row.original),
+        },
+      },
+    };
+  };
+
   return [
-    ...core,
-    ...dynamic,
+    ...core.map(withCellMark),
+    ...dynamic.map(withCellMark),
     {
       id: 'actions',
       header: '',
@@ -502,7 +718,7 @@ function onSelectChannel(first: unknown, second?: unknown): void {
     return;
   }
 
-  if (!row) {
+  if (!row || row.original.baselineOnly) {
     return;
   }
 
@@ -543,7 +759,7 @@ const channelTableTbody = shallowRef<HTMLElement | null>(null);
 
 const { start: startChannelSortable, stop: stopChannelSortable } = useSortable(channelTableTbody, sortableRows, {
   animation: 150,
-  draggable: 'tr',
+  draggable: 'tr.channel-row-live',
   handle: '.channel-drag-handle',
   ghostClass: 'channel-row-ghost',
   chosenClass: 'channel-row-chosen',
@@ -595,7 +811,7 @@ watch(
 );
 
 watch(
-  () => [activeRadioId.value, displayChannelSlotKey.value, channelTableRoot.value] as const,
+  () => [activeRadioId.value, tableSlotKey.value, channelTableRoot.value] as const,
   async () => {
     if (isReorderingChannels.value) {
       return;
@@ -885,7 +1101,7 @@ async function onSaveSerialLog(): Promise<void> {
       v-model="activeTab"
       color="primary"
       variant="link"
-      :items="items"
+      :items="workspaceTabs"
       class="flex min-h-0 flex-1 flex-col overflow-hidden"
       :unmount-on-hide="false"
       :ui="{
@@ -947,6 +1163,16 @@ async function onSaveSerialLog(): Promise<void> {
               size="sm"
               :aria-label="readFromRadio.label"
               @click="run(readFromRadio.id)"
+            />
+          </UTooltip>
+          <UTooltip v-if="pendingChangeTotal > 0" :text="pendingChangeSummary">
+            <UBadge
+              :label="String(pendingChangeTotal)"
+              color="warning"
+              variant="subtle"
+              size="sm"
+              class="tabular-nums"
+              :aria-label="pendingChangeSummary"
             />
           </UTooltip>
           <UTooltip :text="writeMemoryTooltip">
@@ -1082,10 +1308,12 @@ async function onSaveSerialLog(): Promise<void> {
           </div>
           <div ref="channelTableRoot" class="min-h-0 flex-1 overflow-hidden">
             <UTable
-              :key="displayChannelSlotKey"
+              :key="tableSlotKey"
               v-model:row-selection="rowSelection"
-              :data="displayChannels"
+              :data="tableChannels"
               :columns="columns"
+              :meta="channelTableMeta"
+              :row-selection-options="{ enableRowSelection: canSelectChannelRow }"
               :get-row-id="(row) => String(row.channelNumber)"
               sticky
               class="channel-table h-full"
@@ -1099,14 +1327,26 @@ async function onSaveSerialLog(): Promise<void> {
               empty="No channels in this memory."
               @select="onSelectChannel"
             >
-              <template #drag-cell>
+              <template #drag-cell="{ row }">
                 <span
+                  v-if="!row.original.baselineOnly"
                   class="channel-drag-handle inline-flex text-muted"
                   aria-label="Drag to reorder channel"
                   @click.stop
                 >
                   <UIcon name="i-lucide-grip-vertical" class="pointer-events-none size-3.5" />
                 </span>
+              </template>
+              <template #pending-cell="{ row }">
+                <UTooltip v-if="row.original.pendingKind" :text="pendingLabel(row.original.pendingKind)">
+                  <UBadge
+                    :color="pendingBadgeColor(row.original.pendingKind)"
+                    :icon="pendingBadgeIcon(row.original.pendingKind)"
+                    variant="subtle"
+                    size="xs"
+                    :aria-label="pendingLabel(row.original.pendingKind)"
+                  />
+                </UTooltip>
               </template>
               <template #privilege-cell="{ row }">
                 <UTooltip
@@ -1127,7 +1367,7 @@ async function onSaveSerialLog(): Promise<void> {
                 </UTooltip>
               </template>
               <template #actions-cell="{ row }">
-                <div class="flex items-center justify-end gap-0.5" @click.stop>
+                <div v-if="!row.original.baselineOnly" class="flex items-center justify-end gap-0.5" @click.stop>
                   <UButton
                     icon="i-lucide-pencil"
                     color="neutral"
@@ -1171,6 +1411,7 @@ async function onSaveSerialLog(): Promise<void> {
             v-if="settingsMemoryMap && program"
             :memory-map="settingsMemoryMap"
             :settings="program.settings"
+            :changed-paths="pendingDiff.settingsPaths"
             @update:settings="updateSettings"
           />
           <p v-else class="pt-2 text-sm text-muted">This radio has no settings to display.</p>

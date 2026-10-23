@@ -69,7 +69,7 @@ import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { addToRadioDevFixture, DEV_FIXTURE_SERIAL_PORT, isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
-import { type SerialLogOperation } from '~/utils/serial-log-file';
+import { serialLogEntryCount, type SerialLogOperation } from '~/utils/serial-log-file';
 import {
   hasPendingBackupFailureDecision,
   resolveBackupFailureDecision,
@@ -108,6 +108,12 @@ import {
   supportsChainedPrewriteBackupWrite,
 } from '~/utils/radio-chained-clone-write';
 import { isPostPrewriteBackupWriteError } from '~/utils/radio-prewrite-backup-write';
+import {
+  backupBaselineStaleAfterWrite,
+  prewriteBackupReusesRadioBaseline,
+  radioBaselineAfterWriteAttempt,
+  type WriteAttemptTerminal,
+} from '~/utils/radio-baseline-after-write';
 
 const logger = new LogLayer({
   transport: [
@@ -129,9 +135,29 @@ interface RadioCardSession {
   /**
    * Last raw image known to be stored in the radio.
    * Set from a successful read, and replaced after a successful write.
+   * A canceled, failed, or aborted write leaves it unchanged. A pre-write backup
+   * read is stored only in the backup file, not here.
    * Edits in the app change `memory` and leave this copy alone.
    */
   radioBaseline?: Uint8Array;
+  /**
+   * True when `radioBaseline` must not be reused as the pre-write backup.
+   * Set when a write is canceled or fails after bytes may have reached the radio.
+   * A successful read or write clears it. The channels view ignores this flag.
+   */
+  backupBaselineStale?: boolean;
+  /**
+   * Decoded program for `radioBaseline`.
+   * The channels view compares against this snapshot. A successful write stores
+   * the program that was written so the marks clear without another decode.
+   * Cleared when `radioBaseline` is replaced, and left in place when a write does not finish.
+   */
+  radioBaselineProgram?: RadioProgram;
+  /**
+   * Program captured when memory was loaded into the editor.
+   * Used when this session has no radio baseline, such as a file opened before any read.
+   */
+  loadedProgram?: RadioProgram;
   channels: ChannelRow[];
   program?: RadioProgram;
   settingsMemoryMap?: RadioMemoryMap;
@@ -170,6 +196,9 @@ export interface DirectReadRequest {
   baudRate?: number;
   serialPort: string;
 }
+
+/** What the open editor is compared with when marking unsaved channel and setting edits. */
+export type RadioComparisonSource = 'radio' | 'loaded' | 'editor';
 
 export interface ChannelRow {
   channelNumber: number;
@@ -328,6 +357,11 @@ export function useRadio() {
       patchSession(cardId.value, { program: value });
     },
   });
+  const comparison = computed(() => comparisonForSession(readSession(cardId.value)));
+  /** Program the open card is compared with. Radio image when this session has one, otherwise the loaded memory. */
+  const comparisonBaseline = computed(() => comparison.value.program);
+  /** `editor` means there is nothing to compare with, so the channels view shows no pending marks. */
+  const comparisonSource = computed(() => comparison.value.source);
   const settingsMemoryMap = computed({
     get: () => readSession(cardId.value)?.settingsMemoryMap,
     set: (value) => {
@@ -760,7 +794,13 @@ export function useRadio() {
         importedBytes = memoryData.length;
         importedImage = memoryData.slice();
         const undoWarning = await applyLoadedMemory(memoryData, radioId, sessionId, serialPortPath);
-        patchSession(sessionId, { memoryFilePath: undefined, radioBaseline: importedImage });
+        const loaded = readSession(sessionId);
+        patchSession(sessionId, {
+          memoryFilePath: undefined,
+          radioBaseline: importedImage,
+          radioBaselineProgram: loaded?.program ? cloneRadioProgram(loaded.program) : undefined,
+          backupBaselineStale: false,
+        });
         clearBrowserFileHandle();
 
         if (undoWarning) {
@@ -917,17 +957,35 @@ export function useRadio() {
       const radio = loadedRadioToRadio(config, baudRate);
       const backupSettings = readRadioImageBackupSettings();
       const needsPrewriteBackup = shouldCaptureRadioImageBackup(backupSettings, isTauriRuntime());
-      const hasBaseline = Boolean(latest.radioBaseline && latest.radioBaseline.length > 0);
+      const baselineReusable = prewriteBackupReusesRadioBaseline(latest.radioBaseline, latest.backupBaselineStale);
       const useChainedBackupWrite =
-        needsPrewriteBackup && !hasBaseline && supportsChainedPrewriteBackupWrite(radio);
+        needsPrewriteBackup && !baselineReusable && supportsChainedPrewriteBackupWrite(radio);
 
       let freshPrewriteBackupSaved = false;
-      let outcome: 'success' | 'canceled' | 'error' = 'success';
+      let outcome: WriteAttemptTerminal = 'aborted';
+      let writeBytesSent = false;
+      let countWriteProgress = false;
       const writtenBytes = imageToWrite.length;
       let serialLoggedDriver: SerialLoggedDriver | undefined;
 
+      const indicateWriteProgress = (indicator: RadioProgressIndicator): RadioProgressIndicator => ({
+        get isCanceled() {
+          return indicator.isCanceled;
+        },
+        set isCanceled(value: boolean) {
+          indicator.isCanceled = value;
+        },
+        setValue(value: number) {
+          indicator.setValue(value);
+
+          if (countWriteProgress && value > 0) {
+            writeBytesSent = true;
+          }
+        },
+      });
+
       if (useChainedBackupWrite) {
-        const progressIndicator = startProgress('backup');
+        const progressIndicator = indicateWriteProgress(startProgress('backup'));
 
         try {
           const serialLogger = await chainedPrewriteBackupAndWrite({
@@ -938,6 +996,8 @@ export function useRadio() {
             logger,
             enableSerialLogging: true,
             onBackupImageReady: async (backupImage) => {
+              // Backup file only. Do not copy this image into radioBaseline:
+              // the write may still be canceled or fail.
               const captured = await captureRadioImageBackup({
                 settings: backupSettings,
                 identity: { manufacturer: radioId.manufacturer, model: String(radioId.model) },
@@ -953,7 +1013,13 @@ export function useRadio() {
               freshPrewriteBackupSaved = true;
             },
             onWritePhaseStart: () => {
+              countWriteProgress = true;
               progressKind.value = 'write';
+            },
+            onWritePhaseEnd: (bytesSent) => {
+              if (bytesSent) {
+                writeBytesSent = true;
+              }
             },
           });
 
@@ -962,11 +1028,13 @@ export function useRadio() {
               getSerialLogData: () => serialLogger.getLogData(),
             };
           }
+
+          outcome = canceled.value ? 'canceled' : 'success';
         } catch (cause) {
           if (isCancelledTransfer(cause)) {
             outcome = 'canceled';
           } else {
-            outcome = 'error';
+            outcome = 'failed';
             console.error('Failed chained pre-write backup and write', cause);
             await assignWriteProgressError(
               radioId,
@@ -990,18 +1058,20 @@ export function useRadio() {
         }
 
         freshPrewriteBackupSaved = backup.freshBackupSaved;
-        const progressIndicator = startProgress('write');
+        countWriteProgress = true;
+        const progressIndicator = indicateWriteProgress(startProgress('write'));
         const { RadioDriver } = await import('@springfield/ham-radio-driver');
         const driver = new RadioDriver(radio, logger, undefined, true);
         serialLoggedDriver = driver;
 
         try {
           await driver.writeRadio(serialPortPath, imageToWrite, progressIndicator);
+          outcome = canceled.value ? 'canceled' : 'success';
         } catch (cause) {
           if (isCancelledTransfer(cause)) {
             outcome = 'canceled';
           } else {
-            outcome = 'error';
+            outcome = 'failed';
             console.error('Failed to write radio', cause);
             await assignWriteProgressError(
               radioId,
@@ -1013,13 +1083,39 @@ export function useRadio() {
             );
           }
         } finally {
+          if (serialLogEntryCount(driver.getSerialLogData()) > 0) {
+            writeBytesSent = true;
+          }
+
           captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
         }
       }
 
-      if (outcome === 'success') {
-        const written = readSession(sessionId)?.memory ?? imageToWrite;
-        patchSession(sessionId, { radioBaseline: written.slice() });
+      const writtenSession = readSession(sessionId);
+      const written = writtenSession?.memory ?? imageToWrite;
+      const baseline = radioBaselineAfterWriteAttempt({
+        previous: {
+          image: writtenSession?.radioBaseline,
+          program: writtenSession?.radioBaselineProgram,
+        },
+        terminal: outcome,
+        writtenImage: written,
+        writtenProgram: writtenSession?.program,
+        canceled: canceled.value,
+      });
+
+      const backupBaselineStale = backupBaselineStaleAfterWrite({
+        previouslyStale: Boolean(writtenSession?.backupBaselineStale),
+        terminal: outcome,
+        bytesSent: writeBytesSent,
+      });
+
+      if (baseline.commit && baseline.image) {
+        patchSession(sessionId, {
+          radioBaseline: baseline.image,
+          radioBaselineProgram: baseline.program,
+          backupBaselineStale: false,
+        });
         progressOpen.value = false;
         toast.add({
           title: 'Wrote to radio',
@@ -1030,10 +1126,11 @@ export function useRadio() {
         return;
       }
 
-      // The radio may no longer match the last download. The next backup reads it again.
-      patchSession(sessionId, { radioBaseline: undefined });
+      if (backupBaselineStale && !writtenSession?.backupBaselineStale) {
+        patchSession(sessionId, { backupBaselineStale: true });
+      }
 
-      if (outcome === 'canceled') {
+      if (outcome === 'canceled' || canceled.value) {
         progressOpen.value = false;
         toast.add({
           title: 'Write canceled',
@@ -1117,7 +1214,16 @@ export function useRadio() {
         return;
       }
 
-      patchSession(sessionId, { radioBaseline: memoryData.slice() });
+      const radioBaselineProgram = decodeRadioBaseline({
+        channels: [],
+        activeRadioId: radioId,
+        radioBaseline: memoryData,
+      });
+      patchSession(sessionId, {
+        radioBaseline: memoryData.slice(),
+        radioBaselineProgram: radioBaselineProgram ? cloneRadioProgram(radioBaselineProgram) : undefined,
+        backupBaselineStale: false,
+      });
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
       toast.add({
         title: 'Read radio',
@@ -1161,7 +1267,8 @@ export function useRadio() {
    * Save the image currently on the radio before replacing it.
    *
    * Uses the last successful download or write when that still describes the
-   * radio. Otherwise reads the radio first. Returns false when the operator
+   * radio. Reads the radio again when that image is missing or marked stale
+   * by a write that stopped after sending bytes. Returns false when the operator
    * stops the write because that backup could not be made.
    */
   async function preparePrewriteBackup(
@@ -1178,7 +1285,7 @@ export function useRadio() {
       return { ready: true, freshBackupSaved: false };
     }
 
-    const usedBaseline = Boolean(session.radioBaseline && session.radioBaseline.length > 0);
+    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
     const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
 
     if (image === 'abort') {
@@ -1227,6 +1334,7 @@ export function useRadio() {
 
   /**
    * Bytes already known to be on the radio, or a fresh read when they are not.
+   * A stale baseline is not reused: a partial write may have changed the radio.
    */
   async function prewriteBackupImage(
     sessionId: string,
@@ -1236,10 +1344,8 @@ export function useRadio() {
     config: LoadedRadioConfig,
     baudRate?: number,
   ): Promise<Uint8Array | 'skip' | 'abort'> {
-    const baseline = session.radioBaseline;
-
-    if (baseline && baseline.length > 0) {
-      return baseline.slice();
+    if (prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale)) {
+      return session.radioBaseline!.slice();
     }
 
     return readRadioImageForBackup(sessionId, radioId, serialPortPath, config, baudRate);
@@ -2025,6 +2131,7 @@ export function useRadio() {
       memory: memoryData,
       activeRadioId: radioId,
       program: decoded,
+      loadedProgram: decoded ? cloneRadioProgram(decoded) : undefined,
       settingsMemoryMap: memoryMapFromConfig(config),
       channels: rowsFromProgram(decoded),
       memoryHistory,
@@ -2068,6 +2175,7 @@ export function useRadio() {
 
     patchSession(cardId, {
       program: nextProgram,
+      loadedProgram: cloneRadioProgram(nextProgram),
       channels: rowsFromProgram(nextProgram),
       memoryHistory: resetRadioMemoryHistory(nextProgram),
     });
@@ -2249,6 +2357,7 @@ export function useRadio() {
     patchSession(cardId, {
       memory: loaded.memory,
       program: loaded.program,
+      loadedProgram: cloneRadioProgram(loaded.program),
       activeRadioId: radioId,
       channels: loaded.program.channels,
       settingsMemoryMap: config.memoryMap,
@@ -2267,13 +2376,13 @@ export function useRadio() {
     const memoryMap = memoryMapFromConfig(config);
     const assignment = programLibraryChannelsIntoSlots(addToRadioDevFixture(), [0, 1], memoryMap);
 
-    persistProgram(
-      {
-        ...session.program,
-        channels: assignment.programmed,
-      },
-      cardId,
-    );
+    const nextProgram: RadioProgram = {
+      ...session.program,
+      channels: assignment.programmed,
+    };
+
+    patchSession(cardId, { loadedProgram: cloneRadioProgram(nextProgram) });
+    persistProgram(nextProgram, cardId);
   }
 
   async function seedAddToRadioDevFixtureInner(options?: {
@@ -2333,6 +2442,7 @@ export function useRadio() {
         memory: loaded.memory,
         activeRadioId: radioId,
         program: loaded.program,
+        loadedProgram: cloneRadioProgram(loaded.program),
         settingsMemoryMap: memoryMapFromConfig(config),
         channels: rowsFromProgram(loaded.program),
         memoryHistory: resetRadioMemoryHistory(loaded.program),
@@ -2361,6 +2471,62 @@ export function useRadio() {
     }
   }
 
+  function decodeRadioBaseline(session: RadioCardSession): RadioProgram | undefined {
+    const radioId = session.activeRadioId;
+    const image = session.radioBaseline;
+
+    if (!radioId || !image || image.length === 0) {
+      return undefined;
+    }
+
+    const config = getConfiguration(radioId);
+    const memoryMap = config ? memoryMapFromConfig(config) : undefined;
+
+    if (!config?.memoryConfig || !memoryMap) {
+      return undefined;
+    }
+
+    try {
+      const codec = createMemoryMapCodec({
+        radioModel: radioId.model,
+        memoryMap,
+        memoryConfig: config.memoryConfig,
+        logger,
+      });
+
+      return codec.decode({
+        radioModel: radioId.model,
+        contents: image,
+      });
+    } catch (cause) {
+      logger.withError(cause).error('Failed to decode radio baseline');
+      return undefined;
+    }
+  }
+
+  function comparisonForSession(session: RadioCardSession | undefined): {
+    program: RadioProgram | undefined;
+    source: RadioComparisonSource;
+  } {
+    if (!session?.program) {
+      return { program: undefined, source: 'editor' };
+    }
+
+    if (session.radioBaseline && session.radioBaseline.length > 0) {
+      const fromRadio = session.radioBaselineProgram ?? decodeRadioBaseline(session);
+
+      if (fromRadio) {
+        return { program: fromRadio, source: 'radio' };
+      }
+    }
+
+    if (session.loadedProgram) {
+      return { program: session.loadedProgram, source: 'loaded' };
+    }
+
+    return { program: session.program, source: 'editor' };
+  }
+
   return {
     configurations,
     manufacturers,
@@ -2377,6 +2543,8 @@ export function useRadio() {
     memory,
     channels,
     program,
+    comparisonBaseline,
+    comparisonSource,
     settingsMemoryMap,
     activeRadioId,
     addTargets,
@@ -2434,6 +2602,10 @@ export function useRadio() {
     saveMemoryFileAs,
     clearCardSession,
   };
+}
+
+export function channelRowsFromProgram(decoded: RadioProgram | undefined): ChannelRow[] {
+  return rowsFromProgram(decoded);
 }
 
 function rowsFromProgram(decoded: RadioProgram | undefined): ChannelRow[] {

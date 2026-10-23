@@ -6,6 +6,7 @@ import { SerialPort } from 'serialport';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { PostPrewriteBackupWriteError } from '~/utils/radio-prewrite-backup-write';
+import { serialLogEntryCount } from '~/utils/serial-log-file';
 
 function totalMemoryBytes(radio: Radio): number {
   return Object.values(radio.memoryConfig.segments).reduce(
@@ -102,6 +103,11 @@ export interface ChainedPrewriteBackupAndWriteOptions {
   /** Persist the backup image before the write phase begins on the open port. */
   onBackupImageReady: (image: Uint8Array) => Promise<void>;
   onWritePhaseStart?: () => void;
+  /**
+   * Called after the write phase. `bytesSent` is true when that phase put
+   * frames on the port, including when the write then failed.
+   */
+  onWritePhaseEnd?: (bytesSent: boolean) => void;
 }
 
 /**
@@ -115,6 +121,8 @@ export async function chainedPrewriteBackupAndWrite(
   let port: SerialPort | undefined;
   let serialLogger: SerialLogger | undefined;
   let backupPersisted = false;
+  let writeStarted = false;
+  let framesBeforeWrite = 0;
 
   try {
     port = await connectSerialPort(radio, serialPortPath);
@@ -142,6 +150,8 @@ export async function chainedPrewriteBackupAndWrite(
     await options.onBackupImageReady(backupBuffer.slice());
     backupPersisted = true;
     options.onWritePhaseStart?.();
+    writeStarted = true;
+    framesBeforeWrite = serialLogEntryCount(serialLogger?.getLogData());
 
     context.memoryBuffer = writeData;
     context.bufferOffset = 0;
@@ -155,6 +165,11 @@ export async function chainedPrewriteBackupAndWrite(
 
     throw error;
   } finally {
+    if (writeStarted) {
+      const framesAfterWrite = serialLogEntryCount(serialLogger?.getLogData());
+      options.onWritePhaseEnd?.(framesAfterWrite > framesBeforeWrite);
+    }
+
     if (port?.isOpen) {
       port.close();
     }

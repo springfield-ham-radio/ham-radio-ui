@@ -5,10 +5,17 @@ import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups
 import { settingsFieldHelp } from '~/utils/settings-field-help';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
 
-const props = defineProps<{
-  memoryMap: RadioMemoryMap;
-  settings: RadioSettings;
-}>();
+const props = withDefaults(
+  defineProps<{
+    memoryMap: RadioMemoryMap;
+    settings: RadioSettings;
+    /** Setting paths that differ from the radio or loaded memory. */
+    changedPaths?: readonly string[];
+  }>(),
+  {
+    changedPaths: () => [],
+  },
+);
 
 const emit = defineEmits<{
   'update:settings': [settings: RadioSettings];
@@ -90,9 +97,19 @@ const selectedSections = computed(() => {
   return sections;
 });
 
+const changedPathSet = computed(() => new Set(props.changedPaths));
+
+function groupHasChanges(entry: { fields: { path: string }[] }): boolean {
+  return entry.fields.some((field) => changedPathSet.value.has(field.path));
+}
+
+function fieldChanged(path: string): boolean {
+  return changedPathSet.value.has(path);
+}
+
 const groupSelectItems = computed(() => {
   return groupEntries.value.map((entry) => ({
-    label: entry.label,
+    label: groupHasChanges(entry) ? `${entry.label} · Changed` : entry.label,
     value: entry.id,
   }));
 });
@@ -235,7 +252,15 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
         @click="selectGroup(entry.id)"
       >
         <UIcon :name="groupIcon(entry)" class="size-4 shrink-0" />
-        {{ entry.label }}
+        <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+        <UTooltip v-if="groupHasChanges(entry)" text="Changed">
+          <UBadge
+            color="warning"
+            variant="solid"
+            class="size-1.5 shrink-0 rounded-full p-0"
+            aria-label="Changed"
+          />
+        </UTooltip>
       </button>
     </nav>
 
@@ -276,7 +301,22 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
                 :key="field.path"
                 :label="field.ui.label"
                 :ui="fieldFormUi(field)"
+                :class="fieldChanged(field.path) ? 'rounded-md border-s-2 border-warning bg-warning/10 ps-2' : undefined"
               >
+                <template v-if="fieldChanged(field.path)" #label>
+                  <span class="inline-flex items-center gap-1.5">
+                    {{ field.ui.label }}
+                    <UTooltip text="Changed">
+                      <UBadge
+                        color="warning"
+                        variant="subtle"
+                        size="xs"
+                        class="size-1.5 rounded-full p-0"
+                        aria-label="Changed"
+                      />
+                    </UTooltip>
+                  </span>
+                </template>
                 <template v-if="helpByPath.get(field.path)" #hint>
                   <HelpTooltip
                     :menu="helpByPath.get(field.path)?.menuLabel"
