@@ -1,3 +1,9 @@
+## [1.29.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.29.0...v1.29.1) (2026-10-23)
+
+### Bug Fixes
+
+* **deps:** bump ham-radio-driver to 3.8.0 ([#171](https://github.com/springfield-ham-radio/ham-radio-ui/issues/171)) ([f162f19](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f162f1951c45f7aa7d4adc01bb73d9b9ceb0c75a))
+
 ## [1.29.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.28.0...v1.29.0) (2026-10-23)
 
 ### Features
