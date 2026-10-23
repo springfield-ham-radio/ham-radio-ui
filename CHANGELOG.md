@@ -1,3 +1,13 @@
+## [1.29.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.28.0...v1.29.0) (2026-10-23)
+
+### Features
+
+* **radio:** mark channels that differ from the radio ([#169](https://github.com/springfield-ham-radio/ham-radio-ui/issues/169)) ([0fd0d4d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0fd0d4d7d250349912234077f5e9b7e2e92c0189))
+
+### Bug Fixes
+
+* **settings:** bundle lucide icons named by radio modules ([#170](https://github.com/springfield-ham-radio/ham-radio-ui/issues/170)) ([2246b36](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2246b36f186cc0b5c6e933d84ba1cc230066b59d))
+
 ## [1.28.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.27.0...v1.28.0) (2026-10-22)
 
 ### Features
