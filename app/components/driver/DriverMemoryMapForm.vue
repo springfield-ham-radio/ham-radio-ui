@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui';
 import { driverFieldError } from '~/utils/driver-compile';
 import { createMemoryGroup, createMemoryStruct, type DriverMemoryMapDraft } from '~/utils/driver-draft';
+import { resolveModuleIcon } from '~/utils/module-icons';
 
 const { draft, memoryMap, patch } = useDriverDraft();
 
@@ -71,11 +72,15 @@ function addGroup(): void {
 }
 
 const groupItems = computed<TabsItem[]>(() => {
-  return draft.value.memoryMap.groups.map((group) => ({
-    label: group.label.trim() || group.groupId.trim() || 'Group',
-    value: group.id,
-    icon: group.icon.trim() || undefined,
-  }));
+  return draft.value.memoryMap.groups.map((group) => {
+    const icon = group.icon.trim();
+
+    return {
+      label: group.label.trim() || group.groupId.trim() || 'Group',
+      value: group.id,
+      icon: icon ? resolveModuleIcon(icon) : undefined,
+    };
+  });
 });
 
 const openGroupId = shallowRef(draft.value.memoryMap.groups[0]?.id);

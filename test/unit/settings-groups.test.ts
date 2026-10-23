@@ -86,6 +86,23 @@ describe('collectMemoryMapUiGroups', () => {
     expect(grouped[0]?.label).toBe('Service Settings');
     expect(grouped[0]?.warning?.title).toBe('Service calibration values');
     expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['squelch', 'timeout']);
+    expect(grouped[0]?.icon).toBe('i-lucide-wrench');
+    expect(grouped[1]?.icon).toBe('i-lucide-sliders-horizontal');
+  });
+
+  it('should use the default icon when a group icon is missing or not bundled', () => {
+    const grouped = collectMemoryMapUiGroups({
+      ...sampleMap,
+      groups: [
+        { id: 'basic', label: 'Basic Settings', icon: 'i-lucide-layout-dashboard' },
+        { id: 'service', label: 'Service Settings', icon: 'i-lucide-not-a-real-icon' },
+      ],
+    });
+
+    expect(grouped.map((group) => group.icon)).toEqual(['i-lucide-layout-dashboard', 'i-lucide-sliders-horizontal']);
+
+    const undeclared = collectMemoryMapUiGroups(sampleMap);
+    expect(undeclared.every((group) => group.icon === 'i-lucide-sliders-horizontal')).toBe(true);
   });
 
   it('should use declared sub-groups as panel sections', () => {

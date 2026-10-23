@@ -20,6 +20,8 @@ yarn install
 yarn tauri:dev
 ```
 
+Radio-module settings icons must come from the bundled Lucide set in [docs/module-icons.md](docs/module-icons.md). HamBench does not call Iconify at runtime.
+
 ## License
 
 MIT. Copyright (c) 2026 Bryan Hunt. See [LICENSE](LICENSE).

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RadioMemoryMap, RadioSettings, RadioSettingValue } from '@springfield/ham-radio-api';
 import { type RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
+import { resolveModuleIcon } from '~/utils/module-icons';
 import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups';
 import { settingsFieldHelp } from '~/utils/settings-field-help';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
@@ -22,7 +23,6 @@ const emit = defineEmits<{
 }>();
 
 const EMPTY_SELECT_VALUE = '__empty__';
-const FALLBACK_GROUP_ICON = 'i-lucide-sliders-horizontal';
 
 const { settingsFieldsGridStyle } = useAppearanceSettings();
 const contentPane = useTemplateRef<HTMLElement>('contentPane');
@@ -115,7 +115,7 @@ const groupSelectItems = computed(() => {
 });
 
 function groupIcon(entry: { icon?: string }): string {
-  return entry.icon || FALLBACK_GROUP_ICON;
+  return resolveModuleIcon(entry.icon);
 }
 
 function fieldValue(field: RadioMemoryMapUiField): RadioSettingValue | undefined {
