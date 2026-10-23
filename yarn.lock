@@ -3095,15 +3095,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-driver@npm:^3.6.0":
-  version: 3.6.1
-  resolution: "@springfield/ham-radio-driver@npm:3.6.1"
+"@springfield/ham-radio-driver@npm:^3.8.0":
+  version: 3.8.0
+  resolution: "@springfield/ham-radio-driver@npm:3.8.0"
   dependencies:
     "@springfield/ham-radio-api": "npm:^18.3.0"
     "@springfield/ham-radio-utils": "npm:^4.15.4"
     loglayer: "npm:^9.4.0"
     serialport: "npm:^13.0.0"
-  checksum: 10c0/4c47ec0c5088a4b4bb19ba9cefca732cdb5108a574032af3d8ff11ce721b694968937fee7d3e0ad920bc03bc26a2a628bf460a2a970f05e1fa8191fe04e362a0
+  checksum: 10c0/a5935a5f63948583d5cec9838468503790d87d6e6d86be9f5ecbefa57edd28e52561495d5a3197831ae7310d63229e47d03c24bdb31bb703fe00f643ff30ff33
   languageName: node
   linkType: hard
 
@@ -3130,7 +3130,7 @@ __metadata:
     "@semantic-release/github": "npm:12.0.10"
     "@semantic-release/npm": "npm:13.2.0"
     "@springfield/ham-radio-api": "npm:18.3.0"
-    "@springfield/ham-radio-driver": "npm:^3.6.0"
+    "@springfield/ham-radio-driver": "npm:^3.8.0"
     "@springfield/ham-radio-registry": "npm:2.1.0"
     "@springfield/ham-radio-utils": "npm:^4.16.0"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
