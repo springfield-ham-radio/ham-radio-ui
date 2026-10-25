@@ -196,15 +196,13 @@ defineExpose({ save });
     class="mt-4 flex max-w-lg flex-col gap-4"
     @submit.prevent
   >
-    <p class="text-sm text-muted">Name, call sign, and license class for one operator.</p>
+    <p class="text-sm text-muted">Call sign, name, and license class for one operator.</p>
     <p v-if="editingExisting" class="text-sm text-muted">More people and licenses can be managed in Preferences.</p>
-    <UFormField name="name" label="Name" required>
-      <UInput v-model="state.name" class="w-full" placeholder="Name" />
-    </UFormField>
     <UFormField name="callSign" label="Call sign" required>
       <div class="flex gap-2">
         <UInput
           v-model="state.callSign"
+          autofocus
           class="min-w-0 flex-1 uppercase"
           placeholder="W1AW"
           :disabled="lookingUp"
@@ -221,6 +219,9 @@ defineExpose({ save });
       </div>
     </UFormField>
     <p v-if="lookupError" class="text-xs text-error">{{ lookupError }}</p>
+    <UFormField name="name" label="Name" required>
+      <UInput v-model="state.name" class="w-full" placeholder="Name" />
+    </UFormField>
     <UFormField name="licenseClassId" label="License class" required>
       <USelectMenu
         v-model="state.licenseClassId"

@@ -895,6 +895,9 @@ describe('onboarding step transitions', () => {
     expect(licenseTemplate).toContain('name="name"');
     expect(licenseTemplate).toContain('name="callSign"');
     expect(licenseTemplate).toContain('name="licenseClassId"');
+    expect(licenseTemplate.indexOf('name="callSign"')).toBeLessThan(licenseTemplate.indexOf('name="name"'));
+    expect(licenseTemplate.indexOf('name="name"')).toBeLessThan(licenseTemplate.indexOf('name="licenseClassId"'));
+    expect(licenseTemplate).toContain('autofocus');
     expect(licenseTemplate).not.toContain(':error=');
     expect(licenseTemplate).not.toContain('Enter a name');
     expect(licenseTemplate).not.toContain('Enter a call sign');

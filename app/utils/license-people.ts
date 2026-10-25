@@ -2,6 +2,7 @@ import { operatorClassToLicenseClassId } from '@springfield/ham-radio-utils';
 import licenseClasses from '../../node_modules/@springfield/ham-radio-utils/dist/db/license-classes.json' with { type: 'json' };
 import type { CallookResponse } from '~/utils/callook';
 import type { GmrsLookupResponse, GmrsLookupStatusEvent } from '~/utils/gmrs-lookup';
+import { mixedCaseLookupName } from '~/utils/person-name';
 
 export const LICENSE_DIRECTORY_STORAGE_KEY = 'ham-radio-license-directory';
 export const LEGACY_AMATEUR_LICENSE_STORAGE_KEY = 'ham-radio-operator-license';
@@ -220,6 +221,12 @@ function optionalText(value: unknown): string | undefined {
   }
 
   return trimmed;
+}
+
+function lookupPersonName(value: unknown): string | undefined {
+  const text = optionalText(value);
+
+  return text ? mixedCaseLookupName(text) : undefined;
 }
 
 function licenseClassNameForId(id: string | undefined): string | undefined {
@@ -740,7 +747,7 @@ export function amateurLicenseFromCallook(
     personId,
     kind: 'amateur',
     callSign: resolvedCallSign,
-    name: optionalText(response.name),
+    name: lookupPersonName(response.name),
     operatorClass,
     licenseClassId,
     licenseClassName: licenseClassNameForId(licenseClassId),
@@ -787,7 +794,7 @@ export function gmrsLicenseFromLookup(
     personId,
     kind: 'gmrs',
     callSign: payload.callsign.trim().toUpperCase() || callSign,
-    name: optionalText(payload.full_name) ?? optionalText(payload.name),
+    name: lookupPersonName(payload.full_name) ?? lookupPersonName(payload.name),
     status: payload.is_active ? 'VALID' : 'INACTIVE',
     city: optionalText(payload.city ?? undefined),
     state: optionalText(payload.state ?? undefined),
