@@ -22,7 +22,7 @@ The pieces already exist. Preferences (`/preferences`, opened with Command-comma
 
 `SavedRadioEditor` only lists manufacturers and models from installed `configurations`, and `savedRadioDraftIssues` requires a non-empty serial port. A radio row cannot be saved before its module is installed and a port is chosen. Until slice 2, `useRadio().initialize` opened `RadioModulesInstallDialog` ("Install radios") with `required` whenever the catalog is empty, including a brand-new profile and an existing profile whose modules were removed.
 
-That required dialog blocks the app. Preferences → Drivers (`RadioModulesPreference`, including "Install from file…") is enough to install a module before the Radios and Drivers steps exist. Slice 2 removes the startup open and adds the empty-catalog banner. The launch flag stays false until slice 4.
+That required dialog blocks the app. Preferences → Drivers (`RadioModulesPreference`, including "Install from file…") is enough to install a module before the Radios and Drivers steps exist. Slice 2 removes the startup open and adds the empty-catalog banner. Slice 4 sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true.
 
 Units stay on Preferences → Channels (`DistanceUnitPreference`, `ham-radio-distance-unit`). This stepper does not include them.
 
@@ -78,11 +78,11 @@ The default empty Home station is not existing data. Appearance, distance unit, 
 
 ### Startup module install
 
-Remove the startup "Install radios" dialog in slice 2 (Licenses and Home), not in the slice that sets `ONBOARDING_LAUNCH_NEW_PROFILES`. The shell slice (#175, merged as #178) kept the dialog because the guide was still placeholders. Slice 2 removes the startup open while the launch flag stays false. A new profile still does not auto-open the guide. Preferences → Drivers is the install path until the Radios and Drivers steps are real.
+Remove the startup "Install radios" dialog in slice 2 (Licenses and Home), not when the launch flag turns on. The shell slice (#175, merged as #178) kept the dialog because the guide was still placeholders. Slice 2 removes the startup open. Slice 4 sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true, so a profile with no existing data opens the guide on first launch and persists step progress. Preferences → Drivers remains an install path, and the Drivers step installs the models picked on Radios.
 
 - `useRadio().initialize` no longer sets `modulesInstallOpen` or `modulesInstallRequired` because the catalog is empty. Do not keep a second modal behind a flag.
 - `RadioModulesInstallDialog` stays mounted. The radio workspace can still open it, and Preferences → Drivers (`/preferences?section=drivers`, `RadioModulesPreference`) keeps Install and "Install from file…".
-- Later, when the launch flag is true, a new profile starts the guide. Modules are also installed from the Radios step (models they own) and the Drivers step (`installOfficialModule`).
+- With the launch flag true, a new profile starts the guide. Modules are installed from the Drivers step (`installOfficialModule`) for the models chosen on Radios, and from Preferences → Drivers.
 
 A profile with an empty catalog does not get a required dialog. Show a non-blocking `UAlert` under the header, in the same stack as the driver-update alert. It says no radio modules are installed. Its action, "Install drivers", routes to `/preferences?section=drivers`. Dismiss writes `ham-radio-empty-catalog-banner-dismissed` in this profile's localStorage and stays dismissed across launches while the catalog is empty. Installing any module clears that dismissal, so a later empty catalog shows the banner again. The banner disappears once any module is installed. Hide it while the setup guide is open. Do not show it when the stored onboarding status is `active`; that profile uses the Drivers step.
 
@@ -121,26 +121,28 @@ Skipping the cable or read step does not block Stations or normal use of the app
 
 ## Consequences
 
-- New profiles see the stepper instead of a required module dialog, once `ONBOARDING_LAUNCH_NEW_PROFILES` is true. Until that flag, a new profile does not auto-open the guide. Profiles with any signal in `onboardingHasExistingData` never see the stepper unless they open it from Preferences.
+- New profiles see the stepper on first launch, because `ONBOARDING_LAUNCH_NEW_PROFILES` is true. That launch writes `ham-radio-onboarding` as `active`, and later Skip / Continue edits persist. Profiles with any signal in `onboardingHasExistingData` are marked `completed` / `existing-data` and never see the stepper unless they open it from Preferences.
 - Slice 2 removes the startup Install radios dialog. A profile whose module catalog is empty sees a dismissible banner to Preferences → Drivers, not a required dialog. Dismissal is stored per profile in `ham-radio-empty-catalog-banner-dismissed`.
 - No SQLite migration and no rewrite of license, radio, station, channel, log, or backup documents. New localStorage keys are `ham-radio-onboarding` and `ham-radio-empty-catalog-banner-dismissed`. Marking an existing profile `existing-data` does not change those documents.
 - `SavedRadio` still requires an installed model and a serial port. Owned models live in the onboarding document until the cable step can call `addRadio`.
 - `RadioModulesPreference` gains an optional `entryIds` filter. Callers that omit it keep the full list.
 - Slice 2 deletes the startup open. The guide can still hide a manually opened installer while it is open.
 - Units, appearance, updates, backups retention, and the sniffer stay out of the stepper.
-- Follow-on work is the implementation slices below. The launch flag stays false until slice 4.
+- Slice 4 sets the launch flag and replaces the cable, first-read, and stations placeholders.
 
 ### Breaking changes
 
 None for stored data or for callers of the license, station, saved-radio, or backup helpers.
 
-Breaking, in slice 2: the startup module-install dialog is removed. An empty catalog no longer opens "Install radios" on launch. Preferences → Drivers (`/preferences?section=drivers`, `RadioModulesPreference`), including "Install from file…", stays an install path, and the radio workspace can still open `RadioModulesInstallDialog`. An empty catalog gets the dismissible Install drivers banner instead of a required dialog. Dismissal persists per profile. The launch flag stays false in this slice.
+Breaking, in slice 2: the startup module-install dialog is removed. An empty catalog no longer opens "Install radios" on launch. Preferences → Drivers (`/preferences?section=drivers`, `RadioModulesPreference`), including "Install from file…", stays an install path, and the radio workspace can still open `RadioModulesInstallDialog`. An empty catalog gets the dismissible Install drivers banner instead of a required dialog. Dismissal persists per profile.
+
+Breaking, in slice 4: a profile with no existing station data opens the setup guide on first launch and stores `ham-radio-onboarding` as `active`. Step progress persists. A profile that already has a license, a saved radio, a located Home, another station, an antenna, an installed module, a channel, a log row, or a backup is marked `completed` / `existing-data` and the guide stays closed.
 
 ### Suggested pull requests
 
 1. **State and shell.** `onboarding.ts`, `useOnboarding`, the modal plus `UStepper`, the Preferences button, the existing-data write, and the `modulesInstallOpen` guard. Step slots can be short descriptions. `ONBOARDING_LAUNCH_NEW_PROFILES` stays false. Keep the required Install radios dialog. Unit tests for the pure gate and for done/skip transitions.
 2. **Licenses and Home.** Embed `LicensePeoplePreference` and `RadioStationEditor`. Tests for the done checks, including a license grid that already filled Home. This slice also removes the startup Install radios dialog and adds the dismissible empty-catalog banner. `ONBOARDING_LAUNCH_NEW_PROFILES` stays false.
-3. **Radios and drivers.** Catalog multi-select, `ownedModuleIds`, and the `entryIds` filter on `RadioModulesPreference`. Do not set the launch flag. The startup dialog is already gone; Preferences → Drivers remains the install path.
-4. **Cable, first read, and stations.** This slice sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true. Port selection, `addRadio` when a port exists, the existing read/backup path, and `RadioStationPreference`. Cover the no-port and no-desktop alerts in component tests.
+3. **Radios and drivers.** Catalog multi-select, `ownedModuleIds`, and the `entryIds` filter on `RadioModulesPreference`. The startup dialog is already gone; Preferences → Drivers remains the install path.
+4. **Cable, first read, and stations.** This slice sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true. Port selection, `addRadio` when a port exists, the existing read/backup path, and `RadioStationPreference`. It lands on the same pull request as slice 3 once the Radios and Drivers steps are in place. Cover the no-port and no-desktop alerts.
 
-Each slice stays behind the same onboarding key so a half-shipped step can still be skipped. Do not set `ONBOARDING_LAUNCH_NEW_PROFILES` until slice 4. Earlier slices must keep new profiles from becoming `active`, or they would see a guide that cannot finish setup.
+Each slice stays behind the same onboarding key so a half-shipped step can still be skipped. Slice 4 is the first slice that writes `active` for a new profile.

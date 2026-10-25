@@ -13,15 +13,23 @@ import {
   parseLicenseDirectory,
   type LicenseDirectory,
 } from '~/utils/license-people';
-import { SAVED_RADIOS_STORAGE_KEY, parseSavedRadioStore } from '~/utils/saved-radios';
+import { backupFileSegment, parseBackupFileName } from '~/utils/radio-image-backup';
+import {
+  SAVED_RADIOS_STORAGE_KEY,
+  savedRadioDraftHasIssues,
+  savedRadioDraftIssues,
+  savedRadioNameKey,
+  parseSavedRadioStore,
+  type SavedRadioDraft,
+} from '~/utils/saved-radios';
 
 export const ONBOARDING_STORAGE_KEY = 'ham-radio-onboarding';
 
 /**
- * Leave this false until the last setup slice (cable, first read, stations)
- * can finish a new profile. While it is false, launch never writes `active`.
+ * Slice 4 can finish a new profile. Launch writes `active` and opens the guide
+ * when this install has no existing station data.
  */
-export const ONBOARDING_LAUNCH_NEW_PROFILES = false;
+export const ONBOARDING_LAUNCH_NEW_PROFILES = true;
 
 export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'cable', 'read', 'stations'] as const;
 
@@ -83,21 +91,21 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     title: 'Cable',
     description: 'Programming port',
     icon: 'i-lucide-usb',
-    placeholder: 'The cable and port check is added in a later update. Skipping this does not pick a serial port.',
+    placeholder: 'Skipping this does not pick a serial port or create a radio.',
   },
   {
     id: 'read',
     title: 'First read',
     description: 'Backup before edits',
     icon: 'i-lucide-archive',
-    placeholder: 'The first radio read is added in a later update. Skipping this does not read a radio.',
+    placeholder: 'Skipping this does not read a radio.',
   },
   {
     id: 'stations',
     title: 'Stations',
     description: 'Other sites',
     icon: 'i-lucide-map-pin',
-    placeholder: 'Other stations and antennas are added in a later update. Skipping this does not change stations.',
+    placeholder: 'Skipping this does not change stations.',
   },
 ];
 
@@ -223,6 +231,9 @@ export interface OnboardingStepCompletion {
   home: boolean;
   radios: boolean;
   drivers: boolean;
+  cable: boolean;
+  read: boolean;
+  stations: boolean;
 }
 
 /**
@@ -275,26 +286,141 @@ export function onboardingDriversAreDone(input: {
 }
 
 /**
- * Licenses, Home, Radios, and Drivers can be finished. Later steps stay unfinished until their slices land.
+ * Done when the selected port was in the live filtered list. A remembered or "(saved)" row does not count.
+ * The browser build has no serial ports, so it cannot finish this step.
+ */
+export function onboardingCableIsDone(input: {
+  desktop: boolean;
+  selectedPort: string | undefined;
+  livePorts: readonly string[];
+}): boolean {
+  if (!input.desktop || !input.selectedPort) {
+    return false;
+  }
+
+  return input.livePorts.includes(input.selectedPort);
+}
+
+export interface OnboardingCableModel {
+  id: string;
+  manufacturer: string;
+  displayName: string;
+  baudRate: number;
+  baudRates: readonly number[];
+}
+
+/**
+ * Saved-radio drafts for owned models that are installed and not already saved.
+ * A rejected draft returns its field error and no drafts, so nothing is written.
+ */
+export function planOnboardingCableRadios(input: {
+  ownedModuleIds: readonly string[];
+  models: readonly OnboardingCableModel[];
+  existing: readonly { name: string; model: string }[];
+  serialPort: string;
+}): { drafts: SavedRadioDraft[]; error?: string } {
+  const taken = new Set(input.existing.map((radio) => savedRadioNameKey(radio.name)));
+  const named: Array<{ name: string; model: string }> = input.existing.map((radio) => ({
+    name: radio.name,
+    model: radio.model,
+  }));
+  const drafts: SavedRadioDraft[] = [];
+
+  for (const id of input.ownedModuleIds) {
+    if (named.some((radio) => radio.model === id)) {
+      continue;
+    }
+
+    const model = input.models.find((entry) => entry.id === id);
+
+    if (!model) {
+      continue;
+    }
+
+    let name = model.displayName.trim() || model.id;
+    let suffix = 2;
+
+    while (taken.has(savedRadioNameKey(name))) {
+      name = `${model.displayName.trim() || model.id} ${suffix}`;
+      suffix += 1;
+    }
+
+    taken.add(savedRadioNameKey(name));
+
+    const draft: SavedRadioDraft = {
+      name,
+      manufacturer: model.manufacturer,
+      model: id,
+      serialPort: input.serialPort,
+      baudRate: model.baudRate,
+    };
+    const issues = savedRadioDraftIssues(draft, {
+      radios: named.map((radio) => ({
+        id: radio.model,
+        name: radio.name,
+        manufacturer: '',
+        model: radio.model,
+        serialPort: input.serialPort,
+        createdAt: 0,
+        updatedAt: 0,
+      })),
+      baudRates: model.baudRates,
+    });
+    const error = Object.values(issues).find((issue) => issue !== undefined);
+
+    if (savedRadioDraftHasIssues(issues)) {
+      return { drafts: [], error };
+    }
+
+    drafts.push(draft);
+    named.push({ name, model: id });
+  }
+
+  return { drafts };
+}
+
+/**
+ * Done when a read or pre-write backup already exists for one of the operator's models.
+ */
+export function onboardingReadIsDone(input: {
+  fileNames: readonly string[];
+  models: readonly { manufacturer: string; model: string }[];
+}): boolean {
+  const wanted = new Set(
+    input.models.map((model) => `${backupFileSegment(model.manufacturer)}\0${backupFileSegment(model.model)}`),
+  );
+
+  if (wanted.size === 0) {
+    return false;
+  }
+
+  return input.fileNames.some((fileName) => {
+    const parsed = parseBackupFileName(fileName);
+
+    if (!parsed) {
+      return false;
+    }
+
+    return wanted.has(`${parsed.manufacturer}\0${parsed.model}`);
+  });
+}
+
+/**
+ * Done when a station other than Home exists, or any antenna is stored.
+ * The default Home row alone is not done.
+ */
+export function onboardingStationsAreDone(input: {
+  stationIds: readonly string[];
+  antennaCount: number;
+}): boolean {
+  return input.antennaCount > 0 || input.stationIds.some((id) => id !== HOME_STATION_ID);
+}
+
+/**
+ * Every step can be finished. Continue stays disabled until that step's check passes.
  */
 export function onboardingStepIsDone(stepId: OnboardingStepId, completion: OnboardingStepCompletion): boolean {
-  if (stepId === 'licenses') {
-    return completion.licenses;
-  }
-
-  if (stepId === 'home') {
-    return completion.home;
-  }
-
-  if (stepId === 'radios') {
-    return completion.radios;
-  }
-
-  if (stepId === 'drivers') {
-    return completion.drivers;
-  }
-
-  return false;
+  return completion[stepId];
 }
 
 /**

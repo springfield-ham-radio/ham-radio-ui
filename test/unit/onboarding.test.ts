@@ -29,11 +29,15 @@ import {
   finishOnboarding,
   firstPendingOnboardingStep,
   onboardingEditToPersist,
+  onboardingCableIsDone,
   onboardingDriversAreDone,
   onboardingHasExistingData,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
   onboardingRadiosAreDone,
+  onboardingReadIsDone,
+  onboardingStationsAreDone,
+  planOnboardingCableRadios,
   onboardingLaunchPlan,
   onboardingLicensesAreDone,
   onboardingLocalSignals,
@@ -147,15 +151,26 @@ describe('onboarding existing data', () => {
 });
 
 describe('onboarding launch plan', () => {
-  it('should keep new profiles from becoming active until later slices', () => {
-    expect(ONBOARDING_LAUNCH_NEW_PROFILES).toBe(false);
+  it('should open a new profile and keep an existing profile closed', () => {
+    expect(ONBOARDING_LAUNCH_NEW_PROFILES).toBe(true);
+
+    const fresh = onboardingLaunchPlan({
+      stored: undefined,
+      hasExistingData: false,
+      signalsComplete: true,
+      launchNewProfiles: ONBOARDING_LAUNCH_NEW_PROFILES,
+    });
+
+    expect(fresh.open).toBe(true);
+    expect(fresh.persist?.status).toBe('active');
+    expect(fresh.persist?.steps.licenses).toBe('pending');
 
     expect(
       onboardingLaunchPlan({
         stored: undefined,
         hasExistingData: false,
         signalsComplete: true,
-        launchNewProfiles: ONBOARDING_LAUNCH_NEW_PROFILES,
+        launchNewProfiles: false,
       }),
     ).toEqual({ open: false });
   });
@@ -378,18 +393,81 @@ describe('onboarding step transitions', () => {
     expect(skippedDrivers.ownedModuleIds).toEqual(['baofeng-uv5r']);
   });
 
-  it('should leave cable and later steps unfinished', () => {
-    const completion = { licenses: true, home: true, radios: true, drivers: true };
+  it('should finish the cable, read, and stations steps from live data', () => {
+    expect(onboardingCableIsDone({ desktop: false, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(false);
+    expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.saved', livePorts: ['/dev/cu.usb'] })).toBe(false);
+    expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(true);
+
+    const planned = planOnboardingCableRadios({
+      ownedModuleIds: ['baofeng-uv5r', 'kenwood-th-d74', 'missing'],
+      models: [
+        {
+          id: 'baofeng-uv5r',
+          manufacturer: 'Baofeng',
+          displayName: 'UV-5R',
+          baudRate: 9600,
+          baudRates: [9600],
+        },
+        {
+          id: 'kenwood-th-d74',
+          manufacturer: 'Kenwood',
+          displayName: 'UV-5R',
+          baudRate: 9600,
+          baudRates: [9600, 19200],
+        },
+      ],
+      existing: [{ name: 'UV-5R', model: 'already' }],
+      serialPort: '/dev/cu.usb',
+    });
+
+    expect(planned.error).toBeUndefined();
+    expect(planned.drafts.map((draft) => draft.name)).toEqual(['UV-5R 2', 'UV-5R 3']);
+    expect(planned.drafts[0]).toMatchObject({ model: 'baofeng-uv5r', serialPort: '/dev/cu.usb', baudRate: 9600 });
+    expect(
+      planOnboardingCableRadios({
+        ownedModuleIds: ['baofeng-uv5r'],
+        models: [
+          { id: 'baofeng-uv5r', manufacturer: 'Baofeng', displayName: 'UV-5R', baudRate: 9600, baudRates: [9600] },
+        ],
+        existing: [],
+        serialPort: '  ',
+      }).error,
+    ).toBe('Choose a default serial port');
+
+    expect(
+      onboardingReadIsDone({
+        fileNames: ['Baofeng_baofeng-uv5r_20261025-120000_read.img'],
+        models: [{ manufacturer: 'Baofeng', model: 'baofeng-uv5r' }],
+      }),
+    ).toBe(true);
+    expect(
+      onboardingReadIsDone({
+        fileNames: ['Baofeng_baofeng-uv5r_20261025-120000_prewrite.img'],
+        models: [{ manufacturer: 'Kenwood', model: 'th-d74' }],
+      }),
+    ).toBe(false);
+    expect(onboardingReadIsDone({ fileNames: [], models: [] })).toBe(false);
+
+    expect(onboardingStationsAreDone({ stationIds: ['station-home'], antennaCount: 0 })).toBe(false);
+    expect(onboardingStationsAreDone({ stationIds: ['station-home', 'station-cabin'], antennaCount: 0 })).toBe(true);
+    expect(onboardingStationsAreDone({ stationIds: ['station-home'], antennaCount: 1 })).toBe(true);
+  });
+
+  it('should finish every step when its check passes', () => {
+    const completion = {
+      licenses: true,
+      home: true,
+      radios: true,
+      drivers: true,
+      cable: true,
+      read: true,
+      stations: true,
+    };
 
     for (const stepId of ONBOARDING_STEP_IDS) {
-      const done = stepId === 'licenses' || stepId === 'home' || stepId === 'radios' || stepId === 'drivers';
-      expect(onboardingStepIsDone(stepId, completion)).toBe(done);
+      expect(onboardingStepIsDone(stepId, completion)).toBe(true);
+      expect(onboardingStepIsDone(stepId, { ...completion, [stepId]: false })).toBe(false);
     }
-
-    expect(onboardingStepIsDone('radios', { ...completion, radios: false })).toBe(false);
-    expect(onboardingStepIsDone('drivers', { ...completion, drivers: false })).toBe(false);
-    expect(onboardingStepIsDone('licenses', { ...completion, licenses: false })).toBe(false);
-    expect(onboardingStepIsDone('home', { ...completion, home: false })).toBe(false);
   });
 
   it('should not persist an active document for a new profile while launch is off', () => {

@@ -1,40 +1,59 @@
 <script setup lang="ts">
 import type { StepperItem } from '@nuxt/ui';
 import { HOME_STATION_ID, type StationDraft } from '~/utils/antenna-station';
+import { defaultProgrammingBaudRate, programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
+import { radioDisplayName } from '~/utils/radio-module-listing';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   completeOnboardingStep,
   finishOnboarding,
   firstPendingOnboardingStep,
   nextOnboardingStep,
-  ONBOARDING_STEPS,
+  onboardingCableIsDone,
   onboardingDriversAreDone,
   onboardingHomeIsDone,
   onboardingLicensesAreDone,
   onboardingRadiosAreDone,
+  onboardingStationsAreDone,
   onboardingStepIsDone,
   onboardingStepperItems,
+  planOnboardingCableRadios,
   previousOnboardingStep,
   skipOnboardingStep,
   withOwnedModuleIds,
   type OnboardingStepId,
 } from '~/utils/onboarding';
-import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
 const { directory } = useOperatorLicense();
-const { stations, saveStation } = useStationAntennas();
-const { radios } = useSavedRadios();
-const { configurations } = useRadio();
+const { stations, antennas, saveStation } = useStationAntennas();
+const { radios, addRadio } = useSavedRadios();
+const { configurations, openReadFromRadio } = useRadio();
 
 const active = ref<OnboardingStepId>('licenses');
 const homeEditor = ref<{ save: () => boolean } | null>(null);
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
-const placeholderSteps = computed(() =>
-  ONBOARDING_STEPS.filter((step) => !['licenses', 'home', 'radios', 'drivers'].includes(step.id)),
-);
 const ownedModuleIds = computed(() => state.value?.ownedModuleIds ?? []);
+const cableSelection = ref({ port: undefined as string | undefined, livePorts: [] as string[], loading: false });
+const cableFieldError = ref<string | undefined>();
+const readStatus = ref({
+  hasBackup: false,
+  readableId: undefined as string | undefined,
+  backupsEnabled: true,
+  desktop: isTauriRuntime(),
+});
+const readModels = computed(() =>
+  radios.value.map((radio) => ({
+    id: radio.id,
+    name: radio.name,
+    manufacturer: radio.manufacturer,
+    model: radio.model,
+    serialPort: radio.serialPort,
+    hasConfig: configurations.value.some((config) => String(config.id.model) === radio.model),
+  })),
+);
 
 const items = computed<StepperItem[]>(() => {
   if (!state.value) {
@@ -56,10 +75,26 @@ const completion = computed(() => ({
     installedModelIds: configurations.value.map((config) => String(config.id.model)),
     desktop: isTauriRuntime(),
   }),
+  cable: onboardingCableIsDone({
+    desktop: isTauriRuntime(),
+    selectedPort: cableSelection.value.port,
+    livePorts: cableSelection.value.livePorts,
+  }),
+  read: readStatus.value.hasBackup,
+  stations: onboardingStationsAreDone({
+    stationIds: stations.value.map((station) => station.id),
+    antennaCount: antennas.value.length,
+  }),
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
-const canContinue = computed(() => onboardingStepIsDone(active.value, completion.value));
+const canContinue = computed(() => {
+  if (active.value === 'read' && !completion.value.read) {
+    return readStatus.value.desktop && readStatus.value.backupsEnabled && readStatus.value.readableId !== undefined;
+  }
+
+  return onboardingStepIsDone(active.value, completion.value);
+});
 const canGoBack = computed(() => previousOnboardingStep(active.value) !== undefined);
 const continueLabel = computed(() => (isLast.value ? 'Finish' : 'Continue'));
 
@@ -115,12 +150,81 @@ function onHomeSave(draft: StationDraft): void {
   saveStation(HOME_STATION_ID, draft);
 }
 
+function onCableSelection(next: { port: string | undefined; livePorts: string[]; loading: boolean }): void {
+  cableSelection.value = next;
+  cableFieldError.value = undefined;
+}
+
+function onReadStatus(next: {
+  hasBackup: boolean;
+  readableId?: string;
+  backupsEnabled: boolean;
+  desktop: boolean;
+}): void {
+  readStatus.value = {
+    hasBackup: next.hasBackup,
+    readableId: next.readableId,
+    backupsEnabled: next.backupsEnabled,
+    desktop: next.desktop,
+  };
+}
+
+function saveCableRadios(): boolean {
+  const port = cableSelection.value.port;
+
+  if (!port) {
+    return false;
+  }
+
+  const models = configurations.value.map((config) => ({
+    id: String(config.id.model),
+    manufacturer: String(config.id.manufacturer),
+    displayName: radioDisplayName(String(config.id.manufacturer), config.id.name),
+    baudRate: defaultProgrammingBaudRate(config.serialConfig),
+    baudRates: programmingBaudRateSelectItems(config.serialConfig).map((item) => item.value),
+  }));
+  const plan = planOnboardingCableRadios({
+    ownedModuleIds: ownedModuleIds.value,
+    models,
+    existing: radios.value.map((radio) => ({ name: radio.name, model: radio.model })),
+    serialPort: port,
+  });
+
+  if (plan.error) {
+    cableFieldError.value = plan.error;
+    return false;
+  }
+
+  for (const draft of plan.drafts) {
+    const model = models.find((entry) => entry.id === draft.model);
+
+    if (!addRadio(draft, model?.baudRates)) {
+      cableFieldError.value = 'That radio could not be saved.';
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function continueStep(): void {
   if (!state.value) {
     return;
   }
 
   if (active.value === 'home' && !homeEditor.value?.save()) {
+    return;
+  }
+
+  if (active.value === 'cable' && !saveCableRadios()) {
+    return;
+  }
+
+  if (active.value === 'read' && !completion.value.read) {
+    if (readStatus.value.readableId) {
+      openReadFromRadio(readStatus.value.readableId);
+    }
+
     return;
   }
 
@@ -191,15 +295,16 @@ function finishLater(): void {
             <RadioModulesPreference :entry-ids="ownedModuleIds.length > 0 ? ownedModuleIds : undefined" />
           </div>
         </template>
-        <template v-for="step in placeholderSteps" :key="step.id" #[step.id]>
-          <UAlert
-            class="mt-4"
-            color="neutral"
-            variant="subtle"
-            icon="i-lucide-hammer"
-            :title="step.title"
-            :description="step.placeholder"
-          />
+        <template #cable>
+          <OnboardingCableStep :field-error="cableFieldError" @selection="onCableSelection" />
+        </template>
+        <template #read>
+          <OnboardingReadStep :models="readModels" @status="onReadStatus" />
+        </template>
+        <template #stations>
+          <div class="mt-4">
+            <RadioStationPreference />
+          </div>
         </template>
       </UStepper>
     </template>
@@ -207,7 +312,7 @@ function finishLater(): void {
     <template #footer>
       <div class="flex w-full flex-col gap-3">
         <p v-if="!persistsEdits" class="text-xs text-muted">
-          This preview does not save which steps you finished or which radios you checked, and a new install will not open it on its own yet. Licenses, a Home location, and any driver you install are kept.
+          HamBench is still checking this install, so setup progress is not saved yet. Licenses, a Home location, and any driver you install are kept.
         </p>
         <p v-else-if="persisted?.completedReason === 'existing-data'" class="text-xs text-muted">
           This install already has station data. The guide stays closed until you open it here. Skipping a step does not remove licenses, radios, or stations.

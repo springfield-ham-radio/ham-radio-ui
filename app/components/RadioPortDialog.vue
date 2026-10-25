@@ -7,12 +7,14 @@ import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import type { RadioDialogMessageAlert } from '~/utils/radio-dialog-message';
 
 const props = defineProps<{
-  open: boolean;
-  title: string;
-  description: string;
+  open?: boolean;
+  /** Render the port field in place. Callers that omit this keep the modal. */
+  embedded?: boolean;
+  title?: string;
+  description?: string;
   /** Optional per-radio setup text (immediately above the serial port field). */
   setupAlert?: RadioDialogMessageAlert;
-  confirmLabel: string;
+  confirmLabel?: string;
   confirmColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral';
   confirmIcon?: string;
   confirmLoading?: boolean;
@@ -30,12 +32,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:open': [open: boolean];
   confirm: [serialPortPath: string];
+  selection: [selection: { port: string | undefined; livePorts: string[]; loading: boolean }];
 }>();
 
 const slots = useSlots();
 
 const isOpen = computed({
-  get: () => props.open,
+  get: () => props.open ?? false,
   set: (open: boolean) => {
     emit('update:open', open);
   },
@@ -58,8 +61,20 @@ const canSubmit = computed(() => {
   return !unavailable.value.includes(selectedPort.value);
 });
 
+watch([selectedPort, ports, loadingPorts], () => {
+  if (!props.embedded) {
+    return;
+  }
+
+  emit('selection', {
+    port: selectedPort.value,
+    livePorts: ports.value.map((port) => port.value),
+    loading: loadingPorts.value,
+  });
+});
+
 watch(selectedPort, (path) => {
-  if (!props.open || !path || unavailable.value.includes(path)) {
+  if (props.embedded || !props.open || !path || unavailable.value.includes(path)) {
     return;
   }
 
@@ -77,7 +92,7 @@ async function loadPorts(): Promise<void> {
     const available = await SerialPort.available_ports();
     const settings = readSerialPortSettings();
     const listed = serialPortSelectItems(Object.keys(available), settings);
-    const fallback = props.defaultPort?.trim();
+    const fallback = props.embedded ? undefined : props.defaultPort?.trim();
 
     if (fallback && !listed.some((port) => port.value === fallback)) {
       listed.unshift(serialPortOption(fallback, settings.portAliases, { suffix: ' (saved)' }));
@@ -92,7 +107,7 @@ async function loadPorts(): Promise<void> {
     }
   } catch (cause) {
     console.error('Failed to list serial ports', cause);
-    const fallback = props.defaultPort?.trim();
+    const fallback = props.embedded ? undefined : props.defaultPort?.trim();
 
     if (fallback) {
       ports.value = [serialPortOption(fallback, readSerialPortSettings().portAliases, { suffix: ' (saved)' })];
@@ -123,9 +138,19 @@ async function confirm(): Promise<void> {
   isOpen.value = false;
 }
 
+onMounted(() => {
+  if (props.embedded) {
+    void loadPorts();
+  }
+});
+
 watch(
   () => props.open,
   (open) => {
+    if (props.embedded) {
+      return;
+    }
+
     if (open) {
       selectedPort.value = props.defaultPort;
       void loadPorts();
@@ -138,7 +163,32 @@ watch(
 </script>
 
 <template>
+  <div v-if="embedded" class="flex flex-col gap-3">
+    <UFormField label="Serial port">
+      <div class="flex gap-2">
+        <USelectMenu
+          v-model="selectedPort"
+          :items="portItems"
+          value-key="value"
+          placeholder="Select a serial port"
+          class="w-full"
+          :loading="loadingPorts"
+        />
+        <UTooltip text="Refresh serial ports">
+          <UButton
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            :disabled="loadingPorts"
+            aria-label="Refresh serial ports"
+            @click="loadPorts"
+          />
+        </UTooltip>
+      </div>
+    </UFormField>
+  </div>
   <UModal
+    v-else
     v-model:open="isOpen"
     :title="title"
     :description="slots.description ? undefined : description"
