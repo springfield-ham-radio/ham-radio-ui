@@ -1,3 +1,15 @@
+## [3.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v2.0.0...v3.0.0) (2026-10-25)
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** A profile with no existing station data opens the setup guide on first launch and stores ham-radio-onboarding as active. Step progress persists. A profile that already has a license, saved radio, located Home, other station, antenna, installed module, channel, log row, or backup is marked completed / existing-data and the guide stays closed.
+
+Co-authored-by: Bryan Hunt <BryanHunt@users.noreply.github.com>
+
+### Features
+
+* **ui:** finish the onboarding stepper for [#173](https://github.com/springfield-ham-radio/ham-radio-ui/issues/173) ([#180](https://github.com/springfield-ham-radio/ham-radio-ui/issues/180)) ([811c09c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/811c09c508a9acef0052561c5069c7f58bf47527))
+
 ## [2.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.30.0...v2.0.0) (2026-10-25)
 
 ### ⚠ BREAKING CHANGES
