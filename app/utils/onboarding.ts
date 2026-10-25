@@ -103,9 +103,9 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
   {
     id: 'stations',
     title: 'Stations',
-    description: 'Other sites',
+    description: 'Optional',
     icon: 'i-lucide-map-pin',
-    placeholder: 'Skipping this does not change stations.',
+    placeholder: 'Finish keeps Home. Another station or an antenna is optional.',
   },
 ];
 
@@ -462,14 +462,10 @@ export function onboardingReadIsDone(input: {
 }
 
 /**
- * Done when a station other than Home exists, or any antenna is stored.
- * The default Home row alone is not done.
+ * Home alone finishes this step. Another station or an antenna is optional, so Finish stays enabled.
  */
-export function onboardingStationsAreDone(input: {
-  stationIds: readonly string[];
-  antennaCount: number;
-}): boolean {
-  return input.antennaCount > 0 || input.stationIds.some((id) => id !== HOME_STATION_ID);
+export function onboardingStationsAreDone(): boolean {
+  return true;
 }
 
 /**

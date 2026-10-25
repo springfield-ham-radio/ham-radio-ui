@@ -30,7 +30,7 @@ import {
 
 const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
 const { directory } = useOperatorLicense();
-const { stations, antennas, saveStation } = useStationAntennas();
+const { stations, saveStation } = useStationAntennas();
 const { radios, addRadio } = useSavedRadios();
 const { configurations, openReadFromRadio, progressOpen, readBackupSaved } = useRadio();
 const router = useRouter();
@@ -103,15 +103,12 @@ const completion = computed(() => ({
     livePorts: cableSelection.value.livePorts,
   }),
   read: state.value?.steps.read === 'done' || readDecision.value.action === 'advance',
-  stations: onboardingStationsAreDone({
-    stationIds: stations.value.map((station) => station.id),
-    antennaCount: antennas.value.length,
-  }),
+  stations: onboardingStationsAreDone(),
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
 const canContinue = computed(() => {
-  if (active.value === 'read') {
+  if (active.value === 'read' || active.value === 'stations') {
     return true;
   }
 
@@ -377,9 +374,7 @@ function finishLater(): void {
           <OnboardingReadStep :decision="readDecision" :attempted="readAttempted" @go-to="goToStep" @backups="openBackups" />
         </template>
         <template #stations>
-          <div class="mt-4">
-            <RadioStationPreference />
-          </div>
+          <OnboardingStationsStep />
         </template>
       </UStepper>
     </template>
@@ -396,7 +391,7 @@ function finishLater(): void {
           <UButton label="Finish later" color="neutral" variant="ghost" @click="finishLater" />
           <div class="flex gap-2">
             <UButton label="Back" color="neutral" variant="outline" icon="i-lucide-arrow-left" :disabled="!canGoBack" @click="back" />
-            <UButton label="Skip this step" color="neutral" variant="outline" @click="skip" />
+            <UButton v-if="!isLast" label="Skip this step" color="neutral" variant="outline" @click="skip" />
             <UButton :label="continueLabel" color="primary" :disabled="!canContinue" @click="continueStep" />
           </div>
         </div>

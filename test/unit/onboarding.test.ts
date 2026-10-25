@@ -520,9 +520,18 @@ describe('onboarding step transitions', () => {
     expect(readStep).toContain('Go to Drivers');
     expect(readStep).toContain('Open Backups');
 
-    expect(onboardingStationsAreDone({ stationIds: ['station-home'], antennaCount: 0 })).toBe(false);
-    expect(onboardingStationsAreDone({ stationIds: ['station-home', 'station-cabin'], antennaCount: 0 })).toBe(true);
-    expect(onboardingStationsAreDone({ stationIds: ['station-home'], antennaCount: 1 })).toBe(true);
+    expect(onboardingStationsAreDone()).toBe(true);
+
+    const stationsStep = readFileSync('app/components/OnboardingStationsStep.vue', 'utf8');
+
+    expect(stationsStep).toContain('Other places you operate');
+    expect(stationsStep).toContain('Add another station');
+    expect(stationsStep).toContain('Add antenna at Home');
+    expect(stationsStep).toContain('RadioStationEditor');
+    expect(stationsStep).toContain('AntennaStationEditor');
+    expect(stationsStep).not.toContain('No antennas at this site yet');
+    expect(stepper).toContain('v-if="!isLast"');
+    expect(stepper).toContain("active.value === 'stations'");
   });
 
   it('should finish every step when its check passes', () => {
