@@ -358,7 +358,6 @@ function finishLater(): void {
         <template #radios>
           <OnboardingRadiosStep
             :owned-module-ids="ownedModuleIds"
-            :saved-radio-count="radios.length"
             @update:owned-module-ids="setOwnedModuleIds"
           />
         </template>

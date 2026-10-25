@@ -21,6 +21,10 @@ import {
 const props = defineProps<{
   open: boolean;
   radio?: SavedRadio;
+  /** Create-only starting point, used when onboarding names a checked model. */
+  initialManufacturer?: string;
+  initialModel?: string;
+  initialName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -136,9 +140,9 @@ watch(
     }
 
     const draft = props.radio ? draftFromSavedRadio(props.radio) : undefined;
-    name.value = draft?.name ?? '';
-    manufacturer.value = draft?.manufacturer;
-    model.value = draft?.model;
+    name.value = draft?.name ?? (props.radio ? '' : props.initialName ?? '');
+    manufacturer.value = draft?.manufacturer ?? (props.radio ? undefined : props.initialManufacturer);
+    model.value = draft?.model ?? (props.radio ? undefined : props.initialModel);
     baudRate.value = draft?.baudRate;
     serialPort.value = draft?.serialPort;
     txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
@@ -208,6 +212,7 @@ function save(): void {
     :title="title"
     :description="description"
     class="max-w-lg"
+    :ui="{ overlay: 'z-50', content: 'z-50' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>

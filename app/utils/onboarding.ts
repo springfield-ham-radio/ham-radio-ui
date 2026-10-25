@@ -264,6 +264,134 @@ export function onboardingRadiosAreDone(input: {
   return input.ownedModuleIds.length > 0 || input.savedRadioCount > 0;
 }
 
+export interface OnboardingRadioSavedDetail {
+  id: string;
+  name: string;
+  serialPort: string;
+  baudRate?: number;
+}
+
+export interface OnboardingRadioChoice {
+  id: string;
+  name: string;
+  checked: boolean;
+  saved: OnboardingRadioSavedDetail[];
+  /** Name and port can be set only after this checked model has a driver and a port, and no saved radio yet. */
+  canName: boolean;
+}
+
+export interface OnboardingRadioGroup {
+  manufacturer: string;
+  radios: OnboardingRadioChoice[];
+}
+
+/**
+ * Checkbox ids for the Radios step. Unchecking removes the id from the owned list and does not touch saved radios.
+ */
+export function onboardingRadioOwnedIdsAfterToggle(input: {
+  ownedModuleIds: readonly string[];
+  modelId: string;
+  checked: boolean;
+}): string[] {
+  const next = new Set(input.ownedModuleIds.map((id) => id.trim()).filter((id) => id.length > 0));
+  const modelId = input.modelId.trim();
+
+  if (!modelId) {
+    return [...next];
+  }
+
+  if (input.checked) {
+    next.add(modelId);
+  } else {
+    next.delete(modelId);
+  }
+
+  return [...next];
+}
+
+/**
+ * One manufacturer list for the Radios step. A saved radio stays checked even when it is not in `ownedModuleIds`.
+ */
+export function onboardingRadioGroups(input: {
+  models: readonly { id: string; manufacturer: string; name: string }[];
+  ownedModuleIds: readonly string[];
+  saved: readonly {
+    id: string;
+    name: string;
+    manufacturer: string;
+    model: string;
+    serialPort: string;
+    baudRate?: number;
+  }[];
+  installedModelIds: readonly string[];
+  hasPort: boolean;
+}): OnboardingRadioGroup[] {
+  const owned = new Set(input.ownedModuleIds.map((id) => id.trim()).filter((id) => id.length > 0));
+  const installed = new Set(input.installedModelIds);
+  const savedByModel = new Map<string, OnboardingRadioSavedDetail[]>();
+
+  for (const radio of input.saved) {
+    const detail: OnboardingRadioSavedDetail = {
+      id: radio.id,
+      name: radio.name,
+      serialPort: radio.serialPort,
+    };
+
+    if (radio.baudRate !== undefined) {
+      detail.baudRate = radio.baudRate;
+    }
+
+    const list = savedByModel.get(radio.model) ?? [];
+    list.push(detail);
+    savedByModel.set(radio.model, list);
+  }
+
+  const seen = new Set<string>();
+  const buckets = new Map<string, Array<{ id: string; name: string }>>();
+  const manufacturers: string[] = [];
+
+  function addModel(manufacturer: string, id: string, name: string): void {
+    if (!id || seen.has(id)) {
+      return;
+    }
+
+    seen.add(id);
+    let radios = buckets.get(manufacturer);
+
+    if (!radios) {
+      radios = [];
+      buckets.set(manufacturer, radios);
+      manufacturers.push(manufacturer);
+    }
+
+    radios.push({ id, name });
+  }
+
+  for (const model of input.models) {
+    addModel(model.manufacturer, model.id.trim(), model.name);
+  }
+
+  for (const radio of input.saved) {
+    addModel(radio.manufacturer, radio.model, radio.name);
+  }
+
+  return manufacturers.map((manufacturer) => ({
+    manufacturer,
+    radios: (buckets.get(manufacturer) ?? []).map((model) => {
+      const saved = savedByModel.get(model.id) ?? [];
+      const checked = owned.has(model.id) || saved.length > 0;
+
+      return {
+        id: model.id,
+        name: model.name,
+        checked,
+        saved,
+        canName: checked && saved.length === 0 && installed.has(model.id) && input.hasPort,
+      };
+    }),
+  }));
+}
+
 /**
  * Desktop only. Every picked model must be installed. With none picked, any installed module is enough.
  * The browser build cannot finish this step.

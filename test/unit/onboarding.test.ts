@@ -35,6 +35,8 @@ import {
   onboardingHasExistingData,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
+  onboardingRadioGroups,
+  onboardingRadioOwnedIdsAfterToggle,
   onboardingRadiosAreDone,
   onboardingReadContinue,
   onboardingReadIsDone,
@@ -341,6 +343,92 @@ describe('onboarding step transitions', () => {
     expect(onboardingRadiosAreDone({ ownedModuleIds: [], savedRadioCount: 0 })).toBe(false);
     expect(onboardingRadiosAreDone({ ownedModuleIds: ['baofeng-uv5r'], savedRadioCount: 0 })).toBe(true);
     expect(onboardingRadiosAreDone({ ownedModuleIds: [], savedRadioCount: 1 })).toBe(true);
+
+    const models = [
+      { id: 'baofeng-uv5r', manufacturer: 'Baofeng', name: 'UV-5R' },
+      { id: 'kenwood-th-d74', manufacturer: 'Kenwood', name: 'TH-D74' },
+    ];
+    const savedUv5r = {
+      id: 'radio-1',
+      name: 'Handheld',
+      manufacturer: 'Baofeng',
+      model: 'baofeng-uv5r',
+      serialPort: '/dev/cu.usb',
+      baudRate: 9600,
+    };
+
+    expect(
+      onboardingRadioOwnedIdsAfterToggle({
+        ownedModuleIds: ['baofeng-uv5r'],
+        modelId: 'baofeng-uv5r',
+        checked: false,
+      }),
+    ).toEqual([]);
+    expect(
+      onboardingRadioGroups({
+        models,
+        ownedModuleIds: [],
+        saved: [savedUv5r],
+        installedModelIds: ['baofeng-uv5r'],
+        hasPort: true,
+      })[0]?.radios[0],
+    ).toMatchObject({
+      id: 'baofeng-uv5r',
+      checked: true,
+      canName: false,
+      saved: [{ id: 'radio-1', name: 'Handheld', serialPort: '/dev/cu.usb', baudRate: 9600 }],
+    });
+    expect(
+      onboardingRadioGroups({
+        models,
+        ownedModuleIds: ['kenwood-th-d74'],
+        saved: [],
+        installedModelIds: ['kenwood-th-d74'],
+        hasPort: true,
+      })[1]?.radios[0],
+    ).toMatchObject({ id: 'kenwood-th-d74', checked: true, canName: true, saved: [] });
+    expect(
+      onboardingRadioGroups({
+        models,
+        ownedModuleIds: ['kenwood-th-d74'],
+        saved: [],
+        installedModelIds: [],
+        hasPort: true,
+      })[1]?.radios[0]?.canName,
+    ).toBe(false);
+    expect(
+      onboardingRadioGroups({
+        models: [],
+        ownedModuleIds: [],
+        saved: [savedUv5r],
+        installedModelIds: [],
+        hasPort: false,
+      }),
+    ).toEqual([
+      {
+        manufacturer: 'Baofeng',
+        radios: [
+          {
+            id: 'baofeng-uv5r',
+            name: 'Handheld',
+            checked: true,
+            canName: false,
+            saved: [{ id: 'radio-1', name: 'Handheld', serialPort: '/dev/cu.usb', baudRate: 9600 }],
+          },
+        ],
+      },
+    ]);
+
+    const radiosStep = readFileSync('app/components/OnboardingRadiosStep.vue', 'utf8');
+
+    expect(radiosStep).toContain('Which radios do you have?');
+    expect(radiosStep).toContain('Name it / set port');
+    expect(radiosStep).not.toContain('SavedRadiosPreference');
+    expect(radiosStep).not.toContain('Radio page opens these as cards');
+    expect(radiosStep).not.toContain('AntennaStationPreference');
+    expect(onboardingRadioOwnedIdsAfterToggle({ ownedModuleIds: [], modelId: 'kenwood-th-d74', checked: true })).toEqual([
+      'kenwood-th-d74',
+    ]);
   });
 
   it('should finish Drivers only on the desktop, for every picked model or any module', () => {
