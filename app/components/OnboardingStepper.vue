@@ -20,7 +20,7 @@ import {
   type OnboardingStepId,
 } from '~/utils/onboarding';
 
-const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
+const { view, session, shellOpen, persistsEdits, applyEdit, close } = useOnboarding();
 const { directory } = useOperatorLicense();
 const { stations, saveHomeStation } = useStationAntennas();
 const { radios, addRadio } = useSavedRadios();
@@ -319,9 +319,6 @@ function finishLater(): void {
       <div class="flex w-full flex-col gap-3">
         <p v-if="!persistsEdits" class="text-xs text-muted">
           HamBench is still checking this install, so setup progress is not saved yet. Licenses, a Home location, and any driver you install are kept.
-        </p>
-        <p v-else-if="persisted?.completedReason === 'existing-data'" class="text-xs text-muted">
-          This install already has station data. The guide stays closed until you open it here. Skipping a step does not remove licenses, radios, or stations.
         </p>
         <div class="flex w-full items-center justify-between gap-2">
           <UButton label="Finish later" color="neutral" variant="ghost" @click="finishLater" />

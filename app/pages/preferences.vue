@@ -28,7 +28,7 @@
       <header class="shrink-0 border-b border-default px-6 py-3">
         <div class="mx-auto flex w-full max-w-2xl flex-col gap-3">
           <h2 class="text-center text-sm font-semibold text-highlighted">{{ activeSection.label }}</h2>
-          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+          <div v-if="showSetupGuide" class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted">Set up HamBench</p>
@@ -388,10 +388,22 @@ import {
   remoteSnifferInstallLabel,
 } from '~/utils/sniffer-ssh';
 import { APP_NAME } from '~/utils/app-name';
+import { onboardingHomeIsDone, showOnboardingPreferencesEntry } from '~/utils/onboarding';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { customMapStyleUrl, setCustomMapStyleUrl } = useAppearanceSettings();
-const { reopen: reopenOnboarding } = useOnboarding();
+const { persisted, reopen: reopenOnboarding } = useOnboarding();
+const { directory } = useOperatorLicense();
+const { stations } = useStationAntennas();
+const { radios } = useSavedRadios();
+const showSetupGuide = computed(() =>
+  showOnboardingPreferencesEntry({
+    status: persisted.value?.status,
+    hasOperator: directory.value.people.length > 0 || directory.value.licenses.length > 0,
+    hasHome: onboardingHomeIsDone(stations.value),
+    hasSavedRadio: radios.value.length > 0,
+  }),
+);
 const customMapStyleUrlInput = ref(customMapStyleUrl.value ?? '');
 
 watch(customMapStyleUrl, (url) => {

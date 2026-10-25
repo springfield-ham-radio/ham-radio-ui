@@ -47,7 +47,7 @@ Use standard Nuxt UI only:
 
 Footer order is Back, Skip this step, Continue. Continue is enabled only when that step’s done check passes. Skip is always enabled, including on the last step. Finish on the last step writes `completed` / `finished` and closes the modal. Close, and “Finish later”, leave `status: 'active'` and reopen at the first `pending` step on the next launch.
 
-Preferences gains one card in the page header, not a new section: “Set up HamBench” with an Open setup guide button. That sets the shell open again and does not clear step statuses or saved data. Deep links stay `?section=` as they are today.
+Preferences gains one card in the page header, not a new section: “Set up HamBench” with an Open setup guide button. It is shown only while onboarding is not `completed` and the profile is still missing a person or license, a located Home, or a saved radio. The default empty Home does not count. The card is hidden once the guide is `completed`, or once all three of those are present. Opening it does not clear step statuses or saved data. Deep links stay `?section=` as they are today.
 
 ### First run, and who is not forced through it
 
@@ -113,11 +113,11 @@ The read step is last: Finish closes the guide whether or not the switch starts 
 - No saved radio, no installed driver, or no programming port: the read switch is disabled. The note names the radio that needs a port, or the radio that needs a driver. Finish does not call `readFromRadio`.
 - Read error or empty image: the existing progress dialog, error report, and toast are the ones a normal read uses. Onboarding is already `completed` / `finished`. Later writes keep today’s pre-write backup behavior.
 
-Finishing the read step without a backup does not block normal use of the app. Other stations stay in Preferences. The next launch, or Open setup guide, returns to the first step that is still `pending` while the document is `active`. A finished guide stays closed until it is opened from Preferences.
+Finishing the read step without a backup does not block normal use of the app. Other stations stay in Preferences. The next launch returns to the first step that is still `pending` while the document is `active`. A finished guide stays closed, and Preferences hides Open setup guide. While the document is still `active` and a person or license, a located Home, or a saved radio is missing, Open setup guide reopens at the first `pending` step.
 
 ## Consequences
 
-- New profiles see the stepper on first launch, because `ONBOARDING_LAUNCH_NEW_PROFILES` is true. That launch writes `ham-radio-onboarding` as `active`, and later Skip / Continue edits persist. Profiles with any signal in `onboardingHasExistingData` are marked `completed` / `existing-data` and never see the stepper unless they open it from Preferences.
+- New profiles see the stepper on first launch, because `ONBOARDING_LAUNCH_NEW_PROFILES` is true. That launch writes `ham-radio-onboarding` as `active`, and later Skip / Continue edits persist. Profiles with any signal in `onboardingHasExistingData` are marked `completed` / `existing-data` and never see the stepper. Preferences shows Open setup guide only while the document is not `completed` and a person or license, a located Home, or a saved radio is still missing.
 - Slice 2 removes the startup Install radios dialog. A profile whose module catalog is empty sees a dismissible banner to Preferences → Drivers, not a required dialog. Dismissal is stored per profile in `ham-radio-empty-catalog-banner-dismissed`.
 - No SQLite migration and no rewrite of license, radio, station, channel, log, or backup documents. New localStorage keys are `ham-radio-onboarding` and `ham-radio-empty-catalog-banner-dismissed`. Marking an existing profile `existing-data` does not change those documents.
 - `SavedRadio` still requires an installed model and a serial port. Owned models and their ports live in the onboarding document until Continue installs that model’s driver and the port is set, which is when `addRadio` runs.

@@ -938,6 +938,24 @@ export function onboardingLocalSignals(storage: StorageReader): Pick<
   };
 }
 
+/**
+ * Preferences shows “Open setup guide” only while setup is still open.
+ * A completed guide stays hidden. So does a profile that already has a person or
+ * license, a located Home, and a saved radio. The default empty Home does not count.
+ */
+export function showOnboardingPreferencesEntry(input: {
+  status?: OnboardingStatus;
+  hasOperator: boolean;
+  hasHome: boolean;
+  hasSavedRadio: boolean;
+}): boolean {
+  if (input.status === 'completed') {
+    return false;
+  }
+
+  return !(input.hasOperator && input.hasHome && input.hasSavedRadio);
+}
+
 export function onboardingHasExistingData(signals: OnboardingDataSignals): boolean {
   return (
     signals.licensePeople > 0 ||

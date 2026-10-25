@@ -38,6 +38,7 @@ import {
   onboardingEditToPersist,
   planOnboardingDriverInstalls,
   onboardingHasExistingData,
+  showOnboardingPreferencesEntry,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
   onboardingPendingRadioChange,
@@ -245,6 +246,34 @@ describe('onboarding launch plan', () => {
     expect(plan.open).toBe(true);
     expect(plan.persist?.status).toBe('active');
     expect(plan.persist?.completedReason).toBeUndefined();
+  });
+});
+
+describe('onboarding preferences entry', () => {
+  const empty = { hasOperator: false, hasHome: false, hasSavedRadio: false };
+  const complete = { hasOperator: true, hasHome: true, hasSavedRadio: true };
+
+  it('should show Open setup guide for an empty or partial profile', () => {
+    expect(showOnboardingPreferencesEntry({ ...empty, status: undefined })).toBe(true);
+    expect(showOnboardingPreferencesEntry({ ...empty, status: 'active' })).toBe(true);
+    expect(showOnboardingPreferencesEntry({ ...complete, hasSavedRadio: false, status: 'active' })).toBe(true);
+    expect(showOnboardingPreferencesEntry({ ...complete, hasHome: false, status: 'active' })).toBe(true);
+    expect(showOnboardingPreferencesEntry({ ...complete, hasOperator: false, status: 'active' })).toBe(true);
+  });
+
+  it('should hide Open setup guide once onboarding is complete or the setup data exists', () => {
+    expect(showOnboardingPreferencesEntry({ ...empty, status: 'completed' })).toBe(false);
+    expect(showOnboardingPreferencesEntry({ ...complete, status: 'completed' })).toBe(false);
+    expect(showOnboardingPreferencesEntry({ ...complete, status: 'active' })).toBe(false);
+    expect(showOnboardingPreferencesEntry({ ...complete, status: undefined })).toBe(false);
+
+    const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
+    const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
+
+    expect(preferences).toContain('v-if="showSetupGuide"');
+    expect(preferences).toContain('showOnboardingPreferencesEntry');
+    expect(preferences).toContain('label="Open setup guide"');
+    expect(stepper).not.toContain('already has station data');
   });
 });
 
