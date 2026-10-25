@@ -4,6 +4,8 @@ import type { LoadedRadioConfig, RadioCatalogRecord } from '../../app/utils/radi
 import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
 import {
   buildAvailableManufacturerGroups,
+  filterAvailableGroupsToEntryIds,
+  groupCatalogRadiosByManufacturer,
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
   formatCatalogRadioName,
@@ -454,5 +456,37 @@ describe('radio module listing', () => {
     expect(items[0]?.updateAvailable).toBe(true);
     expect(items[0]?.canUpdate).toBe(false);
     expect(items[0]?.updateBlockedReason).toContain('newer version of HamBench');
+  });
+
+  it('should group catalog radios by manufacturer for the onboarding picker', () => {
+    expect(
+      groupCatalogRadiosByManufacturer([
+        baofengEntry,
+        kenwoodThD74,
+        { ...baofengEntry, id: '  ', name: 'Blank' },
+      ]),
+    ).toEqual([
+      { manufacturer: 'Baofeng', radios: [{ id: 'baofeng-uv5r', name: 'UV-5R' }] },
+      { manufacturer: 'Kenwood', radios: [{ id: 'kenwood-th-d74', name: 'TH-D74' }] },
+    ]);
+  });
+
+  it('should limit the drivers catalog to picked entry ids', () => {
+    const groups = [
+      {
+        manufacturer: 'Baofeng',
+        radios: [{ entry: { id: 'baofeng-uv5r' } }, { entry: { id: 'baofeng-uv82' } }],
+      },
+      {
+        manufacturer: 'Kenwood',
+        radios: [{ entry: { id: 'kenwood-th-d74' } }],
+      },
+    ];
+
+    expect(filterAvailableGroupsToEntryIds(groups, undefined)).toEqual(groups);
+    expect(filterAvailableGroupsToEntryIds(groups, ['kenwood-th-d74', 'baofeng-uv82'])).toEqual([
+      { manufacturer: 'Baofeng', radios: [{ entry: { id: 'baofeng-uv82' } }] },
+      { manufacturer: 'Kenwood', radios: [{ entry: { id: 'kenwood-th-d74' } }] },
+    ]);
   });
 });

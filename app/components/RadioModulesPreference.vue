@@ -13,6 +13,7 @@ import {
 } from '~/utils/radio-module-install';
 import {
   buildAvailableManufacturerGroups,
+  filterAvailableGroupsToEntryIds,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   installedRadiosEligibleForVerifiedSwitch,
@@ -22,6 +23,11 @@ import {
 } from '~/utils/radio-module-listing';
 import { isBetaDriverRecord, isBetaZipFileName, versionFromZipName } from '~/utils/radio-module-semver';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
+
+const props = defineProps<{
+  /** Catalog entry ids from the Radios step. Omit this on Preferences to keep the full list. */
+  entryIds?: string[];
+}>();
 
 const toast = useToast();
 const { refreshCatalogState, uninstallRadio } = useRadio();
@@ -47,8 +53,19 @@ const pendingReplaceItem = ref<InstalledRadioListItem | undefined>();
 
 const installedGroups = computed(() => groupInstalledRadiosByManufacturer(installedListItems.value));
 const availableGroups = computed(() =>
-  buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
+  filterAvailableGroupsToEntryIds(
+    buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
+    props.entryIds,
+  ),
 );
+const unmatchedEntryIds = computed(() => {
+  if (!props.entryIds || catalogLoading.value || catalogFailure.value) {
+    return [];
+  }
+
+  const known = new Set(catalogEntries.value.map((entry) => entry.id));
+  return props.entryIds.filter((id) => !known.has(id));
+});
 const switchToVerifiedTargets = computed(() => installedRadiosEligibleForVerifiedSwitch(installedListItems.value));
 
 const removeConfirmMessage = computed(() => {
@@ -645,7 +662,11 @@ onMounted(() => {
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Available drivers</p>
-          <p class="text-xs text-muted">
+          <p v-if="entryIds" class="text-xs text-muted">
+            Drivers for the radios you picked. Install uses the same catalog as Preferences. Install from file still
+            works for a module that is not in this list.
+          </p>
+          <p v-else class="text-xs text-muted">
             Official modules grouped by manufacturer. Install only the models you own, then add each radio under
             Preferences → Radios.
           </p>
@@ -753,6 +774,10 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
+        <p v-else-if="unmatchedEntryIds.length > 0" class="text-sm text-muted">
+          {{ unmatchedEntryIds.join(', ') }}
+          {{ unmatchedEntryIds.length === 1 ? 'is' : 'are' }} not in the official catalog. Install from a file, or go back and pick another radio.
+        </p>
         <p v-else class="text-sm text-muted">All official drivers are installed.</p>
 
         <div>

@@ -29,9 +29,11 @@ import {
   finishOnboarding,
   firstPendingOnboardingStep,
   onboardingEditToPersist,
+  onboardingDriversAreDone,
   onboardingHasExistingData,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
+  onboardingRadiosAreDone,
   onboardingLaunchPlan,
   onboardingLicensesAreDone,
   onboardingLocalSignals,
@@ -40,6 +42,7 @@ import {
   parseOnboardingState,
   serializeOnboardingState,
   skipOnboardingStep,
+  withOwnedModuleIds,
 } from '../../app/utils/onboarding.ts';
 import { SAVED_RADIOS_STORAGE_KEY, serializeSavedRadioStore } from '../../app/utils/saved-radios.ts';
 import type { SavedRadio } from '../../app/utils/saved-radios.ts';
@@ -317,16 +320,76 @@ describe('onboarding step transitions', () => {
     expect(filled.stations.find((station) => station.id === HOME_STATION_ID)?.gridsquare).toBe('EM48');
   });
 
-  it('should leave radios and later steps unfinished', () => {
-    const completion = { licenses: true, home: true };
+  it('should finish Radios from a picked model or an existing saved radio', () => {
+    expect(onboardingRadiosAreDone({ ownedModuleIds: [], savedRadioCount: 0 })).toBe(false);
+    expect(onboardingRadiosAreDone({ ownedModuleIds: ['baofeng-uv5r'], savedRadioCount: 0 })).toBe(true);
+    expect(onboardingRadiosAreDone({ ownedModuleIds: [], savedRadioCount: 1 })).toBe(true);
+  });
+
+  it('should finish Drivers only on the desktop, for every picked model or any module', () => {
+    expect(
+      onboardingDriversAreDone({
+        ownedModuleIds: [],
+        installedModelIds: ['baofeng-uv5r'],
+        desktop: false,
+      }),
+    ).toBe(false);
+    expect(
+      onboardingDriversAreDone({
+        ownedModuleIds: [],
+        installedModelIds: [],
+        desktop: true,
+      }),
+    ).toBe(false);
+    expect(
+      onboardingDriversAreDone({
+        ownedModuleIds: [],
+        installedModelIds: ['baofeng-uv5r'],
+        desktop: true,
+      }),
+    ).toBe(true);
+    expect(
+      onboardingDriversAreDone({
+        ownedModuleIds: ['baofeng-uv5r', 'kenwood-th-d74'],
+        installedModelIds: ['baofeng-uv5r'],
+        desktop: true,
+      }),
+    ).toBe(false);
+    expect(
+      onboardingDriversAreDone({
+        ownedModuleIds: ['baofeng-uv5r'],
+        installedModelIds: ['baofeng-uv5r', 'other'],
+        desktop: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('should clear picked radios on skip and keep saved selections on other skips', () => {
+    const picked = withOwnedModuleIds(createOnboardingState('active'), [' baofeng-uv5r ', 'baofeng-uv5r', '']);
+
+    expect(picked.ownedModuleIds).toEqual(['baofeng-uv5r']);
+
+    const skippedRadios = skipOnboardingStep(picked, 'radios');
+    expect(skippedRadios.steps.radios).toBe('skipped');
+    expect(skippedRadios.ownedModuleIds).toEqual([]);
+
+    const skippedDrivers = skipOnboardingStep(picked, 'drivers');
+    expect(skippedDrivers.steps.drivers).toBe('skipped');
+    expect(skippedDrivers.ownedModuleIds).toEqual(['baofeng-uv5r']);
+  });
+
+  it('should leave cable and later steps unfinished', () => {
+    const completion = { licenses: true, home: true, radios: true, drivers: true };
 
     for (const stepId of ONBOARDING_STEP_IDS) {
-      const done = stepId === 'licenses' || stepId === 'home';
+      const done = stepId === 'licenses' || stepId === 'home' || stepId === 'radios' || stepId === 'drivers';
       expect(onboardingStepIsDone(stepId, completion)).toBe(done);
     }
 
-    expect(onboardingStepIsDone('licenses', { licenses: false, home: true })).toBe(false);
-    expect(onboardingStepIsDone('home', { licenses: true, home: false })).toBe(false);
+    expect(onboardingStepIsDone('radios', { ...completion, radios: false })).toBe(false);
+    expect(onboardingStepIsDone('drivers', { ...completion, drivers: false })).toBe(false);
+    expect(onboardingStepIsDone('licenses', { ...completion, licenses: false })).toBe(false);
+    expect(onboardingStepIsDone('home', { ...completion, home: false })).toBe(false);
   });
 
   it('should not persist an active document for a new profile while launch is off', () => {

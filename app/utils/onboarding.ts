@@ -69,14 +69,14 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     title: 'Radios',
     description: 'Models you own',
     icon: 'i-lucide-radio',
-    placeholder: 'Choosing radios is added in a later update. Skipping this does not add or remove a radio.',
+    placeholder: 'Skipping this does not add or remove a saved radio.',
   },
   {
     id: 'drivers',
     title: 'Drivers',
     description: 'Radio modules',
     icon: 'i-lucide-cpu',
-    placeholder: 'Module install for the radios you own is added in a later update. Skipping this does not install or remove a driver.',
+    placeholder: 'Skipping this does not install or remove a driver.',
   },
   {
     id: 'cable',
@@ -221,6 +221,8 @@ export function onboardingStepperItems(
 export interface OnboardingStepCompletion {
   licenses: boolean;
   home: boolean;
+  radios: boolean;
+  drivers: boolean;
 }
 
 /**
@@ -242,7 +244,38 @@ export function onboardingHomeIsDone(stations: readonly RadioStation[]): boolean
 }
 
 /**
- * Licenses and Home can be finished. Later steps stay unfinished until their slices land.
+ * Done when the operator checked at least one catalog model, or a saved radio already exists.
+ */
+export function onboardingRadiosAreDone(input: {
+  ownedModuleIds: readonly string[];
+  savedRadioCount: number;
+}): boolean {
+  return input.ownedModuleIds.length > 0 || input.savedRadioCount > 0;
+}
+
+/**
+ * Desktop only. Every picked model must be installed. With none picked, any installed module is enough.
+ * The browser build cannot finish this step.
+ */
+export function onboardingDriversAreDone(input: {
+  ownedModuleIds: readonly string[];
+  installedModelIds: readonly string[];
+  desktop: boolean;
+}): boolean {
+  if (!input.desktop) {
+    return false;
+  }
+
+  if (input.ownedModuleIds.length === 0) {
+    return input.installedModelIds.length > 0;
+  }
+
+  const installed = new Set(input.installedModelIds);
+  return input.ownedModuleIds.every((id) => installed.has(id));
+}
+
+/**
+ * Licenses, Home, Radios, and Drivers can be finished. Later steps stay unfinished until their slices land.
  */
 export function onboardingStepIsDone(stepId: OnboardingStepId, completion: OnboardingStepCompletion): boolean {
   if (stepId === 'licenses') {
@@ -253,16 +286,43 @@ export function onboardingStepIsDone(stepId: OnboardingStepId, completion: Onboa
     return completion.home;
   }
 
+  if (stepId === 'radios') {
+    return completion.radios;
+  }
+
+  if (stepId === 'drivers') {
+    return completion.drivers;
+  }
+
   return false;
 }
 
-export function skipOnboardingStep(state: OnboardingState, stepId: OnboardingStepId): OnboardingState {
+/**
+ * Replace the radios picked before a saved radio can exist. Blank ids are dropped.
+ */
+export function withOwnedModuleIds(state: OnboardingState, ids: readonly string[]): OnboardingState {
   return {
+    ...state,
+    ownedModuleIds: parseOwnedModuleIds(ids),
+  };
+}
+
+export function skipOnboardingStep(state: OnboardingState, stepId: OnboardingStepId): OnboardingState {
+  const skipped: OnboardingState = {
     ...state,
     steps: {
       ...state.steps,
       [stepId]: 'skipped',
     },
+  };
+
+  if (stepId !== 'radios') {
+    return skipped;
+  }
+
+  return {
+    ...skipped,
+    ownedModuleIds: [],
   };
 }
 

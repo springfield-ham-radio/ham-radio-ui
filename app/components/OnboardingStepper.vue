@@ -7,25 +7,34 @@ import {
   firstPendingOnboardingStep,
   nextOnboardingStep,
   ONBOARDING_STEPS,
+  onboardingDriversAreDone,
   onboardingHomeIsDone,
   onboardingLicensesAreDone,
+  onboardingRadiosAreDone,
   onboardingStepIsDone,
   onboardingStepperItems,
   previousOnboardingStep,
   skipOnboardingStep,
+  withOwnedModuleIds,
   type OnboardingStepId,
 } from '~/utils/onboarding';
+import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
 const { directory } = useOperatorLicense();
 const { stations, saveStation } = useStationAntennas();
+const { radios } = useSavedRadios();
+const { configurations } = useRadio();
 
 const active = ref<OnboardingStepId>('licenses');
 const homeEditor = ref<{ save: () => boolean } | null>(null);
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
-const placeholderSteps = computed(() => ONBOARDING_STEPS.filter((step) => step.id !== 'licenses' && step.id !== 'home'));
+const placeholderSteps = computed(() =>
+  ONBOARDING_STEPS.filter((step) => !['licenses', 'home', 'radios', 'drivers'].includes(step.id)),
+);
+const ownedModuleIds = computed(() => state.value?.ownedModuleIds ?? []);
 
 const items = computed<StepperItem[]>(() => {
   if (!state.value) {
@@ -38,6 +47,15 @@ const items = computed<StepperItem[]>(() => {
 const completion = computed(() => ({
   licenses: onboardingLicensesAreDone(directory.value),
   home: onboardingHomeIsDone(stations.value),
+  radios: onboardingRadiosAreDone({
+    ownedModuleIds: ownedModuleIds.value,
+    savedRadioCount: radios.value.length,
+  }),
+  drivers: onboardingDriversAreDone({
+    ownedModuleIds: ownedModuleIds.value,
+    installedModelIds: configurations.value.map((config) => String(config.id.model)),
+    desktop: isTauriRuntime(),
+  }),
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
@@ -62,6 +80,14 @@ function back(): void {
   if (previous) {
     active.value = previous;
   }
+}
+
+function setOwnedModuleIds(ids: string[]): void {
+  if (!state.value) {
+    return;
+  }
+
+  applyEdit(withOwnedModuleIds(state.value, ids));
 }
 
 function skip(): void {
@@ -153,6 +179,18 @@ function finishLater(): void {
             />
           </div>
         </template>
+        <template #radios>
+          <OnboardingRadiosStep
+            :owned-module-ids="ownedModuleIds"
+            :saved-radio-count="radios.length"
+            @update:owned-module-ids="setOwnedModuleIds"
+          />
+        </template>
+        <template #drivers>
+          <div class="mt-4">
+            <RadioModulesPreference :entry-ids="ownedModuleIds.length > 0 ? ownedModuleIds : undefined" />
+          </div>
+        </template>
         <template v-for="step in placeholderSteps" :key="step.id" #[step.id]>
           <UAlert
             class="mt-4"
@@ -169,7 +207,7 @@ function finishLater(): void {
     <template #footer>
       <div class="flex w-full flex-col gap-3">
         <p v-if="!persistsEdits" class="text-xs text-muted">
-          This preview does not save which steps you finished, and a new install will not open it on its own yet. Licenses and a Home location you save here are kept.
+          This preview does not save which steps you finished or which radios you checked, and a new install will not open it on its own yet. Licenses, a Home location, and any driver you install are kept.
         </p>
         <p v-else-if="persisted?.completedReason === 'existing-data'" class="text-xs text-muted">
           This install already has station data. The guide stays closed until you open it here. Skipping a step does not remove licenses, radios, or stations.
