@@ -30,7 +30,7 @@ Nuxt UI in this repo is `@nuxt/ui` 4.12.0. The stepper component is not used yet
 
 ## Decision
 
-Add a first-run stepper that embeds those screens. Do not build a second license form, station form, module installer, port scanner, or read path.
+Add a first-run stepper. Home, drivers, cable, and the first read reuse the existing editors and dialogs. The licenses step is one inline form for one person and one license; Preferences keeps the multi-person license editor. Do not build a second station form, module installer, port scanner, or read path.
 
 ### Shell
 
@@ -92,9 +92,9 @@ Reopening the guide from Preferences does not open the Install radios dialog. Wh
 
 ### Steps
 
-Each step renders the existing component inside the stepper slot. Preferences stays the place those components edit the same records later.
+Each step edits the same records Preferences uses later. The licenses step is a short form; the other steps render the existing component inside the stepper slot.
 
-**Licenses.** Embed `LicensePeoplePreference`. Done when the directory has at least one amateur or GMRS license (lookup or manual class). A person with no license is not done. Skip leaves the directory as it is.
+**Licenses.** One inline form: name, call sign, and license class, plus Lookup. Lookup uses Callook unless the class is GMRS, and it only fills the form. There is no person list, no Add person or Add license button, and no Save button on this step. Continue validates, then creates or updates the first person and that person's first license, and advances. A looked-up grant keeps its FCC details when the call sign and kind still match. Other people and licenses are left in place. When the directory already has a license, the form is filled from that first grant and says more people and licenses can be managed in Preferences. Continue stays disabled until name, call sign, and class are set; those errors show on the fields. Skip does not write the directory. Edits stay in the guide session when the operator leaves the step and comes back. Done when the directory has at least one amateur or GMRS license (lookup or manual class). A person with no license is not done. Preferences keeps `LicensePeoplePreference`.
 
 **Home location.** Embed `RadioStationEditor` for `HOME_STATION_ID`. Onboarding passes `hideSave`, so the form’s Save button stays on the Preferences slideover only. Continue validates the nickname, grid, and coordinates, calls `saveHomeStation` (update Home, or create it when the row is missing), and then advances. Continue stays disabled while the nickname is empty or a coordinate is invalid; those errors show on the fields. An empty location is allowed. Skip does not write Home. Edits stay in the guide session when the operator leaves the step and comes back. `hasStationLocation` still describes a located Home for map centering. A license grid copied by `applyLicenseGridToHomeIfEmpty` remains a starting point and stays editable.
 

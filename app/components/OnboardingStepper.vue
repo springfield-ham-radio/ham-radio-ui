@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { StepperItem } from '@nuxt/ui';
 import { HOME_STATION_ID, type StationDraft } from '~/utils/antenna-station';
+import type { OnboardingLicenseSessionDraft } from '~/utils/license-people';
 import { defaultProgrammingBaudRate, programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
 import { listRadioImageBackups } from '~/utils/radio-image-backup-io';
 import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
@@ -39,6 +40,9 @@ const active = ref<OnboardingStepId>('licenses');
 const homeEditor = ref<{ save: () => boolean } | null>(null);
 const homeCanSave = ref(false);
 const homeSessionDraft = ref<StationDraft | undefined>();
+const licenseEditor = ref<{ save: () => boolean } | null>(null);
+const licenseCanSave = ref(false);
+const licenseSessionDraft = ref<OnboardingLicenseSessionDraft | undefined>();
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
@@ -110,6 +114,10 @@ const completion = computed(() => ({
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
 const canContinue = computed(() => {
+  if (active.value === 'licenses') {
+    return licenseCanSave.value;
+  }
+
   if (active.value === 'home') {
     return homeCanSave.value;
   }
@@ -288,6 +296,10 @@ function continueStep(): void {
     return;
   }
 
+  if (active.value === 'licenses' && !licenseEditor.value?.save()) {
+    return;
+  }
+
   if (active.value === 'home' && !homeEditor.value?.save()) {
     return;
   }
@@ -311,7 +323,7 @@ function continueStep(): void {
     }
   }
 
-  if (active.value !== 'home' && !onboardingStepIsDone(active.value, completion.value)) {
+  if (active.value !== 'home' && active.value !== 'licenses' && !onboardingStepIsDone(active.value, completion.value)) {
     return;
   }
 
@@ -351,9 +363,12 @@ function finishLater(): void {
         class="w-full"
       >
         <template #licenses>
-          <div class="mt-4">
-            <LicensePeoplePreference />
-          </div>
+          <OnboardingLicensesStep
+            ref="licenseEditor"
+            :session-draft="licenseSessionDraft"
+            @draft="licenseSessionDraft = $event"
+            @can-save="licenseCanSave = $event"
+          />
         </template>
         <template #home>
           <div class="mt-4">

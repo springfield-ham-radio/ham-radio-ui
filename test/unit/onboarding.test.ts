@@ -14,8 +14,13 @@ import {
   LEGACY_AMATEUR_LICENSE_STORAGE_KEY,
   LEGACY_GMRS_LICENSE_STORAGE_KEY,
   LICENSE_DIRECTORY_STORAGE_KEY,
+  applyOnboardingLicense,
   createLicensePerson,
   emptyLicenseDirectory,
+  onboardingLicenseClassOptions,
+  onboardingLicenseFieldErrors,
+  onboardingLicenseFormCanSave,
+  onboardingLicensePrefill,
   serializeLicenseDirectory,
   type AmateurLicense,
   type GmrsLicenseRecord,
@@ -330,6 +335,160 @@ describe('onboarding step transitions', () => {
     expect(onboardingLicensesAreDone({ people: none.people, licenses: [gmrs] })).toBe(true);
   });
 
+  it('should save one onboarding person and license from the inline form', () => {
+    const technician = onboardingLicenseClassOptions.find((option) => option.label === 'Technician');
+    const gmrsClass = onboardingLicenseClassOptions.find((option) => option.label === 'GMRS');
+    expect(technician).toBeDefined();
+    expect(gmrsClass).toBeDefined();
+
+    const emptyForm = { name: '', callSign: '', licenseClassId: '' };
+    expect(onboardingLicenseFormCanSave(emptyForm)).toBe(false);
+    expect(onboardingLicenseFieldErrors(emptyForm)).toEqual({
+      name: 'Enter a name',
+      callSign: 'Enter a call sign',
+      licenseClassId: 'Select a license class',
+    });
+    expect(onboardingLicenseFormCanSave({ name: 'Ada', callSign: 'W1AW', licenseClassId: '' })).toBe(false);
+    expect(onboardingLicensePrefill(emptyLicenseDirectory()).editingExisting).toBe(false);
+
+    const created = applyOnboardingLicense({
+      directory: emptyLicenseDirectory(),
+      form: { name: ' Ada ', callSign: 'w1aw', licenseClassId: technician!.value },
+      now: '2026-01-02T00:00:00.000Z',
+      newPersonId: 'person-1',
+      newLicenseId: 'lic-1',
+    });
+    expect(created.people).toEqual([
+      {
+        id: 'person-1',
+        name: 'Ada',
+        createdAt: '2026-01-02T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+    ]);
+    expect(created.licenses).toHaveLength(1);
+    const createdLicense = created.licenses[0];
+    expect(createdLicense?.kind).toBe('amateur');
+    expect(createdLicense?.callSign).toBe('W1AW');
+    expect(createdLicense && 'licenseClassId' in createdLicense ? createdLicense.licenseClassId : undefined).toBe(technician!.value);
+    expect(createdLicense && 'status' in createdLicense ? createdLicense.status : undefined).toBe('manual');
+
+    const other = createLicensePerson('Grace', '2026-01-01T00:00:00.000Z', 'person-2');
+    const second: GmrsLicenseRecord = {
+      id: 'gmrs-2',
+      personId: 'person-1',
+      kind: 'gmrs',
+      callSign: 'WRKP365',
+      name: 'Ada',
+      status: 'VALID',
+      city: 'Springfield',
+      state: 'IL',
+      frn: undefined,
+      grantDate: undefined,
+      expiryDate: undefined,
+      lastActionDate: undefined,
+      ulsUrl: undefined,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const directory: LicenseDirectory = {
+      people: [...created.people, other!],
+      licenses: [
+        {
+          ...(created.licenses[0] as AmateurLicense),
+          status: 'VALID',
+          gridsquare: 'EM48',
+          grantDate: '2020-01-01',
+        },
+        second,
+      ],
+    };
+    const prefill = onboardingLicensePrefill(directory);
+    expect(prefill).toMatchObject({
+      personId: 'person-1',
+      licenseId: 'lic-1',
+      name: 'Ada',
+      callSign: 'W1AW',
+      licenseClassId: technician!.value,
+      editingExisting: true,
+    });
+
+    const renamed = applyOnboardingLicense({
+      directory,
+      form: { name: 'Ada Lovelace', callSign: 'W1AW', licenseClassId: technician!.value },
+      personId: prefill.personId,
+      licenseId: prefill.licenseId,
+      now: '2026-01-03T00:00:00.000Z',
+      newPersonId: 'person-new',
+      newLicenseId: 'lic-new',
+    });
+    expect(renamed.people.map((person) => person.name)).toEqual(['Ada Lovelace', 'Grace']);
+    expect(renamed.licenses).toHaveLength(2);
+    const kept = renamed.licenses.find((license) => license.id === 'lic-1') as AmateurLicense;
+    expect(kept.gridsquare).toBe('EM48');
+    expect(kept.grantDate).toBe('2020-01-01');
+    expect(kept.status).toBe('VALID');
+    expect(renamed.licenses.find((license) => license.id === 'gmrs-2')).toEqual(second);
+
+    const replaced = applyOnboardingLicense({
+      directory,
+      form: { name: 'Ada', callSign: 'K1JT', licenseClassId: technician!.value },
+      personId: 'person-1',
+      licenseId: 'lic-1',
+      now: '2026-01-04T00:00:00.000Z',
+      newPersonId: 'person-new',
+      newLicenseId: 'lic-new',
+    });
+    const manual = replaced.licenses.find((license) => license.id === 'lic-1') as AmateurLicense;
+    expect(manual.callSign).toBe('K1JT');
+    expect(manual.status).toBe('manual');
+    expect(manual.gridsquare).toBeUndefined();
+    expect(replaced.licenses.find((license) => license.id === 'gmrs-2')).toEqual(second);
+
+    const lookedUp: AmateurLicense = {
+      ...(created.licenses[0] as AmateurLicense),
+      id: 'pending',
+      personId: 'pending',
+      callSign: 'W1AW',
+      status: 'VALID',
+      gridsquare: 'FN31',
+      grantDate: '2019-06-01',
+    };
+    const fromLookup = applyOnboardingLicense({
+      directory: emptyLicenseDirectory(),
+      form: { name: 'Hiram', callSign: 'W1AW', licenseClassId: technician!.value },
+      lookedUp,
+      now: '2026-01-05T00:00:00.000Z',
+      newPersonId: 'person-3',
+      newLicenseId: 'lic-3',
+    });
+    const looked = fromLookup.licenses[0] as AmateurLicense;
+    expect(looked.id).toBe('lic-3');
+    expect(looked.personId).toBe('person-3');
+    expect(looked.gridsquare).toBe('FN31');
+    expect(looked.grantDate).toBe('2019-06-01');
+    expect(looked.status).toBe('VALID');
+
+    const gmrsSaved = applyOnboardingLicense({
+      directory: emptyLicenseDirectory(),
+      form: { name: 'Ada', callSign: 'wrkp365', licenseClassId: gmrsClass!.value },
+      now: '2026-01-06T00:00:00.000Z',
+      newPersonId: 'person-4',
+      newLicenseId: 'lic-4',
+    });
+    expect(gmrsSaved.licenses[0]).toMatchObject({ kind: 'gmrs', callSign: 'WRKP365', status: 'VALID' });
+
+    const unchanged = applyOnboardingLicense({
+      directory,
+      form: { name: '', callSign: 'W1AW', licenseClassId: technician!.value },
+      personId: 'person-1',
+      licenseId: 'lic-1',
+      now: '2026-01-07T00:00:00.000Z',
+      newPersonId: 'person-new',
+      newLicenseId: 'lic-new',
+    });
+    expect(unchanged).toBe(directory);
+  });
+
   it('should finish Home when a license grid already filled it', () => {
     const empty = defaultStationAntennaStore();
     expect(onboardingHomeIsDone(empty.stations)).toBe(false);
@@ -626,6 +785,30 @@ describe('onboarding step transitions', () => {
     expect(stepper).toContain('hide-save');
     expect(stepper).toContain('saveHomeStation');
     expect(stepper).toContain('homeSessionDraft');
+    expect(stepper).toContain('OnboardingLicensesStep');
+    expect(stepper).toContain('licenseEditor.value?.save()');
+    expect(stepper).toContain('licenseSessionDraft');
+    expect(stepper).not.toContain('LicensePeoplePreference');
+    const skipSource = stepper.slice(stepper.indexOf('function skip()'), stepper.indexOf('function continueStep()'));
+    expect(skipSource).not.toContain('licenseEditor');
+    expect(skipSource).not.toContain('saveOnboardingLicense');
+
+    const licensesStep = readFileSync('app/components/OnboardingLicensesStep.vue', 'utf8');
+    const licensePreference = readFileSync('app/components/LicensePeoplePreference.vue', 'utf8');
+    const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
+
+    expect(licensesStep).toContain('More people and licenses can be managed in Preferences.');
+    expect(licensesStep).toContain('label="Lookup"');
+    expect(licensesStep).toContain('label="Name"');
+    expect(licensesStep).toContain('label="Call sign"');
+    expect(licensesStep).toContain('label="License class"');
+    expect(licensesStep).not.toContain('Add person');
+    expect(licensesStep).not.toContain('Add amateur license');
+    expect(licensesStep).not.toContain('Add GMRS license');
+    expect(licensesStep).not.toContain('LicensePeoplePreference');
+    expect(licensesStep).not.toContain('label="Save"');
+    expect(licensePreference).toContain('Add person');
+    expect(preferences).toContain('LicensePeoplePreference');
     expect(stationEditor).toContain('v-if="!hideSave"');
     expect(stationEditor).toContain(":label=\"isCreate ? 'Add' : 'Save'\"");
   });

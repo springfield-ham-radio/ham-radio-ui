@@ -5,11 +5,14 @@ import {
   amateurCallSignSelectOptions,
   amateurLicenseClassOptions,
   amateurLicenseFromCallook,
+  applyOnboardingLicense,
+  onboardingLicenseFormCanSave,
   assessPrivilege,
   createLicensePerson,
   desiredRadioPrivilege,
   emptyLicenseDirectory,
   gmrsLicenseFromLookup,
+  type GmrsLicenseRecord,
   homeGridsquareFor,
   soleAmateurIdentity,
   isPrivilegeChoiceValid,
@@ -31,6 +34,7 @@ import {
   type AmateurLicense,
   type HeldLicense,
   type LicenseDirectory,
+  type OnboardingLicenseForm,
   type LicensePerson,
   type PrivilegeAssessment,
   type PrivilegeMenuItem,
@@ -189,6 +193,79 @@ export function useOperatorLicense() {
     }
   }
 
+  async function lookupAmateurLicense(callSign: string): Promise<{ license?: AmateurLicense; error?: string }> {
+    const normalized = callSign.trim().toUpperCase();
+
+    if (!normalized) {
+      return { error: 'Enter a US call sign to look up.' };
+    }
+
+    try {
+      const response = await fetchCallookLicense(normalized);
+
+      if (response.status === 'INVALID') {
+        return { error: `No active US amateur license found for ${normalized}.` };
+      }
+
+      if (response.status === 'UPDATING') {
+        return { error: 'Callook is updating its database. Try again in a few minutes.' };
+      }
+
+      return {
+        license: amateurLicenseFromCallook(response, 'pending', normalized, 'pending', new Date().toISOString()),
+      };
+    } catch (cause) {
+      return { error: cause instanceof Error ? cause.message : 'Callook lookup failed.' };
+    }
+  }
+
+  async function lookupGmrsLicense(callSign: string): Promise<{ license?: GmrsLicenseRecord; error?: string }> {
+    const normalized = callSign.trim().toUpperCase();
+
+    if (!normalized) {
+      return { error: 'Enter a GMRS call sign to look up.' };
+    }
+
+    try {
+      const result = await fetchGmrsLicense(normalized);
+
+      if (!result.found) {
+        return { error: `No GMRS license found for ${normalized}.` };
+      }
+
+      return {
+        license: gmrsLicenseFromLookup(result.license, 'pending', normalized, 'pending', new Date().toISOString()),
+      };
+    } catch (cause) {
+      return { error: cause instanceof Error ? cause.message : 'GMRS lookup failed.' };
+    }
+  }
+
+  function saveOnboardingLicense(input: {
+    form: OnboardingLicenseForm;
+    personId?: string;
+    licenseId?: string;
+    lookedUp?: HeldLicense;
+  }): boolean {
+    if (!onboardingLicenseFormCanSave(input.form)) {
+      return false;
+    }
+
+    persist(
+      applyOnboardingLicense({
+        directory: directory.value,
+        form: input.form,
+        personId: input.personId,
+        licenseId: input.licenseId,
+        lookedUp: input.lookedUp,
+        now: new Date().toISOString(),
+        newPersonId: crypto.randomUUID(),
+        newLicenseId: crypto.randomUUID(),
+      }),
+    );
+    return true;
+  }
+
   function setManualLicenseClass(licenseId: string, licenseClassId: string): void {
     persist(setAmateurClass(directory.value, licenseId, licenseClassId, new Date().toISOString()));
   }
@@ -248,6 +325,9 @@ export function useOperatorLicense() {
     removeLicensePerson,
     addAmateurLicense,
     addGmrsLicense,
+    lookupAmateurLicense,
+    lookupGmrsLicense,
+    saveOnboardingLicense,
     setManualLicenseClass,
     clearHeldLicense,
     choiceForRadio,
