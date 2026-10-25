@@ -31,7 +31,10 @@ export const ONBOARDING_STORAGE_KEY = 'ham-radio-onboarding';
  */
 export const ONBOARDING_LAUNCH_NEW_PROFILES = true;
 
-export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'cable', 'read', 'stations'] as const;
+export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'cable', 'read'] as const;
+
+/** Step ids removed from the guide. Stored documents may still name them. */
+const REMOVED_ONBOARDING_STEP_IDS = ['stations'] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEP_IDS)[number];
 
@@ -98,14 +101,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     title: 'First read',
     description: 'Backup before edits',
     icon: 'i-lucide-archive',
-    placeholder: 'Skipping this does not read a radio.',
-  },
-  {
-    id: 'stations',
-    title: 'Stations',
-    description: 'Optional',
-    icon: 'i-lucide-map-pin',
-    placeholder: 'Finish keeps Home. Another station or an antenna is optional.',
+    placeholder: 'Finish closes the guide. A backup is optional.',
   },
 ];
 
@@ -145,7 +141,6 @@ function pendingSteps(): Record<OnboardingStepId, OnboardingStepStatus> {
     drivers: 'pending',
     cable: 'pending',
     read: 'pending',
-    stations: 'pending',
   };
 }
 
@@ -233,7 +228,6 @@ export interface OnboardingStepCompletion {
   drivers: boolean;
   cable: boolean;
   read: boolean;
-  stations: boolean;
 }
 
 /**
@@ -590,13 +584,6 @@ export function onboardingReadIsDone(input: {
 }
 
 /**
- * Home alone finishes this step. Another station or an antenna is optional, so Finish stays enabled.
- */
-export function onboardingStationsAreDone(): boolean {
-  return true;
-}
-
-/**
  * Every step can be finished. Continue stays disabled until that step's check passes.
  */
 export function onboardingStepIsDone(stepId: OnboardingStepId, completion: OnboardingStepCompletion): boolean {
@@ -694,6 +681,7 @@ export function parseOnboardingState(raw: string | null): OnboardingState | unde
 
     const steps = pendingSteps();
     const storedSteps = isRecord(parsed.steps) ? parsed.steps : {};
+    const hadRemovedStep = REMOVED_ONBOARDING_STEP_IDS.some((stepId) => stepId in storedSteps);
 
     for (const stepId of ONBOARDING_STEP_IDS) {
       steps[stepId] = stepStatus(storedSteps[stepId]);
@@ -708,6 +696,9 @@ export function parseOnboardingState(raw: string | null): OnboardingState | unde
 
     if (parsed.status === 'completed') {
       state.completedReason = parsed.completedReason === 'finished' ? 'finished' : 'existing-data';
+    } else if (hadRemovedStep && !onboardingHasPendingStep(state)) {
+      state.status = 'completed';
+      state.completedReason = 'finished';
     }
 
     return state;
@@ -731,13 +722,42 @@ export function serializeOnboardingState(state: OnboardingState): string {
   return JSON.stringify(stored);
 }
 
+/**
+ * True when a stored document still names a removed step, such as `stations`.
+ * Reading that document drops the step, and this says the rewritten document should be saved.
+ */
+export function onboardingStoredDocumentNeedsRewrite(raw: string | null): boolean {
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!isRecord(parsed) || !isRecord(parsed.steps)) {
+      return false;
+    }
+
+    return REMOVED_ONBOARDING_STEP_IDS.some((stepId) => stepId in parsed.steps);
+  } catch {
+    return false;
+  }
+}
+
 export function readOnboardingState(): OnboardingState | undefined {
   if (!import.meta.client) {
     return undefined;
   }
 
   try {
-    return parseOnboardingState(localStorage.getItem(ONBOARDING_STORAGE_KEY));
+    const raw = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    const state = parseOnboardingState(raw);
+
+    if (state && onboardingStoredDocumentNeedsRewrite(raw)) {
+      writeOnboardingState(state);
+    }
+
+    return state;
   } catch {
     return undefined;
   }

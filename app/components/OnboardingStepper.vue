@@ -19,7 +19,6 @@ import {
   onboardingRadiosAreDone,
   onboardingReadContinue,
   onboardingReadIsDone,
-  onboardingStationsAreDone,
   onboardingStepIsDone,
   onboardingStepperItems,
   planOnboardingCableRadios,
@@ -109,7 +108,6 @@ const completion = computed(() => ({
     livePorts: cableSelection.value.livePorts,
   }),
   read: state.value?.steps.read === 'done' || readDecision.value.action === 'advance',
-  stations: onboardingStationsAreDone(),
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
@@ -122,7 +120,7 @@ const canContinue = computed(() => {
     return homeCanSave.value;
   }
 
-  if (active.value === 'read' || active.value === 'stations') {
+  if (active.value === 'read') {
     return true;
   }
 
@@ -253,6 +251,20 @@ function openBackups(): void {
   void router.push('/preferences?section=backups');
 }
 
+function readRadio(): void {
+  const decision = readDecision.value;
+
+  if (decision.action === 'read') {
+    readAttempted.value = false;
+    openReadFromRadio(decision.radioId);
+    return;
+  }
+
+  if (decision.action === 'blocked') {
+    readAttempted.value = true;
+  }
+}
+
 function saveCableRadios(): boolean {
   const port = cableSelection.value.port;
 
@@ -308,19 +320,13 @@ function continueStep(): void {
     return;
   }
 
-  if (active.value === 'read' && state.value.steps.read !== 'done') {
-    const decision = readDecision.value;
+  if (active.value === 'read') {
+    const done = state.value.steps.read === 'done' || readDecision.value.action === 'advance';
+    const marked = done ? completeOnboardingStep(state.value, 'read') : state.value;
 
-    if (decision.action === 'read') {
-      readAttempted.value = false;
-      openReadFromRadio(decision.radioId);
-      return;
-    }
-
-    if (decision.action === 'blocked') {
-      readAttempted.value = true;
-      return;
-    }
+    applyEdit(finishOnboarding(marked));
+    close();
+    return;
   }
 
   if (active.value !== 'home' && active.value !== 'licenses' && !onboardingStepIsDone(active.value, completion.value)) {
@@ -349,7 +355,7 @@ function finishLater(): void {
   <UModal
     v-model:open="shellOpen"
     title="Set up HamBench"
-    description="You can skip any step and open this again from Preferences."
+    description="Skip a step, or finish later, and open this again from Preferences."
     :dismissible="false"
     :ui="{ content: 'sm:max-w-5xl' }"
   >
@@ -400,10 +406,13 @@ function finishLater(): void {
           <OnboardingCableStep :field-error="cableFieldError" @selection="onCableSelection" />
         </template>
         <template #read>
-          <OnboardingReadStep :decision="readDecision" :attempted="readAttempted" @go-to="goToStep" @backups="openBackups" />
-        </template>
-        <template #stations>
-          <OnboardingStationsStep />
+          <OnboardingReadStep
+            :decision="readDecision"
+            :attempted="readAttempted"
+            @go-to="goToStep"
+            @backups="openBackups"
+            @read="readRadio"
+          />
         </template>
       </UStepper>
     </template>

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   HOME_STATION_ID,
@@ -45,11 +45,12 @@ import {
   onboardingRadiosAreDone,
   onboardingReadContinue,
   onboardingReadIsDone,
-  onboardingStationsAreDone,
+  onboardingStoredDocumentNeedsRewrite,
   planOnboardingCableRadios,
   onboardingLaunchPlan,
   onboardingLicensesAreDone,
   onboardingLocalSignals,
+  nextOnboardingStep,
   onboardingStepIsDone,
   onboardingStepReached,
   parseOnboardingState,
@@ -263,12 +264,13 @@ describe('onboarding step transitions', () => {
   });
 
   it('should finish without clearing skipped steps', () => {
-    const finished = finishOnboarding(skipOnboardingStep(createOnboardingState('active'), 'stations'));
+    const finished = finishOnboarding(skipOnboardingStep(createOnboardingState('active'), 'read'));
 
     expect(finished.status).toBe('completed');
     expect(finished.completedReason).toBe('finished');
-    expect(finished.steps.stations).toBe('skipped');
+    expect(finished.steps.read).toBe('skipped');
     expect(finished.steps.licenses).toBe('pending');
+    expect(nextOnboardingStep('read')).toBeUndefined();
   });
 
   it('should keep later steps disabled until they are reached', () => {
@@ -642,7 +644,7 @@ describe('onboarding step transitions', () => {
     expect(skippedDrivers.ownedModuleIds).toEqual(['baofeng-uv5r']);
   });
 
-  it('should finish the cable, read, and stations steps from live data', () => {
+  it('should finish the cable and read steps from live data', () => {
     expect(onboardingCableIsDone({ desktop: false, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(false);
     expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.saved', livePorts: ['/dev/cu.usb'] })).toBe(false);
     expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(true);
@@ -767,18 +769,16 @@ describe('onboarding step transitions', () => {
     expect(readStep).toContain('Go to Drivers');
     expect(readStep).toContain('Open Backups');
 
-    expect(onboardingStationsAreDone()).toBe(true);
-
-    const stationsStep = readFileSync('app/components/OnboardingStationsStep.vue', 'utf8');
-
-    expect(stationsStep).toContain('Other places you operate');
-    expect(stationsStep).toContain('Add another station');
-    expect(stationsStep).toContain('Add antenna at Home');
-    expect(stationsStep).toContain('RadioStationEditor');
-    expect(stationsStep).toContain('AntennaStationEditor');
-    expect(stationsStep).not.toContain('No antennas at this site yet');
+    expect(existsSync('app/components/OnboardingStationsStep.vue')).toBe(false);
+    expect(stepper).not.toContain('OnboardingStationsStep');
+    expect(stepper).not.toContain("active.value === 'stations'");
     expect(stepper).toContain('v-if="!isLast"');
-    expect(stepper).toContain("active.value === 'stations'");
+    expect(stepper).toContain("active.value === 'read'");
+    expect(stepper).toContain('finishOnboarding(marked)');
+    expect(readStep).toContain('label="Read radio"');
+    expect(readStep).not.toContain('Skip stays available');
+    expect(ONBOARDING_STEP_IDS).not.toContain('stations');
+    expect(ONBOARDING_STEP_IDS.at(-1)).toBe('read');
 
     const stationEditor = readFileSync('app/components/RadioStationEditor.vue', 'utf8');
 
@@ -821,7 +821,6 @@ describe('onboarding step transitions', () => {
       drivers: true,
       cable: true,
       read: true,
-      stations: true,
     };
 
     for (const stepId of ONBOARDING_STEP_IDS) {
@@ -888,9 +887,53 @@ describe('onboarding storage', () => {
     );
 
     expect(parsed?.steps.licenses).toBe('done');
-    expect(parsed?.steps.stations).toBe('pending');
+    expect(parsed?.steps.read).toBe('pending');
+    expect(parsed && 'stations' in parsed.steps).toBe(false);
     expect(parsed?.completedReason).toBe('existing-data');
     expect(parsed?.ownedModuleIds).toEqual(['uv-5r']);
+  });
+
+  it('should drop a stored stations step and finish the guide when nothing else is pending', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      status: 'active',
+      steps: {
+        licenses: 'done',
+        home: 'done',
+        radios: 'skipped',
+        drivers: 'done',
+        cable: 'done',
+        read: 'done',
+        stations: 'pending',
+      },
+      ownedModuleIds: ['baofeng-uv5r'],
+    });
+
+    expect(onboardingStoredDocumentNeedsRewrite(raw)).toBe(true);
+    const parsed = parseOnboardingState(raw);
+
+    expect(parsed?.status).toBe('completed');
+    expect(parsed?.completedReason).toBe('finished');
+    expect(parsed?.steps.read).toBe('done');
+    expect(parsed?.steps.radios).toBe('skipped');
+    expect(parsed && 'stations' in parsed.steps).toBe(false);
+    expect(parsed && onboardingHasPendingStep(parsed)).toBe(false);
+    expect(serializeOnboardingState(parsed!)).not.toContain('stations');
+    expect(parsed?.ownedModuleIds).toEqual(['baofeng-uv5r']);
+
+    const stillActive = JSON.stringify({
+      version: 1,
+      status: 'active',
+      steps: { licenses: 'pending', stations: 'done' },
+      ownedModuleIds: [],
+    });
+    const kept = parseOnboardingState(stillActive);
+
+    expect(onboardingStoredDocumentNeedsRewrite(stillActive)).toBe(true);
+    expect(kept?.status).toBe('active');
+    expect(kept?.steps.licenses).toBe('pending');
+    expect(kept && 'stations' in kept.steps).toBe(false);
+    expect(onboardingStoredDocumentNeedsRewrite(serializeOnboardingState(createOnboardingState('active')))).toBe(false);
   });
 });
 

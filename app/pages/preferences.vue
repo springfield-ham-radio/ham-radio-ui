@@ -33,7 +33,7 @@
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted">Set up HamBench</p>
                 <p class="text-xs text-muted">
-                  Licenses, home, radios, drivers, cable, a first read, and stations. Skip any step.
+                  Licenses, home, radios, drivers, cable, and a first read. Skip any step except the last.
                 </p>
               </div>
               <UButton
