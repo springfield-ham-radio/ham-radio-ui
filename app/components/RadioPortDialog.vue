@@ -169,6 +169,7 @@ watch(
     :title="title"
     :description="slots.description ? undefined : description"
     :class="panelClass ?? 'max-w-lg'"
+    :ui="{ overlay: 'z-50', content: 'z-50' }"
   >
     <template v-if="slots.description" #description>
       <slot name="description" />

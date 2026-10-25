@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   HOME_STATION_ID,
@@ -35,6 +36,7 @@ import {
   onboardingHasPendingStep,
   onboardingHomeIsDone,
   onboardingRadiosAreDone,
+  onboardingReadContinue,
   onboardingReadIsDone,
   onboardingStationsAreDone,
   planOnboardingCableRadios,
@@ -447,6 +449,64 @@ describe('onboarding step transitions', () => {
       }),
     ).toBe(false);
     expect(onboardingReadIsDone({ fileNames: [], models: [] })).toBe(false);
+
+    const ready = { id: 'radio-1', name: 'UV-5R', serialPort: '/dev/cu.usb', hasConfig: true };
+
+    expect(
+      onboardingReadContinue({
+        desktop: true,
+        backupsEnabled: true,
+        hasBackup: false,
+        models: [ready],
+      }),
+    ).toEqual({ action: 'read', radioId: 'radio-1', name: 'UV-5R', serialPort: '/dev/cu.usb' });
+    expect(
+      onboardingReadContinue({
+        desktop: false,
+        backupsEnabled: false,
+        hasBackup: true,
+        models: [],
+      }),
+    ).toEqual({ action: 'advance' });
+    expect(
+      onboardingReadContinue({ desktop: false, backupsEnabled: true, hasBackup: false, models: [ready] }),
+    ).toEqual({ action: 'blocked', reason: 'desktop' });
+    expect(
+      onboardingReadContinue({ desktop: true, backupsEnabled: false, hasBackup: false, models: [ready] }),
+    ).toEqual({ action: 'blocked', reason: 'backups' });
+    expect(
+      onboardingReadContinue({
+        desktop: true,
+        backupsEnabled: true,
+        hasBackup: false,
+        models: [{ ...ready, hasConfig: false }],
+      }),
+    ).toEqual({ action: 'blocked', reason: 'driver', name: 'UV-5R' });
+    expect(
+      onboardingReadContinue({
+        desktop: true,
+        backupsEnabled: true,
+        hasBackup: false,
+        models: [{ ...ready, serialPort: '  ' }],
+      }),
+    ).toEqual({ action: 'blocked', reason: 'port' });
+    expect(
+      onboardingReadContinue({ desktop: true, backupsEnabled: true, hasBackup: false, models: [] }),
+    ).toEqual({ action: 'blocked', reason: 'port' });
+
+    const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
+    const portDialog = readFileSync('app/components/RadioPortDialog.vue', 'utf8');
+    const progressDialog = readFileSync('app/components/RadioProgressDialog.vue', 'utf8');
+    const readStep = readFileSync('app/components/OnboardingReadStep.vue', 'utf8');
+
+    expect(stepper).toContain('openReadFromRadio(decision.radioId)');
+    expect(stepper).toContain('readAttempted.value = true');
+    expect(stepper).not.toContain('z-50');
+    expect(portDialog).toContain("overlay: 'z-50'");
+    expect(progressDialog).toContain("overlay: 'z-50'");
+    expect(readStep).toContain('Go to Cable');
+    expect(readStep).toContain('Go to Drivers');
+    expect(readStep).toContain('Open Backups');
 
     expect(onboardingStationsAreDone({ stationIds: ['station-home'], antennaCount: 0 })).toBe(false);
     expect(onboardingStationsAreDone({ stationIds: ['station-home', 'station-cabin'], antennaCount: 0 })).toBe(true);

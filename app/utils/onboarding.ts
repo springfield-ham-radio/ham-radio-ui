@@ -379,6 +379,60 @@ export function planOnboardingCableRadios(input: {
   return { drafts };
 }
 
+export interface OnboardingReadModel {
+  id: string;
+  name: string;
+  serialPort: string;
+  hasConfig: boolean;
+}
+
+export type OnboardingReadContinueResult =
+  | { action: 'advance' }
+  | { action: 'read'; radioId: string; name: string; serialPort: string }
+  | { action: 'blocked'; reason: 'desktop' | 'backups' | 'driver' | 'port'; name?: string };
+
+/**
+ * Continue opens the read dialog, moves on when a backup already exists, or explains the missing piece.
+ * It does not fail closed with no message.
+ */
+export function onboardingReadContinue(input: {
+  desktop: boolean;
+  backupsEnabled: boolean;
+  hasBackup: boolean;
+  models: readonly OnboardingReadModel[];
+}): OnboardingReadContinueResult {
+  if (input.hasBackup) {
+    return { action: 'advance' };
+  }
+
+  if (!input.desktop) {
+    return { action: 'blocked', reason: 'desktop' };
+  }
+
+  if (!input.backupsEnabled) {
+    return { action: 'blocked', reason: 'backups' };
+  }
+
+  const readable = input.models.find((model) => model.hasConfig && model.serialPort.trim().length > 0);
+
+  if (readable) {
+    return {
+      action: 'read',
+      radioId: readable.id,
+      name: readable.name,
+      serialPort: readable.serialPort,
+    };
+  }
+
+  const missingDriver = input.models.find((model) => !model.hasConfig);
+
+  if (missingDriver) {
+    return { action: 'blocked', reason: 'driver', name: missingDriver.name };
+  }
+
+  return { action: 'blocked', reason: 'port' };
+}
+
 /**
  * Done when a read or pre-write backup already exists for one of the operator's models.
  */
