@@ -1,6 +1,6 @@
 # First-run onboarding stepper
 
-**Status:** proposed  
+**Status:** accepted  
 **Date:** 2026-10-25  
 **Related:** [#173](https://github.com/springfield-ham-radio/ham-radio-ui/issues/173), [0001](./0001-location-model.md), [0009](./0009-per-radio-modules.md)
 
