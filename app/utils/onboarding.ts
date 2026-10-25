@@ -488,10 +488,21 @@ export interface OnboardingFinishReadRadio {
   canRead: boolean;
 }
 
+export interface OnboardingFinishReadChoice {
+  id: string;
+  name: string;
+  serialPort: string;
+  ready: boolean;
+  /** Shown on a disabled row: missing driver, missing port, or both. */
+  disabledReason?: string;
+}
+
 export interface OnboardingFinishReadPlan {
   enabled: boolean;
   defaultOn: boolean;
-  radios: Array<{ id: string; name: string; serialPort: string }>;
+  /** First radio that can be read. The select starts here. */
+  selectedId?: string;
+  radios: OnboardingFinishReadChoice[];
   note?: string;
 }
 
@@ -509,32 +520,67 @@ function englishRadioList(names: readonly string[]): string {
   return `${clean.slice(0, -1).join(', ')}, and ${clean.at(-1)}`;
 }
 
+function finishReadDisabledReason(model: OnboardingFinishReadRadio): string | undefined {
+  const missingDriver = !model.hasConfig;
+  const missingPort = model.serialPort.trim().length === 0;
+  const ready = model.canRead && !missingDriver && !missingPort;
+
+  if (ready) {
+    return undefined;
+  }
+
+  if (missingDriver && missingPort) {
+    return 'Needs a driver and a port';
+  }
+
+  if (missingDriver) {
+    return 'Needs a driver';
+  }
+
+  if (missingPort) {
+    return 'Needs a port';
+  }
+
+  return 'Not saved yet';
+}
+
 /**
- * Finish can read a saved radio that already has a driver and its own port.
- * A missing port names that radio. A pending model cannot be selected.
+ * Every checked or saved radio is listed. One that is missing a driver or a port stays
+ * in the list but cannot be chosen. The switch is on only when at least one radio can be read.
  */
 export function onboardingFinishReadPlan(models: readonly OnboardingFinishReadRadio[]): OnboardingFinishReadPlan {
-  const usable = models.filter(
-    (model) => model.canRead && model.hasConfig && model.serialPort.trim().length > 0,
-  );
-  const missingPort = models.filter((model) => model.hasConfig && model.serialPort.trim().length === 0);
-  const missingDriver = models.filter((model) => !model.hasConfig);
-  const note = missingPort.length > 0
-    ? `Set a programming port for ${englishRadioList(missingPort.map((model) => model.name))}.`
-    : missingDriver.length > 0
-      ? `Install a driver for ${englishRadioList(missingDriver.map((model) => model.name))}.`
-      : usable.length === 0
-        ? 'Save a radio before this can read one.'
-        : undefined;
-
-  return {
-    enabled: usable.length > 0,
-    defaultOn: usable.length > 0,
-    radios: usable.map((model) => ({
+  const radios: OnboardingFinishReadChoice[] = models.map((model) => {
+    const serialPort = model.serialPort.trim();
+    const disabledReason = finishReadDisabledReason(model);
+    const choice: OnboardingFinishReadChoice = {
       id: model.id,
       name: model.name,
-      serialPort: model.serialPort.trim(),
-    })),
+      serialPort,
+      ready: disabledReason === undefined,
+    };
+
+    if (disabledReason) {
+      choice.disabledReason = disabledReason;
+    }
+
+    return choice;
+  });
+  const ready = radios.filter((radio) => radio.ready);
+  const missingPort = models.filter((model) => model.hasConfig && model.serialPort.trim().length === 0);
+  const missingDriver = models.filter((model) => !model.hasConfig);
+  const note = ready.length > 0
+    ? undefined
+    : missingPort.length > 0
+      ? `Set a programming port for ${englishRadioList(missingPort.map((model) => model.name))}.`
+      : missingDriver.length > 0
+        ? `Install a driver for ${englishRadioList(missingDriver.map((model) => model.name))}.`
+        : 'Save a radio before this can read one.';
+
+  return {
+    enabled: ready.length > 0,
+    defaultOn: ready.length > 0,
+    ...(ready[0] ? { selectedId: ready[0].id } : {}),
+    radios,
     ...(note ? { note } : {}),
   };
 }

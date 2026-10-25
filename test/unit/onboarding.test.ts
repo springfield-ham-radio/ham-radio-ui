@@ -711,14 +711,28 @@ describe('onboarding step transitions', () => {
       radios: [],
       note: 'Save a radio before this can read one.',
     });
-    expect(onboardingFinishReadPlan([{ ...uv5r, hasConfig: false }])).toMatchObject({
+    expect(onboardingFinishReadPlan([{ ...uv5r, hasConfig: false }])).toEqual({
       enabled: false,
       defaultOn: false,
+      radios: [{
+        id: 'radio-uv5r',
+        name: 'UV-5R',
+        serialPort: '/dev/cu.usb',
+        ready: false,
+        disabledReason: 'Needs a driver',
+      }],
       note: 'Install a driver for UV-5R.',
     });
-    expect(onboardingFinishReadPlan([{ ...uv5r, serialPort: '  ' }])).toMatchObject({
+    expect(onboardingFinishReadPlan([{ ...uv5r, serialPort: '  ' }])).toEqual({
       enabled: false,
       defaultOn: false,
+      radios: [{
+        id: 'radio-uv5r',
+        name: 'UV-5R',
+        serialPort: '',
+        ready: false,
+        disabledReason: 'Needs a port',
+      }],
       note: 'Set a programming port for UV-5R.',
     });
     expect(
@@ -726,23 +740,66 @@ describe('onboarding step transitions', () => {
         { ...uv5r, serialPort: '' },
         { ...tmD710a, serialPort: ' ' },
       ]),
-    ).toMatchObject({
+    ).toEqual({
       enabled: false,
+      defaultOn: false,
+      radios: [
+        {
+          id: 'radio-uv5r',
+          name: 'UV-5R',
+          serialPort: '',
+          ready: false,
+          disabledReason: 'Needs a port',
+        },
+        {
+          id: 'radio-tmd710a',
+          name: 'TM-D710A',
+          serialPort: '',
+          ready: false,
+          disabledReason: 'Needs a port',
+        },
+      ],
       note: 'Set a programming port for UV-5R and TM-D710A.',
     });
     expect(onboardingFinishReadPlan([uv5r])).toEqual({
       enabled: true,
       defaultOn: true,
-      radios: [{ id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' }],
+      selectedId: 'radio-uv5r',
+      radios: [{ id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb', ready: true }],
+    });
+    expect(onboardingFinishReadPlan([
+      { ...uv5r, hasConfig: false, canRead: false, serialPort: '' },
+      tmD710a,
+    ])).toEqual({
+      enabled: true,
+      defaultOn: true,
+      selectedId: 'radio-tmd710a',
+      radios: [
+        {
+          id: 'radio-uv5r',
+          name: 'UV-5R',
+          serialPort: '',
+          ready: false,
+          disabledReason: 'Needs a driver and a port',
+        },
+        { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2', ready: true },
+      ],
     });
     expect(onboardingFinishReadPlan([uv5r, tmD710a, { ...uv5r, id: 'bare', name: 'Bare', hasConfig: false, canRead: false }])).toEqual({
       enabled: true,
       defaultOn: true,
+      selectedId: 'radio-uv5r',
       radios: [
-        { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' },
-        { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2' },
+        { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb', ready: true },
+        { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2', ready: true },
+        {
+          id: 'bare',
+          name: 'Bare',
+          serialPort: '/dev/cu.usb',
+          ready: false,
+          disabledReason: 'Needs a driver',
+        },
       ],
-      note: 'Install a driver for Bare.',
     });
 
     const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
@@ -761,8 +818,13 @@ describe('onboarding step transitions', () => {
     expect(progressDialog).toContain('RadioErrorDetails');
     expect(readStep).toContain('label="Read my radio when I finish"');
     expect(readStep).toContain('description="The read saves a backup before any edits."');
-    expect(readStep).toContain('USelectMenu');
+    expect(readStep).toContain('<USelect');
+    expect(readStep).not.toContain('USelectMenu');
     expect(readStep).toContain('plan.radios.length > 1');
+    expect(readStep).toContain('disabled: !radio.ready');
+    expect(readStep).toContain('description: radio.disabledReason');
+    expect(readStep).toContain(':disabled="!plan.enabled"');
+    expect(stepper).toContain('canRead: false');
     expect(readStep).not.toContain('Read radio');
     expect(readStep).not.toContain('Go to Cable');
     expect(readStep).not.toContain('Go to Drivers');

@@ -10,13 +10,20 @@ const readOnFinish = ref(false);
 const selectedRadioId = ref<string | undefined>();
 const touched = ref(false);
 const radioItems = computed(() =>
-  plan.value.radios.map((radio) => ({ label: `${radio.name} · ${radio.serialPort}`, value: radio.id })),
+  plan.value.radios.map((radio) => ({
+    label: radio.serialPort ? `${radio.name} · ${radio.serialPort}` : radio.name,
+    value: radio.id,
+    disabled: !radio.ready,
+    ...(radio.disabledReason ? { description: radio.disabledReason } : {}),
+  })),
 );
 
 watch(
   plan,
   (next) => {
-    if (!next.enabled) {
+    const ready = next.radios.filter((radio) => radio.ready);
+
+    if (ready.length === 0) {
       readOnFinish.value = false;
       touched.value = false;
       selectedRadioId.value = undefined;
@@ -27,8 +34,8 @@ watch(
       readOnFinish.value = next.defaultOn;
     }
 
-    if (!next.radios.some((radio) => radio.id === selectedRadioId.value)) {
-      selectedRadioId.value = next.radios[0]?.id;
+    if (!ready.some((radio) => radio.id === selectedRadioId.value)) {
+      selectedRadioId.value = next.selectedId ?? ready[0]?.id;
     }
   },
   { immediate: true },
@@ -39,7 +46,10 @@ function finishRead(): string | undefined {
     return undefined;
   }
 
-  return selectedRadioId.value ?? plan.value.radios[0]?.id;
+  const ready = plan.value.radios.filter((radio) => radio.ready);
+  const chosen = ready.find((radio) => radio.id === selectedRadioId.value);
+
+  return chosen?.id ?? ready[0]?.id;
 }
 
 function onSwitch(value: boolean): void {
@@ -60,14 +70,13 @@ defineExpose({ finishRead });
         :disabled="!plan.enabled"
         @update:model-value="onSwitch"
       />
-      <USelectMenu
+      <USelect
         v-if="plan.radios.length > 1"
         v-model="selectedRadioId"
         :items="radioItems"
         value-key="value"
         color="neutral"
-        :search-input="false"
-        class="w-56"
+        class="w-64"
         aria-label="Radio to read"
       />
     </div>
