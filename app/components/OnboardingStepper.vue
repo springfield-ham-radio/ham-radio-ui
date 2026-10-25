@@ -32,7 +32,7 @@ const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } =
 const { directory } = useOperatorLicense();
 const { stations, antennas, saveStation } = useStationAntennas();
 const { radios, addRadio } = useSavedRadios();
-const { configurations, openReadFromRadio, progressOpen } = useRadio();
+const { configurations, openReadFromRadio, progressOpen, readBackupSaved } = useRadio();
 const router = useRouter();
 
 const active = ref<OnboardingStepId>('licenses');
@@ -55,12 +55,22 @@ const readModels = computed(() =>
     hasConfig: configurations.value.some((config) => String(config.id.model) === radio.model),
   })),
 );
+const readBackupNames = computed(() => {
+  const names = [...readFileNames.value];
+  const saved = readBackupSaved.value?.fileName;
+
+  if (saved && !names.includes(saved)) {
+    names.push(saved);
+  }
+
+  return names;
+});
 const readDecision = computed(() =>
   onboardingReadContinue({
     desktop: isTauriRuntime(),
     backupsEnabled: readRadioImageBackupSettings().enabled,
     hasBackup: onboardingReadIsDone({
-      fileNames: readFileNames.value,
+      fileNames: readBackupNames.value,
       models: readModels.value.map((model) => ({ manufacturer: model.manufacturer, model: model.model })),
     }),
     models: readModels.value,
@@ -92,7 +102,7 @@ const completion = computed(() => ({
     selectedPort: cableSelection.value.port,
     livePorts: cableSelection.value.livePorts,
   }),
-  read: readDecision.value.action === 'advance',
+  read: state.value?.steps.read === 'done' || readDecision.value.action === 'advance',
   stations: onboardingStationsAreDone({
     stationIds: stations.value.map((station) => station.id),
     antennaCount: antennas.value.length,
@@ -138,6 +148,15 @@ watch(progressOpen, (open) => {
   if (!open && active.value === 'read') {
     void refreshReadBackups();
   }
+});
+
+watch(readBackupSaved, (saved) => {
+  if (!saved || state.value?.status !== 'active' || state.value.steps.read !== 'pending') {
+    return;
+  }
+
+  applyEdit(completeOnboardingStep(state.value, 'read'));
+  void refreshReadBackups();
 });
 
 function back(): void {
@@ -192,11 +211,19 @@ async function refreshReadBackups(): Promise<void> {
     return;
   }
 
+  const saved = readBackupSaved.value?.fileName;
+
   try {
     const listed = await listRadioImageBackups();
-    readFileNames.value = listed.map((entry) => entry.fileName);
+    const names = listed.map((entry) => entry.fileName);
+
+    if (saved && !names.includes(saved)) {
+      names.push(saved);
+    }
+
+    readFileNames.value = names;
   } catch {
-    readFileNames.value = [];
+    readFileNames.value = saved ? [saved] : [];
   }
 }
 
@@ -261,7 +288,7 @@ function continueStep(): void {
     return;
   }
 
-  if (active.value === 'read') {
+  if (active.value === 'read' && state.value.steps.read !== 'done') {
     const decision = readDecision.value;
 
     if (decision.action === 'read') {

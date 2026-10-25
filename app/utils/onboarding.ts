@@ -441,7 +441,9 @@ export function onboardingReadIsDone(input: {
   models: readonly { manufacturer: string; model: string }[];
 }): boolean {
   const wanted = new Set(
-    input.models.map((model) => `${backupFileSegment(model.manufacturer)}\0${backupFileSegment(model.model)}`),
+    input.models.map(
+      (model) => `${backupFileSegment(model.manufacturer).toLowerCase()}\0${backupFileSegment(model.model).toLowerCase()}`,
+    ),
   );
 
   if (wanted.size === 0) {
@@ -449,13 +451,13 @@ export function onboardingReadIsDone(input: {
   }
 
   return input.fileNames.some((fileName) => {
-    const parsed = parseBackupFileName(fileName);
+    const parsed = parseBackupFileName(fileName.trim().split(/[\\/]/).pop() ?? '');
 
-    if (!parsed) {
+    if (!parsed || (parsed.kind !== 'read' && parsed.kind !== 'prewrite')) {
       return false;
     }
 
-    return wanted.has(`${parsed.manufacturer}\0${parsed.model}`);
+    return wanted.has(`${parsed.manufacturer.toLowerCase()}\0${parsed.model.toLowerCase()}`);
   });
 }
 

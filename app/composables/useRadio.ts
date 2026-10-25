@@ -61,6 +61,7 @@ import {
   parseBackupFileName,
   readRadioImageBackupSettings,
   shouldCaptureRadioImageBackup,
+  type RadioImageBackupCapture,
 } from '~/utils/radio-image-backup';
 import { createTauriRadioImageBackupStore, loadRadioImageBackup } from '~/utils/radio-image-backup-io';
 import { radioCardIdKey } from '~/composables/radio-card-context';
@@ -222,6 +223,8 @@ export function useRadio() {
   const isLoading = useState('radio-loading', () => false);
   const error = useState<string | null>('radio-error', () => null);
   const readOpen = useState('radio-read-open', () => false);
+  /** Set when a read's image backup is on disk. The onboarding read step uses this directly. */
+  const readBackupSaved = useState<{ fileName: string } | undefined>('radio-read-backup-saved', () => undefined);
   const directReadOpen = useState('radio-direct-read-open', () => false);
   const writeOpen = useState('radio-write-open', () => false);
   const progressOpen = useState('radio-progress-open', () => false);
@@ -832,6 +835,10 @@ export function useRadio() {
     }
 
     if (outcome === 'success') {
+      if (importedImage) {
+        await saveRadioImageBackup(radioId, importedImage, 'read');
+      }
+
       progressOpen.value = false;
       toast.add({
         title: 'Read from radio',
@@ -839,10 +846,6 @@ export function useRadio() {
         color: 'success',
         icon: 'i-hambench-radio-read',
       });
-
-      if (importedImage) {
-        await saveRadioImageBackup(radioId, importedImage, 'read');
-      }
 
       return;
     }
@@ -1440,23 +1443,31 @@ export function useRadio() {
     }
   }
 
-  async function saveRadioImageBackup(radioId: RadioId, image: Uint8Array, kind: 'read' | 'prewrite'): Promise<void> {
+  async function saveRadioImageBackup(
+    radioId: RadioId,
+    image: Uint8Array,
+    kind: 'read' | 'prewrite',
+  ): Promise<RadioImageBackupCapture> {
     const settings = readRadioImageBackupSettings();
 
     if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
-      return;
+      return { status: 'skipped' };
     }
 
     const captured = await captureRadioImageBackup({
       settings,
-      identity: { manufacturer: radioId.manufacturer, model: String(radioId.model) },
+      identity: { manufacturer: String(radioId.manufacturer), model: String(radioId.model) },
       kind,
       image,
       store: createTauriRadioImageBackupStore(),
     });
 
+    if (captured.status === 'saved' && kind === 'read') {
+      readBackupSaved.value = { fileName: captured.fileName };
+    }
+
     if (captured.status !== 'failed') {
-      return;
+      return captured;
     }
 
     logger.error(`Failed to back up radio image: ${captured.message}`);
@@ -1466,6 +1477,7 @@ export function useRadio() {
       color: 'warning',
       icon: 'i-lucide-triangle-alert',
     });
+    return captured;
   }
 
   async function updateSettings(nextSettings: RadioSettings): Promise<void> {
@@ -2530,6 +2542,7 @@ export function useRadio() {
     isLoading,
     error,
     readOpen,
+    readBackupSaved,
     directReadOpen,
     writeOpen,
     progressOpen,

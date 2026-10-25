@@ -438,10 +438,22 @@ describe('onboarding step transitions', () => {
 
     expect(
       onboardingReadIsDone({
-        fileNames: ['Baofeng_baofeng-uv5r_20261025-120000_read.img'],
+        fileNames: ['Baofeng_baofeng-uv5r_20261024-215009_read.img'],
         models: [{ manufacturer: 'Baofeng', model: 'baofeng-uv5r' }],
       }),
     ).toBe(true);
+    expect(
+      onboardingReadIsDone({
+        fileNames: ['backups/Baofeng_baofeng-uv5r_20261024-215009_read.img'],
+        models: [{ manufacturer: 'baofeng', model: 'Baofeng-UV5R' }],
+      }),
+    ).toBe(true);
+    expect(
+      onboardingReadIsDone({
+        fileNames: ['Baofeng_baofeng-uv5r_20261024-215009_read.img'],
+        models: [{ manufacturer: 'Baofeng', model: 'UV-5R' }],
+      }),
+    ).toBe(false);
     expect(
       onboardingReadIsDone({
         fileNames: ['Baofeng_baofeng-uv5r_20261025-120000_prewrite.img'],
