@@ -33,7 +33,7 @@ export function writeEmptyCatalogBannerDismissed(dismissed: boolean): void {
 
 /**
  * Empty catalog, not dismissed, guide closed, and setup is not already `active`.
- * An active guide uses the Drivers step instead of this banner.
+ * An active guide installs drivers from the Radios step instead of this banner.
  */
 export function shouldShowEmptyCatalogBanner(input: {
   catalogEmpty: boolean;

@@ -248,6 +248,45 @@ export function groupInstalledRadiosByManufacturer(
  * Official catalog manufacturers that still have at least one radio you do not have.
  * Installed models stay visible as children so you can see what you already own.
  */
+export interface CatalogRadioGroup {
+  manufacturer: string;
+  radios: Array<{ id: string; name: string }>;
+}
+
+/**
+ * Official catalog models grouped by manufacturer, in catalog order.
+ * The Radios step checks these before a saved radio exists.
+ */
+export function groupCatalogRadiosByManufacturer(
+  entries: readonly { id: string; manufacturer: string; name: string }[],
+): CatalogRadioGroup[] {
+  const byManufacturer = new Map<string, Array<{ id: string; name: string }>>();
+  const manufacturers: string[] = [];
+
+  for (const entry of entries) {
+    const id = entry.id.trim();
+
+    if (!id) {
+      continue;
+    }
+
+    let radios = byManufacturer.get(entry.manufacturer);
+
+    if (!radios) {
+      radios = [];
+      byManufacturer.set(entry.manufacturer, radios);
+      manufacturers.push(entry.manufacturer);
+    }
+
+    radios.push({ id, name: radioDisplayName(entry.manufacturer, entry.name) });
+  }
+
+  return manufacturers.map((manufacturer) => ({
+    manufacturer,
+    radios: byManufacturer.get(manufacturer) ?? [],
+  }));
+}
+
 export function buildAvailableManufacturerGroups(
   records: RadioCatalogRecord[],
   catalog: RadioModuleCatalogEntry[],

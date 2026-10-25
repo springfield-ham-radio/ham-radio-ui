@@ -145,6 +145,7 @@ function closeProgress(): void {
     :dismissible="Boolean(progressError)"
     :close="progressError ? { color: 'neutral', variant: 'ghost' } : false"
     class="max-w-md"
+    :ui="{ overlay: 'z-50', content: 'z-50' }"
   >
     <template #body>
       <RadioErrorDetails v-if="progressError" :report="progressError" :alert-title="errorTitle" />

@@ -131,6 +131,13 @@ describe('radio image backup files', () => {
     expect(backup).toBeDefined();
     expect(matchBackupConfiguration(configs, backup!)).toBe(configs[0]);
     expect(parseBackupFileName('notes.txt')).toBeUndefined();
+    expect(parseBackupFileName('Baofeng_baofeng-uv5r_20261024-215009_read.img')).toEqual({
+      fileName: 'Baofeng_baofeng-uv5r_20261024-215009_read.img',
+      manufacturer: 'Baofeng',
+      model: 'baofeng-uv5r',
+      timestamp: '20261024-215009',
+      kind: 'read',
+    });
   });
 
   it('should add a suffix when two backups land in the same second', () => {

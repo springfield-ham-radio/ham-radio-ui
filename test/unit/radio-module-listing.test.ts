@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import type { LoadedRadioConfig, RadioCatalogRecord } from '../../app/utils/radio-catalog-db.ts';
 import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
 import {
   buildAvailableManufacturerGroups,
+  groupCatalogRadiosByManufacturer,
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
   formatCatalogRadioName,
@@ -454,5 +456,54 @@ describe('radio module listing', () => {
     expect(items[0]?.updateAvailable).toBe(true);
     expect(items[0]?.canUpdate).toBe(false);
     expect(items[0]?.updateBlockedReason).toContain('newer version of HamBench');
+  });
+
+  it('should group catalog radios by manufacturer for the onboarding picker', () => {
+    expect(
+      groupCatalogRadiosByManufacturer([
+        baofengEntry,
+        kenwoodThD74,
+        { ...baofengEntry, id: '  ', name: 'Blank' },
+      ]),
+    ).toEqual([
+      { manufacturer: 'Baofeng', radios: [{ id: 'baofeng-uv5r', name: 'UV-5R' }] },
+      { manufacturer: 'Kenwood', radios: [{ id: 'kenwood-th-d74', name: 'TH-D74' }] },
+    ]);
+  });
+
+  it('should drop a manufacturer from Available only when every model is installed', () => {
+    const installed = [
+      record({
+        modelId: 'baofeng-uv5r',
+        name: 'UV-5R',
+        manufacturer: 'Baofeng',
+        version: '3.7.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
+      }),
+      record({
+        modelId: 'kenwood-tm-d710a',
+        name: 'TM-D710A',
+        manufacturer: 'Kenwood',
+        version: '1.13.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/kenwood-tm-d710a/1.13.0',
+      }),
+    ];
+    const groups = buildAvailableManufacturerGroups(installed, catalog);
+    const picked = ['baofeng-uv5r', 'kenwood-tm-d710a'];
+
+    expect(groups.find((group) => group.manufacturer === 'Baofeng')).toBeUndefined();
+    expect(groups.find((group) => group.manufacturer === 'Kenwood')?.radios.map((radio) => radio.modelId)).toEqual([
+      'kenwood-th-d74',
+      'kenwood-th-f6',
+      'kenwood-tm-d710a',
+    ]);
+    expect(picked).toEqual(['baofeng-uv5r', 'kenwood-tm-d710a']);
+
+    const preference = readFileSync('app/components/RadioModulesPreference.vue', 'utf8');
+    expect(preference).toContain('buildAvailableManufacturerGroups');
+    expect(preference).toContain('Install from file…');
+    expect(preference).not.toContain('entryIds');
   });
 });

@@ -5,6 +5,8 @@ const props = defineProps<{
   axis: CoordinateAxis;
   modelValue: DmsInput;
   label: string;
+  /** Form field name so UForm can show this coordinate's error after blur or submit. */
+  name: string;
   error?: string;
 }>();
 
@@ -51,7 +53,7 @@ function onHemisphere(value: string | number): void {
 </script>
 
 <template>
-  <UFormField :label="label" hint="Optional" :error="error">
+  <UFormField :name="name" :label="label" hint="Optional" :error="error">
     <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_4.5rem] gap-1.5">
       <div>
         <p class="mb-1 text-[11px] leading-none text-muted">Degrees</p>

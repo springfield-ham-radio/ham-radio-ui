@@ -816,6 +816,22 @@ export function stationDraftErrors(draft: StationDraft): Partial<Record<keyof St
 }
 
 /**
+ * The Home onboarding step can save when the nickname is present and the grid and coordinates are valid.
+ * An empty location is allowed. A half-entered or out-of-range coordinate is not.
+ */
+export function stationEditorCanSave(input: {
+  draft: StationDraft;
+  latitudeError?: string;
+  longitudeError?: string;
+}): boolean {
+  if (input.latitudeError || input.longitudeError) {
+    return false;
+  }
+
+  return stationDraftErrors(input.draft) === undefined;
+}
+
+/**
  * Builds a persisted station from a draft.
  */
 export function createRadioStation(draft: StationDraft, options: { id?: string; now?: number } = {}): RadioStation {

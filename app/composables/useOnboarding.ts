@@ -105,6 +105,7 @@ export function useOnboarding() {
           ...persisted.value,
           steps: { ...persisted.value.steps },
           ownedModuleIds: [...persisted.value.ownedModuleIds],
+          pendingRadios: persisted.value.pendingRadios.map((radio) => ({ ...radio })),
         }
       : createOnboardingState('active');
     shellOpen.value = true;

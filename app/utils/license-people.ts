@@ -2,6 +2,7 @@ import { operatorClassToLicenseClassId } from '@springfield/ham-radio-utils';
 import licenseClasses from '../../node_modules/@springfield/ham-radio-utils/dist/db/license-classes.json' with { type: 'json' };
 import type { CallookResponse } from '~/utils/callook';
 import type { GmrsLookupResponse, GmrsLookupStatusEvent } from '~/utils/gmrs-lookup';
+import { mixedCaseLookupName } from '~/utils/person-name';
 
 export const LICENSE_DIRECTORY_STORAGE_KEY = 'ham-radio-license-directory';
 export const LEGACY_AMATEUR_LICENSE_STORAGE_KEY = 'ham-radio-operator-license';
@@ -106,6 +107,96 @@ export const amateurLicenseClassOptions = LICENSE_CLASSES.filter((licenseClass) 
   }),
 );
 
+/** Amateur classes plus GMRS, for the one-license onboarding form. */
+export const onboardingLicenseClassOptions = [
+  ...amateurLicenseClassOptions,
+  ...(GMRS_LICENSE_CLASS_ID ? [{ label: 'GMRS', value: GMRS_LICENSE_CLASS_ID }] : []),
+];
+
+export function onboardingLicenseClassIsGmrs(licenseClassId: string): boolean {
+  return Boolean(GMRS_LICENSE_CLASS_ID) && licenseClassId === GMRS_LICENSE_CLASS_ID;
+}
+
+export interface OnboardingLicenseForm {
+  name: string;
+  callSign: string;
+  licenseClassId: string;
+}
+
+export interface OnboardingLicenseFieldErrors {
+  name?: string;
+  callSign?: string;
+  licenseClassId?: string;
+}
+
+export interface OnboardingLicensePrefill {
+  personId?: string;
+  licenseId?: string;
+  name: string;
+  callSign: string;
+  licenseClassId: string;
+  /** True when the directory already holds a license, so the form edits that grant. */
+  editingExisting: boolean;
+}
+
+/** Session copy of the onboarding license form, including a lookup that has not been saved. */
+export interface OnboardingLicenseSessionDraft extends OnboardingLicenseForm {
+  lookedUp?: HeldLicense;
+}
+
+const ONBOARDING_LICENSE_CLASS_IDS = new Set(onboardingLicenseClassOptions.map((option) => option.value));
+
+export function onboardingLicenseFieldErrors(form: OnboardingLicenseForm): OnboardingLicenseFieldErrors | undefined {
+  const errors: OnboardingLicenseFieldErrors = {};
+
+  if (!form.name.trim()) {
+    errors.name = 'Enter a name';
+  }
+
+  if (!form.callSign.trim()) {
+    errors.callSign = 'Enter a call sign';
+  }
+
+  if (!form.licenseClassId || !ONBOARDING_LICENSE_CLASS_IDS.has(form.licenseClassId)) {
+    errors.licenseClassId = 'Select a license class';
+  }
+
+  if (errors.name || errors.callSign || errors.licenseClassId) {
+    return errors;
+  }
+
+  return undefined;
+}
+
+export function onboardingLicenseFormCanSave(form: OnboardingLicenseForm): boolean {
+  return onboardingLicenseFieldErrors(form) === undefined;
+}
+
+/**
+ * The guide edits one person and one license: the first person, and that person's first license.
+ * Other people and licenses stay in the directory for Preferences.
+ */
+export function onboardingLicensePrefill(directory: LicenseDirectory): OnboardingLicensePrefill {
+  const person = directory.people[0];
+  const license = person ? licensesForPerson(directory, person.id)[0] : undefined;
+  let licenseClassId = '';
+
+  if (license?.kind === 'gmrs' && GMRS_LICENSE_CLASS_ID) {
+    licenseClassId = GMRS_LICENSE_CLASS_ID;
+  } else if (license?.kind === 'amateur' && license.licenseClassId) {
+    licenseClassId = license.licenseClassId;
+  }
+
+  return {
+    personId: person?.id,
+    licenseId: license?.id,
+    name: person?.name ?? '',
+    callSign: license?.callSign ?? '',
+    licenseClassId,
+    editingExisting: directory.licenses.length > 0,
+  };
+}
+
 export function emptyLicenseDirectory(): LicenseDirectory {
   return { people: [], licenses: [] };
 }
@@ -130,6 +221,12 @@ function optionalText(value: unknown): string | undefined {
   }
 
   return trimmed;
+}
+
+function lookupPersonName(value: unknown): string | undefined {
+  const text = optionalText(value);
+
+  return text ? mixedCaseLookupName(text) : undefined;
 }
 
 function licenseClassNameForId(id: string | undefined): string | undefined {
@@ -452,6 +549,164 @@ export function setAmateurClass(
   return upsertLicense(directory, next);
 }
 
+export interface ApplyOnboardingLicenseInput {
+  directory: LicenseDirectory;
+  form: OnboardingLicenseForm;
+  personId?: string;
+  licenseId?: string;
+  lookedUp?: HeldLicense;
+  now: string;
+  newPersonId: string;
+  newLicenseId: string;
+}
+
+function manualAmateurLicense(
+  id: string,
+  personId: string,
+  callSign: string,
+  licenseClassId: string,
+  now: string,
+): AmateurLicense {
+  const licenseClassName = licenseClassNameForId(licenseClassId);
+
+  return {
+    id,
+    personId,
+    kind: 'amateur',
+    callSign,
+    name: undefined,
+    operatorClass: licenseClassName ?? '',
+    licenseClassId,
+    licenseClassName,
+    status: 'manual',
+    lookupType: undefined,
+    grantDate: undefined,
+    expiryDate: undefined,
+    lastActionDate: undefined,
+    previousCallSign: undefined,
+    previousOperatorClass: undefined,
+    trusteeCallSign: undefined,
+    trusteeName: undefined,
+    gridsquare: undefined,
+    ulsUrl: undefined,
+    updatedAt: now,
+  };
+}
+
+function manualGmrsLicense(id: string, personId: string, callSign: string, now: string): GmrsLicenseRecord {
+  return {
+    id,
+    personId,
+    kind: 'gmrs',
+    callSign,
+    name: undefined,
+    status: 'VALID',
+    city: undefined,
+    state: undefined,
+    frn: undefined,
+    grantDate: undefined,
+    expiryDate: undefined,
+    lastActionDate: undefined,
+    ulsUrl: undefined,
+    updatedAt: now,
+  };
+}
+
+function sameCallSign(left: string, right: string): boolean {
+  return left.trim().toUpperCase() === right.trim().toUpperCase();
+}
+
+/**
+ * Create or update the onboarding person and their one license.
+ * An invalid form leaves the directory unchanged. Other people and licenses are kept.
+ */
+export function applyOnboardingLicense(input: ApplyOnboardingLicenseInput): LicenseDirectory {
+  if (!onboardingLicenseFormCanSave(input.form)) {
+    return input.directory;
+  }
+
+  const name = input.form.name.trim();
+  const callSign = input.form.callSign.trim().toUpperCase();
+  const licenseClassId = input.form.licenseClassId;
+  const gmrs = onboardingLicenseClassIsGmrs(licenseClassId);
+  const existingPerson = input.personId
+    ? input.directory.people.find((person) => person.id === input.personId)
+    : undefined;
+  let next = input.directory;
+  let personId: string;
+
+  if (existingPerson && input.personId) {
+    personId = input.personId;
+    next = renamePerson(next, personId, name, input.now);
+  } else {
+    const created = createLicensePerson(name, input.now, input.newPersonId);
+
+    if (!created) {
+      return input.directory;
+    }
+
+    personId = created.id;
+    next = addPerson(next, created);
+  }
+
+  const existingLicense = input.licenseId
+    ? input.directory.licenses.find((license) => license.id === input.licenseId && license.personId === personId)
+    : undefined;
+  const licenseId = existingLicense ? existingLicense.id : input.newLicenseId;
+  const lookedUp = input.lookedUp;
+  const lookupMatches =
+    lookedUp !== undefined &&
+    sameCallSign(lookedUp.callSign, callSign) &&
+    (gmrs ? lookedUp.kind === 'gmrs' : lookedUp.kind === 'amateur');
+
+  let license: HeldLicense;
+
+  if (lookupMatches && lookedUp?.kind === 'amateur') {
+    license = {
+      ...lookedUp,
+      id: licenseId,
+      personId,
+      callSign,
+      licenseClassId,
+      licenseClassName: licenseClassNameForId(licenseClassId),
+      operatorClass: lookedUp.operatorClass || licenseClassNameForId(licenseClassId) || '',
+      updatedAt: input.now,
+    };
+  } else if (lookupMatches && lookedUp?.kind === 'gmrs') {
+    license = {
+      ...lookedUp,
+      id: licenseId,
+      personId,
+      callSign,
+      updatedAt: input.now,
+    };
+  } else if (existingLicense?.kind === 'amateur' && !gmrs && sameCallSign(existingLicense.callSign, callSign)) {
+    license = {
+      ...existingLicense,
+      personId,
+      callSign,
+      licenseClassId,
+      licenseClassName: licenseClassNameForId(licenseClassId),
+      operatorClass: existingLicense.operatorClass || licenseClassNameForId(licenseClassId) || '',
+      status: existingLicense.status === 'VALID' ? 'VALID' : 'manual',
+      updatedAt: input.now,
+    };
+  } else if (existingLicense?.kind === 'gmrs' && gmrs && sameCallSign(existingLicense.callSign, callSign)) {
+    license = {
+      ...existingLicense,
+      personId,
+      callSign,
+      updatedAt: input.now,
+    };
+  } else if (gmrs) {
+    license = manualGmrsLicense(licenseId, personId, callSign, input.now);
+  } else {
+    license = manualAmateurLicense(licenseId, personId, callSign, licenseClassId, input.now);
+  }
+
+  return upsertLicense(next, license);
+}
+
 function normalizeUlsUrl(url: string | undefined): string | undefined {
   if (!url) {
     return undefined;
@@ -492,7 +747,7 @@ export function amateurLicenseFromCallook(
     personId,
     kind: 'amateur',
     callSign: resolvedCallSign,
-    name: optionalText(response.name),
+    name: lookupPersonName(response.name),
     operatorClass,
     licenseClassId,
     licenseClassName: licenseClassNameForId(licenseClassId),
@@ -539,7 +794,7 @@ export function gmrsLicenseFromLookup(
     personId,
     kind: 'gmrs',
     callSign: payload.callsign.trim().toUpperCase() || callSign,
-    name: optionalText(payload.full_name) ?? optionalText(payload.name),
+    name: lookupPersonName(payload.full_name) ?? lookupPersonName(payload.name),
     status: payload.is_active ? 'VALID' : 'INACTIVE',
     city: optionalText(payload.city ?? undefined),
     state: optionalText(payload.state ?? undefined),

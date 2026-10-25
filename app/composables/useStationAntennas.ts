@@ -157,6 +157,18 @@ export function useStationAntennas() {
     return updated;
   }
 
+  function saveHomeStation(draft: StationDraft): RadioStation {
+    const updated = saveStation(HOME_STATION_ID, draft);
+
+    if (updated) {
+      return updated;
+    }
+
+    const created = createRadioStation(draft, { id: HOME_STATION_ID });
+    persist(addStationToStore(store.value, created));
+    return created;
+  }
+
   function removeStation(id: string): void {
     persist(removeStationFromStore(store.value, id));
   }
@@ -274,6 +286,7 @@ export function useStationAntennas() {
     selectAntenna,
     addStation,
     saveStation,
+    saveHomeStation,
     removeStation,
     selectStation,
     setSource,

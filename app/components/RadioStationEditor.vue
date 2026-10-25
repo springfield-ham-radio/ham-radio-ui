@@ -3,6 +3,7 @@ import {
   defaultStationDraft,
   draftFromRadioStation,
   stationDraftErrors,
+  stationEditorCanSave,
   type RadioStation,
   type StationDraft,
   type StationLocationSource,
@@ -15,17 +16,23 @@ import {
   type DmsParseResult,
 } from '~/utils/location-format';
 import { latLonToMaidenhead, maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
+import { revalidateShownFields, type ShownFormApi } from '~/utils/shown-form-errors';
 
 const props = defineProps<{
   open: boolean;
   station?: RadioStation;
   /** Render the form in place. Preferences keeps the slideover. */
   embedded?: boolean;
+  /** Onboarding hides this form's Save button and uses the guide's Continue button. */
+  hideSave?: boolean;
+  /** Unsaved Home edits kept by the guide while the step is not on screen. */
+  sessionDraft?: StationDraft;
 }>();
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
   save: [draft: StationDraft];
+  draft: [draft: StationDraft];
 }>();
 
 const nickname = ref('');
@@ -33,10 +40,15 @@ const gridText = ref('');
 const latitudeDms = ref<DmsInput>(emptyDmsInput('latitude'));
 const longitudeDms = ref<DmsInput>(emptyDmsInput('longitude'));
 const locationSource = ref<StationLocationSource | undefined>();
-const nicknameError = ref<string | undefined>();
-const gridError = ref<string | undefined>();
-const latitudeError = ref<string | undefined>();
-const longitudeError = ref<string | undefined>();
+const form = ref<ShownFormApi | null>(null);
+const locationFields = ['gridsquare', 'latitude', 'longitude'] as const;
+
+const formState = computed(() => ({
+  nickname: nickname.value,
+  gridsquare: gridText.value,
+  latitude: latitudeDms.value,
+  longitude: longitudeDms.value,
+}));
 
 const isCreate = computed(() => props.station === undefined);
 const title = computed(() => (isCreate.value ? 'Add station' : 'Edit station'));
@@ -54,17 +66,7 @@ watch(
   },
 );
 
-watch(
-  () => props.station,
-  () => {
-    if (!props.embedded) {
-      return;
-    }
-
-    applyDraft(props.station ? draftFromRadioStation(props.station) : defaultStationDraft());
-  },
-  { immediate: true },
-);
+const restoredSession = ref(false);
 
 function applyDraft(draft: StationDraft): void {
   nickname.value = draft.nickname;
@@ -72,11 +74,22 @@ function applyDraft(draft: StationDraft): void {
   latitudeDms.value = dmsInputFromDecimal(draft.latitude, 'latitude');
   longitudeDms.value = dmsInputFromDecimal(draft.longitude, 'longitude');
   locationSource.value = draft.locationSource;
-  nicknameError.value = undefined;
-  gridError.value = undefined;
-  latitudeError.value = undefined;
-  longitudeError.value = undefined;
 }
+
+watch(
+  () => props.station,
+  () => {
+    if (!props.embedded || restoredSession.value) {
+      return;
+    }
+
+    restoredSession.value = true;
+    applyDraft(
+      props.sessionDraft ?? (props.station ? draftFromRadioStation(props.station) : defaultStationDraft()),
+    );
+  },
+  { immediate: true },
+);
 
 function parsedDecimal(result: DmsParseResult): number | undefined {
   return 'value' in result ? result.value : undefined;
@@ -103,6 +116,7 @@ function onGridInput(value: string | number): void {
       locationSource.value = undefined;
     }
 
+    void revalidateShownFields(form.value, locationFields);
     return;
   }
 
@@ -114,6 +128,8 @@ function onGridInput(value: string | number): void {
     latitudeDms.value = dmsInputFromDecimal(point.latitude, 'latitude');
     longitudeDms.value = dmsInputFromDecimal(point.longitude, 'longitude');
   }
+
+  void revalidateShownFields(form.value, locationFields);
 }
 
 function onCoordinateInput(): void {
@@ -136,28 +152,88 @@ function onCoordinateInput(): void {
   if (grid) {
     gridText.value = grid;
   }
+
+  void revalidateShownFields(form.value, locationFields);
 }
 
 function close(): void {
   emit('update:open', false);
 }
 
-function save(): boolean {
+function coordinateErrors(): { latitude?: string; longitude?: string } {
   const latitude = parseDmsInput(latitudeDms.value, 'latitude');
   const longitude = parseDmsInput(longitudeDms.value, 'longitude');
+  const errors = stationDraftErrors(currentDraft());
+
+  return {
+    latitude: 'error' in latitude ? latitude.error : errors?.latitude,
+    longitude: 'error' in longitude ? longitude.error : errors?.longitude,
+  };
+}
+
+function canSaveDraft(): boolean {
+  const coordinates = coordinateErrors();
+
+  return stationEditorCanSave({
+    draft: currentDraft(),
+    latitudeError: coordinates.latitude,
+    longitudeError: coordinates.longitude,
+  });
+}
+
+function validateStation(): { name: string; message: string }[] {
   const draft = currentDraft();
   const errors = stationDraftErrors(draft);
+  const coordinates = coordinateErrors();
+  const messages: { name: string; message: string }[] = [];
 
-  nicknameError.value = errors?.nickname;
-  gridError.value = errors?.gridsquare;
-  latitudeError.value = 'error' in latitude ? latitude.error : errors?.latitude;
-  longitudeError.value = 'error' in longitude ? longitude.error : errors?.longitude;
+  if (errors?.nickname) {
+    messages.push({ name: 'nickname', message: errors.nickname });
+  }
 
-  if (nicknameError.value || gridError.value || latitudeError.value || longitudeError.value) {
+  if (errors?.gridsquare) {
+    messages.push({ name: 'gridsquare', message: errors.gridsquare });
+  }
+
+  if (coordinates.latitude) {
+    messages.push({ name: 'latitude', message: coordinates.latitude });
+  }
+
+  if (coordinates.longitude) {
+    messages.push({ name: 'longitude', message: coordinates.longitude });
+  }
+
+  return messages;
+}
+
+watch(
+  [nickname, gridText, latitudeDms, longitudeDms, locationSource],
+  () => {
+    if (!props.embedded || !props.hideSave) {
+      return;
+    }
+
+    emit('draft', currentDraft());
+  },
+  { deep: true },
+);
+
+async function save(): Promise<boolean> {
+  if (!form.value) {
     return false;
   }
 
-  emit('save', draft);
+  try {
+    await form.value.validate();
+  } catch {
+    return false;
+  }
+
+  if (!canSaveDraft()) {
+    return false;
+  }
+
+  emit('save', currentDraft());
   return true;
 }
 
@@ -170,19 +246,26 @@ defineExpose({ save });
     :open="open"
     :title="title"
     :description="description"
-    :ui="{ content: 'max-w-lg' }"
+    :ui="{ overlay: 'z-50', content: 'z-50 max-w-lg' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>
-      <div class="space-y-4">
-        <UFormField label="Nickname" :error="nicknameError" required>
+      <UForm
+        ref="form"
+        :state="formState"
+        :validate="validateStation"
+        :loading-auto="false"
+        class="space-y-4"
+        @submit.prevent
+      >
+        <UFormField name="nickname" label="Nickname" required>
           <UInput v-model="nickname" class="w-full" placeholder="Home" />
         </UFormField>
 
         <UFormField
+          name="gridsquare"
           label="Maidenhead grid"
           hint="Optional"
-          :error="gridError"
           description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
         >
           <UInput
@@ -195,23 +278,23 @@ defineExpose({ save });
 
         <DmsCoordinateInput
           v-model="latitudeDms"
+          name="latitude"
           axis="latitude"
           label="Latitude"
-          :error="latitudeError"
           @change="onCoordinateInput"
         />
 
         <DmsCoordinateInput
           v-model="longitudeDms"
+          name="longitude"
           axis="longitude"
           label="Longitude"
-          :error="longitudeError"
           @change="onCoordinateInput"
         />
         <p class="text-xs text-muted">
           Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
         </p>
-      </div>
+      </UForm>
     </template>
 
     <template #footer>
@@ -224,15 +307,22 @@ defineExpose({ save });
 
   <div v-else class="flex flex-col gap-4 rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
     <p class="text-xs text-muted">{{ locationHint }}</p>
-    <div class="space-y-4">
-      <UFormField label="Nickname" :error="nicknameError" required>
+    <UForm
+      ref="form"
+      :state="formState"
+      :validate="validateStation"
+      :loading-auto="false"
+      class="space-y-4"
+      @submit.prevent
+    >
+      <UFormField name="nickname" label="Nickname" required>
         <UInput v-model="nickname" class="w-full" placeholder="Home" />
       </UFormField>
 
       <UFormField
+        name="gridsquare"
         label="Maidenhead grid"
         hint="Optional"
-        :error="gridError"
         description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
       >
         <UInput
@@ -245,24 +335,24 @@ defineExpose({ save });
 
       <DmsCoordinateInput
         v-model="latitudeDms"
+        name="latitude"
         axis="latitude"
         label="Latitude"
-        :error="latitudeError"
         @change="onCoordinateInput"
       />
 
       <DmsCoordinateInput
         v-model="longitudeDms"
+        name="longitude"
         axis="longitude"
         label="Longitude"
-        :error="longitudeError"
         @change="onCoordinateInput"
       />
       <p class="text-xs text-muted">
         Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
       </p>
-    </div>
-    <div class="flex justify-end">
+    </UForm>
+    <div v-if="!hideSave" class="flex justify-end">
       <UButton color="primary" label="Save" @click="save" />
     </div>
   </div>
