@@ -20,8 +20,9 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0010](./0010-channel-pack.md) | accepted | Channel pack (.hpack) format |
 | [0011](./0011-channel-pack-url.md) | accepted | Channel pack URL import and manual updates |
 | [0012](./0012-installed-module-version.md) | accepted | Installed module version is the directory version |
+| [0013](./0013-first-run-onboarding-stepper.md) | accepted | First-run onboarding stepper |
 
-Numbers 0006–0008 are unused in this repository. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
+Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
 ## Status
 
