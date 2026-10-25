@@ -36,11 +36,9 @@ const { configurations, openReadFromRadio, progressOpen, readBackupSaved } = use
 const router = useRouter();
 
 const active = ref<OnboardingStepId>('licenses');
-const homeEditor = ref<{ save: () => boolean } | null>(null);
-const homeCanSave = ref(false);
+const homeEditor = ref<{ save: () => Promise<boolean> } | null>(null);
 const homeSessionDraft = ref<StationDraft | undefined>();
-const licenseEditor = ref<{ save: () => boolean } | null>(null);
-const licenseCanSave = ref(false);
+const licenseEditor = ref<{ save: () => Promise<boolean> } | null>(null);
 const licenseSessionDraft = ref<OnboardingLicenseSessionDraft | undefined>();
 
 const state = computed(() => session.value ?? view.value);
@@ -112,15 +110,7 @@ const completion = computed(() => ({
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
 const canContinue = computed(() => {
-  if (active.value === 'licenses') {
-    return licenseCanSave.value;
-  }
-
-  if (active.value === 'home') {
-    return homeCanSave.value;
-  }
-
-  if (active.value === 'read') {
+  if (active.value === 'licenses' || active.value === 'home' || active.value === 'read') {
     return true;
   }
 
@@ -303,16 +293,16 @@ function saveCableRadios(): boolean {
   return true;
 }
 
-function continueStep(): void {
+async function continueStep(): Promise<void> {
   if (!state.value) {
     return;
   }
 
-  if (active.value === 'licenses' && !licenseEditor.value?.save()) {
+  if (active.value === 'licenses' && !(await licenseEditor.value?.save())) {
     return;
   }
 
-  if (active.value === 'home' && !homeEditor.value?.save()) {
+  if (active.value === 'home' && !(await homeEditor.value?.save())) {
     return;
   }
 
@@ -373,7 +363,6 @@ function finishLater(): void {
             ref="licenseEditor"
             :session-draft="licenseSessionDraft"
             @draft="licenseSessionDraft = $event"
-            @can-save="licenseCanSave = $event"
           />
         </template>
         <template #home>
@@ -387,7 +376,6 @@ function finishLater(): void {
               :session-draft="homeSessionDraft"
               @save="onHomeSave"
               @draft="onHomeDraft"
-              @can-save="homeCanSave = $event"
             />
           </div>
         </template>

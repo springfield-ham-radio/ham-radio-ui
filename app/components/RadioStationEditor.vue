@@ -32,7 +32,6 @@ const emit = defineEmits<{
   'update:open': [open: boolean];
   save: [draft: StationDraft];
   draft: [draft: StationDraft];
-  'can-save': [canSave: boolean];
 }>();
 
 const nickname = ref('');
@@ -40,10 +39,14 @@ const gridText = ref('');
 const latitudeDms = ref<DmsInput>(emptyDmsInput('latitude'));
 const longitudeDms = ref<DmsInput>(emptyDmsInput('longitude'));
 const locationSource = ref<StationLocationSource | undefined>();
-const nicknameError = ref<string | undefined>();
-const gridError = ref<string | undefined>();
-const latitudeError = ref<string | undefined>();
-const longitudeError = ref<string | undefined>();
+const form = ref<{ validate: () => Promise<unknown> } | null>(null);
+
+const formState = computed(() => ({
+  nickname: nickname.value,
+  gridsquare: gridText.value,
+  latitude: latitudeDms.value,
+  longitude: longitudeDms.value,
+}));
 
 const isCreate = computed(() => props.station === undefined);
 const title = computed(() => (isCreate.value ? 'Add station' : 'Edit station'));
@@ -69,10 +72,6 @@ function applyDraft(draft: StationDraft): void {
   latitudeDms.value = dmsInputFromDecimal(draft.latitude, 'latitude');
   longitudeDms.value = dmsInputFromDecimal(draft.longitude, 'longitude');
   locationSource.value = draft.locationSource;
-  nicknameError.value = undefined;
-  gridError.value = undefined;
-  latitudeError.value = undefined;
-  longitudeError.value = undefined;
 }
 
 watch(
@@ -175,15 +174,29 @@ function canSaveDraft(): boolean {
   });
 }
 
-function showFieldErrors(): void {
+function validateStation(): { name: string; message: string }[] {
   const draft = currentDraft();
   const errors = stationDraftErrors(draft);
   const coordinates = coordinateErrors();
+  const messages: { name: string; message: string }[] = [];
 
-  nicknameError.value = errors?.nickname;
-  gridError.value = errors?.gridsquare;
-  latitudeError.value = coordinates.latitude;
-  longitudeError.value = coordinates.longitude;
+  if (errors?.nickname) {
+    messages.push({ name: 'nickname', message: errors.nickname });
+  }
+
+  if (errors?.gridsquare) {
+    messages.push({ name: 'gridsquare', message: errors.gridsquare });
+  }
+
+  if (coordinates.latitude) {
+    messages.push({ name: 'latitude', message: coordinates.latitude });
+  }
+
+  if (coordinates.longitude) {
+    messages.push({ name: 'longitude', message: coordinates.longitude });
+  }
+
+  return messages;
 }
 
 watch(
@@ -193,15 +206,21 @@ watch(
       return;
     }
 
-    showFieldErrors();
     emit('draft', currentDraft());
-    emit('can-save', canSaveDraft());
   },
-  { deep: true, immediate: true },
+  { deep: true },
 );
 
-function save(): boolean {
-  showFieldErrors();
+async function save(): Promise<boolean> {
+  if (!form.value) {
+    return false;
+  }
+
+  try {
+    await form.value.validate();
+  } catch {
+    return false;
+  }
 
   if (!canSaveDraft()) {
     return false;
@@ -224,15 +243,22 @@ defineExpose({ save });
     @update:open="emit('update:open', $event)"
   >
     <template #body>
-      <div class="space-y-4">
-        <UFormField label="Nickname" :error="nicknameError" required>
+      <UForm
+        ref="form"
+        :state="formState"
+        :validate="validateStation"
+        :loading-auto="false"
+        class="space-y-4"
+        @submit.prevent
+      >
+        <UFormField name="nickname" label="Nickname" required>
           <UInput v-model="nickname" class="w-full" placeholder="Home" />
         </UFormField>
 
         <UFormField
+          name="gridsquare"
           label="Maidenhead grid"
           hint="Optional"
-          :error="gridError"
           description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
         >
           <UInput
@@ -245,23 +271,23 @@ defineExpose({ save });
 
         <DmsCoordinateInput
           v-model="latitudeDms"
+          name="latitude"
           axis="latitude"
           label="Latitude"
-          :error="latitudeError"
           @change="onCoordinateInput"
         />
 
         <DmsCoordinateInput
           v-model="longitudeDms"
+          name="longitude"
           axis="longitude"
           label="Longitude"
-          :error="longitudeError"
           @change="onCoordinateInput"
         />
         <p class="text-xs text-muted">
           Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
         </p>
-      </div>
+      </UForm>
     </template>
 
     <template #footer>
@@ -274,15 +300,22 @@ defineExpose({ save });
 
   <div v-else class="flex flex-col gap-4 rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
     <p class="text-xs text-muted">{{ locationHint }}</p>
-    <div class="space-y-4">
-      <UFormField label="Nickname" :error="nicknameError" required>
+    <UForm
+      ref="form"
+      :state="formState"
+      :validate="validateStation"
+      :loading-auto="false"
+      class="space-y-4"
+      @submit.prevent
+    >
+      <UFormField name="nickname" label="Nickname" required>
         <UInput v-model="nickname" class="w-full" placeholder="Home" />
       </UFormField>
 
       <UFormField
+        name="gridsquare"
         label="Maidenhead grid"
         hint="Optional"
-        :error="gridError"
         description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
       >
         <UInput
@@ -295,23 +328,23 @@ defineExpose({ save });
 
       <DmsCoordinateInput
         v-model="latitudeDms"
+        name="latitude"
         axis="latitude"
         label="Latitude"
-        :error="latitudeError"
         @change="onCoordinateInput"
       />
 
       <DmsCoordinateInput
         v-model="longitudeDms"
+        name="longitude"
         axis="longitude"
         label="Longitude"
-        :error="longitudeError"
         @change="onCoordinateInput"
       />
       <p class="text-xs text-muted">
         Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
       </p>
-    </div>
+    </UForm>
     <div v-if="!hideSave" class="flex justify-end">
       <UButton color="primary" label="Save" @click="save" />
     </div>

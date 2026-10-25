@@ -813,6 +813,57 @@ describe('onboarding step transitions', () => {
     expect(stationEditor).toContain(":label=\"isCreate ? 'Add' : 'Save'\"");
   });
 
+  it('should hide onboarding license and Home errors until blur or Continue', () => {
+    function templateOf(source: string): string {
+      return source.slice(source.indexOf('<template>'), source.lastIndexOf('</template>'));
+    }
+
+    const licenses = readFileSync('app/components/OnboardingLicensesStep.vue', 'utf8');
+    const home = readFileSync('app/components/RadioStationEditor.vue', 'utf8');
+    const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
+    const licenseTemplate = templateOf(licenses);
+    const homeTemplate = templateOf(home);
+
+    expect(licenseTemplate).toContain('<UForm');
+    expect(licenseTemplate).toContain(':validate="validateLicense"');
+    expect(licenseTemplate).toContain('name="name"');
+    expect(licenseTemplate).toContain('name="callSign"');
+    expect(licenseTemplate).toContain('name="licenseClassId"');
+    expect(licenseTemplate).not.toContain(':error=');
+    expect(licenseTemplate).not.toContain('Enter a name');
+    expect(licenseTemplate).not.toContain('Enter a call sign');
+    expect(licenseTemplate).not.toContain('Select a license class');
+    expect(licenses).toContain('await form.value.validate()');
+    expect(licenses).not.toContain('showFieldErrors');
+
+    expect(homeTemplate).toContain('<UForm');
+    expect(homeTemplate).toContain(':validate="validateStation"');
+    expect(homeTemplate).toContain('name="nickname"');
+    expect(homeTemplate).toContain('name="gridsquare"');
+    expect(homeTemplate).toContain('name="latitude"');
+    expect(homeTemplate).toContain('name="longitude"');
+    expect(homeTemplate).not.toContain(':error=');
+    expect(homeTemplate).not.toContain('Enter a station name');
+    expect(home).toContain('await form.value.validate()');
+    expect(home).not.toContain('showFieldErrors');
+    expect(home).not.toContain('nicknameError');
+
+    expect(stepper).toContain('await licenseEditor.value?.save()');
+    expect(stepper).toContain('await homeEditor.value?.save()');
+    expect(stepper).not.toContain('licenseCanSave');
+    expect(stepper).not.toContain('homeCanSave');
+
+    const form = readFileSync('node_modules/@nuxt/ui/dist/runtime/components/Form.vue', 'utf8');
+    expect(form).toContain('const errors = ref([])');
+    expect(form).toContain('!(event.eager || blurredFields.has(event.name))');
+
+    expect(onboardingLicenseFieldErrors({ name: '', callSign: '', licenseClassId: '' })).toEqual({
+      name: 'Enter a name',
+      callSign: 'Enter a call sign',
+      licenseClassId: 'Select a license class',
+    });
+  });
+
   it('should finish every step when its check passes', () => {
     const completion = {
       licenses: true,
