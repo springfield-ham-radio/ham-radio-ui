@@ -1,3 +1,14 @@
+## [1.30.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.29.2...v1.30.0) (2026-10-25)
+
+### Features
+
+* **ui:** add onboarding stepper shell for [#173](https://github.com/springfield-ham-radio/ham-radio-ui/issues/173) ([#178](https://github.com/springfield-ham-radio/ham-radio-ui/issues/178)) ([92c5282](https://github.com/springfield-ham-radio/ham-radio-ui/commit/92c52821688734bf43fe1602499f9e19e95bc8dc))
+
+### Bug Fixes
+
+* **deps:** bump fast-uri from 3.1.8 to 3.1.9 ([#176](https://github.com/springfield-ham-radio/ham-radio-ui/issues/176)) ([8d60725](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8d60725c3092345c73b7034bfe86c05269f8e55e))
+* **deps:** bump serialize-javascript from 7.1.0 to 7.1.4 ([#177](https://github.com/springfield-ham-radio/ham-radio-ui/issues/177)) ([53fe094](https://github.com/springfield-ham-radio/ham-radio-ui/commit/53fe09479e450ba1d4711b802e796ad372614cc2))
+
 ## [1.29.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.29.1...v1.29.2) (2026-10-24)
 
 ### Bug Fixes
