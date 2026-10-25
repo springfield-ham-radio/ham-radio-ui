@@ -163,32 +163,8 @@ watch(
 </script>
 
 <template>
-  <div v-if="embedded" class="flex flex-col gap-3">
-    <UFormField label="Serial port">
-      <div class="flex gap-2">
-        <USelectMenu
-          v-model="selectedPort"
-          :items="portItems"
-          value-key="value"
-          placeholder="Select a serial port"
-          class="w-full"
-          :loading="loadingPorts"
-        />
-        <UTooltip text="Refresh serial ports">
-          <UButton
-            icon="i-lucide-refresh-cw"
-            color="neutral"
-            variant="outline"
-            :disabled="loadingPorts"
-            aria-label="Refresh serial ports"
-            @click="loadPorts"
-          />
-        </UTooltip>
-      </div>
-    </UFormField>
-  </div>
   <UModal
-    v-else
+    v-if="!embedded"
     v-model:open="isOpen"
     :title="title"
     :description="slots.description ? undefined : description"
@@ -258,4 +234,28 @@ watch(
       </div>
     </template>
   </UModal>
+  <div v-else class="flex flex-col gap-3">
+    <UFormField label="Programming port">
+      <div class="flex gap-2">
+        <USelectMenu
+          v-model="selectedPort"
+          :items="portItems"
+          value-key="value"
+          placeholder="Select a serial port"
+          class="w-full"
+          :loading="loadingPorts"
+        />
+        <UTooltip text="Refresh serial ports">
+          <UButton
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            :disabled="loadingPorts"
+            aria-label="Refresh serial ports"
+            @click="loadPorts"
+          />
+        </UTooltip>
+      </div>
+    </UFormField>
+  </div>
 </template>
