@@ -6,7 +6,7 @@
 
 ## Context
 
-A new HamBench operator has to discover Preferences on their own: licenses, the Home station that centers the map and repeater distance sort, the radios they own, the modules those radios need, a programming cable, and a first read that backs up the radio before edits. Other stations stay in Preferences. Nothing in the app walks through that order.
+A new HamBench operator has to discover Preferences on their own: licenses, the Home station that centers the map and repeater distance sort, the radios they own and the port on each one, the modules those radios need, and a first read that backs up the radio before edits. Other stations stay in Preferences. Nothing in the app walks through that order.
 
 The pieces already exist. Preferences (`/preferences`, opened with Command-comma) is the settings screen. It embeds one component per area, and each area already has a composable and a storage key. There is no Pinia store.
 
@@ -16,7 +16,7 @@ The pieces already exist. Preferences (`/preferences`, opened with Command-comma
 | Home location | `RadioStationEditor` on the station `station-home` | `useStationAntennas` → localStorage `ham-radio-station-antennas`. `hasStationLocation` is the located check. `applyLicenseGridToHomeIfEmpty` copies the sole amateur grid onto Home when Home has no location. Map trip start and the Channels distance sort use that Home point via `defaultDistanceStartId`. |
 | Radios | `SavedRadiosPreference` and `SavedRadioEditor` | `useSavedRadios` → localStorage `ham-radio-saved-radios` |
 | Drivers | `RadioModulesPreference` and `RadioModulesInstallDialog` | `useRadioModuleCatalog`, `installOfficialModule`, SQLite `radio_models` |
-| Cable and port | Port list inside `RadioPortDialog` and `SavedRadioEditor` | `useRadioConnectionForm`, `SerialPort.available_ports()`, `serialPortSelectItems` plus `ham-radio-serial-ports` filters |
+| Port on each radio | `USelect` of `serialPortSelectItems` on the Radios step, and `RadioPortDialog` for a later read | `SerialPort.available_ports()` plus `ham-radio-serial-ports` filters. A chosen port is stored on that radio. |
 | First radio read | `RadioReadDialog` → `useRadio().readFromRadio` → `RadioProgressDialog` | Successful read calls `saveRadioImageBackup(..., 'read')`. Files live under app data `backups/`. Defaults in `ham-radio-image-backups` keep backups on. |
 | Stations | `RadioStationEditor` and `AntennaStationEditor` | Same station store. A default Home row is created for every profile. Home alone finishes the step. |
 
@@ -30,7 +30,7 @@ Nuxt UI in this repo is `@nuxt/ui` 4.12.0. The stepper component is not used yet
 
 ## Decision
 
-Add a first-run stepper. Home, drivers, cable, and the first read reuse the existing editors and dialogs. The licenses step is one inline form for one person and one license; Preferences keeps the multi-person license editor. Do not build a second station form, module installer, port scanner, or read path.
+Add a first-run stepper. Home, drivers, and the first read reuse the existing editors and dialogs. The licenses step is one inline form for one person and one license; Preferences keeps the multi-person license editor. Each checked radio picks its own serial port on the Radios step. Do not build a second station form, module installer, port scanner, or read path. There is no Cable step.
 
 ### Shell
 
@@ -39,9 +39,9 @@ Mount `OnboardingStepper` from `app.vue` beside the radio dialogs so a read stil
 Use standard Nuxt UI only:
 
 - `UModal` as the shell. Overlay click and Escape do not discard progress.
-- `UStepper` for the seven steps, horizontal, controlled with `v-model`. Items use `StepperItem` fields `title`, `description`, `icon`, `value`, `slot`, and `disabled`. Do not set `linear`: a skipped step must not block the next one. Steps the operator has not reached stay `disabled`.
+- `UStepper` for the five steps, horizontal, controlled with `v-model`. Items use `StepperItem` fields `title`, `description`, `icon`, `value`, `slot`, and `disabled`. Do not set `linear`: a skipped step must not block the next one. Steps the operator has not reached stay `disabled`.
 - `UButton` for Back, Skip this step, and Continue.
-- `UAlert` for an empty port list and a desktop-only cable step in the browser. A failed read stays in the progress dialog.
+- `USelect` for each radio’s port. An empty detected list shows “Unplugged”. A failed read stays in the progress dialog.
 - Lucide icons already used on the matching Preferences rows (`i-lucide-id-card`, `i-lucide-house`, `i-lucide-radio`, `i-lucide-cpu`, `i-lucide-usb`, `i-lucide-archive`, `i-lucide-map-pin`).
 
 Footer order is Back, Skip this step, Continue. Continue is enabled only when that step’s done check passes. Skip is always enabled, including on the last step. Finish on the last step writes `completed` / `finished` and closes the modal. Close, and “Finish later”, leave `status: 'active'` and reopen at the first `pending` step on the next launch.
@@ -56,8 +56,9 @@ Persist one document at localStorage `ham-radio-onboarding` (version 1):
 - `completedReason`: `finished` or `existing-data` when completed
 - `steps`: each id is `pending`, `done`, or `skipped`
 - `ownedModuleIds`: catalog entry ids chosen on the Radios step before a `SavedRadio` can exist
+- `pendingRadios`: name and serial port for each owned id that does not have a saved radio yet
 
-Step ids, in order: `licenses`, `home`, `radios`, `drivers`, `cable`, `read`. A stored document may still contain `steps.stations` from an earlier guide. Reading it drops that step. When the document is `active` and every remaining step is already `done` or `skipped`, the read marks it `completed` / `finished` and writes the document back. Other stations and antennas stay in Preferences → Stations.
+Step ids, in order: `licenses`, `home`, `radios`, `drivers`, `read`. A stored document may still contain `steps.stations` or `steps.cable` from an earlier guide. Reading it drops that step. When the document is `active` and every remaining step is already `done` or `skipped`, the read marks it `completed` / `finished` and writes the document back. Other stations and antennas stay in Preferences → Stations.
 
 On launch, after `useRadio().initialize()` and a count of `saved_channels` and `station_log_qsos`:
 
@@ -98,35 +99,33 @@ Each step edits the same records Preferences uses later. The licenses step is a 
 
 **Home location.** Embed `RadioStationEditor` for `HOME_STATION_ID`. Onboarding passes `hideSave`, so the form’s Save button stays on the Preferences slideover only. Continue calls the form's `validate()`, then `saveHomeStation` (update Home, or create it when the row is missing), and then advances. Nickname, grid, and coordinate errors stay hidden until that field is blurred or Continue validates the whole form. An invalid Continue stays on the step. An empty location is allowed. Skip does not write Home. Edits stay in the guide session when the operator leaves the step and comes back. `hasStationLocation` still describes a located Home for map centering. A license grid copied by `applyLicenseGridToHomeIfEmpty` remains a starting point and stays editable.
 
-**Radios.** One list titled “Which radios do you have?”, grouped by manufacturer from the official catalog (`groupCatalogRadiosByManufacturer` / `useRadioModuleCatalog`). Each model is a checkbox. Checking a model stores its catalog id in `ownedModuleIds` so the Drivers step can install it. It does not create a `SavedRadio`. A model that already has a saved radio is shown checked, with that radio’s name, port, and baud inline, plus the existing edit and delete actions. Unchecking removes the id from `ownedModuleIds` and does not delete the saved radio, so the row stays checked while the radio exists. Once that model’s driver is installed and a serial port exists, a model with no saved radio offers “Name it / set port”, which opens `SavedRadioEditor`. Antennas and the Radio-page card copy stay on Preferences → Radios. Done when `ownedModuleIds` is non-empty or `useSavedRadios().radios` is already non-empty. Skip clears nothing already saved; it leaves `ownedModuleIds` empty.
+**Radios.** One list titled “Which radios do you have?”, grouped by manufacturer from the official catalog (`groupCatalogRadiosByManufacturer` / `useRadioModuleCatalog`). Each model is a checkbox. Checking a model stores its catalog id in `ownedModuleIds` and a `pendingRadios` row whose name defaults to the model name. The checked row shows that name and a compact port `USelect` immediately. The select lists detected serial ports (`serialPortSelectItems`). A refresh button reloads them. An empty list, or a chosen port that is not in the list, shows “Unplugged”. The port does not wait for a driver. A model that already has a saved radio is shown checked, and that row edits the saved name and port. Unchecking removes the id and the pending row and does not delete the saved radio, so the row stays checked while the radio exists. Antennas and the Radio-page card copy stay on Preferences → Radios. Done when `ownedModuleIds` is non-empty or `useSavedRadios().radios` is already non-empty. Skip clears nothing already saved; it leaves `ownedModuleIds` and `pendingRadios` empty.
 
-**Drivers.** Embed `RadioModulesPreference`. Add an optional `entryIds` prop. When `ownedModuleIds` is non-empty, the list is those entries and the existing Install buttons call `installOfficialModule` for each. An installed model is omitted from Available even when that manufacturer still has other models that are not installed. When every picked model is installed, Available is replaced by “All drivers for your radios are installed.” When the Radios step was skipped, the prop is omitted and the full Preferences list is shown, including Installed badges. Do not copy the install, beta, or local-file flows. Done when every owned id is present in `configurations`. If nothing was owned, done when at least one module is installed. A catalog fetch failure uses the existing `officialCatalogFailureFromCause` alert; Skip stays available. Browser builds keep the current “install from the desktop app” message and cannot reach done.
+**Drivers.** Embed `RadioModulesPreference`. Add an optional `entryIds` prop. When `ownedModuleIds` is non-empty, the list is those entries and the existing Install buttons call `installOfficialModule` for each. An installed model is omitted from Available even when that manufacturer still has other models that are not installed. When every picked model is installed, Available is replaced by “All drivers for your radios are installed.” When the Radios step was skipped, the prop is omitted and the full Preferences list is shown, including Installed badges. Do not copy the install, beta, or local-file flows. Once a pending model’s driver is installed and that row has a port, call `useSavedRadios().addRadio` with the pending name (or the model name), `defaultProgrammingBaudRate`, and that radio’s port, then drop the pending row. A pending row with no port stays pending. Done when every owned id is present in `configurations`. If nothing was owned, done when at least one module is installed. A catalog fetch failure uses the existing `officialCatalogFailureFromCause` alert; Skip stays available. Browser builds keep the current “install from the desktop app” message and cannot reach done.
 
-**Cable and port.** Reuse `useRadioConnectionForm` and `serialPortSelectItems` (the same filter and refresh behavior as `RadioPortDialog`). Do not open a second modal. Done when the operator selects a port that `SerialPort.available_ports()` just returned and that the serial-port filters did not hide. A remembered path or a “saved” fallback row does not count. On done, for each owned id that now has an installed config and does not already have a saved radio, call `useSavedRadios().addRadio` with the model’s display name (disambiguated if the name is taken), `defaultProgrammingBaudRate`, and that port. `savedRadioDraftIssues` is unchanged. If the draft is rejected, the step stays not done and the field error is shown.
-
-**First radio read.** This is the last step. The footer is Finish later, Back, and Finish. Skip this step is omitted. The step is a `USwitch`, “Read my radio when I finish,” with one line: the read saves a backup before any edits. When more than one saved radio has an installed driver and a port, a select sits next to the switch. The switch defaults on when at least one saved radio has both. Otherwise it is disabled, and an inline note names the missing radio, driver, or port. Finish marks this step `done`, writes `completed` / `finished`, and closes the guide. Finish later closes without completing. When the switch is on, Finish then opens that radio’s card and the existing `RadioReadDialog` / `readFromRadio` path, including `saveRadioImageBackup(..., 'read')`. Loaded channels show on that card the same way a read from the radio page does. A read error uses `RadioProgressDialog` and its error report. The guide stays complete either way. The step does not scan backup files, and it does not offer Read radio, Go to Drivers, Go to Cable, or Open Backups.
+**First radio read.** This is the last step. The footer is Finish later, Back, and Finish. Skip this step is omitted. The step is a `USwitch`, “Read my radio when I finish,” with one line: the read saves a backup before any edits. When more than one saved radio has an installed driver and its own port, a select sits next to the switch and each option shows that port. The switch defaults on when at least one saved radio has both. Otherwise it is disabled. A missing port names that radio (“Set a programming port for UV-5R and TM-D710A.”). A missing driver names that radio too. Finish marks this step `done`, writes `completed` / `finished`, and closes the guide. Finish later closes without completing. When the switch is on, Finish then opens that radio’s card and the existing `RadioReadDialog` / `readFromRadio` path, including `saveRadioImageBackup(..., 'read')`. The read uses the port saved on that radio. Loaded channels show on that card the same way a read from the radio page does. A read error uses `RadioProgressDialog` and its error report. The guide stays complete either way. The step does not scan backup files, and it does not offer Read radio, Go to Drivers, or Open Backups.
 
 ### No radio connected
 
-The cable step stays skippable. The read step is last: Finish closes the guide whether or not the switch starts a read, and Finish later leaves it open for next time. Neither step invents a port or starts a write. A read starts only after Finish, and only through the existing read dialog.
+The read step is last: Finish closes the guide whether or not the switch starts a read, and Finish later leaves it open for next time. The guide does not invent a port or start a write. A read starts only after Finish, and only through the existing read dialog, on the port stored for that radio.
 
-- No listed port (cable unplugged, only filtered system ports, or `available_ports()` failed with no saved fallback): `UAlert` tells the operator to plug in the programming cable and press the same Refresh control the port dialog uses. Continue stays disabled. Skip does not create a saved radio.
-- Not the desktop app (`isTauriRuntime()` is false): the cable step shows that serial ports and module installs need the HamBench desktop app. Cable Continue stays disabled. Finish on the read step still closes the guide. A switched-on read opens the same dialog the radio page uses.
-- No saved radio, no installed driver, or no programming port: the read switch is disabled and an inline note names that gap. Finish does not call `readFromRadio`.
+- No listed port (cable unplugged, only filtered system ports, or `available_ports()` failed): the radio’s port select shows “Unplugged”. The model can still be checked. A saved radio is created only after a port is chosen and that model’s driver is installed.
+- Not the desktop app (`isTauriRuntime()` is false): serial ports are not listed, so the port select shows “Unplugged”. Drivers still say that module installs need the HamBench desktop app. Finish on the read step still closes the guide.
+- No saved radio, no installed driver, or no programming port: the read switch is disabled. The note names the radio that needs a port, or the radio that needs a driver. Finish does not call `readFromRadio`.
 - Read error or empty image: the existing progress dialog, error report, and toast are the ones a normal read uses. Onboarding is already `completed` / `finished`. Later writes keep today’s pre-write backup behavior.
 
-Skipping the cable step, or finishing the read step without a backup, does not block normal use of the app. Other stations stay in Preferences. The next launch, or Open setup guide, returns to the first step that is still `pending` while the document is `active`. A finished guide stays closed until it is opened from Preferences.
+Finishing the read step without a backup does not block normal use of the app. Other stations stay in Preferences. The next launch, or Open setup guide, returns to the first step that is still `pending` while the document is `active`. A finished guide stays closed until it is opened from Preferences.
 
 ## Consequences
 
 - New profiles see the stepper on first launch, because `ONBOARDING_LAUNCH_NEW_PROFILES` is true. That launch writes `ham-radio-onboarding` as `active`, and later Skip / Continue edits persist. Profiles with any signal in `onboardingHasExistingData` are marked `completed` / `existing-data` and never see the stepper unless they open it from Preferences.
 - Slice 2 removes the startup Install radios dialog. A profile whose module catalog is empty sees a dismissible banner to Preferences → Drivers, not a required dialog. Dismissal is stored per profile in `ham-radio-empty-catalog-banner-dismissed`.
 - No SQLite migration and no rewrite of license, radio, station, channel, log, or backup documents. New localStorage keys are `ham-radio-onboarding` and `ham-radio-empty-catalog-banner-dismissed`. Marking an existing profile `existing-data` does not change those documents.
-- `SavedRadio` still requires an installed model and a serial port. Owned models live in the onboarding document until the cable step can call `addRadio`.
+- `SavedRadio` still requires an installed model and a serial port. Owned models and their ports live in the onboarding document until that model’s driver is installed and the port is set, which is when `addRadio` runs.
 - `RadioModulesPreference` gains an optional `entryIds` filter. Callers that omit it keep the full list.
 - Slice 2 deletes the startup open. The guide can still hide a manually opened installer while it is open.
 - Units, appearance, updates, backups retention, and the sniffer stay out of the stepper.
-- Slice 4 sets the launch flag and replaces the cable and first-read placeholders. The Stations step is not part of the guide. A stored `steps.stations` value is dropped on read.
+- Slice 4 sets the launch flag. The Stations step and the Cable step are not part of the guide. A stored `steps.stations` or `steps.cable` value is dropped on read.
 
 ### Breaking changes
 
@@ -136,11 +135,13 @@ Breaking, in slice 2: the startup module-install dialog is removed. An empty cat
 
 Breaking, in slice 4: a profile with no existing station data opens the setup guide on first launch and stores `ham-radio-onboarding` as `active`. Step progress persists. A profile that already has a license, a saved radio, a located Home, another station, an antenna, an installed module, a channel, a log row, or a backup is marked `completed` / `existing-data` and the guide stays closed.
 
+Breaking: the Cable step is removed. A stored `steps.cable` value is dropped the next time the onboarding document is read. Each radio’s port is chosen on the Radios step and stored with that radio.
+
 ### Suggested pull requests
 
 1. **State and shell.** `onboarding.ts`, `useOnboarding`, the modal plus `UStepper`, the Preferences button, the existing-data write, and the `modulesInstallOpen` guard. Step slots can be short descriptions. `ONBOARDING_LAUNCH_NEW_PROFILES` stays false. Keep the required Install radios dialog. Unit tests for the pure gate and for done/skip transitions.
 2. **Licenses and Home.** Embed `LicensePeoplePreference` and `RadioStationEditor`. Tests for the done checks, including a license grid that already filled Home. This slice also removes the startup Install radios dialog and adds the dismissible empty-catalog banner. `ONBOARDING_LAUNCH_NEW_PROFILES` stays false.
 3. **Radios and drivers.** Catalog multi-select, `ownedModuleIds`, and the `entryIds` filter on `RadioModulesPreference`. The startup dialog is already gone; Preferences → Drivers remains the install path.
-4. **Cable and first read.** This slice sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true. Port selection, `addRadio` when a port exists, and the existing read/backup path. First read is the last step: Finish later, Back, and Finish. The step is a switch that starts that read after the guide closes. It lands on the same pull request as slice 3 once the Radios and Drivers steps are in place. Cover a missing radio, driver, or port. The Stations step was removed after review; other stations stay in Preferences.
+4. **Ports and first read.** This slice sets `ONBOARDING_LAUNCH_NEW_PROFILES` to true. Each checked radio stores its own port. `addRadio` runs when that model’s driver is installed and the port is set. First read is the last step: Finish later, Back, and Finish. The step is a switch that starts that read after the guide closes. There is no Cable step. The Stations step was removed after review; other stations stay in Preferences.
 
 Each slice stays behind the same onboarding key so a half-shipped step can still be skipped. Slice 4 is the first slice that writes `active` for a new profile.

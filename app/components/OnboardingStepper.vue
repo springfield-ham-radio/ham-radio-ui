@@ -10,17 +10,15 @@ import {
   finishOnboarding,
   firstPendingOnboardingStep,
   nextOnboardingStep,
-  onboardingCableIsDone,
   onboardingDriversAreDone,
   onboardingHomeIsDone,
   onboardingLicensesAreDone,
   onboardingRadiosAreDone,
   onboardingStepIsDone,
   onboardingStepperItems,
-  planOnboardingCableRadios,
+  planOnboardingSavedRadios,
   previousOnboardingStep,
   skipOnboardingStep,
-  withOwnedModuleIds,
   type OnboardingStepId,
 } from '~/utils/onboarding';
 
@@ -43,16 +41,29 @@ const readEditor = ref<{ finishRead: () => string | undefined } | null>(null);
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
 const ownedModuleIds = computed(() => state.value?.ownedModuleIds ?? []);
-const cableSelection = ref({ port: undefined as string | undefined, livePorts: [] as string[], loading: false });
-const cableFieldError = ref<string | undefined>();
-const readRadios = computed(() =>
-  radios.value.map((radio) => ({
-    id: radio.id,
-    name: radio.name,
-    serialPort: radio.serialPort,
-    hasConfig: configurations.value.some((config) => String(config.id.model) === radio.model),
-  })),
-);
+const pendingRadios = computed(() => state.value?.pendingRadios ?? []);
+const readRadios = computed(() => {
+  const savedModels = new Set(radios.value.map((radio) => radio.model));
+
+  return [
+    ...radios.value.map((radio) => ({
+      id: radio.id,
+      name: radio.name,
+      serialPort: radio.serialPort,
+      hasConfig: configurations.value.some((config) => String(config.id.model) === radio.model),
+      canRead: true,
+    })),
+    ...pendingRadios.value
+      .filter((radio) => !savedModels.has(radio.modelId))
+      .map((radio) => ({
+        id: radio.modelId,
+        name: radio.name.trim() || radio.modelId,
+        serialPort: radio.serialPort,
+        hasConfig: configurations.value.some((config) => String(config.id.model) === radio.modelId),
+        canRead: false,
+      })),
+  ];
+});
 
 const items = computed<StepperItem[]>(() => {
   if (!state.value) {
@@ -73,11 +84,6 @@ const completion = computed(() => ({
     ownedModuleIds: ownedModuleIds.value,
     installedModelIds: configurations.value.map((config) => String(config.id.model)),
     desktop: isTauriRuntime(),
-  }),
-  cable: onboardingCableIsDone({
-    desktop: isTauriRuntime(),
-    selectedPort: cableSelection.value.port,
-    livePorts: cableSelection.value.livePorts,
   }),
   read: state.value?.steps.read === 'done',
 }));
@@ -112,13 +118,60 @@ function back(): void {
   }
 }
 
-function setOwnedModuleIds(ids: string[]): void {
+function setRadioPicks(picks: { ownedModuleIds: string[]; pendingRadios: { modelId: string; name: string; serialPort: string }[] }): void {
   if (!state.value) {
     return;
   }
 
-  applyEdit(withOwnedModuleIds(state.value, ids));
+  applyEdit({
+    ...state.value,
+    ownedModuleIds: picks.ownedModuleIds,
+    pendingRadios: picks.pendingRadios,
+  });
 }
+
+function materializePendingRadios(): void {
+  const current = state.value;
+
+  if (!current || current.pendingRadios.length === 0) {
+    return;
+  }
+
+  const models = configurations.value.map((config) => ({
+    id: String(config.id.model),
+    manufacturer: String(config.id.manufacturer),
+    displayName: radioDisplayName(String(config.id.manufacturer), config.id.name),
+    baudRate: defaultProgrammingBaudRate(config.serialConfig),
+    baudRates: programmingBaudRateSelectItems(config.serialConfig).map((item) => item.value),
+  }));
+  const { drafts } = planOnboardingSavedRadios({
+    pending: current.pendingRadios,
+    models,
+    existing: radios.value.map((radio) => ({ name: radio.name, model: radio.model })),
+  });
+  const created: string[] = [];
+
+  for (const draft of drafts) {
+    const model = models.find((entry) => entry.id === draft.model);
+
+    if (addRadio(draft, model?.baudRates)) {
+      created.push(draft.model);
+    }
+  }
+
+  if (created.length === 0 || !state.value) {
+    return;
+  }
+
+  applyEdit({
+    ...state.value,
+    pendingRadios: state.value.pendingRadios.filter((radio) => !created.includes(radio.modelId)),
+  });
+}
+
+watch([configurations, radios, pendingRadios], () => {
+  materializePendingRadios();
+}, { immediate: true });
 
 function skip(): void {
   if (!state.value) {
@@ -150,49 +203,6 @@ function onHomeDraft(draft: StationDraft): void {
   homeSessionDraft.value = draft;
 }
 
-function onCableSelection(next: { port: string | undefined; livePorts: string[]; loading: boolean }): void {
-  cableSelection.value = next;
-  cableFieldError.value = undefined;
-}
-
-function saveCableRadios(): boolean {
-  const port = cableSelection.value.port;
-
-  if (!port) {
-    return false;
-  }
-
-  const models = configurations.value.map((config) => ({
-    id: String(config.id.model),
-    manufacturer: String(config.id.manufacturer),
-    displayName: radioDisplayName(String(config.id.manufacturer), config.id.name),
-    baudRate: defaultProgrammingBaudRate(config.serialConfig),
-    baudRates: programmingBaudRateSelectItems(config.serialConfig).map((item) => item.value),
-  }));
-  const plan = planOnboardingCableRadios({
-    ownedModuleIds: ownedModuleIds.value,
-    models,
-    existing: radios.value.map((radio) => ({ name: radio.name, model: radio.model })),
-    serialPort: port,
-  });
-
-  if (plan.error) {
-    cableFieldError.value = plan.error;
-    return false;
-  }
-
-  for (const draft of plan.drafts) {
-    const model = models.find((entry) => entry.id === draft.model);
-
-    if (!addRadio(draft, model?.baudRates)) {
-      cableFieldError.value = 'That radio could not be saved.';
-      return false;
-    }
-  }
-
-  return true;
-}
-
 async function continueStep(): Promise<void> {
   if (!state.value) {
     return;
@@ -203,10 +213,6 @@ async function continueStep(): Promise<void> {
   }
 
   if (active.value === 'home' && !(await homeEditor.value?.save())) {
-    return;
-  }
-
-  if (active.value === 'cable' && !saveCableRadios()) {
     return;
   }
 
@@ -292,16 +298,14 @@ function finishLater(): void {
         <template #radios>
           <OnboardingRadiosStep
             :owned-module-ids="ownedModuleIds"
-            @update:owned-module-ids="setOwnedModuleIds"
+            :pending-radios="pendingRadios"
+            @update:picks="setRadioPicks"
           />
         </template>
         <template #drivers>
           <div class="mt-4">
             <RadioModulesPreference :entry-ids="ownedModuleIds.length > 0 ? ownedModuleIds : undefined" />
           </div>
-        </template>
-        <template #cable>
-          <OnboardingCableStep :field-error="cableFieldError" @selection="onCableSelection" />
         </template>
         <template #read>
           <OnboardingReadStep ref="readEditor" :radios="readRadios" />

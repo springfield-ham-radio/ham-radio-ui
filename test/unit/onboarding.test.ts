@@ -35,17 +35,18 @@ import {
   finishOnboarding,
   firstPendingOnboardingStep,
   onboardingEditToPersist,
-  onboardingCableIsDone,
   onboardingDriversAreDone,
   onboardingHasExistingData,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
+  onboardingPendingRadioChange,
   onboardingRadioGroups,
   onboardingRadioOwnedIdsAfterToggle,
+  onboardingRadioPicksAfterToggle,
   onboardingFinishReadPlan,
   onboardingRadiosAreDone,
   onboardingStoredDocumentNeedsRewrite,
-  planOnboardingCableRadios,
+  planOnboardingSavedRadios,
   onboardingLaunchPlan,
   onboardingLicensesAreDone,
   onboardingLocalSignals,
@@ -529,13 +530,10 @@ describe('onboarding step transitions', () => {
         models,
         ownedModuleIds: [],
         saved: [savedUv5r],
-        installedModelIds: ['baofeng-uv5r'],
-        hasPort: true,
       })[0]?.radios[0],
     ).toMatchObject({
       id: 'baofeng-uv5r',
       checked: true,
-      canName: false,
       saved: [{ id: 'radio-1', name: 'Handheld', serialPort: '/dev/cu.usb', baudRate: 9600 }],
     });
     expect(
@@ -543,26 +541,13 @@ describe('onboarding step transitions', () => {
         models,
         ownedModuleIds: ['kenwood-th-d74'],
         saved: [],
-        installedModelIds: ['kenwood-th-d74'],
-        hasPort: true,
       })[1]?.radios[0],
-    ).toMatchObject({ id: 'kenwood-th-d74', checked: true, canName: true, saved: [] });
-    expect(
-      onboardingRadioGroups({
-        models,
-        ownedModuleIds: ['kenwood-th-d74'],
-        saved: [],
-        installedModelIds: [],
-        hasPort: true,
-      })[1]?.radios[0]?.canName,
-    ).toBe(false);
+    ).toMatchObject({ id: 'kenwood-th-d74', checked: true, saved: [] });
     expect(
       onboardingRadioGroups({
         models: [],
         ownedModuleIds: [],
         saved: [savedUv5r],
-        installedModelIds: [],
-        hasPort: false,
       }),
     ).toEqual([
       {
@@ -572,17 +557,40 @@ describe('onboarding step transitions', () => {
             id: 'baofeng-uv5r',
             name: 'Handheld',
             checked: true,
-            canName: false,
             saved: [{ id: 'radio-1', name: 'Handheld', serialPort: '/dev/cu.usb', baudRate: 9600 }],
           },
         ],
       },
     ]);
 
+    const checked = onboardingRadioPicksAfterToggle({
+      ownedModuleIds: [],
+      pendingRadios: [],
+      modelId: 'kenwood-th-d74',
+      modelName: 'TH-D74',
+      checked: true,
+    });
+    expect(checked.ownedModuleIds).toEqual(['kenwood-th-d74']);
+    expect(checked.pendingRadios).toEqual([{ modelId: 'kenwood-th-d74', name: 'TH-D74', serialPort: '' }]);
+    expect(
+      onboardingPendingRadioChange(checked.pendingRadios, 'kenwood-th-d74', { serialPort: '/dev/cu.kenwood' }),
+    ).toEqual([{ modelId: 'kenwood-th-d74', name: 'TH-D74', serialPort: '/dev/cu.kenwood' }]);
+    expect(
+      onboardingRadioPicksAfterToggle({
+        ...checked,
+        modelId: 'kenwood-th-d74',
+        modelName: 'TH-D74',
+        checked: false,
+      }).pendingRadios,
+    ).toEqual([]);
+
     const radiosStep = readFileSync('app/components/OnboardingRadiosStep.vue', 'utf8');
 
     expect(radiosStep).toContain('Which radios do you have?');
-    expect(radiosStep).toContain('Name it / set port');
+    expect(radiosStep).toContain('<USelect');
+    expect(radiosStep).toContain('Unplugged');
+    expect(radiosStep).toContain('aria-label="Refresh serial ports"');
+    expect(radiosStep).not.toContain('Name it / set port');
     expect(radiosStep).not.toContain('SavedRadiosPreference');
     expect(radiosStep).not.toContain('Radio page opens these as cards');
     expect(radiosStep).not.toContain('AntennaStationPreference');
@@ -637,55 +645,64 @@ describe('onboarding step transitions', () => {
     const skippedRadios = skipOnboardingStep(picked, 'radios');
     expect(skippedRadios.steps.radios).toBe('skipped');
     expect(skippedRadios.ownedModuleIds).toEqual([]);
+    expect(skippedRadios.pendingRadios).toEqual([]);
 
     const skippedDrivers = skipOnboardingStep(picked, 'drivers');
     expect(skippedDrivers.steps.drivers).toBe('skipped');
     expect(skippedDrivers.ownedModuleIds).toEqual(['baofeng-uv5r']);
   });
 
-  it('should finish the cable and read steps from live data', () => {
-    expect(onboardingCableIsDone({ desktop: false, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(false);
-    expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.saved', livePorts: ['/dev/cu.usb'] })).toBe(false);
-    expect(onboardingCableIsDone({ desktop: true, selectedPort: '/dev/cu.usb', livePorts: ['/dev/cu.usb'] })).toBe(true);
-
-    const planned = planOnboardingCableRadios({
-      ownedModuleIds: ['baofeng-uv5r', 'kenwood-th-d74', 'missing'],
-      models: [
-        {
-          id: 'baofeng-uv5r',
-          manufacturer: 'Baofeng',
-          displayName: 'UV-5R',
-          baudRate: 9600,
-          baudRates: [9600],
-        },
-        {
-          id: 'kenwood-th-d74',
-          manufacturer: 'Kenwood',
-          displayName: 'UV-5R',
-          baudRate: 9600,
-          baudRates: [9600, 19200],
-        },
+  it('should save each pending radio on its own port once that driver is installed', () => {
+    const models = [
+      {
+        id: 'baofeng-uv5r',
+        manufacturer: 'Baofeng',
+        displayName: 'UV-5R',
+        baudRate: 9600,
+        baudRates: [9600],
+      },
+      {
+        id: 'kenwood-tm-d710a',
+        manufacturer: 'Kenwood',
+        displayName: 'TM-D710A',
+        baudRate: 57600,
+        baudRates: [9600, 57600],
+      },
+    ];
+    const planned = planOnboardingSavedRadios({
+      pending: [
+        { modelId: 'baofeng-uv5r', name: 'UV-5R', serialPort: '/dev/cu.baofeng' },
+        { modelId: 'kenwood-tm-d710a', name: 'TM-D710A', serialPort: '/dev/cu.kenwood' },
+        { modelId: 'kenwood-th-d74', name: 'TH-D74', serialPort: '/dev/cu.other' },
+        { modelId: 'baofeng-uv82', name: '', serialPort: '  ' },
       ],
+      models,
       existing: [{ name: 'UV-5R', model: 'already' }],
-      serialPort: '/dev/cu.usb',
     });
 
-    expect(planned.error).toBeUndefined();
-    expect(planned.drafts.map((draft) => draft.name)).toEqual(['UV-5R 2', 'UV-5R 3']);
-    expect(planned.drafts[0]).toMatchObject({ model: 'baofeng-uv5r', serialPort: '/dev/cu.usb', baudRate: 9600 });
+    expect(planned.drafts.map((draft) => draft.name)).toEqual(['UV-5R 2', 'TM-D710A']);
+    expect(planned.drafts[0]).toMatchObject({ model: 'baofeng-uv5r', serialPort: '/dev/cu.baofeng', baudRate: 9600 });
+    expect(planned.drafts[1]).toMatchObject({
+      model: 'kenwood-tm-d710a',
+      serialPort: '/dev/cu.kenwood',
+      baudRate: 57600,
+    });
     expect(
-      planOnboardingCableRadios({
-        ownedModuleIds: ['baofeng-uv5r'],
-        models: [
-          { id: 'baofeng-uv5r', manufacturer: 'Baofeng', displayName: 'UV-5R', baudRate: 9600, baudRates: [9600] },
-        ],
+      planOnboardingSavedRadios({
+        pending: [{ modelId: 'baofeng-uv5r', name: 'UV-5R', serialPort: '  ' }],
+        models: [models[0]!],
         existing: [],
-        serialPort: '  ',
-      }).error,
-    ).toBe('Choose a default serial port');
+      }).drafts,
+    ).toEqual([]);
 
-    const uv5r = { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb', hasConfig: true };
-    const tmD710a = { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2', hasConfig: true };
+    const uv5r = { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb', hasConfig: true, canRead: true };
+    const tmD710a = {
+      id: 'radio-tmd710a',
+      name: 'TM-D710A',
+      serialPort: '/dev/cu.usb2',
+      hasConfig: true,
+      canRead: true,
+    };
 
     expect(onboardingFinishReadPlan([])).toEqual({
       enabled: false,
@@ -696,25 +713,35 @@ describe('onboarding step transitions', () => {
     expect(onboardingFinishReadPlan([{ ...uv5r, hasConfig: false }])).toMatchObject({
       enabled: false,
       defaultOn: false,
-      note: 'Install a driver before this can read a radio.',
+      note: 'Install a driver for UV-5R.',
     });
     expect(onboardingFinishReadPlan([{ ...uv5r, serialPort: '  ' }])).toMatchObject({
       enabled: false,
       defaultOn: false,
-      note: 'Set a programming port before this can read a radio.',
+      note: 'Set a programming port for UV-5R.',
+    });
+    expect(
+      onboardingFinishReadPlan([
+        { ...uv5r, serialPort: '' },
+        { ...tmD710a, serialPort: ' ' },
+      ]),
+    ).toMatchObject({
+      enabled: false,
+      note: 'Set a programming port for UV-5R and TM-D710A.',
     });
     expect(onboardingFinishReadPlan([uv5r])).toEqual({
       enabled: true,
       defaultOn: true,
-      radios: [{ id: 'radio-uv5r', name: 'UV-5R' }],
+      radios: [{ id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' }],
     });
-    expect(onboardingFinishReadPlan([uv5r, tmD710a, { ...uv5r, id: 'bare', name: 'Bare', hasConfig: false }])).toEqual({
+    expect(onboardingFinishReadPlan([uv5r, tmD710a, { ...uv5r, id: 'bare', name: 'Bare', hasConfig: false, canRead: false }])).toEqual({
       enabled: true,
       defaultOn: true,
       radios: [
-        { id: 'radio-uv5r', name: 'UV-5R' },
-        { id: 'radio-tmd710a', name: 'TM-D710A' },
+        { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' },
+        { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2' },
       ],
+      note: 'Install a driver for Bare.',
     });
 
     const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
@@ -743,8 +770,14 @@ describe('onboarding step transitions', () => {
     expect(existsSync('app/components/OnboardingStationsStep.vue')).toBe(false);
     expect(stepper).not.toContain('OnboardingStationsStep');
     expect(stepper).not.toContain("active.value === 'stations'");
+    expect(existsSync('app/components/OnboardingCableStep.vue')).toBe(false);
+    expect(stepper).not.toContain('OnboardingCableStep');
+    expect(stepper).not.toContain("active.value === 'cable'");
+    expect(stepper).toContain('planOnboardingSavedRadios');
+    expect(readStep).toContain('radio.serialPort');
     expect(stepper).toContain('v-if="!isLast"');
     expect(stepper).toContain("active.value === 'read'");
+    expect(ONBOARDING_STEP_IDS).not.toContain('cable');
     expect(readStep).not.toContain('Skip stays available');
     expect(ONBOARDING_STEP_IDS).not.toContain('stations');
     expect(ONBOARDING_STEP_IDS.at(-1)).toBe('read');
@@ -839,7 +872,6 @@ describe('onboarding step transitions', () => {
       home: true,
       radios: true,
       drivers: true,
-      cable: true,
       read: true,
     };
 
@@ -885,8 +917,10 @@ describe('onboarding step transitions', () => {
 
 describe('onboarding storage', () => {
   it('should round-trip a completed document and reject junk', () => {
-    const state = skipOnboardingStep(createOnboardingState('completed', 'existing-data'), 'cable');
-    state.ownedModuleIds = ['kenwood-th-f6'];
+    const state = withOwnedModuleIds(
+      skipOnboardingStep(createOnboardingState('completed', 'existing-data'), 'drivers'),
+      ['kenwood-th-f6'],
+    );
 
     expect(parseOnboardingState(serializeOnboardingState(state))).toEqual(state);
     expect(parseOnboardingState(null)).toBeUndefined();
@@ -937,9 +971,35 @@ describe('onboarding storage', () => {
     expect(parsed?.steps.read).toBe('done');
     expect(parsed?.steps.radios).toBe('skipped');
     expect(parsed && 'stations' in parsed.steps).toBe(false);
+    expect(parsed && 'cable' in parsed.steps).toBe(false);
     expect(parsed && onboardingHasPendingStep(parsed)).toBe(false);
     expect(serializeOnboardingState(parsed!)).not.toContain('stations');
+    expect(serializeOnboardingState(parsed!)).not.toContain('cable');
     expect(parsed?.ownedModuleIds).toEqual(['baofeng-uv5r']);
+
+    const cableOnly = JSON.stringify({
+      version: 1,
+      status: 'active',
+      steps: {
+        licenses: 'done',
+        home: 'done',
+        radios: 'done',
+        drivers: 'done',
+        cable: 'pending',
+        read: 'done',
+      },
+      ownedModuleIds: ['baofeng-uv5r'],
+      pendingRadios: [{ modelId: 'baofeng-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' }],
+    });
+    const droppedCable = parseOnboardingState(cableOnly);
+
+    expect(onboardingStoredDocumentNeedsRewrite(cableOnly)).toBe(true);
+    expect(droppedCable?.status).toBe('completed');
+    expect(droppedCable?.completedReason).toBe('finished');
+    expect(droppedCable && 'cable' in droppedCable.steps).toBe(false);
+    expect(droppedCable?.pendingRadios).toEqual([
+      { modelId: 'baofeng-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' },
+    ]);
 
     const stillActive = JSON.stringify({
       version: 1,

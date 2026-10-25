@@ -1,37 +1,41 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
+import { programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { radioDisplayName } from '~/utils/radio-module-listing';
-import { serialPortLabel, serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortSelectItems, type SerialPortOption } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
-import type { SavedRadio, SavedRadioDraft } from '~/utils/saved-radios';
-import { onboardingRadioGroups, onboardingRadioOwnedIdsAfterToggle, type OnboardingRadioSavedDetail } from '~/utils/onboarding';
+import { draftFromSavedRadio, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
+import {
+  onboardingPendingRadioChange,
+  onboardingRadioGroups,
+  onboardingRadioPicksAfterToggle,
+  type OnboardingPendingRadio,
+} from '~/utils/onboarding';
 
 const props = defineProps<{
   ownedModuleIds: string[];
+  pendingRadios: readonly OnboardingPendingRadio[];
 }>();
 
 const emit = defineEmits<{
-  'update:ownedModuleIds': [ids: string[]];
+  'update:picks': [picks: { ownedModuleIds: string[]; pendingRadios: OnboardingPendingRadio[] }];
 }>();
 
 const { catalogEntries, catalogFailure, catalogLoading, loadOfficialCatalog, reload } = useRadioModuleCatalog();
-const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
+const { radios, saveRadio, deleteRadio } = useSavedRadios();
 const { configurations, clearCardSession } = useRadio();
 const { removeRadioAntennas } = useStationAntennas();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
 
-const livePortCount = ref(0);
+const ports = ref<SerialPortOption[]>([]);
+const loadingPorts = ref(false);
 const editorOpen = shallowRef(false);
 const editing = shallowRef<SavedRadio | undefined>();
-const naming = shallowRef<{ manufacturer: string; model: string; name: string } | undefined>();
 const removeConfirmOpen = shallowRef(false);
 const pendingRemove = shallowRef<SavedRadio | undefined>();
 
-const hasPort = computed(
-  () => livePortCount.value > 0 || radios.value.some((radio) => radio.serialPort.trim().length > 0),
-);
 const groups = computed(() =>
   onboardingRadioGroups({
     models: catalogEntries.value.map((entry) => ({
@@ -41,36 +45,61 @@ const groups = computed(() =>
     })),
     ownedModuleIds: props.ownedModuleIds,
     saved: radios.value,
-    installedModelIds: configurations.value.map((config) => String(config.id.model)),
-    hasPort: hasPort.value,
   }),
 );
 
-function toggle(id: string, checked: boolean | 'indeterminate'): void {
+function pendingFor(modelId: string): OnboardingPendingRadio | undefined {
+  return props.pendingRadios.find((radio) => radio.modelId === modelId);
+}
+
+function portItems(selected: string | undefined): SerialPortOption[] {
+  const port = selected?.trim();
+
+  if (!port || ports.value.some((item) => item.value === port)) {
+    return ports.value;
+  }
+
+  return [{ label: port, value: port }, ...ports.value];
+}
+
+function portIsUnplugged(selected: string | undefined): boolean {
+  if (ports.value.length === 0) {
+    return true;
+  }
+
+  const port = selected?.trim();
+
+  return Boolean(port) && !ports.value.some((item) => item.value === port);
+}
+
+function baudRatesFor(modelId: string): number[] | undefined {
+  const config = configurations.value.find((item) => String(item.id.model) === modelId);
+
+  if (!config) {
+    return undefined;
+  }
+
+  return programmingBaudRateSelectItems(config.serialConfig).map((item) => item.value);
+}
+
+function toggle(id: string, name: string, checked: boolean | 'indeterminate'): void {
   emit(
-    'update:ownedModuleIds',
-    onboardingRadioOwnedIdsAfterToggle({
+    'update:picks',
+    onboardingRadioPicksAfterToggle({
       ownedModuleIds: props.ownedModuleIds,
+      pendingRadios: props.pendingRadios,
       modelId: id,
+      modelName: name,
       checked: checked === true,
     }),
   );
 }
 
-function detail(radio: OnboardingRadioSavedDetail): string {
-  const parts = [radio.name, serialPortLabel(radio.serialPort, readSerialPortSettings().portAliases)];
-
-  if (radio.baudRate !== undefined) {
-    parts.push(`${radio.baudRate} baud`);
-  }
-
-  return parts.join(' · ');
-}
-
-function openName(manufacturer: string, modelId: string, name: string): void {
-  editing.value = undefined;
-  naming.value = { manufacturer, model: modelId, name };
-  editorOpen.value = true;
+function patchPending(modelId: string, patch: { name?: string; serialPort?: string }): void {
+  emit('update:picks', {
+    ownedModuleIds: props.ownedModuleIds,
+    pendingRadios: onboardingPendingRadioChange(props.pendingRadios, modelId, patch),
+  });
 }
 
 function openEdit(savedId: string): void {
@@ -80,7 +109,6 @@ function openEdit(savedId: string): void {
     return;
   }
 
-  naming.value = undefined;
   editing.value = radio;
   editorOpen.value = true;
 }
@@ -88,21 +116,35 @@ function openEdit(savedId: string): void {
 function onSave(draft: SavedRadioDraft): void {
   const current = editing.value;
 
-  if (current) {
-    const saved = saveRadio(current.id, draft);
-
-    if (!saved) {
-      return;
-    }
-
-    if (saved.model !== current.model) {
-      clearCardSession(saved.id);
-    }
-  } else if (!addRadio(draft)) {
+  if (!current || !saveRadio(current.id, draft, baudRatesFor(current.model))) {
     return;
   }
 
+  if (draft.model !== current.model) {
+    clearCardSession(current.id);
+  }
+
   editorOpen.value = false;
+}
+
+function updateSaved(savedId: string, patch: { name?: string; serialPort?: string }): void {
+  const radio = radios.value.find((entry) => entry.id === savedId);
+
+  if (!radio) {
+    return;
+  }
+
+  const draft = draftFromSavedRadio(radio);
+
+  if (patch.name !== undefined) {
+    draft.name = patch.name;
+  }
+
+  if (patch.serialPort !== undefined) {
+    draft.serialPort = patch.serialPort;
+  }
+
+  saveRadio(radio.id, draft, baudRatesFor(radio.model));
 }
 
 function requestRemove(savedId: string): void {
@@ -142,15 +184,19 @@ async function confirmRemove(): Promise<void> {
 
 async function loadPorts(): Promise<void> {
   if (!isTauriRuntime()) {
-    livePortCount.value = 0;
+    ports.value = [];
     return;
   }
 
+  loadingPorts.value = true;
+
   try {
     const available = await SerialPort.available_ports();
-    livePortCount.value = serialPortSelectItems(Object.keys(available), readSerialPortSettings()).length;
+    ports.value = serialPortSelectItems(Object.keys(available), readSerialPortSettings());
   } catch {
-    livePortCount.value = 0;
+    ports.value = [];
+  } finally {
+    loadingPorts.value = false;
   }
 }
 
@@ -164,9 +210,25 @@ onMounted(() => {
   <div class="mt-4">
     <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
       <div class="flex flex-col gap-4 px-4 py-4">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-highlighted">Which radios do you have?</p>
-          <p class="text-xs text-muted">Check the models you own so the next step can install their drivers.</p>
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-highlighted">Which radios do you have?</p>
+            <p class="text-xs text-muted">
+              Check the models you own. Each radio keeps its own port. The driver step saves it once that driver is
+              installed.
+            </p>
+          </div>
+          <UTooltip text="Refresh serial ports">
+            <UButton
+              icon="i-lucide-refresh-cw"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              :loading="loadingPorts"
+              aria-label="Refresh serial ports"
+              @click="loadPorts"
+            />
+          </UTooltip>
         </div>
 
         <div v-if="catalogLoading && catalogEntries.length === 0" class="flex items-center gap-2 text-sm text-muted">
@@ -189,10 +251,51 @@ onMounted(() => {
                 <UCheckbox
                   :model-value="radio.checked"
                   :label="radio.name"
-                  @update:model-value="toggle(radio.id, $event)"
+                  @update:model-value="toggle(radio.id, radio.name, $event)"
                 />
-                <div v-for="saved in radio.saved" :key="saved.id" class="mt-1 ml-7 flex items-center gap-2">
-                  <p class="min-w-0 flex-1 truncate text-xs text-muted">{{ detail(saved) }}</p>
+                <div
+                  v-if="radio.checked && radio.saved.length === 0"
+                  class="mt-2 ml-7 flex flex-wrap items-center gap-2"
+                >
+                  <UInput
+                    :model-value="pendingFor(radio.id)?.name || radio.name"
+                    size="sm"
+                    class="w-40"
+                    aria-label="Radio name"
+                    @update:model-value="patchPending(radio.id, { name: String($event ?? '') })"
+                  />
+                  <USelect
+                    :model-value="pendingFor(radio.id)?.serialPort || undefined"
+                    :items="portItems(pendingFor(radio.id)?.serialPort)"
+                    value-key="value"
+                    placeholder="Port"
+                    size="sm"
+                    class="w-48"
+                    aria-label="Serial port"
+                    @update:model-value="patchPending(radio.id, { serialPort: String($event ?? '') })"
+                  />
+                  <span v-if="portIsUnplugged(pendingFor(radio.id)?.serialPort)" class="text-xs text-muted">Unplugged</span>
+                </div>
+                <div v-for="saved in radio.saved" :key="saved.id" class="mt-2 ml-7 flex flex-wrap items-center gap-2">
+                  <UInput
+                    :model-value="saved.name"
+                    size="sm"
+                    class="w-40"
+                    aria-label="Radio name"
+                    @update:model-value="updateSaved(saved.id, { name: String($event ?? '') })"
+                  />
+                  <USelect
+                    :model-value="saved.serialPort || undefined"
+                    :items="portItems(saved.serialPort)"
+                    value-key="value"
+                    placeholder="Port"
+                    size="sm"
+                    class="w-48"
+                    aria-label="Serial port"
+                    @update:model-value="updateSaved(saved.id, { serialPort: String($event ?? '') })"
+                  />
+                  <span v-if="saved.baudRate !== undefined" class="text-xs text-muted">{{ saved.baudRate }} baud</span>
+                  <span v-if="portIsUnplugged(saved.serialPort)" class="text-xs text-muted">Unplugged</span>
                   <UButton
                     color="neutral"
                     variant="ghost"
@@ -210,15 +313,6 @@ onMounted(() => {
                     @click="requestRemove(saved.id)"
                   />
                 </div>
-                <UButton
-                  v-if="radio.canName"
-                  class="mt-1 ml-7"
-                  color="neutral"
-                  variant="link"
-                  size="xs"
-                  label="Name it / set port"
-                  @click="openName(group.manufacturer, radio.id, radio.name)"
-                />
               </li>
             </ul>
           </li>
@@ -227,14 +321,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <SavedRadioEditor
-      v-model:open="editorOpen"
-      :radio="editing"
-      :initial-manufacturer="naming?.manufacturer"
-      :initial-model="naming?.model"
-      :initial-name="naming?.name"
-      @save="onSave"
-    />
+    <SavedRadioEditor v-model:open="editorOpen" :radio="editing" @save="onSave" />
 
     <UModal
       v-model:open="removeConfirmOpen"

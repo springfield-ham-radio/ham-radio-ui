@@ -9,7 +9,9 @@ const plan = computed(() => onboardingFinishReadPlan(props.radios));
 const readOnFinish = ref(false);
 const selectedRadioId = ref<string | undefined>();
 const touched = ref(false);
-const radioItems = computed(() => plan.value.radios.map((radio) => ({ label: radio.name, value: radio.id })));
+const radioItems = computed(() =>
+  plan.value.radios.map((radio) => ({ label: `${radio.name} · ${radio.serialPort}`, value: radio.id })),
+);
 
 watch(
   plan,

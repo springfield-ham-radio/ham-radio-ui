@@ -30,10 +30,10 @@ export const ONBOARDING_STORAGE_KEY = 'ham-radio-onboarding';
  */
 export const ONBOARDING_LAUNCH_NEW_PROFILES = true;
 
-export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'cable', 'read'] as const;
+export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'read'] as const;
 
 /** Step ids removed from the guide. Stored documents may still name them. */
-const REMOVED_ONBOARDING_STEP_IDS = ['stations'] as const;
+const REMOVED_ONBOARDING_STEP_IDS = ['stations', 'cable'] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEP_IDS)[number];
 
@@ -43,12 +43,20 @@ export type OnboardingStatus = 'active' | 'completed';
 
 export type OnboardingCompletedReason = 'finished' | 'existing-data';
 
+/** Name and port chosen for a catalog model before its driver can create a saved radio. */
+export interface OnboardingPendingRadio {
+  modelId: string;
+  name: string;
+  serialPort: string;
+}
+
 export interface OnboardingState {
   version: 1;
   status: OnboardingStatus;
   completedReason?: OnboardingCompletedReason;
   steps: Record<OnboardingStepId, OnboardingStepStatus>;
   ownedModuleIds: string[];
+  pendingRadios: OnboardingPendingRadio[];
 }
 
 export interface OnboardingStepDefinition {
@@ -87,13 +95,6 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     description: 'Radio modules',
     icon: 'i-lucide-cpu',
     placeholder: 'Skipping this does not install or remove a driver.',
-  },
-  {
-    id: 'cable',
-    title: 'Cable',
-    description: 'Programming port',
-    icon: 'i-lucide-usb',
-    placeholder: 'Skipping this does not pick a serial port or create a radio.',
   },
   {
     id: 'read',
@@ -138,7 +139,6 @@ function pendingSteps(): Record<OnboardingStepId, OnboardingStepStatus> {
     home: 'pending',
     radios: 'pending',
     drivers: 'pending',
-    cable: 'pending',
     read: 'pending',
   };
 }
@@ -152,6 +152,7 @@ export function createOnboardingState(
     status,
     steps: pendingSteps(),
     ownedModuleIds: [],
+    pendingRadios: [],
   };
 
   if (status === 'completed' && completedReason) {
@@ -225,7 +226,6 @@ export interface OnboardingStepCompletion {
   home: boolean;
   radios: boolean;
   drivers: boolean;
-  cable: boolean;
   read: boolean;
 }
 
@@ -269,8 +269,6 @@ export interface OnboardingRadioChoice {
   name: string;
   checked: boolean;
   saved: OnboardingRadioSavedDetail[];
-  /** Name and port can be set only after this checked model has a driver and a port, and no saved radio yet. */
-  canName: boolean;
 }
 
 export interface OnboardingRadioGroup {
@@ -316,11 +314,8 @@ export function onboardingRadioGroups(input: {
     serialPort: string;
     baudRate?: number;
   }[];
-  installedModelIds: readonly string[];
-  hasPort: boolean;
 }): OnboardingRadioGroup[] {
   const owned = new Set(input.ownedModuleIds.map((id) => id.trim()).filter((id) => id.length > 0));
-  const installed = new Set(input.installedModelIds);
   const savedByModel = new Map<string, OnboardingRadioSavedDetail[]>();
 
   for (const radio of input.saved) {
@@ -379,7 +374,6 @@ export function onboardingRadioGroups(input: {
         name: model.name,
         checked,
         saved,
-        canName: checked && saved.length === 0 && installed.has(model.id) && input.hasPort,
       };
     }),
   }));
@@ -406,23 +400,7 @@ export function onboardingDriversAreDone(input: {
   return input.ownedModuleIds.every((id) => installed.has(id));
 }
 
-/**
- * Done when the selected port was in the live filtered list. A remembered or "(saved)" row does not count.
- * The browser build has no serial ports, so it cannot finish this step.
- */
-export function onboardingCableIsDone(input: {
-  desktop: boolean;
-  selectedPort: string | undefined;
-  livePorts: readonly string[];
-}): boolean {
-  if (!input.desktop || !input.selectedPort) {
-    return false;
-  }
-
-  return input.livePorts.includes(input.selectedPort);
-}
-
-export interface OnboardingCableModel {
+export interface OnboardingSavedRadioModel {
   id: string;
   manufacturer: string;
   displayName: string;
@@ -431,15 +409,14 @@ export interface OnboardingCableModel {
 }
 
 /**
- * Saved-radio drafts for owned models that are installed and not already saved.
- * A rejected draft returns its field error and no drafts, so nothing is written.
+ * Saved-radio drafts for pending models whose driver is installed and whose own port is set.
+ * A model with no port, or no driver yet, stays pending. Each radio keeps its own port.
  */
-export function planOnboardingCableRadios(input: {
-  ownedModuleIds: readonly string[];
-  models: readonly OnboardingCableModel[];
+export function planOnboardingSavedRadios(input: {
+  pending: readonly OnboardingPendingRadio[];
+  models: readonly OnboardingSavedRadioModel[];
   existing: readonly { name: string; model: string }[];
-  serialPort: string;
-}): { drafts: SavedRadioDraft[]; error?: string } {
+}): { drafts: SavedRadioDraft[] } {
   const taken = new Set(input.existing.map((radio) => savedRadioNameKey(radio.name)));
   const named: Array<{ name: string; model: string }> = input.existing.map((radio) => ({
     name: radio.name,
@@ -447,22 +424,25 @@ export function planOnboardingCableRadios(input: {
   }));
   const drafts: SavedRadioDraft[] = [];
 
-  for (const id of input.ownedModuleIds) {
-    if (named.some((radio) => radio.model === id)) {
+  for (const pending of input.pending) {
+    const port = pending.serialPort.trim();
+
+    if (!port || named.some((radio) => radio.model === pending.modelId)) {
       continue;
     }
 
-    const model = input.models.find((entry) => entry.id === id);
+    const model = input.models.find((entry) => entry.id === pending.modelId);
 
     if (!model) {
       continue;
     }
 
-    let name = model.displayName.trim() || model.id;
+    const base = pending.name.trim() || model.displayName.trim() || pending.modelId;
+    let name = base;
     let suffix = 2;
 
     while (taken.has(savedRadioNameKey(name))) {
-      name = `${model.displayName.trim() || model.id} ${suffix}`;
+      name = `${base} ${suffix}`;
       suffix += 1;
     }
 
@@ -471,8 +451,8 @@ export function planOnboardingCableRadios(input: {
     const draft: SavedRadioDraft = {
       name,
       manufacturer: model.manufacturer,
-      model: id,
-      serialPort: input.serialPort,
+      model: pending.modelId,
+      serialPort: port,
       baudRate: model.baudRate,
     };
     const issues = savedRadioDraftIssues(draft, {
@@ -481,20 +461,19 @@ export function planOnboardingCableRadios(input: {
         name: radio.name,
         manufacturer: '',
         model: radio.model,
-        serialPort: input.serialPort,
+        serialPort: port,
         createdAt: 0,
         updatedAt: 0,
       })),
       baudRates: model.baudRates,
     });
-    const error = Object.values(issues).find((issue) => issue !== undefined);
 
     if (savedRadioDraftHasIssues(issues)) {
-      return { drafts: [], error };
+      continue;
     }
 
     drafts.push(draft);
-    named.push({ name, model: id });
+    named.push({ name, model: pending.modelId });
   }
 
   return { drafts };
@@ -505,43 +484,58 @@ export interface OnboardingFinishReadRadio {
   name: string;
   serialPort: string;
   hasConfig: boolean;
+  /** Saved radio Finish can open. A pending model is only a note. */
+  canRead: boolean;
 }
 
 export interface OnboardingFinishReadPlan {
   enabled: boolean;
   defaultOn: boolean;
-  radios: Array<{ id: string; name: string }>;
+  radios: Array<{ id: string; name: string; serialPort: string }>;
   note?: string;
 }
 
-const FINISH_READ_GAP_NOTE = {
-  radio: 'Save a radio before this can read one.',
-  driver: 'Install a driver before this can read a radio.',
-  port: 'Set a programming port before this can read a radio.',
-} as const;
+function englishRadioList(names: readonly string[]): string {
+  const clean = names.map((name) => name.trim()).filter((name) => name.length > 0);
 
-/**
- * Finish can read a saved radio that already has a driver and a port.
- * Otherwise the switch stays off and the note names the missing piece.
- */
-export function onboardingFinishReadPlan(models: readonly OnboardingFinishReadRadio[]): OnboardingFinishReadPlan {
-  const usable = models.filter((model) => model.hasConfig && model.serialPort.trim().length > 0);
-
-  if (usable.length > 0) {
-    return {
-      enabled: true,
-      defaultOn: true,
-      radios: usable.map((model) => ({ id: model.id, name: model.name })),
-    };
+  if (clean.length <= 1) {
+    return clean[0] ?? '';
   }
 
-  const gap = models.length === 0 ? 'radio' : models.some((model) => model.hasConfig) ? 'port' : 'driver';
+  if (clean.length === 2) {
+    return `${clean[0]} and ${clean[1]}`;
+  }
+
+  return `${clean.slice(0, -1).join(', ')}, and ${clean.at(-1)}`;
+}
+
+/**
+ * Finish can read a saved radio that already has a driver and its own port.
+ * A missing port names that radio. A pending model cannot be selected.
+ */
+export function onboardingFinishReadPlan(models: readonly OnboardingFinishReadRadio[]): OnboardingFinishReadPlan {
+  const usable = models.filter(
+    (model) => model.canRead && model.hasConfig && model.serialPort.trim().length > 0,
+  );
+  const missingPort = models.filter((model) => model.hasConfig && model.serialPort.trim().length === 0);
+  const missingDriver = models.filter((model) => !model.hasConfig);
+  const note = missingPort.length > 0
+    ? `Set a programming port for ${englishRadioList(missingPort.map((model) => model.name))}.`
+    : missingDriver.length > 0
+      ? `Install a driver for ${englishRadioList(missingDriver.map((model) => model.name))}.`
+      : usable.length === 0
+        ? 'Save a radio before this can read one.'
+        : undefined;
 
   return {
-    enabled: false,
-    defaultOn: false,
-    radios: [],
-    note: FINISH_READ_GAP_NOTE[gap],
+    enabled: usable.length > 0,
+    defaultOn: usable.length > 0,
+    radios: usable.map((model) => ({
+      id: model.id,
+      name: model.name,
+      serialPort: model.serialPort.trim(),
+    })),
+    ...(note ? { note } : {}),
   };
 }
 
@@ -556,10 +550,65 @@ export function onboardingStepIsDone(stepId: OnboardingStepId, completion: Onboa
  * Replace the radios picked before a saved radio can exist. Blank ids are dropped.
  */
 export function withOwnedModuleIds(state: OnboardingState, ids: readonly string[]): OnboardingState {
+  const ownedModuleIds = parseOwnedModuleIds(ids);
+
   return {
     ...state,
-    ownedModuleIds: parseOwnedModuleIds(ids),
+    ownedModuleIds,
+    pendingRadios: pendingRadiosForOwned(ownedModuleIds, state.pendingRadios),
   };
+}
+
+/**
+ * Check or uncheck a catalog model. Unchecking drops its pending name and port and does not delete a saved radio.
+ */
+export function onboardingRadioPicksAfterToggle(input: {
+  ownedModuleIds: readonly string[];
+  pendingRadios: readonly OnboardingPendingRadio[];
+  modelId: string;
+  modelName: string;
+  checked: boolean;
+}): { ownedModuleIds: string[]; pendingRadios: OnboardingPendingRadio[] } {
+  const ownedModuleIds = onboardingRadioOwnedIdsAfterToggle({
+    ownedModuleIds: input.ownedModuleIds,
+    modelId: input.modelId,
+    checked: input.checked,
+  });
+  const modelId = input.modelId.trim();
+  const pendingRadios = ownedModuleIds.map((id) => {
+    const current = input.pendingRadios.find((radio) => radio.modelId === id);
+
+    if (current) {
+      return current;
+    }
+
+    return {
+      modelId: id,
+      name: id === modelId ? input.modelName.trim() : '',
+      serialPort: '',
+    };
+  });
+
+  return { ownedModuleIds, pendingRadios };
+}
+
+/** Replace the name or port stored for one pending model. */
+export function onboardingPendingRadioChange(
+  pendingRadios: readonly OnboardingPendingRadio[],
+  modelId: string,
+  patch: { name?: string; serialPort?: string },
+): OnboardingPendingRadio[] {
+  return pendingRadios.map((radio) => {
+    if (radio.modelId !== modelId) {
+      return radio;
+    }
+
+    return {
+      modelId: radio.modelId,
+      name: patch.name !== undefined ? patch.name : radio.name,
+      serialPort: patch.serialPort !== undefined ? patch.serialPort : radio.serialPort,
+    };
+  });
 }
 
 export function skipOnboardingStep(state: OnboardingState, stepId: OnboardingStepId): OnboardingState {
@@ -578,6 +627,7 @@ export function skipOnboardingStep(state: OnboardingState, stepId: OnboardingSte
   return {
     ...skipped,
     ownedModuleIds: [],
+    pendingRadios: [],
   };
 }
 
@@ -625,6 +675,43 @@ function parseOwnedModuleIds(value: unknown): string[] {
   return ids;
 }
 
+function pendingRadiosForOwned(
+  ownedModuleIds: readonly string[],
+  pendingRadios: readonly OnboardingPendingRadio[],
+): OnboardingPendingRadio[] {
+  return ownedModuleIds.map((modelId) => {
+    const current = pendingRadios.find((radio) => radio.modelId === modelId);
+
+    return current ?? { modelId, name: '', serialPort: '' };
+  });
+}
+
+function parsePendingRadios(value: unknown, ownedModuleIds: readonly string[]): OnboardingPendingRadio[] {
+  const stored: OnboardingPendingRadio[] = [];
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (!isRecord(entry) || typeof entry.modelId !== 'string') {
+        continue;
+      }
+
+      const modelId = entry.modelId.trim();
+
+      if (!modelId || stored.some((radio) => radio.modelId === modelId)) {
+        continue;
+      }
+
+      stored.push({
+        modelId,
+        name: typeof entry.name === 'string' ? entry.name.trim() : '',
+        serialPort: typeof entry.serialPort === 'string' ? entry.serialPort.trim() : '',
+      });
+    }
+  }
+
+  return pendingRadiosForOwned(ownedModuleIds, stored);
+}
+
 export function parseOnboardingState(raw: string | null): OnboardingState | undefined {
   if (!raw) {
     return undefined;
@@ -649,11 +736,13 @@ export function parseOnboardingState(raw: string | null): OnboardingState | unde
       steps[stepId] = stepStatus(storedSteps[stepId]);
     }
 
+    const ownedModuleIds = parseOwnedModuleIds(parsed.ownedModuleIds);
     const state: OnboardingState = {
       version: 1,
       status: parsed.status,
       steps,
-      ownedModuleIds: parseOwnedModuleIds(parsed.ownedModuleIds),
+      ownedModuleIds,
+      pendingRadios: parsePendingRadios(parsed.pendingRadios, ownedModuleIds),
     };
 
     if (parsed.status === 'completed') {
@@ -675,6 +764,7 @@ export function serializeOnboardingState(state: OnboardingState): string {
     status: state.status,
     steps: state.steps,
     ownedModuleIds: state.ownedModuleIds,
+    pendingRadios: state.pendingRadios,
   };
 
   if (state.status === 'completed' && state.completedReason) {
@@ -685,7 +775,7 @@ export function serializeOnboardingState(state: OnboardingState): string {
 }
 
 /**
- * True when a stored document still names a removed step, such as `stations`.
+ * True when a stored document still names a removed step, such as `stations` or `cable`.
  * Reading that document drops the step, and this says the rewritten document should be saved.
  */
 export function onboardingStoredDocumentNeedsRewrite(raw: string | null): boolean {
