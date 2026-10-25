@@ -30,13 +30,15 @@ import {
 
 const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
 const { directory } = useOperatorLicense();
-const { stations, saveStation } = useStationAntennas();
+const { stations, saveHomeStation } = useStationAntennas();
 const { radios, addRadio } = useSavedRadios();
 const { configurations, openReadFromRadio, progressOpen, readBackupSaved } = useRadio();
 const router = useRouter();
 
 const active = ref<OnboardingStepId>('licenses');
 const homeEditor = ref<{ save: () => boolean } | null>(null);
+const homeCanSave = ref(false);
+const homeSessionDraft = ref<StationDraft | undefined>();
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
@@ -108,6 +110,10 @@ const completion = computed(() => ({
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
 const canContinue = computed(() => {
+  if (active.value === 'home') {
+    return homeCanSave.value;
+  }
+
   if (active.value === 'read' || active.value === 'stations') {
     return true;
   }
@@ -194,7 +200,12 @@ function skip(): void {
 }
 
 function onHomeSave(draft: StationDraft): void {
-  saveStation(HOME_STATION_ID, draft);
+  saveHomeStation(draft);
+  homeSessionDraft.value = draft;
+}
+
+function onHomeDraft(draft: StationDraft): void {
+  homeSessionDraft.value = draft;
 }
 
 function onCableSelection(next: { port: string | undefined; livePorts: string[]; loading: boolean }): void {
@@ -300,7 +311,7 @@ function continueStep(): void {
     }
   }
 
-  if (!onboardingStepIsDone(active.value, completion.value)) {
+  if (active.value !== 'home' && !onboardingStepIsDone(active.value, completion.value)) {
     return;
   }
 
@@ -349,9 +360,13 @@ function finishLater(): void {
             <RadioStationEditor
               ref="homeEditor"
               embedded
+              hide-save
               :open="true"
               :station="homeStation"
+              :session-draft="homeSessionDraft"
               @save="onHomeSave"
+              @draft="onHomeDraft"
+              @can-save="homeCanSave = $event"
             />
           </div>
         </template>

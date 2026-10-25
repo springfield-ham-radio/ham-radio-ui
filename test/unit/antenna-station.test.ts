@@ -36,6 +36,7 @@ import {
   selectStationInStore,
   serializeStationAntennaStore,
   stationDraftErrors,
+  stationEditorCanSave,
   updateStationAntenna,
 } from '../../app/utils/antenna-station.ts';
 
@@ -594,6 +595,15 @@ describe('radio stations', () => {
     expect(stationDraftErrors({ nickname: 'Cabin', latitude: 38.6 })?.longitude).toBeTypeOf('string');
     expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'nope' })?.gridsquare).toBeTypeOf('string');
     expect(stationDraftErrors({ nickname: 'Cabin', gridsquare: 'EM48' })).toBe(undefined);
+    expect(stationEditorCanSave({ draft: { nickname: ' ' } })).toBe(false);
+    expect(stationEditorCanSave({ draft: { nickname: 'Home' } })).toBe(true);
+    expect(stationEditorCanSave({ draft: { nickname: 'Home', latitude: 38.6 } })).toBe(false);
+    expect(
+      stationEditorCanSave({
+        draft: { nickname: 'Home' },
+        latitudeError: 'Enter a latitude.',
+      }),
+    ).toBe(false);
   });
 
   it('should keep at least one station and delete antennas with a removed site', () => {

@@ -620,6 +620,14 @@ describe('onboarding step transitions', () => {
     expect(stationsStep).not.toContain('No antennas at this site yet');
     expect(stepper).toContain('v-if="!isLast"');
     expect(stepper).toContain("active.value === 'stations'");
+
+    const stationEditor = readFileSync('app/components/RadioStationEditor.vue', 'utf8');
+
+    expect(stepper).toContain('hide-save');
+    expect(stepper).toContain('saveHomeStation');
+    expect(stepper).toContain('homeSessionDraft');
+    expect(stationEditor).toContain('v-if="!hideSave"');
+    expect(stationEditor).toContain(":label=\"isCreate ? 'Add' : 'Save'\"");
   });
 
   it('should finish every step when its check passes', () => {

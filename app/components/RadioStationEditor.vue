@@ -3,6 +3,7 @@ import {
   defaultStationDraft,
   draftFromRadioStation,
   stationDraftErrors,
+  stationEditorCanSave,
   type RadioStation,
   type StationDraft,
   type StationLocationSource,
@@ -21,11 +22,17 @@ const props = defineProps<{
   station?: RadioStation;
   /** Render the form in place. Preferences keeps the slideover. */
   embedded?: boolean;
+  /** Onboarding hides this form's Save button and uses the guide's Continue button. */
+  hideSave?: boolean;
+  /** Unsaved Home edits kept by the guide while the step is not on screen. */
+  sessionDraft?: StationDraft;
 }>();
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
   save: [draft: StationDraft];
+  draft: [draft: StationDraft];
+  'can-save': [canSave: boolean];
 }>();
 
 const nickname = ref('');
@@ -54,17 +61,7 @@ watch(
   },
 );
 
-watch(
-  () => props.station,
-  () => {
-    if (!props.embedded) {
-      return;
-    }
-
-    applyDraft(props.station ? draftFromRadioStation(props.station) : defaultStationDraft());
-  },
-  { immediate: true },
-);
+const restoredSession = ref(false);
 
 function applyDraft(draft: StationDraft): void {
   nickname.value = draft.nickname;
@@ -77,6 +74,21 @@ function applyDraft(draft: StationDraft): void {
   latitudeError.value = undefined;
   longitudeError.value = undefined;
 }
+
+watch(
+  () => props.station,
+  () => {
+    if (!props.embedded || restoredSession.value) {
+      return;
+    }
+
+    restoredSession.value = true;
+    applyDraft(
+      props.sessionDraft ?? (props.station ? draftFromRadioStation(props.station) : defaultStationDraft()),
+    );
+  },
+  { immediate: true },
+);
 
 function parsedDecimal(result: DmsParseResult): number | undefined {
   return 'value' in result ? result.value : undefined;
@@ -142,22 +154,60 @@ function close(): void {
   emit('update:open', false);
 }
 
-function save(): boolean {
+function coordinateErrors(): { latitude?: string; longitude?: string } {
   const latitude = parseDmsInput(latitudeDms.value, 'latitude');
   const longitude = parseDmsInput(longitudeDms.value, 'longitude');
+  const errors = stationDraftErrors(currentDraft());
+
+  return {
+    latitude: 'error' in latitude ? latitude.error : errors?.latitude,
+    longitude: 'error' in longitude ? longitude.error : errors?.longitude,
+  };
+}
+
+function canSaveDraft(): boolean {
+  const coordinates = coordinateErrors();
+
+  return stationEditorCanSave({
+    draft: currentDraft(),
+    latitudeError: coordinates.latitude,
+    longitudeError: coordinates.longitude,
+  });
+}
+
+function showFieldErrors(): void {
   const draft = currentDraft();
   const errors = stationDraftErrors(draft);
+  const coordinates = coordinateErrors();
 
   nicknameError.value = errors?.nickname;
   gridError.value = errors?.gridsquare;
-  latitudeError.value = 'error' in latitude ? latitude.error : errors?.latitude;
-  longitudeError.value = 'error' in longitude ? longitude.error : errors?.longitude;
+  latitudeError.value = coordinates.latitude;
+  longitudeError.value = coordinates.longitude;
+}
 
-  if (nicknameError.value || gridError.value || latitudeError.value || longitudeError.value) {
+watch(
+  [nickname, gridText, latitudeDms, longitudeDms, locationSource],
+  () => {
+    if (!props.embedded || !props.hideSave) {
+      return;
+    }
+
+    showFieldErrors();
+    emit('draft', currentDraft());
+    emit('can-save', canSaveDraft());
+  },
+  { deep: true, immediate: true },
+);
+
+function save(): boolean {
+  showFieldErrors();
+
+  if (!canSaveDraft()) {
     return false;
   }
 
-  emit('save', draft);
+  emit('save', currentDraft());
   return true;
 }
 
@@ -262,7 +312,7 @@ defineExpose({ save });
         Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
       </p>
     </div>
-    <div class="flex justify-end">
+    <div v-if="!hideSave" class="flex justify-end">
       <UButton color="primary" label="Save" @click="save" />
     </div>
   </div>
