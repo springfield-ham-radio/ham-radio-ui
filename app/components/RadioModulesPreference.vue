@@ -12,8 +12,8 @@ import {
   sha256HexForLocalFile,
 } from '~/utils/radio-module-install';
 import {
+  availableDriverGroupsForPicker,
   buildAvailableManufacturerGroups,
-  filterAvailableGroupsToEntryIds,
   groupInstalledRadiosByManufacturer,
   installedDriverVersionLabel,
   installedRadiosEligibleForVerifiedSwitch,
@@ -53,7 +53,7 @@ const pendingReplaceItem = ref<InstalledRadioListItem | undefined>();
 
 const installedGroups = computed(() => groupInstalledRadiosByManufacturer(installedListItems.value));
 const availableGroups = computed(() =>
-  filterAvailableGroupsToEntryIds(
+  availableDriverGroupsForPicker(
     buildAvailableManufacturerGroups(catalogRecords.value, catalogEntries.value),
     props.entryIds,
   ),
@@ -66,6 +66,15 @@ const unmatchedEntryIds = computed(() => {
   const known = new Set(catalogEntries.value.map((entry) => entry.id));
   return props.entryIds.filter((id) => !known.has(id));
 });
+const pickedDriversInstalled = computed(
+  () =>
+    props.entryIds !== undefined &&
+    props.entryIds.length > 0 &&
+    !catalogLoading.value &&
+    !catalogFailure.value &&
+    availableGroups.value.length === 0 &&
+    unmatchedEntryIds.value.length === 0,
+);
 const switchToVerifiedTargets = computed(() => installedRadiosEligibleForVerifiedSwitch(installedListItems.value));
 
 const removeConfirmMessage = computed(() => {
@@ -658,7 +667,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+    <p v-if="pickedDriversInstalled" class="text-sm text-muted">All drivers for your radios are installed.</p>
+    <div v-else class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
       <div class="flex flex-col gap-4 px-4 py-4">
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Available drivers</p>

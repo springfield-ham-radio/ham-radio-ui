@@ -309,6 +309,40 @@ export function filterAvailableGroupsToEntryIds<T extends { radios: Array<{ entr
     .filter((group) => group.radios.length > 0);
 }
 
+function availableRadioIsInstalled(radio: {
+  installedOfficially: boolean;
+  installedBeta: boolean;
+  installedUnverified: boolean;
+}): boolean {
+  return radio.installedOfficially || radio.installedBeta || radio.installedUnverified;
+}
+
+/**
+ * Drivers step list.
+ *
+ * A manufacturer group stays in the full catalog while any sibling model is not
+ * installed. Narrowing to the picked ids afterward would still show an installed
+ * model from that group. Drop those installed rows here. Omit `entryIds` to keep
+ * the Preferences list, including its Installed badges.
+ */
+export function availableDriverGroupsForPicker(
+  groups: readonly AvailableManufacturerGroup[],
+  entryIds: readonly string[] | undefined,
+): AvailableManufacturerGroup[] {
+  const limited = filterAvailableGroupsToEntryIds(groups, entryIds);
+
+  if (entryIds === undefined) {
+    return limited;
+  }
+
+  return limited
+    .map((group) => ({
+      ...group,
+      radios: group.radios.filter((radio) => !availableRadioIsInstalled(radio)),
+    }))
+    .filter((group) => group.radios.length > 0);
+}
+
 export function buildAvailableManufacturerGroups(
   records: RadioCatalogRecord[],
   catalog: RadioModuleCatalogEntry[],

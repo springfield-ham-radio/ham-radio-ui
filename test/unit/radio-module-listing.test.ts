@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import type { LoadedRadioConfig, RadioCatalogRecord } from '../../app/utils/radio-catalog-db.ts';
 import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
 import {
+  availableDriverGroupsForPicker,
   buildAvailableManufacturerGroups,
   filterAvailableGroupsToEntryIds,
   groupCatalogRadiosByManufacturer,
@@ -488,5 +490,44 @@ describe('radio module listing', () => {
       { manufacturer: 'Baofeng', radios: [{ entry: { id: 'baofeng-uv82' } }] },
       { manufacturer: 'Kenwood', radios: [{ entry: { id: 'kenwood-th-d74' } }] },
     ]);
+  });
+
+  it('should drop installed drivers from the onboarding list for every manufacturer', () => {
+    const installed = [
+      record({
+        modelId: 'baofeng-uv5r',
+        name: 'UV-5R',
+        manufacturer: 'Baofeng',
+        version: '3.7.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/baofeng-uv5r/3.7.0',
+      }),
+      record({
+        modelId: 'kenwood-tm-d710a',
+        name: 'TM-D710A',
+        manufacturer: 'Kenwood',
+        version: '1.13.0',
+        source: 'installed',
+        sourcePath: '/tmp/radio-modules/kenwood-tm-d710a/1.13.0',
+      }),
+    ];
+    const groups = buildAvailableManufacturerGroups(installed, catalog);
+    const picked = ['baofeng-uv5r', 'kenwood-tm-d710a'];
+
+    expect(groups.find((group) => group.manufacturer === 'Baofeng')).toBeUndefined();
+    expect(
+      filterAvailableGroupsToEntryIds(groups, picked).flatMap((group) => group.radios.map((radio) => radio.modelId)),
+    ).toEqual(['kenwood-tm-d710a']);
+    expect(availableDriverGroupsForPicker(groups, picked)).toEqual([]);
+    expect(
+      availableDriverGroupsForPicker(groups, ['baofeng-uv5r', 'kenwood-th-d74']).flatMap((group) =>
+        group.radios.map((radio) => radio.modelId),
+      ),
+    ).toEqual(['kenwood-th-d74']);
+    expect(availableDriverGroupsForPicker(groups, undefined).some((group) => group.manufacturer === 'Kenwood')).toBe(true);
+
+    const preference = readFileSync('app/components/RadioModulesPreference.vue', 'utf8');
+    expect(preference).toContain('availableDriverGroupsForPicker');
+    expect(preference).toContain('All drivers for your radios are installed.');
   });
 });
