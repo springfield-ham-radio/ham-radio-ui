@@ -13,7 +13,6 @@ import {
   parseLicenseDirectory,
   type LicenseDirectory,
 } from '~/utils/license-people';
-import { backupFileSegment, parseBackupFileName } from '~/utils/radio-image-backup';
 import {
   SAVED_RADIOS_STORAGE_KEY,
   savedRadioDraftHasIssues,
@@ -101,7 +100,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     title: 'First read',
     description: 'Backup before edits',
     icon: 'i-lucide-archive',
-    placeholder: 'Finish closes the guide. A backup is optional.',
+    placeholder: 'Finish closes the guide. A read is optional.',
   },
 ];
 
@@ -501,86 +500,49 @@ export function planOnboardingCableRadios(input: {
   return { drafts };
 }
 
-export interface OnboardingReadModel {
+export interface OnboardingFinishReadRadio {
   id: string;
   name: string;
   serialPort: string;
   hasConfig: boolean;
 }
 
-export type OnboardingReadContinueResult =
-  | { action: 'advance' }
-  | { action: 'read'; radioId: string; name: string; serialPort: string }
-  | { action: 'blocked'; reason: 'desktop' | 'backups' | 'driver' | 'port'; name?: string };
+export interface OnboardingFinishReadPlan {
+  enabled: boolean;
+  defaultOn: boolean;
+  radios: Array<{ id: string; name: string }>;
+  note?: string;
+}
+
+const FINISH_READ_GAP_NOTE = {
+  radio: 'Save a radio before this can read one.',
+  driver: 'Install a driver before this can read a radio.',
+  port: 'Set a programming port before this can read a radio.',
+} as const;
 
 /**
- * Continue opens the read dialog, moves on when a backup already exists, or explains the missing piece.
- * It does not fail closed with no message.
+ * Finish can read a saved radio that already has a driver and a port.
+ * Otherwise the switch stays off and the note names the missing piece.
  */
-export function onboardingReadContinue(input: {
-  desktop: boolean;
-  backupsEnabled: boolean;
-  hasBackup: boolean;
-  models: readonly OnboardingReadModel[];
-}): OnboardingReadContinueResult {
-  if (input.hasBackup) {
-    return { action: 'advance' };
-  }
+export function onboardingFinishReadPlan(models: readonly OnboardingFinishReadRadio[]): OnboardingFinishReadPlan {
+  const usable = models.filter((model) => model.hasConfig && model.serialPort.trim().length > 0);
 
-  if (!input.desktop) {
-    return { action: 'blocked', reason: 'desktop' };
-  }
-
-  if (!input.backupsEnabled) {
-    return { action: 'blocked', reason: 'backups' };
-  }
-
-  const readable = input.models.find((model) => model.hasConfig && model.serialPort.trim().length > 0);
-
-  if (readable) {
+  if (usable.length > 0) {
     return {
-      action: 'read',
-      radioId: readable.id,
-      name: readable.name,
-      serialPort: readable.serialPort,
+      enabled: true,
+      defaultOn: true,
+      radios: usable.map((model) => ({ id: model.id, name: model.name })),
     };
   }
 
-  const missingDriver = input.models.find((model) => !model.hasConfig);
+  const gap = models.length === 0 ? 'radio' : models.some((model) => model.hasConfig) ? 'port' : 'driver';
 
-  if (missingDriver) {
-    return { action: 'blocked', reason: 'driver', name: missingDriver.name };
-  }
-
-  return { action: 'blocked', reason: 'port' };
-}
-
-/**
- * Done when a read or pre-write backup already exists for one of the operator's models.
- */
-export function onboardingReadIsDone(input: {
-  fileNames: readonly string[];
-  models: readonly { manufacturer: string; model: string }[];
-}): boolean {
-  const wanted = new Set(
-    input.models.map(
-      (model) => `${backupFileSegment(model.manufacturer).toLowerCase()}\0${backupFileSegment(model.model).toLowerCase()}`,
-    ),
-  );
-
-  if (wanted.size === 0) {
-    return false;
-  }
-
-  return input.fileNames.some((fileName) => {
-    const parsed = parseBackupFileName(fileName.trim().split(/[\\/]/).pop() ?? '');
-
-    if (!parsed || (parsed.kind !== 'read' && parsed.kind !== 'prewrite')) {
-      return false;
-    }
-
-    return wanted.has(`${parsed.manufacturer.toLowerCase()}\0${parsed.model.toLowerCase()}`);
-  });
+  return {
+    enabled: false,
+    defaultOn: false,
+    radios: [],
+    note: FINISH_READ_GAP_NOTE[gap],
+  };
 }
 
 /**

@@ -42,9 +42,8 @@ import {
   onboardingHomeIsDone,
   onboardingRadioGroups,
   onboardingRadioOwnedIdsAfterToggle,
+  onboardingFinishReadPlan,
   onboardingRadiosAreDone,
-  onboardingReadContinue,
-  onboardingReadIsDone,
   onboardingStoredDocumentNeedsRewrite,
   planOnboardingCableRadios,
   onboardingLaunchPlan,
@@ -685,97 +684,67 @@ describe('onboarding step transitions', () => {
       }).error,
     ).toBe('Choose a default serial port');
 
-    expect(
-      onboardingReadIsDone({
-        fileNames: ['Baofeng_baofeng-uv5r_20261024-215009_read.img'],
-        models: [{ manufacturer: 'Baofeng', model: 'baofeng-uv5r' }],
-      }),
-    ).toBe(true);
-    expect(
-      onboardingReadIsDone({
-        fileNames: ['backups/Baofeng_baofeng-uv5r_20261024-215009_read.img'],
-        models: [{ manufacturer: 'baofeng', model: 'Baofeng-UV5R' }],
-      }),
-    ).toBe(true);
-    expect(
-      onboardingReadIsDone({
-        fileNames: ['Baofeng_baofeng-uv5r_20261024-215009_read.img'],
-        models: [{ manufacturer: 'Baofeng', model: 'UV-5R' }],
-      }),
-    ).toBe(false);
-    expect(
-      onboardingReadIsDone({
-        fileNames: ['Baofeng_baofeng-uv5r_20261025-120000_prewrite.img'],
-        models: [{ manufacturer: 'Kenwood', model: 'th-d74' }],
-      }),
-    ).toBe(false);
-    expect(onboardingReadIsDone({ fileNames: [], models: [] })).toBe(false);
+    const uv5r = { id: 'radio-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb', hasConfig: true };
+    const tmD710a = { id: 'radio-tmd710a', name: 'TM-D710A', serialPort: '/dev/cu.usb2', hasConfig: true };
 
-    const ready = { id: 'radio-1', name: 'UV-5R', serialPort: '/dev/cu.usb', hasConfig: true };
-
-    expect(
-      onboardingReadContinue({
-        desktop: true,
-        backupsEnabled: true,
-        hasBackup: false,
-        models: [ready],
-      }),
-    ).toEqual({ action: 'read', radioId: 'radio-1', name: 'UV-5R', serialPort: '/dev/cu.usb' });
-    expect(
-      onboardingReadContinue({
-        desktop: false,
-        backupsEnabled: false,
-        hasBackup: true,
-        models: [],
-      }),
-    ).toEqual({ action: 'advance' });
-    expect(
-      onboardingReadContinue({ desktop: false, backupsEnabled: true, hasBackup: false, models: [ready] }),
-    ).toEqual({ action: 'blocked', reason: 'desktop' });
-    expect(
-      onboardingReadContinue({ desktop: true, backupsEnabled: false, hasBackup: false, models: [ready] }),
-    ).toEqual({ action: 'blocked', reason: 'backups' });
-    expect(
-      onboardingReadContinue({
-        desktop: true,
-        backupsEnabled: true,
-        hasBackup: false,
-        models: [{ ...ready, hasConfig: false }],
-      }),
-    ).toEqual({ action: 'blocked', reason: 'driver', name: 'UV-5R' });
-    expect(
-      onboardingReadContinue({
-        desktop: true,
-        backupsEnabled: true,
-        hasBackup: false,
-        models: [{ ...ready, serialPort: '  ' }],
-      }),
-    ).toEqual({ action: 'blocked', reason: 'port' });
-    expect(
-      onboardingReadContinue({ desktop: true, backupsEnabled: true, hasBackup: false, models: [] }),
-    ).toEqual({ action: 'blocked', reason: 'port' });
+    expect(onboardingFinishReadPlan([])).toEqual({
+      enabled: false,
+      defaultOn: false,
+      radios: [],
+      note: 'Save a radio before this can read one.',
+    });
+    expect(onboardingFinishReadPlan([{ ...uv5r, hasConfig: false }])).toMatchObject({
+      enabled: false,
+      defaultOn: false,
+      note: 'Install a driver before this can read a radio.',
+    });
+    expect(onboardingFinishReadPlan([{ ...uv5r, serialPort: '  ' }])).toMatchObject({
+      enabled: false,
+      defaultOn: false,
+      note: 'Set a programming port before this can read a radio.',
+    });
+    expect(onboardingFinishReadPlan([uv5r])).toEqual({
+      enabled: true,
+      defaultOn: true,
+      radios: [{ id: 'radio-uv5r', name: 'UV-5R' }],
+    });
+    expect(onboardingFinishReadPlan([uv5r, tmD710a, { ...uv5r, id: 'bare', name: 'Bare', hasConfig: false }])).toEqual({
+      enabled: true,
+      defaultOn: true,
+      radios: [
+        { id: 'radio-uv5r', name: 'UV-5R' },
+        { id: 'radio-tmd710a', name: 'TM-D710A' },
+      ],
+    });
 
     const stepper = readFileSync('app/components/OnboardingStepper.vue', 'utf8');
     const portDialog = readFileSync('app/components/RadioPortDialog.vue', 'utf8');
     const progressDialog = readFileSync('app/components/RadioProgressDialog.vue', 'utf8');
     const readStep = readFileSync('app/components/OnboardingReadStep.vue', 'utf8');
 
-    expect(stepper).toContain('openReadFromRadio(decision.radioId)');
-    expect(stepper).toContain('readAttempted.value = true');
+    expect(stepper).toContain('openCard(radioId)');
+    expect(stepper).toContain('openReadFromRadio(cardId)');
+    expect(stepper).toContain("finishOnboarding(completeOnboardingStep(state.value, 'read'))");
+    expect(stepper).not.toContain('onboardingReadContinue');
+    expect(stepper).not.toContain('refreshReadBackups');
     expect(stepper).not.toContain('z-50');
     expect(portDialog).toContain("overlay: 'z-50'");
     expect(progressDialog).toContain("overlay: 'z-50'");
-    expect(readStep).toContain('Go to Cable');
-    expect(readStep).toContain('Go to Drivers');
-    expect(readStep).toContain('Open Backups');
+    expect(progressDialog).toContain('RadioErrorDetails');
+    expect(readStep).toContain('label="Read my radio when I finish"');
+    expect(readStep).toContain('description="The read saves a backup before any edits."');
+    expect(readStep).toContain('USelectMenu');
+    expect(readStep).toContain('plan.radios.length > 1');
+    expect(readStep).not.toContain('Read radio');
+    expect(readStep).not.toContain('Go to Cable');
+    expect(readStep).not.toContain('Go to Drivers');
+    expect(readStep).not.toContain('Open Backups');
 
     expect(existsSync('app/components/OnboardingStationsStep.vue')).toBe(false);
     expect(stepper).not.toContain('OnboardingStationsStep');
     expect(stepper).not.toContain("active.value === 'stations'");
     expect(stepper).toContain('v-if="!isLast"');
     expect(stepper).toContain("active.value === 'read'");
-    expect(stepper).toContain('finishOnboarding(marked)');
-    expect(readStep).toContain('label="Read radio"');
     expect(readStep).not.toContain('Skip stays available');
     expect(ONBOARDING_STEP_IDS).not.toContain('stations');
     expect(ONBOARDING_STEP_IDS.at(-1)).toBe('read');

@@ -3,8 +3,6 @@ import type { StepperItem } from '@nuxt/ui';
 import { HOME_STATION_ID, type StationDraft } from '~/utils/antenna-station';
 import type { OnboardingLicenseSessionDraft } from '~/utils/license-people';
 import { defaultProgrammingBaudRate, programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
-import { listRadioImageBackups } from '~/utils/radio-image-backup-io';
-import { readRadioImageBackupSettings } from '~/utils/radio-image-backup';
 import { radioDisplayName } from '~/utils/radio-module-listing';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
@@ -17,8 +15,6 @@ import {
   onboardingHomeIsDone,
   onboardingLicensesAreDone,
   onboardingRadiosAreDone,
-  onboardingReadContinue,
-  onboardingReadIsDone,
   onboardingStepIsDone,
   onboardingStepperItems,
   planOnboardingCableRadios,
@@ -32,52 +28,30 @@ const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } =
 const { directory } = useOperatorLicense();
 const { stations, saveHomeStation } = useStationAntennas();
 const { radios, addRadio } = useSavedRadios();
-const { configurations, openReadFromRadio, progressOpen, readBackupSaved } = useRadio();
+const { configurations, openReadFromRadio } = useRadio();
+const { cards, openCard } = useRadioBoard();
 const router = useRouter();
+const route = useRoute();
 
 const active = ref<OnboardingStepId>('licenses');
 const homeEditor = ref<{ save: () => Promise<boolean> } | null>(null);
 const homeSessionDraft = ref<StationDraft | undefined>();
 const licenseEditor = ref<{ save: () => Promise<boolean> } | null>(null);
 const licenseSessionDraft = ref<OnboardingLicenseSessionDraft | undefined>();
+const readEditor = ref<{ finishRead: () => string | undefined } | null>(null);
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
 const ownedModuleIds = computed(() => state.value?.ownedModuleIds ?? []);
 const cableSelection = ref({ port: undefined as string | undefined, livePorts: [] as string[], loading: false });
 const cableFieldError = ref<string | undefined>();
-const readFileNames = ref<string[]>([]);
-const readAttempted = ref(false);
-const readModels = computed(() =>
+const readRadios = computed(() =>
   radios.value.map((radio) => ({
     id: radio.id,
     name: radio.name,
-    manufacturer: radio.manufacturer,
-    model: radio.model,
     serialPort: radio.serialPort,
     hasConfig: configurations.value.some((config) => String(config.id.model) === radio.model),
   })),
-);
-const readBackupNames = computed(() => {
-  const names = [...readFileNames.value];
-  const saved = readBackupSaved.value?.fileName;
-
-  if (saved && !names.includes(saved)) {
-    names.push(saved);
-  }
-
-  return names;
-});
-const readDecision = computed(() =>
-  onboardingReadContinue({
-    desktop: isTauriRuntime(),
-    backupsEnabled: readRadioImageBackupSettings().enabled,
-    hasBackup: onboardingReadIsDone({
-      fileNames: readBackupNames.value,
-      models: readModels.value.map((model) => ({ manufacturer: model.manufacturer, model: model.model })),
-    }),
-    models: readModels.value,
-  }),
 );
 
 const items = computed<StepperItem[]>(() => {
@@ -105,7 +79,7 @@ const completion = computed(() => ({
     selectedPort: cableSelection.value.port,
     livePorts: cableSelection.value.livePorts,
   }),
-  read: state.value?.steps.read === 'done' || readDecision.value.action === 'advance',
+  read: state.value?.steps.read === 'done',
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
@@ -128,34 +102,6 @@ watch(shellOpen, (open) => {
   if (session.value) {
     active.value = firstPendingOnboardingStep(session.value);
   }
-
-  if (active.value === 'read') {
-    void refreshReadBackups();
-  }
-});
-
-watch(active, (step) => {
-  if (step !== 'read') {
-    return;
-  }
-
-  readAttempted.value = false;
-  void refreshReadBackups();
-});
-
-watch(progressOpen, (open) => {
-  if (!open && active.value === 'read') {
-    void refreshReadBackups();
-  }
-});
-
-watch(readBackupSaved, (saved) => {
-  if (!saved || state.value?.status !== 'active' || state.value.steps.read !== 'pending') {
-    return;
-  }
-
-  applyEdit(completeOnboardingStep(state.value, 'read'));
-  void refreshReadBackups();
 });
 
 function back(): void {
@@ -207,52 +153,6 @@ function onHomeDraft(draft: StationDraft): void {
 function onCableSelection(next: { port: string | undefined; livePorts: string[]; loading: boolean }): void {
   cableSelection.value = next;
   cableFieldError.value = undefined;
-}
-
-async function refreshReadBackups(): Promise<void> {
-  if (!isTauriRuntime()) {
-    readFileNames.value = [];
-    return;
-  }
-
-  const saved = readBackupSaved.value?.fileName;
-
-  try {
-    const listed = await listRadioImageBackups();
-    const names = listed.map((entry) => entry.fileName);
-
-    if (saved && !names.includes(saved)) {
-      names.push(saved);
-    }
-
-    readFileNames.value = names;
-  } catch {
-    readFileNames.value = saved ? [saved] : [];
-  }
-}
-
-function goToStep(step: 'drivers' | 'cable'): void {
-  readAttempted.value = false;
-  active.value = step;
-}
-
-function openBackups(): void {
-  close();
-  void router.push('/preferences?section=backups');
-}
-
-function readRadio(): void {
-  const decision = readDecision.value;
-
-  if (decision.action === 'read') {
-    readAttempted.value = false;
-    openReadFromRadio(decision.radioId);
-    return;
-  }
-
-  if (decision.action === 'blocked') {
-    readAttempted.value = true;
-  }
 }
 
 function saveCableRadios(): boolean {
@@ -311,11 +211,21 @@ async function continueStep(): Promise<void> {
   }
 
   if (active.value === 'read') {
-    const done = state.value.steps.read === 'done' || readDecision.value.action === 'advance';
-    const marked = done ? completeOnboardingStep(state.value, 'read') : state.value;
+    const radioId = readEditor.value?.finishRead();
 
-    applyEdit(finishOnboarding(marked));
+    applyEdit(finishOnboarding(completeOnboardingStep(state.value, 'read')));
     close();
+
+    if (radioId) {
+      openCard(radioId);
+      const cardId = cards.value.find((card) => card.savedRadioId === radioId)?.id ?? radioId;
+      openReadFromRadio(cardId);
+
+      if (route.path !== '/') {
+        void router.push('/');
+      }
+    }
+
     return;
   }
 
@@ -394,13 +304,7 @@ function finishLater(): void {
           <OnboardingCableStep :field-error="cableFieldError" @selection="onCableSelection" />
         </template>
         <template #read>
-          <OnboardingReadStep
-            :decision="readDecision"
-            :attempted="readAttempted"
-            @go-to="goToStep"
-            @backups="openBackups"
-            @read="readRadio"
-          />
+          <OnboardingReadStep ref="readEditor" :radios="readRadios" />
         </template>
       </UStepper>
     </template>
