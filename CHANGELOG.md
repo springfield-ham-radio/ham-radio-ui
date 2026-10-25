@@ -1,3 +1,15 @@
+## [2.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.30.0...v2.0.0) (2026-10-25)
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** The startup Install radios dialog no longer opens when the module catalog is empty. Install modules from Preferences → Drivers, including Install from file…. An empty catalog shows a dismissible Install drivers banner instead. Dismissal is stored per profile.
+
+Co-authored-by: Bryan Hunt <BryanHunt@users.noreply.github.com>
+
+### Features
+
+* **ui:** add license and home onboarding steps for [#173](https://github.com/springfield-ham-radio/ham-radio-ui/issues/173) ([#179](https://github.com/springfield-ham-radio/ham-radio-ui/issues/179)) ([209ce63](https://github.com/springfield-ham-radio/ham-radio-ui/commit/209ce63beae817877abeed1203ced693e46e9072))
+
 ## [1.30.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v1.29.2...v1.30.0) (2026-10-25)
 
 ### Features
