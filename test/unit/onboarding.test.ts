@@ -26,6 +26,7 @@ import {
   type GmrsLicenseRecord,
   type LicenseDirectory,
 } from '../../app/utils/license-people.ts';
+import { revalidateShownFields, shownFormErrorsAfterRevalidate } from '../../app/utils/shown-form-errors.ts';
 import {
   ONBOARDING_LAUNCH_NEW_PROFILES,
   ONBOARDING_STEP_IDS,
@@ -864,6 +865,67 @@ describe('onboarding step transitions', () => {
       callSign: 'Enter a call sign',
       licenseClassId: 'Select a license class',
     });
+  });
+
+  it('should clear the license class error when Lookup fills a valid class', async () => {
+    const general = onboardingLicenseClassOptions.find((option) => option.label === 'General');
+    expect(general).toBeDefined();
+
+    const current = [
+      { name: 'name', message: 'Enter a name' },
+      { name: 'callSign', message: 'Enter a call sign' },
+      { name: 'licenseClassId', message: 'Select a license class' },
+    ];
+    const values = { name: '', callSign: 'W1AW', licenseClassId: '' };
+    let errors = [...current];
+    const form = {
+      getErrors: () => errors,
+      validate: async (opts: { name: string[]; silent: true }) => {
+        values.name = 'Bryan';
+        values.callSign = 'W1AW';
+        values.licenseClassId = general!.value;
+        const fieldErrors = onboardingLicenseFieldErrors(values);
+        const next = [
+          fieldErrors?.name ? { name: 'name', message: fieldErrors.name } : undefined,
+          fieldErrors?.callSign ? { name: 'callSign', message: fieldErrors.callSign } : undefined,
+          fieldErrors?.licenseClassId ? { name: 'licenseClassId', message: fieldErrors.licenseClassId } : undefined,
+        ].filter((error): error is { name: string; message: string } => error !== undefined);
+        errors = shownFormErrorsAfterRevalidate(errors, next, opts.name);
+      },
+    };
+
+    await revalidateShownFields(form, ['name', 'callSign', 'licenseClassId']);
+
+    expect(errors.find((error) => error.name === 'licenseClassId')).toBeUndefined();
+    expect(errors).toEqual([]);
+    expect(
+      shownFormErrorsAfterRevalidate(
+        current,
+        [{ name: 'name', message: 'Enter a name' }],
+        ['name', 'callSign', 'licenseClassId'],
+      ),
+    ).toEqual([{ name: 'name', message: 'Enter a name' }]);
+
+    const licenses = readFileSync('app/components/OnboardingLicensesStep.vue', 'utf8');
+    const lookup = licenses.slice(licenses.indexOf('async function onLookup'), licenses.indexOf('async function save'));
+    expect(lookup).toContain('state.licenseClassId =');
+    expect(lookup).toContain('revalidateShownFields(form.value, licenseFields)');
+    expect(licenses).toContain("const licenseFields = ['name', 'callSign', 'licenseClassId']");
+
+    const selectMenu = readFileSync('node_modules/@nuxt/ui/dist/runtime/components/SelectMenu.vue', 'utf8');
+    const onUpdate = selectMenu.slice(selectMenu.indexOf('function onUpdate'), selectMenu.indexOf('function onUpdateOpen'));
+    expect(onUpdate).toContain('emitFormChange()');
+    const formSource = readFileSync('node_modules/@nuxt/ui/dist/runtime/components/Form.vue', 'utf8');
+    expect(formSource).toContain('return ["input", "blur", "change"]');
+
+    const home = readFileSync('app/components/RadioStationEditor.vue', 'utf8');
+    const grid = home.slice(home.indexOf('function onGridInput'), home.indexOf('function onCoordinateInput'));
+    const coordinates = home.slice(home.indexOf('function onCoordinateInput'), home.indexOf('function close'));
+    expect(grid).toContain('latitudeDms.value = dmsInputFromDecimal');
+    expect(grid).toContain('revalidateShownFields(form.value, locationFields)');
+    expect(coordinates).toContain('gridText.value = grid');
+    expect(coordinates).toContain('revalidateShownFields(form.value, locationFields)');
+    expect(home).toContain("const locationFields = ['gridsquare', 'latitude', 'longitude']");
   });
 
   it('should finish every step when its check passes', () => {

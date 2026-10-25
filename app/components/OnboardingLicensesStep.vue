@@ -9,6 +9,7 @@ import {
   type OnboardingLicenseForm,
   type OnboardingLicenseSessionDraft,
 } from '~/utils/license-people';
+import { revalidateShownFields, type ShownFormApi } from '~/utils/shown-form-errors';
 
 const props = defineProps<{
   /** Unsaved license edits kept by the guide while the step is not on screen. */
@@ -33,7 +34,8 @@ const editingExisting = ref(false);
 const lookupError = ref<string | undefined>();
 const lookingUp = ref(false);
 const restoredSession = ref(false);
-const form = ref<{ validate: () => Promise<unknown> } | null>(null);
+const form = ref<ShownFormApi | null>(null);
+const licenseFields = ['name', 'callSign', 'licenseClassId'] as const;
 
 function currentDraft(): OnboardingLicenseSessionDraft {
   return {
@@ -68,6 +70,7 @@ function applySession(draft: OnboardingLicenseSessionDraft): void {
   state.licenseClassId = draft.licenseClassId;
   lookedUp.value = draft.lookedUp;
   lookupError.value = undefined;
+  void revalidateShownFields(form.value, licenseFields);
 }
 
 watch(
@@ -151,6 +154,8 @@ async function onLookup(): Promise<void> {
     } else if (result.license.licenseClassId) {
       state.licenseClassId = result.license.licenseClassId;
     }
+
+    await revalidateShownFields(form.value, licenseFields);
   } finally {
     lookingUp.value = false;
   }

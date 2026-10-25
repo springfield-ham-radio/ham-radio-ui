@@ -16,6 +16,7 @@ import {
   type DmsParseResult,
 } from '~/utils/location-format';
 import { latLonToMaidenhead, maidenheadToLatLon, normalizeMaidenhead } from '~/utils/maidenhead';
+import { revalidateShownFields, type ShownFormApi } from '~/utils/shown-form-errors';
 
 const props = defineProps<{
   open: boolean;
@@ -39,7 +40,8 @@ const gridText = ref('');
 const latitudeDms = ref<DmsInput>(emptyDmsInput('latitude'));
 const longitudeDms = ref<DmsInput>(emptyDmsInput('longitude'));
 const locationSource = ref<StationLocationSource | undefined>();
-const form = ref<{ validate: () => Promise<unknown> } | null>(null);
+const form = ref<ShownFormApi | null>(null);
+const locationFields = ['gridsquare', 'latitude', 'longitude'] as const;
 
 const formState = computed(() => ({
   nickname: nickname.value,
@@ -114,6 +116,7 @@ function onGridInput(value: string | number): void {
       locationSource.value = undefined;
     }
 
+    void revalidateShownFields(form.value, locationFields);
     return;
   }
 
@@ -125,6 +128,8 @@ function onGridInput(value: string | number): void {
     latitudeDms.value = dmsInputFromDecimal(point.latitude, 'latitude');
     longitudeDms.value = dmsInputFromDecimal(point.longitude, 'longitude');
   }
+
+  void revalidateShownFields(form.value, locationFields);
 }
 
 function onCoordinateInput(): void {
@@ -147,6 +152,8 @@ function onCoordinateInput(): void {
   if (grid) {
     gridText.value = grid;
   }
+
+  void revalidateShownFields(form.value, locationFields);
 }
 
 function close(): void {
