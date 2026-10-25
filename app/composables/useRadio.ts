@@ -22,6 +22,7 @@ import {
   type ChannelPatch,
 } from '~/utils/channel-edit';
 import { useCatPortLock } from '~/composables/useCatPortLock';
+import { readOnboardingStatus, shouldOpenModuleInstallDialog } from '~/utils/onboarding';
 import {
   CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
   CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
@@ -519,7 +520,12 @@ export function useRadio() {
       await migrateLegacyManufacturerRadioModules();
       await refreshCatalogState();
 
-      if (configurations.value.length === 0) {
+      if (
+        shouldOpenModuleInstallDialog({
+          catalogEmpty: configurations.value.length === 0,
+          onboardingStatus: readOnboardingStatus(),
+        })
+      ) {
         modulesInstallRequired.value = true;
         modulesInstallOpen.value = true;
       }

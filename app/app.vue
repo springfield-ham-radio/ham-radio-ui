@@ -17,6 +17,7 @@
       @installed="onModulesInstalled"
     />
     <ChannelPrintDialog />
+    <OnboardingStepper />
   </UApp>
 </template>
 
@@ -34,13 +35,14 @@ const {
   directReadOpen,
   readIntoGuestCard,
 } = useRadio();
+const { settle: settleOnboarding, shellOpen: onboardingOpen, blocksModuleInstall } = useOnboarding();
 const { start: startAppUpdater } = useAppUpdater();
 const router = useRouter();
 const route = useRoute();
 
 const modulesDialogOpen = computed({
   get: () => {
-    if (!modulesInstallOpen.value) {
+    if (onboardingOpen.value || !modulesInstallOpen.value) {
       return false;
     }
 
@@ -67,8 +69,18 @@ const modulesDialogOpen = computed({
     return true;
   },
   set: (open: boolean) => {
+    if (!open && onboardingOpen.value) {
+      return;
+    }
+
     modulesInstallOpen.value = open;
   },
+});
+
+watch(blocksModuleInstall, (block) => {
+  if (block) {
+    modulesInstallOpen.value = false;
+  }
 });
 
 useHead({
@@ -97,7 +109,7 @@ async function onModulesInstalled(): Promise<void> {
 }
 
 onMounted(() => {
-  void initialize();
+  void initialize().then(() => settleOnboarding());
   startAppUpdater();
 });
 </script>
