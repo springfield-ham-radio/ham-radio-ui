@@ -36,7 +36,7 @@ import {
   finishOnboarding,
   firstPendingOnboardingStep,
   onboardingEditToPersist,
-  onboardingDriversAreDone,
+  planOnboardingDriverInstalls,
   onboardingHasExistingData,
   onboardingHasPendingStep,
   onboardingHomeIsDone,
@@ -591,6 +591,13 @@ describe('onboarding step transitions', () => {
     expect(radiosStep).toContain('<USelect');
     expect(radiosStep).toContain('Unplugged');
     expect(radiosStep).toContain('aria-label="Refresh serial ports"');
+    expect(radiosStep).toContain('label="Installed"');
+    expect(radiosStep).toContain('Installing');
+    expect(radiosStep).toContain('label="Retry"');
+    expect(radiosStep).toContain('<UAlert');
+    expect(radiosStep).toContain('installOfficialModule');
+    expect(radiosStep).toContain('planOnboardingSavedRadios');
+    expect(radiosStep).not.toContain('Install from file');
     expect(radiosStep).not.toContain('Name it / set port');
     expect(radiosStep).not.toContain('SavedRadiosPreference');
     expect(radiosStep).not.toContain('Radio page opens these as cards');
@@ -600,42 +607,31 @@ describe('onboarding step transitions', () => {
     ]);
   });
 
-  it('should finish Drivers only on the desktop, for every picked model or any module', () => {
-    expect(
-      onboardingDriversAreDone({
-        ownedModuleIds: [],
-        installedModelIds: ['baofeng-uv5r'],
-        desktop: false,
-      }),
-    ).toBe(false);
-    expect(
-      onboardingDriversAreDone({
-        ownedModuleIds: [],
-        installedModelIds: [],
-        desktop: true,
-      }),
-    ).toBe(false);
-    expect(
-      onboardingDriversAreDone({
-        ownedModuleIds: [],
-        installedModelIds: ['baofeng-uv5r'],
-        desktop: true,
-      }),
-    ).toBe(true);
-    expect(
-      onboardingDriversAreDone({
-        ownedModuleIds: ['baofeng-uv5r', 'kenwood-th-d74'],
-        installedModelIds: ['baofeng-uv5r'],
-        desktop: true,
-      }),
-    ).toBe(false);
-    expect(
-      onboardingDriversAreDone({
-        ownedModuleIds: ['baofeng-uv5r'],
-        installedModelIds: ['baofeng-uv5r', 'other'],
-        desktop: true,
-      }),
-    ).toBe(true);
+  it('should install only the checked radios that do not already have a driver', () => {
+    expect(planOnboardingDriverInstalls({
+      modelIds: ['baofeng-uv5r', 'kenwood-tm-d710a'],
+      installedModelIds: ['baofeng-uv5r'],
+      catalogModelIds: ['baofeng-uv5r', 'kenwood-tm-d710a', 'kenwood-th-d74'],
+    })).toEqual({
+      installed: ['baofeng-uv5r'],
+      install: ['kenwood-tm-d710a'],
+      missing: [],
+    });
+    expect(planOnboardingDriverInstalls({
+      modelIds: ['baofeng-uv5r', 'missing-radio', 'baofeng-uv5r'],
+      installedModelIds: [],
+      catalogModelIds: ['baofeng-uv5r'],
+    })).toEqual({
+      installed: [],
+      install: ['baofeng-uv5r'],
+      missing: ['missing-radio'],
+    });
+    expect(planOnboardingDriverInstalls({
+      modelIds: [],
+      installedModelIds: ['baofeng-uv5r'],
+      catalogModelIds: [],
+    })).toEqual({ installed: [], install: [], missing: [] });
+    expect(nextOnboardingStep('radios')).toBe('read');
   });
 
   it('should clear picked radios on skip and keep saved selections on other skips', () => {
@@ -648,9 +644,9 @@ describe('onboarding step transitions', () => {
     expect(skippedRadios.ownedModuleIds).toEqual([]);
     expect(skippedRadios.pendingRadios).toEqual([]);
 
-    const skippedDrivers = skipOnboardingStep(picked, 'drivers');
-    expect(skippedDrivers.steps.drivers).toBe('skipped');
-    expect(skippedDrivers.ownedModuleIds).toEqual(['baofeng-uv5r']);
+    const skippedHome = skipOnboardingStep(picked, 'home');
+    expect(skippedHome.steps.home).toBe('skipped');
+    expect(skippedHome.ownedModuleIds).toEqual(['baofeng-uv5r']);
   });
 
   it('should save each pending radio on its own port once that driver is installed', () => {
@@ -841,9 +837,14 @@ describe('onboarding step transitions', () => {
     expect(stepper).toContain('v-if="!isLast"');
     expect(stepper).toContain("active.value === 'read'");
     expect(ONBOARDING_STEP_IDS).not.toContain('cable');
+    expect(ONBOARDING_STEP_IDS).not.toContain('drivers');
     expect(readStep).not.toContain('Skip stays available');
     expect(ONBOARDING_STEP_IDS).not.toContain('stations');
+    expect(ONBOARDING_STEP_IDS).toEqual(['licenses', 'home', 'radios', 'read']);
     expect(ONBOARDING_STEP_IDS.at(-1)).toBe('read');
+    expect(stepper).not.toContain('RadioModulesPreference');
+    expect(stepper).not.toContain('#drivers');
+    expect(stepper).toContain('continueRadios');
 
     const stationEditor = readFileSync('app/components/RadioStationEditor.vue', 'utf8');
 
@@ -995,7 +996,6 @@ describe('onboarding step transitions', () => {
       licenses: true,
       home: true,
       radios: true,
-      drivers: true,
       read: true,
     };
 
@@ -1042,7 +1042,7 @@ describe('onboarding step transitions', () => {
 describe('onboarding storage', () => {
   it('should round-trip a completed document and reject junk', () => {
     const state = withOwnedModuleIds(
-      skipOnboardingStep(createOnboardingState('completed', 'existing-data'), 'drivers'),
+      skipOnboardingStep(createOnboardingState('completed', 'existing-data'), 'licenses'),
       ['kenwood-th-f6'],
     );
 
@@ -1096,9 +1096,11 @@ describe('onboarding storage', () => {
     expect(parsed?.steps.radios).toBe('skipped');
     expect(parsed && 'stations' in parsed.steps).toBe(false);
     expect(parsed && 'cable' in parsed.steps).toBe(false);
+    expect(parsed && 'drivers' in parsed.steps).toBe(false);
     expect(parsed && onboardingHasPendingStep(parsed)).toBe(false);
     expect(serializeOnboardingState(parsed!)).not.toContain('stations');
     expect(serializeOnboardingState(parsed!)).not.toContain('cable');
+    expect(serializeOnboardingState(parsed!)).not.toContain('drivers');
     expect(parsed?.ownedModuleIds).toEqual(['baofeng-uv5r']);
 
     const cableOnly = JSON.stringify({
@@ -1121,6 +1123,45 @@ describe('onboarding storage', () => {
     expect(droppedCable?.status).toBe('completed');
     expect(droppedCable?.completedReason).toBe('finished');
     expect(droppedCable && 'cable' in droppedCable.steps).toBe(false);
+    expect(droppedCable && 'drivers' in droppedCable.steps).toBe(false);
+
+    const driversOnly = JSON.stringify({
+      version: 1,
+      status: 'active',
+      steps: {
+        licenses: 'done',
+        home: 'done',
+        radios: 'done',
+        drivers: 'pending',
+        read: 'done',
+      },
+      ownedModuleIds: ['baofeng-uv5r'],
+    });
+    const droppedDrivers = parseOnboardingState(driversOnly);
+
+    expect(onboardingStoredDocumentNeedsRewrite(driversOnly)).toBe(true);
+    expect(droppedDrivers?.status).toBe('completed');
+    expect(droppedDrivers?.completedReason).toBe('finished');
+    expect(droppedDrivers && 'drivers' in droppedDrivers.steps).toBe(false);
+    expect(serializeOnboardingState(droppedDrivers!)).not.toContain('drivers');
+
+    const driversWhileActive = JSON.stringify({
+      version: 1,
+      status: 'active',
+      steps: {
+        licenses: 'done',
+        home: 'pending',
+        radios: 'pending',
+        drivers: 'pending',
+        read: 'pending',
+      },
+    });
+    const keptDrivers = parseOnboardingState(driversWhileActive);
+
+    expect(keptDrivers?.status).toBe('active');
+    expect(keptDrivers?.steps.home).toBe('pending');
+    expect(keptDrivers?.steps.radios).toBe('pending');
+    expect(keptDrivers && 'drivers' in keptDrivers.steps).toBe(false);
     expect(droppedCable?.pendingRadios).toEqual([
       { modelId: 'baofeng-uv5r', name: 'UV-5R', serialPort: '/dev/cu.usb' },
     ]);

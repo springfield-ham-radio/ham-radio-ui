@@ -287,62 +287,6 @@ export function groupCatalogRadiosByManufacturer(
   }));
 }
 
-/**
- * Limit the Drivers catalog to the models picked on the Radios step.
- * Omit `entryIds` to keep the full Preferences list.
- */
-export function filterAvailableGroupsToEntryIds<T extends { radios: Array<{ entry: { id: string } }> }>(
-  groups: readonly T[],
-  entryIds: readonly string[] | undefined,
-): T[] {
-  if (entryIds === undefined) {
-    return [...groups];
-  }
-
-  const ids = new Set(entryIds);
-
-  return groups
-    .map((group) => ({
-      ...group,
-      radios: group.radios.filter((radio) => ids.has(radio.entry.id)),
-    }))
-    .filter((group) => group.radios.length > 0);
-}
-
-function availableRadioIsInstalled(radio: {
-  installedOfficially: boolean;
-  installedBeta: boolean;
-  installedUnverified: boolean;
-}): boolean {
-  return radio.installedOfficially || radio.installedBeta || radio.installedUnverified;
-}
-
-/**
- * Drivers step list.
- *
- * A manufacturer group stays in the full catalog while any sibling model is not
- * installed. Narrowing to the picked ids afterward would still show an installed
- * model from that group. Drop those installed rows here. Omit `entryIds` to keep
- * the Preferences list, including its Installed badges.
- */
-export function availableDriverGroupsForPicker(
-  groups: readonly AvailableManufacturerGroup[],
-  entryIds: readonly string[] | undefined,
-): AvailableManufacturerGroup[] {
-  const limited = filterAvailableGroupsToEntryIds(groups, entryIds);
-
-  if (entryIds === undefined) {
-    return limited;
-  }
-
-  return limited
-    .map((group) => ({
-      ...group,
-      radios: group.radios.filter((radio) => !availableRadioIsInstalled(radio)),
-    }))
-    .filter((group) => group.radios.length > 0);
-}
-
 export function buildAvailableManufacturerGroups(
   records: RadioCatalogRecord[],
   catalog: RadioModuleCatalogEntry[],

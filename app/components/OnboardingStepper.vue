@@ -4,13 +4,11 @@ import { HOME_STATION_ID, type StationDraft } from '~/utils/antenna-station';
 import type { OnboardingLicenseSessionDraft } from '~/utils/license-people';
 import { defaultProgrammingBaudRate, programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
 import { radioDisplayName } from '~/utils/radio-module-listing';
-import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import {
   completeOnboardingStep,
   finishOnboarding,
   firstPendingOnboardingStep,
   nextOnboardingStep,
-  onboardingDriversAreDone,
   onboardingHomeIsDone,
   onboardingLicensesAreDone,
   onboardingRadiosAreDone,
@@ -37,6 +35,8 @@ const homeSessionDraft = ref<StationDraft | undefined>();
 const licenseEditor = ref<{ save: () => Promise<boolean> } | null>(null);
 const licenseSessionDraft = ref<OnboardingLicenseSessionDraft | undefined>();
 const readEditor = ref<{ finishRead: () => string | undefined } | null>(null);
+const radiosEditor = ref<{ continueRadios: () => Promise<boolean> } | null>(null);
+const radiosInstalling = ref(false);
 
 const state = computed(() => session.value ?? view.value);
 const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
@@ -80,16 +80,15 @@ const completion = computed(() => ({
     ownedModuleIds: ownedModuleIds.value,
     savedRadioCount: radios.value.length,
   }),
-  drivers: onboardingDriversAreDone({
-    ownedModuleIds: ownedModuleIds.value,
-    installedModelIds: configurations.value.map((config) => String(config.id.model)),
-    desktop: isTauriRuntime(),
-  }),
   read: state.value?.steps.read === 'done',
 }));
 
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
 const canContinue = computed(() => {
+  if (radiosInstalling.value) {
+    return false;
+  }
+
   if (active.value === 'licenses' || active.value === 'home' || active.value === 'read') {
     return true;
   }
@@ -216,6 +215,12 @@ async function continueStep(): Promise<void> {
     return;
   }
 
+  if (active.value === 'radios') {
+    if (!onboardingStepIsDone('radios', completion.value) || !(await radiosEditor.value?.continueRadios())) {
+      return;
+    }
+  }
+
   if (active.value === 'read') {
     const radioId = readEditor.value?.finishRead();
 
@@ -297,15 +302,12 @@ function finishLater(): void {
         </template>
         <template #radios>
           <OnboardingRadiosStep
+            ref="radiosEditor"
             :owned-module-ids="ownedModuleIds"
             :pending-radios="pendingRadios"
             @update:picks="setRadioPicks"
+            @update:installing="radiosInstalling = $event"
           />
-        </template>
-        <template #drivers>
-          <div class="mt-4">
-            <RadioModulesPreference :entry-ids="ownedModuleIds.length > 0 ? ownedModuleIds : undefined" />
-          </div>
         </template>
         <template #read>
           <OnboardingReadStep ref="readEditor" :radios="readRadios" />
@@ -325,8 +327,8 @@ function finishLater(): void {
           <UButton label="Finish later" color="neutral" variant="ghost" @click="finishLater" />
           <div class="flex gap-2">
             <UButton label="Back" color="neutral" variant="outline" icon="i-lucide-arrow-left" :disabled="!canGoBack" @click="back" />
-            <UButton v-if="!isLast" label="Skip this step" color="neutral" variant="outline" @click="skip" />
-            <UButton :label="continueLabel" color="primary" :disabled="!canContinue" @click="continueStep" />
+            <UButton v-if="!isLast" label="Skip this step" color="neutral" variant="outline" :disabled="radiosInstalling" @click="skip" />
+            <UButton :label="continueLabel" color="primary" :loading="radiosInstalling" :disabled="!canContinue" @click="continueStep" />
           </div>
         </div>
       </div>

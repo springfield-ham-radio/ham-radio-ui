@@ -4,9 +4,7 @@ import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
 import type { LoadedRadioConfig, RadioCatalogRecord } from '../../app/utils/radio-catalog-db.ts';
 import { APP_HAM_RADIO_API_VERSION } from '../../app/utils/radio-module-install.ts';
 import {
-  availableDriverGroupsForPicker,
   buildAvailableManufacturerGroups,
-  filterAvailableGroupsToEntryIds,
   groupCatalogRadiosByManufacturer,
   buildInstalledRadioListItems,
   catalogEntryForInstalledRadio,
@@ -473,26 +471,7 @@ describe('radio module listing', () => {
     ]);
   });
 
-  it('should limit the drivers catalog to picked entry ids', () => {
-    const groups = [
-      {
-        manufacturer: 'Baofeng',
-        radios: [{ entry: { id: 'baofeng-uv5r' } }, { entry: { id: 'baofeng-uv82' } }],
-      },
-      {
-        manufacturer: 'Kenwood',
-        radios: [{ entry: { id: 'kenwood-th-d74' } }],
-      },
-    ];
-
-    expect(filterAvailableGroupsToEntryIds(groups, undefined)).toEqual(groups);
-    expect(filterAvailableGroupsToEntryIds(groups, ['kenwood-th-d74', 'baofeng-uv82'])).toEqual([
-      { manufacturer: 'Baofeng', radios: [{ entry: { id: 'baofeng-uv82' } }] },
-      { manufacturer: 'Kenwood', radios: [{ entry: { id: 'kenwood-th-d74' } }] },
-    ]);
-  });
-
-  it('should drop installed drivers from the onboarding list for every manufacturer', () => {
+  it('should drop a manufacturer from Available only when every model is installed', () => {
     const installed = [
       record({
         modelId: 'baofeng-uv5r',
@@ -515,19 +494,16 @@ describe('radio module listing', () => {
     const picked = ['baofeng-uv5r', 'kenwood-tm-d710a'];
 
     expect(groups.find((group) => group.manufacturer === 'Baofeng')).toBeUndefined();
-    expect(
-      filterAvailableGroupsToEntryIds(groups, picked).flatMap((group) => group.radios.map((radio) => radio.modelId)),
-    ).toEqual(['kenwood-tm-d710a']);
-    expect(availableDriverGroupsForPicker(groups, picked)).toEqual([]);
-    expect(
-      availableDriverGroupsForPicker(groups, ['baofeng-uv5r', 'kenwood-th-d74']).flatMap((group) =>
-        group.radios.map((radio) => radio.modelId),
-      ),
-    ).toEqual(['kenwood-th-d74']);
-    expect(availableDriverGroupsForPicker(groups, undefined).some((group) => group.manufacturer === 'Kenwood')).toBe(true);
+    expect(groups.find((group) => group.manufacturer === 'Kenwood')?.radios.map((radio) => radio.modelId)).toEqual([
+      'kenwood-th-d74',
+      'kenwood-th-f6',
+      'kenwood-tm-d710a',
+    ]);
+    expect(picked).toEqual(['baofeng-uv5r', 'kenwood-tm-d710a']);
 
     const preference = readFileSync('app/components/RadioModulesPreference.vue', 'utf8');
-    expect(preference).toContain('availableDriverGroupsForPicker');
-    expect(preference).toContain('All drivers for your radios are installed.');
+    expect(preference).toContain('buildAvailableManufacturerGroups');
+    expect(preference).toContain('Install from file…');
+    expect(preference).not.toContain('entryIds');
   });
 });

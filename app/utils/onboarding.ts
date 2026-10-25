@@ -30,10 +30,10 @@ export const ONBOARDING_STORAGE_KEY = 'ham-radio-onboarding';
  */
 export const ONBOARDING_LAUNCH_NEW_PROFILES = true;
 
-export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'drivers', 'read'] as const;
+export const ONBOARDING_STEP_IDS = ['licenses', 'home', 'radios', 'read'] as const;
 
 /** Step ids removed from the guide. Stored documents may still name them. */
-const REMOVED_ONBOARDING_STEP_IDS = ['stations', 'cable'] as const;
+const REMOVED_ONBOARDING_STEP_IDS = ['stations', 'cable', 'drivers'] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEP_IDS)[number];
 
@@ -90,13 +90,6 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     placeholder: 'Skipping this does not add or remove a saved radio.',
   },
   {
-    id: 'drivers',
-    title: 'Drivers',
-    description: 'Radio modules',
-    icon: 'i-lucide-cpu',
-    placeholder: 'Skipping this does not install or remove a driver.',
-  },
-  {
     id: 'read',
     title: 'First read',
     description: 'Backup before edits',
@@ -138,7 +131,6 @@ function pendingSteps(): Record<OnboardingStepId, OnboardingStepStatus> {
     licenses: 'pending',
     home: 'pending',
     radios: 'pending',
-    drivers: 'pending',
     read: 'pending',
   };
 }
@@ -225,7 +217,6 @@ export interface OnboardingStepCompletion {
   licenses: boolean;
   home: boolean;
   radios: boolean;
-  drivers: boolean;
   read: boolean;
 }
 
@@ -379,25 +370,45 @@ export function onboardingRadioGroups(input: {
   }));
 }
 
+export interface OnboardingDriverInstallPlan {
+  /** Checked models that already have a driver. Continue skips these. */
+  installed: string[];
+  /** Checked models to download from the official catalog. */
+  install: string[];
+  /** Checked models that are not installed and are not in the catalog. */
+  missing: string[];
+}
+
 /**
- * Desktop only. Every picked model must be installed. With none picked, any installed module is enough.
- * The browser build cannot finish this step.
+ * Continue installs the latest catalog driver for every checked model that does not already have one.
+ * A model that is already installed is skipped. A model missing from the catalog cannot be installed.
  */
-export function onboardingDriversAreDone(input: {
-  ownedModuleIds: readonly string[];
+export function planOnboardingDriverInstalls(input: {
+  modelIds: readonly string[];
   installedModelIds: readonly string[];
-  desktop: boolean;
-}): boolean {
-  if (!input.desktop) {
-    return false;
-  }
-
-  if (input.ownedModuleIds.length === 0) {
-    return input.installedModelIds.length > 0;
-  }
-
+  catalogModelIds: readonly string[];
+}): OnboardingDriverInstallPlan {
   const installed = new Set(input.installedModelIds);
-  return input.ownedModuleIds.every((id) => installed.has(id));
+  const catalog = new Set(input.catalogModelIds);
+  const plan: OnboardingDriverInstallPlan = { installed: [], install: [], missing: [] };
+
+  for (const modelId of input.modelIds) {
+    const id = modelId.trim();
+
+    if (!id || plan.installed.includes(id) || plan.install.includes(id) || plan.missing.includes(id)) {
+      continue;
+    }
+
+    if (installed.has(id)) {
+      plan.installed.push(id);
+    } else if (catalog.has(id)) {
+      plan.install.push(id);
+    } else {
+      plan.missing.push(id);
+    }
+  }
+
+  return plan;
 }
 
 export interface OnboardingSavedRadioModel {
@@ -821,7 +832,7 @@ export function serializeOnboardingState(state: OnboardingState): string {
 }
 
 /**
- * True when a stored document still names a removed step, such as `stations` or `cable`.
+ * True when a stored document still names a removed step, such as `stations`, `cable`, or `drivers`.
  * Reading that document drops the step, and this says the rewritten document should be saved.
  */
 export function onboardingStoredDocumentNeedsRewrite(raw: string | null): boolean {

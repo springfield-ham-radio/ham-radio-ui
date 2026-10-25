@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
-import { programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
+import { defaultProgrammingBaudRate, programmingBaudRateSelectItems } from '~/utils/radio-baud-rate';
+import { installOfficialModule } from '~/utils/radio-module-install';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { radioDisplayName } from '~/utils/radio-module-listing';
 import { serialPortSelectItems, type SerialPortOption } from '~/utils/serial-port-list';
@@ -10,6 +11,8 @@ import {
   onboardingPendingRadioChange,
   onboardingRadioGroups,
   onboardingRadioPicksAfterToggle,
+  planOnboardingDriverInstalls,
+  planOnboardingSavedRadios,
   type OnboardingPendingRadio,
 } from '~/utils/onboarding';
 
@@ -20,17 +23,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:picks': [picks: { ownedModuleIds: string[]; pendingRadios: OnboardingPendingRadio[] }];
+  'update:installing': [installing: boolean];
 }>();
 
+interface DriverRowState {
+  status: 'installing' | 'installed' | 'failed';
+  message?: string;
+}
+
 const { catalogEntries, catalogFailure, catalogLoading, loadOfficialCatalog, reload } = useRadioModuleCatalog();
-const { radios, saveRadio, deleteRadio } = useSavedRadios();
-const { configurations, clearCardSession } = useRadio();
+const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
+const { configurations, clearCardSession, refreshCatalogState } = useRadio();
 const { removeRadioAntennas } = useStationAntennas();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
 
 const ports = ref<SerialPortOption[]>([]);
 const loadingPorts = ref(false);
+const installing = ref(false);
+const rowStatus = ref<Record<string, DriverRowState>>({});
 const editorOpen = shallowRef(false);
 const editing = shallowRef<SavedRadio | undefined>();
 const removeConfirmOpen = shallowRef(false);
@@ -200,10 +211,162 @@ async function loadPorts(): Promise<void> {
   }
 }
 
+function setRow(modelId: string, status: DriverRowState['status'], message?: string): void {
+  const next: DriverRowState = { status };
+
+  if (message) {
+    next.message = message;
+  }
+
+  rowStatus.value = { ...rowStatus.value, [modelId]: next };
+}
+
+function driverInstalled(modelId: string): boolean {
+  return configurations.value.some((config) => String(config.id.model) === modelId)
+    || rowStatus.value[modelId]?.status === 'installed';
+}
+
+function rowState(modelId: string): DriverRowState | undefined {
+  return rowStatus.value[modelId];
+}
+
+function saveInstalledRadio(modelId: string): void {
+  const models = configurations.value
+    .filter((config) => String(config.id.model) === modelId)
+    .map((config) => ({
+      id: String(config.id.model),
+      manufacturer: String(config.id.manufacturer),
+      displayName: radioDisplayName(String(config.id.manufacturer), config.id.name),
+      baudRate: defaultProgrammingBaudRate(config.serialConfig),
+      baudRates: programmingBaudRateSelectItems(config.serialConfig).map((item) => item.value),
+    }));
+  const { drafts } = planOnboardingSavedRadios({
+    pending: props.pendingRadios.filter((radio) => radio.modelId === modelId),
+    models,
+    existing: radios.value.map((radio) => ({ name: radio.name, model: radio.model })),
+  });
+  const created: string[] = [];
+
+  for (const draft of drafts) {
+    const model = models.find((entry) => entry.id === draft.model);
+
+    if (addRadio(draft, model?.baudRates)) {
+      created.push(draft.model);
+    }
+  }
+
+  if (created.length === 0) {
+    return;
+  }
+
+  emit('update:picks', {
+    ownedModuleIds: props.ownedModuleIds,
+    pendingRadios: props.pendingRadios.filter((radio) => !created.includes(radio.modelId)),
+  });
+}
+
+async function installModels(modelIds: readonly string[]): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    for (const modelId of modelIds) {
+      setRow(modelId, 'failed', 'Installing radio modules requires the Tauri desktop app.');
+    }
+
+    return false;
+  }
+
+  let ok = true;
+
+  for (const modelId of modelIds) {
+    const entry = catalogEntries.value.find((item) => item.id === modelId);
+
+    if (!entry) {
+      setRow(modelId, 'failed', 'This model is not in the official catalog.');
+      ok = false;
+      continue;
+    }
+
+    setRow(modelId, 'installing');
+
+    try {
+      await installOfficialModule(entry);
+      await refreshCatalogState();
+      saveInstalledRadio(modelId);
+      setRow(modelId, 'installed');
+    } catch (cause) {
+      ok = false;
+      setRow(modelId, 'failed', cause instanceof Error ? cause.message : 'Install failed');
+    }
+  }
+
+  return ok;
+}
+
+async function continueRadios(): Promise<boolean> {
+  if (installing.value) {
+    return false;
+  }
+
+  installing.value = true;
+
+  try {
+    if (catalogLoading.value || (catalogEntries.value.length === 0 && !catalogFailure.value)) {
+      await reload();
+    }
+
+    const plan = planOnboardingDriverInstalls({
+      modelIds: props.ownedModuleIds,
+      installedModelIds: configurations.value.map((config) => String(config.id.model)),
+      catalogModelIds: catalogEntries.value.map((entry) => entry.id),
+    });
+
+    if (catalogFailure.value && (plan.install.length > 0 || plan.missing.length > 0)) {
+      return false;
+    }
+
+    for (const modelId of plan.missing) {
+      setRow(modelId, 'failed', 'This model is not in the official catalog.');
+    }
+
+    const installed = plan.install.length === 0 ? true : await installModels(plan.install);
+
+    return installed && plan.missing.length === 0;
+  } finally {
+    installing.value = false;
+  }
+}
+
+async function retryInstall(modelId: string): Promise<void> {
+  if (installing.value) {
+    return;
+  }
+
+  installing.value = true;
+
+  try {
+    if (catalogFailure.value) {
+      await loadOfficialCatalog();
+    }
+
+    if (catalogFailure.value) {
+      return;
+    }
+
+    await installModels([modelId]);
+  } finally {
+    installing.value = false;
+  }
+}
+
+watch(installing, (value) => {
+  emit('update:installing', value);
+});
+
 onMounted(() => {
   void reload();
   void loadPorts();
 });
+
+defineExpose({ continueRadios });
 </script>
 
 <template>
@@ -214,8 +377,8 @@ onMounted(() => {
           <div class="min-w-0">
             <p class="text-sm font-medium text-highlighted">Which radios do you have?</p>
             <p class="text-xs text-muted">
-              Check the models you own. Each radio keeps its own port. The driver step saves it once that driver is
-              installed.
+              Check the models you own. Each radio keeps its own port. Continue installs the driver for each checked
+              radio and saves it when that driver finishes.
             </p>
           </div>
           <UTooltip text="Refresh serial ports">
@@ -231,16 +394,22 @@ onMounted(() => {
           </UTooltip>
         </div>
 
+        <UAlert
+          v-if="catalogFailure"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-wifi-off"
+          :title="catalogFailure.title"
+          :description="`${catalogFailure.detail} ${catalogFailure.guidance}`"
+        >
+          <template #actions>
+            <UButton size="xs" color="neutral" variant="outline" label="Retry" @click="loadOfficialCatalog" />
+          </template>
+        </UAlert>
+
         <div v-if="catalogLoading && catalogEntries.length === 0" class="flex items-center gap-2 text-sm text-muted">
           <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
           Loading official catalog…
-        </div>
-
-        <div v-else-if="catalogFailure" class="rounded-lg bg-muted px-3 py-3 text-sm">
-          <p class="font-medium text-highlighted">{{ catalogFailure.title }}</p>
-          <p class="mt-1 text-muted">{{ catalogFailure.detail }}</p>
-          <p class="mt-2 text-muted">{{ catalogFailure.guidance }}</p>
-          <UButton class="mt-3" size="sm" color="neutral" variant="outline" label="Retry" @click="loadOfficialCatalog" />
         </div>
 
         <ul v-else-if="groups.length > 0" class="divide-y divide-default rounded-lg bg-muted">
@@ -248,11 +417,42 @@ onMounted(() => {
             <p class="truncate text-sm font-medium text-highlighted">{{ group.manufacturer }}</p>
             <ul class="mt-2 flex flex-col gap-3">
               <li v-for="radio in group.radios" :key="radio.id">
-                <UCheckbox
-                  :model-value="radio.checked"
-                  :label="radio.name"
-                  @update:model-value="toggle(radio.id, radio.name, $event)"
-                />
+                <div class="flex flex-wrap items-center gap-2">
+                  <UCheckbox
+                    :model-value="radio.checked"
+                    :label="radio.name"
+                    :disabled="installing"
+                    @update:model-value="toggle(radio.id, radio.name, $event)"
+                  />
+                  <UBadge
+                    v-if="driverInstalled(radio.id)"
+                    label="Installed"
+                    color="success"
+                    variant="subtle"
+                    size="sm"
+                  />
+                  <span
+                    v-else-if="radio.checked && rowState(radio.id)?.status === 'installing'"
+                    class="inline-flex items-center gap-1 text-xs text-muted"
+                  >
+                    <UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
+                    Installing
+                  </span>
+                  <span
+                    v-else-if="radio.checked && rowState(radio.id)?.status === 'failed'"
+                    class="inline-flex flex-wrap items-center gap-2"
+                  >
+                    <span class="text-xs text-error">{{ rowState(radio.id)?.message }}</span>
+                    <UButton
+                      label="Retry"
+                      color="neutral"
+                      variant="outline"
+                      size="xs"
+                      :disabled="installing"
+                      @click="retryInstall(radio.id)"
+                    />
+                  </span>
+                </div>
                 <div
                   v-if="radio.checked && radio.saved.length === 0"
                   class="mt-2 ml-7 flex flex-wrap items-center gap-2"
@@ -317,7 +517,7 @@ onMounted(() => {
             </ul>
           </li>
         </ul>
-        <p v-else class="text-sm text-muted">The official catalog has no radios yet.</p>
+        <p v-else-if="!catalogFailure" class="text-sm text-muted">The official catalog has no radios yet.</p>
       </div>
     </div>
 
