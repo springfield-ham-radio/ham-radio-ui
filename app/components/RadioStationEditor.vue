@@ -19,6 +19,8 @@ import { latLonToMaidenhead, maidenheadToLatLon, normalizeMaidenhead } from '~/u
 const props = defineProps<{
   open: boolean;
   station?: RadioStation;
+  /** Render the form in place. Preferences keeps the slideover. */
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,21 +40,30 @@ const longitudeError = ref<string | undefined>();
 
 const isCreate = computed(() => props.station === undefined);
 const title = computed(() => (isCreate.value ? 'Add station' : 'Edit station'));
-const description = computed(() =>
-  isCreate.value
-    ? 'A site with a Maidenhead grid and coordinates in degrees, minutes, and seconds. License grid is a starting point, not the shack.'
-    : props.station?.nickname || 'Station',
-);
+const locationHint = 'A site with a Maidenhead grid and coordinates in degrees, minutes, and seconds. License grid is a starting point, not the shack.';
+const description = computed(() => (isCreate.value ? locationHint : props.station?.nickname || 'Station'));
 
 watch(
   () => props.open,
   (open) => {
-    if (!open) {
+    if (props.embedded || !open) {
       return;
     }
 
     applyDraft(props.station ? draftFromRadioStation(props.station) : defaultStationDraft());
   },
+);
+
+watch(
+  () => props.station,
+  () => {
+    if (!props.embedded) {
+      return;
+    }
+
+    applyDraft(props.station ? draftFromRadioStation(props.station) : defaultStationDraft());
+  },
+  { immediate: true },
 );
 
 function applyDraft(draft: StationDraft): void {
@@ -131,7 +142,7 @@ function close(): void {
   emit('update:open', false);
 }
 
-function save(): void {
+function save(): boolean {
   const latitude = parseDmsInput(latitudeDms.value, 'latitude');
   const longitude = parseDmsInput(longitudeDms.value, 'longitude');
   const draft = currentDraft();
@@ -143,15 +154,19 @@ function save(): void {
   longitudeError.value = 'error' in longitude ? longitude.error : errors?.longitude;
 
   if (nicknameError.value || gridError.value || latitudeError.value || longitudeError.value) {
-    return;
+    return false;
   }
 
   emit('save', draft);
+  return true;
 }
+
+defineExpose({ save });
 </script>
 
 <template>
   <USlideover
+    v-if="!embedded"
     :open="open"
     :title="title"
     :description="description"
@@ -206,4 +221,49 @@ function save(): void {
       </div>
     </template>
   </USlideover>
+
+  <div v-else class="flex flex-col gap-4 rounded-xl bg-default p-4 shadow-sm ring-1 ring-default">
+    <p class="text-xs text-muted">{{ locationHint }}</p>
+    <div class="space-y-4">
+      <UFormField label="Nickname" :error="nicknameError" required>
+        <UInput v-model="nickname" class="w-full" placeholder="Home" />
+      </UFormField>
+
+      <UFormField
+        label="Maidenhead grid"
+        hint="Optional"
+        :error="gridError"
+        description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
+      >
+        <UInput
+          :model-value="gridText"
+          class="w-full uppercase"
+          placeholder="EM48"
+          @update:model-value="onGridInput"
+        />
+      </UFormField>
+
+      <DmsCoordinateInput
+        v-model="latitudeDms"
+        axis="latitude"
+        label="Latitude"
+        :error="latitudeError"
+        @change="onCoordinateInput"
+      />
+
+      <DmsCoordinateInput
+        v-model="longitudeDms"
+        axis="longitude"
+        label="Longitude"
+        :error="longitudeError"
+        @change="onCoordinateInput"
+      />
+      <p class="text-xs text-muted">
+        Degrees, minutes, and decimal seconds. Editing coordinates keeps that point and sets a 6-character grid.
+      </p>
+    </div>
+    <div class="flex justify-end">
+      <UButton color="primary" label="Save" @click="save" />
+    </div>
+  </div>
 </template>

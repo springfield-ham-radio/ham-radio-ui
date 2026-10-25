@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HOME_STATION_ID,
   STATION_ANTENNA_STORAGE_KEY,
+  applyLicenseGridToHomeIfEmpty,
   createRadioStation,
   createStationAntenna,
   defaultAntennaDraft,
@@ -13,7 +14,11 @@ import {
   LEGACY_GMRS_LICENSE_STORAGE_KEY,
   LICENSE_DIRECTORY_STORAGE_KEY,
   createLicensePerson,
+  emptyLicenseDirectory,
   serializeLicenseDirectory,
+  type AmateurLicense,
+  type GmrsLicenseRecord,
+  type LicenseDirectory,
 } from '../../app/utils/license-people.ts';
 import {
   ONBOARDING_LAUNCH_NEW_PROFILES,
@@ -26,7 +31,9 @@ import {
   onboardingEditToPersist,
   onboardingHasExistingData,
   onboardingHasPendingStep,
+  onboardingHomeIsDone,
   onboardingLaunchPlan,
+  onboardingLicensesAreDone,
   onboardingLocalSignals,
   onboardingStepIsDone,
   onboardingStepReached,
@@ -250,10 +257,77 @@ describe('onboarding step transitions', () => {
     expect(onboardingStepReached(skipped, 'radios', 'home')).toBe(false);
   });
 
-  it('should leave every step unfinished until a later slice adds the body', () => {
+  it('should finish licenses only when an amateur or GMRS grant exists', () => {
+    const person = createLicensePerson('Ada', '2026-01-01T00:00:00.000Z', 'person-1');
+    expect(person).toBeDefined();
+
+    const none: LicenseDirectory = { people: person ? [person] : [], licenses: [] };
+    expect(onboardingLicensesAreDone(emptyLicenseDirectory())).toBe(false);
+    expect(onboardingLicensesAreDone(none)).toBe(false);
+
+    const manual: AmateurLicense = {
+      id: 'lic-1',
+      personId: 'person-1',
+      kind: 'amateur',
+      callSign: 'W1AW',
+      name: 'Ada',
+      operatorClass: 'TECHNICIAN',
+      licenseClassId: undefined,
+      licenseClassName: 'Technician',
+      status: 'manual',
+      lookupType: undefined,
+      grantDate: undefined,
+      expiryDate: undefined,
+      lastActionDate: undefined,
+      previousCallSign: undefined,
+      previousOperatorClass: undefined,
+      trusteeCallSign: undefined,
+      trusteeName: undefined,
+      gridsquare: 'EM48',
+      ulsUrl: undefined,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const gmrs: GmrsLicenseRecord = {
+      id: 'gmrs-1',
+      personId: 'person-1',
+      kind: 'gmrs',
+      callSign: 'WRKP365',
+      name: 'Ada',
+      status: 'VALID',
+      city: undefined,
+      state: undefined,
+      frn: undefined,
+      grantDate: undefined,
+      expiryDate: undefined,
+      lastActionDate: undefined,
+      ulsUrl: undefined,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    expect(onboardingLicensesAreDone({ people: none.people, licenses: [{ ...manual, status: 'VALID' }] })).toBe(true);
+    expect(onboardingLicensesAreDone({ people: none.people, licenses: [manual] })).toBe(true);
+    expect(onboardingLicensesAreDone({ people: none.people, licenses: [gmrs] })).toBe(true);
+  });
+
+  it('should finish Home when a license grid already filled it', () => {
+    const empty = defaultStationAntennaStore();
+    expect(onboardingHomeIsDone(empty.stations)).toBe(false);
+
+    const filled = applyLicenseGridToHomeIfEmpty(empty, 'EM48', 1);
+    expect(onboardingHomeIsDone(filled.stations)).toBe(true);
+    expect(filled.stations.find((station) => station.id === HOME_STATION_ID)?.gridsquare).toBe('EM48');
+  });
+
+  it('should leave radios and later steps unfinished', () => {
+    const completion = { licenses: true, home: true };
+
     for (const stepId of ONBOARDING_STEP_IDS) {
-      expect(onboardingStepIsDone(stepId)).toBe(false);
+      const done = stepId === 'licenses' || stepId === 'home';
+      expect(onboardingStepIsDone(stepId, completion)).toBe(done);
     }
+
+    expect(onboardingStepIsDone('licenses', { licenses: false, home: true })).toBe(false);
+    expect(onboardingStepIsDone('home', { licenses: true, home: false })).toBe(false);
   });
 
   it('should not persist an active document for a new profile while launch is off', () => {
