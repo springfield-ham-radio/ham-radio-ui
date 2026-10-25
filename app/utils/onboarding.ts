@@ -519,14 +519,3 @@ export function onboardingEditToPersist(input: {
 
   return input.next;
 }
-
-/**
- * Empty catalog opens the module installer unless setup is already `active`.
- * Reopening the guide does not call this.
- */
-export function shouldOpenModuleInstallDialog(input: {
-  catalogEmpty: boolean;
-  onboardingStatus: OnboardingStatus | undefined;
-}): boolean {
-  return input.catalogEmpty && input.onboardingStatus !== 'active';
-}

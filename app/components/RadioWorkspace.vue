@@ -71,7 +71,7 @@ const {
   savedRadio,
   cardRadio,
   isLoading,
-  modulesInstallRequired,
+  catalogLoaded,
   canUndoMemory,
   canRedoMemory,
   memoryUndoLabel,
@@ -154,7 +154,7 @@ const router = useRouter();
 const activeTab = shallowRef('channels');
 
 function catalogResolved(): boolean {
-  return !isLoading.value && (configurations.value.length > 0 || modulesInstallRequired.value);
+  return !isLoading.value && (catalogLoaded.value || configurations.value.length > 0);
 }
 
 function replaceCatQuery(showCat: boolean): void {

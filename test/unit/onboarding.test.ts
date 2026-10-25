@@ -39,7 +39,6 @@ import {
   onboardingStepReached,
   parseOnboardingState,
   serializeOnboardingState,
-  shouldOpenModuleInstallDialog,
   skipOnboardingStep,
 } from '../../app/utils/onboarding.ts';
 import { SAVED_RADIOS_STORAGE_KEY, serializeSavedRadioStore } from '../../app/utils/saved-radios.ts';
@@ -394,11 +393,3 @@ describe('onboarding storage', () => {
   });
 });
 
-describe('module install dialog', () => {
-  it('should stay closed while onboarding is active and stay open for everyone else', () => {
-    expect(shouldOpenModuleInstallDialog({ catalogEmpty: true, onboardingStatus: undefined })).toBe(true);
-    expect(shouldOpenModuleInstallDialog({ catalogEmpty: true, onboardingStatus: 'completed' })).toBe(true);
-    expect(shouldOpenModuleInstallDialog({ catalogEmpty: true, onboardingStatus: 'active' })).toBe(false);
-    expect(shouldOpenModuleInstallDialog({ catalogEmpty: false, onboardingStatus: undefined })).toBe(false);
-  });
-});

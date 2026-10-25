@@ -22,7 +22,6 @@ import {
   type ChannelPatch,
 } from '~/utils/channel-edit';
 import { useCatPortLock } from '~/composables/useCatPortLock';
-import { readOnboardingStatus, shouldOpenModuleInstallDialog } from '~/utils/onboarding';
 import {
   CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
   CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
@@ -236,6 +235,7 @@ export function useRadio() {
   const sessions = useState<Record<string, RadioCardSession>>('radio-card-sessions', () => ({}));
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
+  const catalogLoaded = useState('radio-catalog-loaded', () => false);
   const { lockedPorts: catLockedPorts } = useCatPortLock();
   const { radios } = useSavedRadios();
   const { transferCardId, focusedCardId, cards, openGuestCard, focusCard, beginTransfer, clearTransfer } = useRadioBoard();
@@ -519,19 +519,10 @@ export function useRadio() {
     try {
       await migrateLegacyManufacturerRadioModules();
       await refreshCatalogState();
-
-      if (
-        shouldOpenModuleInstallDialog({
-          catalogEmpty: configurations.value.length === 0,
-          onboardingStatus: readOnboardingStatus(),
-        })
-      ) {
-        modulesInstallRequired.value = true;
-        modulesInstallOpen.value = true;
-      }
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Failed to load radio configurations';
     } finally {
+      catalogLoaded.value = true;
       isLoading.value = false;
     }
   }
@@ -2576,6 +2567,7 @@ export function useRadio() {
     cardRadio,
     modulesInstallOpen,
     modulesInstallRequired,
+    catalogLoaded,
     initialize,
     refreshCatalogState,
     openModulesInstall,
