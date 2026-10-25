@@ -3,6 +3,7 @@ import {
   STATION_ANTENNA_STORAGE_KEY,
   hasStationLocation,
   parseStationAntennaStore,
+  type RadioStation,
   type StationAntennaStore,
 } from '~/utils/antenna-station';
 import {
@@ -10,13 +11,14 @@ import {
   LEGACY_GMRS_LICENSE_STORAGE_KEY,
   LICENSE_DIRECTORY_STORAGE_KEY,
   parseLicenseDirectory,
+  type LicenseDirectory,
 } from '~/utils/license-people';
 import { SAVED_RADIOS_STORAGE_KEY, parseSavedRadioStore } from '~/utils/saved-radios';
 
 export const ONBOARDING_STORAGE_KEY = 'ham-radio-onboarding';
 
 /**
- * Slice 1 ships the shell only. Leave this false until the last setup slice
+ * Leave this false until the last setup slice (cable, first read, stations)
  * can finish a new profile. While it is false, launch never writes `active`.
  */
 export const ONBOARDING_LAUNCH_NEW_PROFILES = false;
@@ -53,14 +55,14 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDefinition[] = [
     title: 'Licenses',
     description: 'Call sign and class',
     icon: 'i-lucide-id-card',
-    placeholder: 'License lookup is added in a later update. Skipping this does not change people or call signs.',
+    placeholder: 'Skipping this does not change people or call signs.',
   },
   {
     id: 'home',
     title: 'Home',
     description: 'Map and repeaters',
     icon: 'i-lucide-house',
-    placeholder: 'The Home location editor is added in a later update. Skipping this does not move Home.',
+    placeholder: 'Skipping this does not move Home.',
   },
   {
     id: 'radios',
@@ -216,10 +218,41 @@ export function onboardingStepperItems(
   }));
 }
 
+export interface OnboardingStepCompletion {
+  licenses: boolean;
+  home: boolean;
+}
+
 /**
- * Slice 1 has no step body that can be finished. Later slices replace this.
+ * Done when the directory holds an amateur or GMRS grant, including a manual class.
+ * A person with no license is not done.
  */
-export function onboardingStepIsDone(_stepId: OnboardingStepId): boolean {
+export function onboardingLicensesAreDone(directory: LicenseDirectory): boolean {
+  return directory.licenses.some((license) => license.kind === 'amateur' || license.kind === 'gmrs');
+}
+
+/**
+ * Done when Home has a grid or a real coordinate pair.
+ * A license grid copied onto an empty Home counts.
+ */
+export function onboardingHomeIsDone(stations: readonly RadioStation[]): boolean {
+  const home = stations.find((station) => station.id === HOME_STATION_ID);
+
+  return Boolean(home && hasStationLocation(home));
+}
+
+/**
+ * Licenses and Home can be finished. Later steps stay unfinished until their slices land.
+ */
+export function onboardingStepIsDone(stepId: OnboardingStepId, completion: OnboardingStepCompletion): boolean {
+  if (stepId === 'licenses') {
+    return completion.licenses;
+  }
+
+  if (stepId === 'home') {
+    return completion.home;
+  }
+
   return false;
 }
 
@@ -485,15 +518,4 @@ export function onboardingEditToPersist(input: {
   }
 
   return input.next;
-}
-
-/**
- * Empty catalog opens the module installer unless setup is already `active`.
- * Reopening the guide does not call this.
- */
-export function shouldOpenModuleInstallDialog(input: {
-  catalogEmpty: boolean;
-  onboardingStatus: OnboardingStatus | undefined;
-}): boolean {
-  return input.catalogEmpty && input.onboardingStatus !== 'active';
 }

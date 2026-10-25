@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { StepperItem } from '@nuxt/ui';
+import { HOME_STATION_ID, type StationDraft } from '~/utils/antenna-station';
 import {
   completeOnboardingStep,
   finishOnboarding,
   firstPendingOnboardingStep,
   nextOnboardingStep,
   ONBOARDING_STEPS,
+  onboardingHomeIsDone,
+  onboardingLicensesAreDone,
   onboardingStepIsDone,
   onboardingStepperItems,
   previousOnboardingStep,
@@ -14,10 +17,15 @@ import {
 } from '~/utils/onboarding';
 
 const { view, session, shellOpen, persisted, persistsEdits, applyEdit, close } = useOnboarding();
+const { directory } = useOperatorLicense();
+const { stations, saveStation } = useStationAntennas();
 
 const active = ref<OnboardingStepId>('licenses');
+const homeEditor = ref<{ save: () => boolean } | null>(null);
 
 const state = computed(() => session.value ?? view.value);
+const homeStation = computed(() => stations.value.find((station) => station.id === HOME_STATION_ID));
+const placeholderSteps = computed(() => ONBOARDING_STEPS.filter((step) => step.id !== 'licenses' && step.id !== 'home'));
 
 const items = computed<StepperItem[]>(() => {
   if (!state.value) {
@@ -27,8 +35,13 @@ const items = computed<StepperItem[]>(() => {
   return onboardingStepperItems(state.value, active.value);
 });
 
+const completion = computed(() => ({
+  licenses: onboardingLicensesAreDone(directory.value),
+  home: onboardingHomeIsDone(stations.value),
+}));
+
 const isLast = computed(() => nextOnboardingStep(active.value) === undefined);
-const canContinue = computed(() => onboardingStepIsDone(active.value));
+const canContinue = computed(() => onboardingStepIsDone(active.value, completion.value));
 const canGoBack = computed(() => previousOnboardingStep(active.value) !== undefined);
 const continueLabel = computed(() => (isLast.value ? 'Finish' : 'Continue'));
 
@@ -72,8 +85,20 @@ function skip(): void {
   }
 }
 
+function onHomeSave(draft: StationDraft): void {
+  saveStation(HOME_STATION_ID, draft);
+}
+
 function continueStep(): void {
-  if (!state.value || !canContinue.value) {
+  if (!state.value) {
+    return;
+  }
+
+  if (active.value === 'home' && !homeEditor.value?.save()) {
+    return;
+  }
+
+  if (!onboardingStepIsDone(active.value, completion.value)) {
     return;
   }
 
@@ -112,7 +137,23 @@ function finishLater(): void {
         size="xs"
         class="w-full"
       >
-        <template v-for="step in ONBOARDING_STEPS" :key="step.id" #[step.id]>
+        <template #licenses>
+          <div class="mt-4">
+            <LicensePeoplePreference />
+          </div>
+        </template>
+        <template #home>
+          <div class="mt-4">
+            <RadioStationEditor
+              ref="homeEditor"
+              embedded
+              :open="true"
+              :station="homeStation"
+              @save="onHomeSave"
+            />
+          </div>
+        </template>
+        <template v-for="step in placeholderSteps" :key="step.id" #[step.id]>
           <UAlert
             class="mt-4"
             color="neutral"
@@ -128,7 +169,7 @@ function finishLater(): void {
     <template #footer>
       <div class="flex w-full flex-col gap-3">
         <p v-if="!persistsEdits" class="text-xs text-muted">
-          This preview does not save setup progress, and a new install will not open it on its own yet.
+          This preview does not save which steps you finished, and a new install will not open it on its own yet. Licenses and a Home location you save here are kept.
         </p>
         <p v-else-if="persisted?.completedReason === 'existing-data'" class="text-xs text-muted">
           This install already has station data. The guide stays closed until you open it here. Skipping a step does not remove licenses, radios, or stations.
