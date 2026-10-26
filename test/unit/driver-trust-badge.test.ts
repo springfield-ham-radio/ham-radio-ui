@@ -79,18 +79,32 @@ describe('driver trust badges', () => {
     });
   });
 
-  it('should accept a deprecated reason string or a bare flag', () => {
-    expect(readCatalogDriverTrust({ deprecated: 'Broken on the current API' }).deprecated).toEqual({
-      reason: 'Broken on the current API',
-    });
-    expect(driverTrustBadges({ catalogEntry: { deprecated: true } })[1]).toEqual({
-      kind: 'deprecated',
-      label: 'Deprecated',
-      color: 'error',
-    });
-    expect(driverTrustBadges({ catalogEntry: { deprecated: false } }).map((badge) => badge.kind)).toEqual([
-      'official',
-    ]);
+  it('should require deprecated to be a reason plus a calendar date', () => {
+    expect(
+      readCatalogDriverTrust({
+        deprecated: { reason: 'No maintainer response', date: '2026-10-26' },
+      }).deprecated,
+    ).toEqual({ reason: 'No maintainer response', date: '2026-10-26' });
+    expect(
+      readCatalogDriverTrust({
+        deprecated: { reason: 'Leap day', date: '2024-02-29' },
+      }).deprecated?.date,
+    ).toBe('2024-02-29');
+
+    for (const deprecated of [
+      true,
+      false,
+      'Broken on the current API',
+      { reason: 'No maintainer response' },
+      { date: '2026-10-26' },
+      { reason: '   ', date: '2026-10-26' },
+      { reason: 'No maintainer response', date: '2026-02-31' },
+      { reason: 'No maintainer response', date: '2026-02-29' },
+      { reason: 'No maintainer response', date: '10/26/2026' },
+    ]) {
+      expect(readCatalogDriverTrust({ deprecated }).deprecated).toBeUndefined();
+      expect(driverTrustBadges({ catalogEntry: { deprecated } }).map((badge) => badge.kind)).toEqual(['official']);
+    }
   });
 
   it('should mark a file install that is not a catalog zip as Unverified', () => {
@@ -114,7 +128,7 @@ describe('driver trust badges', () => {
         catalogEntry: {
           tier: 'community',
           publisher: 'Ada Lovelace',
-          deprecated: { reason: 'No maintainer response' },
+          deprecated: { reason: 'No maintainer response', date: '2026-10-26' },
         },
       }).map((badge) => badge.label),
     ).toEqual(['Unverified', 'Deprecated']);
@@ -134,11 +148,11 @@ describe('driver trust badges', () => {
         record: { source: 'user', sourcePath: BETA_INSTALL_PATH },
         catalogEntry: {
           tier: 'official',
-          deprecated: { reason: 'Replaced by the stable zip' },
+          deprecated: { reason: 'Replaced by the stable zip', date: '2026-10-26' },
         },
       }).map((badge) => ({ label: badge.label, tooltip: badge.tooltip })),
     ).toEqual([
-      { label: 'Deprecated', tooltip: 'Replaced by the stable zip' },
+      { label: 'Deprecated', tooltip: 'Replaced by the stable zip (2026-10-26)' },
       { label: 'Beta', tooltip: undefined },
     ]);
   });
@@ -177,6 +191,7 @@ describe('driver trust badges', () => {
     applyCatalogTrustFields(parsed, raw);
 
     expect(parsed.modules[0]).toMatchObject({
+      package: '@springfield/radio-module-kenwood-th-d74',
       tier: 'community',
       publisher: 'Ada Lovelace',
       deprecated: { reason: 'No maintainer response', date: '2026-10-01' },
@@ -198,7 +213,7 @@ describe('driver trust badges', () => {
         catalogModule('kenwood-th-d74', '1.11.1', {
           tier: 'community',
           publisher: 'Ada Lovelace',
-          deprecated: { reason: 'No maintainer response' },
+          deprecated: { reason: 'No maintainer response', date: '2026-10-26' },
         }),
       ],
     });
@@ -216,7 +231,9 @@ describe('driver trust badges', () => {
         'Community, by Ada Lovelace',
         'Deprecated',
       ]);
-      expect(driverTrustBadges({ catalogEntry: catalog.modules[0] })[1]?.tooltip).toBe('No maintainer response');
+      expect(driverTrustBadges({ catalogEntry: catalog.modules[0] })[1]?.tooltip).toBe(
+        'No maintainer response (2026-10-26)',
+      );
     } finally {
       vi.unstubAllGlobals();
     }

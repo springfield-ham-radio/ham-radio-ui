@@ -4,9 +4,10 @@ import { isBetaDriverRecord } from '~/utils/radio-module-semver';
 
 export type DriverTrustTier = 'official' | 'community';
 
+/** `deprecated` on a catalog entry. Both fields are required when the object is present. */
 export interface CatalogDeprecation {
-  reason?: string;
-  date?: string;
+  reason: string;
+  date: string;
 }
 
 /** Trust fields from a radio-module-catalog entry. Missing tier means official. */
@@ -45,17 +46,29 @@ function nonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** RFC 3339 full-date. `2026-02-31` is not a calendar day. */
+function isCalendarDate(value: string): boolean {
+  const match = CALENDAR_DATE_PATTERN.exec(value);
+
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+/**
+ * `deprecated` is optional. When present it is `{ reason, date }` and both
+ * fields are required. A string, boolean, or partial object is not the flag.
+ */
 function readDeprecation(value: unknown): CatalogDeprecation | undefined {
-  if (value === true) {
-    return {};
-  }
-
-  const asReason = nonEmptyString(value);
-
-  if (asReason) {
-    return { reason: asReason };
-  }
-
   if (!isRecord(value)) {
     return undefined;
   }
@@ -63,10 +76,11 @@ function readDeprecation(value: unknown): CatalogDeprecation | undefined {
   const reason = nonEmptyString(value.reason);
   const date = nonEmptyString(value.date);
 
-  return {
-    ...(reason ? { reason } : {}),
-    ...(date ? { date } : {}),
-  };
+  if (!reason || !date || !isCalendarDate(date)) {
+    return undefined;
+  }
+
+  return { reason, date };
 }
 
 /**
@@ -93,12 +107,8 @@ export function communityBadgeLabel(publisher: string | undefined): string {
   return publisher ? `Community, by ${publisher}` : 'Community';
 }
 
-export function deprecationTooltip(deprecated: CatalogDeprecation): string | undefined {
-  if (deprecated.reason && deprecated.date) {
-    return `${deprecated.reason} (${deprecated.date})`;
-  }
-
-  return deprecated.reason ?? deprecated.date;
+export function deprecationTooltip(deprecated: CatalogDeprecation): string {
+  return `${deprecated.reason} (${deprecated.date})`;
 }
 
 /**
@@ -167,9 +177,9 @@ function catalogTierBadge(trust: CatalogDriverTrust | undefined): DriverTrustBad
  * Badges for an installed driver and/or a catalog row.
  *
  * Official is the default, including catalogs that omit `tier`. Community uses
- * the publisher display name. Unverified is a file install that is not the
- * catalog's pinned zip (a beta file keeps the Beta badge instead). Deprecated
- * is added beside those labels, with the reason as a tooltip.
+ * the publisher display name. Unverified and Beta are file-install labels, not
+ * catalog tiers. Deprecated is added beside those labels when the catalog
+ * entry has a `{ reason, date }` object. The tooltip is the reason and date.
  */
 export function driverTrustBadges(options: {
   record?: Pick<RadioCatalogRecord, 'source' | 'sourcePath'>;
@@ -196,12 +206,11 @@ export function driverTrustBadges(options: {
   }
 
   if (trust?.deprecated) {
-    const tooltip = deprecationTooltip(trust.deprecated);
     badges.push({
       kind: 'deprecated',
       label: 'Deprecated',
       color: 'error',
-      ...(tooltip ? { tooltip } : {}),
+      tooltip: deprecationTooltip(trust.deprecated),
     });
   }
 
