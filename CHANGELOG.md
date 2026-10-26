@@ -1,3 +1,9 @@
+## [3.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.0.0...v3.1.0) (2026-10-26)
+
+### Features
+
+* **ui:** show official, community, unverified, and deprecated driver badges ([#182](https://github.com/springfield-ham-radio/ham-radio-ui/issues/182)) ([10ea522](https://github.com/springfield-ham-radio/ham-radio-ui/commit/10ea5222c6a891f090e0eb1afb76b89f13c5d573)), closes [#181](https://github.com/springfield-ham-radio/ham-radio-ui/issues/181)
+
 ## [3.0.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v2.0.0...v3.0.0) (2026-10-25)
 
 ### ⚠ BREAKING CHANGES
