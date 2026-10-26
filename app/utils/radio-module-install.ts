@@ -5,6 +5,7 @@ import type {
   RegistryRadio,
 } from '@springfield/ham-radio-registry';
 import { isApiVersionCompatible, parseModuleCatalog } from '@springfield/ham-radio-registry';
+import { applyCatalogTrustFields } from '~/utils/driver-trust-badge';
 import { loadRadioConfigFromFile } from '~/utils/load-radio-config';
 import {
   deleteRadioCatalogRecord,
@@ -153,7 +154,15 @@ export async function fetchOfficialModuleCatalog(
     const text = await response.text();
 
     try {
-      return parseModuleCatalog(text);
+      const catalog = parseModuleCatalog(text);
+
+      try {
+        applyCatalogTrustFields(catalog, JSON.parse(text) as unknown);
+      } catch {
+        // parseModuleCatalog already accepted this document.
+      }
+
+      return catalog;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Invalid module catalog';
       throw new OfficialModuleCatalogError('incompatible', message);
