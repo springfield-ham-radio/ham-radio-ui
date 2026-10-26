@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { RadioModuleCatalogEntry } from '@springfield/ham-radio-registry';
+import { driverTrustBadges } from '~/utils/driver-trust-badge';
 import { radioDisplayName } from '~/utils/radio-module-listing';
 import {
   fetchOfficialModuleCatalog,
@@ -317,9 +318,12 @@ function onOpenChange(value: boolean): void {
               :model-value="selectedIds.includes(item.id)"
               @update:model-value="(checked: boolean | 'indeterminate') => toggleModule(item.id, checked === true)"
             />
-            <span class="min-w-0">
-              <span class="block text-sm font-medium text-highlighted">{{ item.label }}</span>
-              <span class="block text-xs text-muted">{{ item.description }}</span>
+            <span class="flex min-w-0 flex-1 items-start justify-between gap-2">
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-highlighted">{{ item.label }}</span>
+                <span class="block text-xs text-muted">{{ item.description }}</span>
+              </span>
+              <DriverTrustBadges :badges="driverTrustBadges({ catalogEntry: item.entry })" />
             </span>
           </label>
         </div>
@@ -359,7 +363,10 @@ function onOpenChange(value: boolean): void {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+            <DriverTrustBadges :badges="driverTrustBadges({ record: { source: 'user' }, beta: true })" />
+          </div>
           <p class="mt-2 text-sm text-muted">
             Compare the SHA-256 below with the value from the author before installing. Beta drivers are not published
             on the official catalog.
@@ -386,7 +393,10 @@ function onOpenChange(value: boolean): void {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Install unverified module?</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-highlighted">Install unverified module?</h2>
+            <DriverTrustBadges :badges="driverTrustBadges({ record: { source: 'user' } })" />
+          </div>
           <p class="mt-2 text-sm text-muted">
             Springfield did not publish this file. Installing it is
             <span class="font-medium text-highlighted">at your own risk</span>. A bad module can fail to talk to

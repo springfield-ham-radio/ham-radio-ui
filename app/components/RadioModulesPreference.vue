@@ -20,6 +20,7 @@ import {
   type AvailableRadioModelItem,
   type InstalledRadioListItem,
 } from '~/utils/radio-module-listing';
+import { driverTrustBadges, type DriverTrustBadge } from '~/utils/driver-trust-badge';
 import { isBetaDriverRecord, isBetaZipFileName, versionFromZipName } from '~/utils/radio-module-semver';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
@@ -65,23 +66,11 @@ const removeConfirmMessage = computed(() => {
   return `Remove ${record.manufacturer} ${record.name} from your catalog? The original file on disk is not deleted.`;
 });
 
-function sourceBadge(record: RadioCatalogRecord): {
-  label: string;
-  color: 'warning' | 'success' | 'info';
-} {
-  if (isBetaDriverRecord(record)) {
-    return { label: 'Beta', color: 'info' };
-  }
-
-  if (record.source === 'user') {
-    return { label: 'Unverified', color: 'warning' };
-  }
-
-  if (record.source === 'installed') {
-    return { label: 'Official', color: 'success' };
-  }
-
-  return { label: 'Bundled', color: 'success' };
+function sourceBadge(
+  record: RadioCatalogRecord,
+  catalogEntry?: InstalledRadioListItem['catalogEntry'],
+): DriverTrustBadge[] {
+  return driverTrustBadges({ record, catalogEntry });
 }
 
 const pendingBetaVersion = computed(() => {
@@ -617,12 +606,7 @@ onMounted(() => {
                       />
                     </span>
                   </UTooltip>
-                  <UBadge
-                    :label="sourceBadge(item.record).label"
-                    :color="sourceBadge(item.record).color"
-                    variant="subtle"
-                    size="sm"
-                  />
+                  <DriverTrustBadges :badges="sourceBadge(item.record, item.catalogEntry)" />
                   <UButton
                     color="neutral"
                     variant="ghost"
@@ -687,6 +671,7 @@ onMounted(() => {
                   <p class="truncate text-sm text-highlighted">{{ radio.name }}</p>
                   <p class="truncate text-xs text-muted">v{{ radio.entry.version }}</p>
                 </div>
+                <DriverTrustBadges :badges="driverTrustBadges({ catalogEntry: radio.entry })" />
                 <UBadge
                   v-if="radio.installedOfficially"
                   label="Installed"
@@ -795,7 +780,10 @@ onMounted(() => {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-highlighted">Install beta driver?</h2>
+            <DriverTrustBadges :badges="driverTrustBadges({ record: { source: 'user' }, beta: true })" />
+          </div>
           <p class="mt-2 text-sm text-muted">
             Compare the SHA-256 below with the value from the author before installing. Beta drivers are not published
             on the official catalog.
@@ -839,7 +827,10 @@ onMounted(() => {
     <template #content>
       <div class="flex flex-col gap-4 p-5">
         <div>
-          <h2 class="text-lg font-semibold text-highlighted">Install unverified module?</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-highlighted">Install unverified module?</h2>
+            <DriverTrustBadges :badges="driverTrustBadges({ record: { source: 'user' } })" />
+          </div>
           <p class="mt-2 text-sm text-muted">
             Springfield did not publish this file. Installing it is
             <span class="font-medium text-highlighted">at your own risk</span>. A bad module can fail to talk to
