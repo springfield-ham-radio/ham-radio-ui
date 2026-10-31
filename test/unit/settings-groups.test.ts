@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import type { RadioMemoryMap } from '@springfield/ham-radio-api';
+import type { RadioMemoryMap, RadioMemoryMapField } from '@springfield/ham-radio-api';
 import { collectMemoryMapUiGroups } from '../../app/utils/settings-groups.ts';
+
+function setting(
+  id: string,
+  label: string,
+  section?: string,
+  order?: number,
+  sectionOrder?: number,
+): RadioMemoryMapField {
+  return {
+    id,
+    type: 'u8',
+    value: { kind: 'boolean' },
+    ui: {
+      group: 'misc',
+      label,
+      widget: 'switch',
+      menu: { number: 900 + (order ?? 0), code: 'SQL' },
+      ...(order === undefined ? {} : { order }),
+      ...(section === undefined ? {} : { section }),
+      ...(sectionOrder === undefined ? {} : { sectionOrder }),
+    },
+  } as RadioMemoryMapField;
+}
+
+function sectionMap(fields: RadioMemoryMapField[], groups?: RadioMemoryMap['groups']): RadioMemoryMap {
+  return {
+    version: '1.0.0',
+    structs: [{ id: 'settings', seek: 0, fields }],
+    ...(groups ? { groups } : {}),
+  };
+}
 
 const sampleMap: RadioMemoryMap = {
   version: '1.0.0',
@@ -160,5 +191,178 @@ describe('collectMemoryMapUiGroups', () => {
       'uhf_enable',
       'vhf_lower',
     ]);
+  });
+
+  it('should group settings by driver section names in first-seen order', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('backlight', 'Backlight', 'Display', 2),
+        setting('beep', 'Key Beep', 'Audio', 1),
+        setting('brightness', 'Brightness', 'Display', 0),
+        setting('callsign', 'My Callsign', 'APRS'),
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Display', 'Audio', 'APRS']);
+    expect(grouped.map((group) => group.fields.map((field) => field.fieldId))).toEqual([
+      ['backlight', 'brightness'],
+      ['beep'],
+      ['callsign'],
+    ]);
+    expect(grouped.map((group) => group.groups)).toEqual([[], [], []]);
+    expect(grouped.every((group) => !/\d/.test(group.label))).toBe(true);
+  });
+
+  it('should replace declared groups and ignore menu numbers when a section is set', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap(
+        [
+          setting('tx', 'TX Inhibit', 'Transmit', 10),
+          {
+            ...setting('pitch', 'CW Pitch', undefined, 70),
+            ui: { ...setting('pitch', 'CW Pitch', undefined, 70).ui, section: 100 },
+          } as RadioMemoryMapField,
+        ],
+        [{ id: 'misc', label: 'Should Not Show', icon: 'i-lucide-wrench' }],
+      ),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Transmit', 'Other']);
+    expect(grouped[0]?.icon).toBe('i-lucide-sliders-horizontal');
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['tx']);
+    expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['pitch']);
+  });
+
+  it('should put settings without a section in a final Other group', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('squelch', 'Squelch'),
+        setting('beep', 'Key Beep', 'Audio'),
+        setting('contrast', 'Contrast', 'Display'),
+        setting('apo', 'Auto Power Off', 'Other'),
+        setting('units', 'Speed'),
+      ]),
+    );
+
+    expect(grouped.map((group) => ({ id: group.id, label: group.label }))).toEqual([
+      { id: 'audio', label: 'Audio' },
+      { id: 'display', label: 'Display' },
+      { id: 'other', label: 'Other' },
+    ]);
+    expect(grouped[2]?.fields.map((field) => field.fieldId)).toEqual(['squelch', 'apo', 'units']);
+  });
+
+  it('should keep the current group layout when no setting has a section', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap(
+        [setting('squelch', 'Squelch'), setting('timeout', 'Timeout')],
+        [{ id: 'misc', label: 'Basic Settings', icon: 'i-lucide-sliders-horizontal' }],
+      ),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Basic Settings']);
+    expect(grouped[0]?.id).toBe('misc');
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['squelch', 'timeout']);
+  });
+
+  it('should ignore blank sections and menu numbers used as section values', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap(
+        [
+          setting('squelch', 'Squelch', '   '),
+          {
+            ...setting('timeout', 'Timeout'),
+            ui: { ...setting('timeout', 'Timeout').ui, section: 100 },
+          } as RadioMemoryMapField,
+        ],
+        [{ id: 'misc', label: 'Basic Settings' }],
+      ),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Basic Settings']);
+  });
+
+  it('should prefer ui.section and fall back to a top-level section', () => {
+    const contrast = setting('contrast', 'Contrast');
+    const volume = setting('volume', 'Volume', 'Audio');
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('beep', 'Key Beep', 'Audio'),
+        { ...contrast, section: 'Display' } as RadioMemoryMapField,
+        { ...volume, section: 'Ignored' } as RadioMemoryMapField,
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio', 'Display']);
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['beep', 'volume']);
+    expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['contrast']);
+  });
+
+  it('should sort sections by the smallest ui.sectionOrder and keep Other last', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('group', 'Group name', 'Memory', undefined, 2),
+        setting('callsign', 'My Callsign', 'Digital', undefined, 6),
+        setting('inhibit', 'TX Inhibit', 'TX/RX', undefined, 9),
+        setting('pitch', 'CW Pitch', 'TX/RX', undefined, 1),
+        setting('monitor', 'TX Monitor', 'Audio File', undefined, 3),
+        setting('beep', 'Key Beep', 'Configuration', undefined, 9),
+        setting('ssid', 'SSID', 'APRS', undefined, 5),
+        setting('plain', 'Squelch'),
+        setting('notes', 'Notes'),
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual([
+      'TX/RX',
+      'Memory',
+      'Audio File',
+      'APRS',
+      'Digital',
+      'Configuration',
+      'Other',
+    ]);
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['inhibit', 'pitch']);
+    expect(grouped.at(-1)?.fields.map((field) => field.fieldId)).toEqual(['plain', 'notes']);
+  });
+
+  it('should place sections without sectionOrder after ordered ones, in first-seen order', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('group', 'Group name', 'Memory'),
+        setting('beep', 'Key Beep', 'Configuration', undefined, 9),
+        setting('ssid', 'SSID', 'APRS'),
+        setting('inhibit', 'TX Inhibit', 'TX/RX', undefined, 1),
+        setting('misc', 'Notes', 'Other', undefined, 0),
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['TX/RX', 'Configuration', 'Memory', 'APRS', 'Other']);
+    expect(grouped.at(-1)?.fields.map((field) => field.fieldId)).toEqual(['misc']);
+  });
+
+  it('should ignore a non-finite sectionOrder and keep equal ranks in first-seen order', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('monitor', 'TX Monitor', 'Audio File', undefined, 3),
+        setting('ssid', 'SSID', 'APRS', undefined, 3),
+        {
+          ...setting('group', 'Group name', 'Memory'),
+          ui: { ...setting('group', 'Group name', 'Memory').ui, sectionOrder: Number.NaN },
+        } as RadioMemoryMapField,
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio File', 'APRS', 'Memory']);
+  });
+
+  it('should trim section names and keep a single Other group when that is the only section', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([setting('beep', 'Key Beep', '  Audio  '), setting('squelch', 'Squelch', 'Other')]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio', 'Other']);
+    expect(grouped[0]?.fields.map((field) => field.ui.label)).toEqual(['Key Beep']);
+    expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['squelch']);
   });
 });
