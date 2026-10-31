@@ -10,11 +10,13 @@ import { resolveModuleIcon } from './module-icons';
  * Menu-group name on a setting.
  * Kenwood config 1.16.0 sends this as `ui.section`. A top-level `section` is
  * accepted when `ui.section` is absent. `@springfield/ham-radio-api` does not
- * type either field yet. Both stay valid after `section?: string` is added to
- * `RadioMemoryMapFieldUi`.
+ * type either field yet. Both stay valid after `section?: string` and
+ * `sectionOrder?: number` are added to `RadioMemoryMapFieldUi`.
  */
 type RadioSettingUi = NonNullable<RadioMemoryMapField['ui']> & {
   section?: string;
+  /** Lower values sort the section earlier. The radio's menu hundred works (1 for 1xx). */
+  sectionOrder?: number;
 };
 
 type RadioSettingDefinition = RadioMemoryMapField & {
@@ -184,20 +186,57 @@ function settingSection(field: RadioMemoryMapField): string | undefined {
   return namedSection(definition.ui?.section) ?? namedSection(definition.section);
 }
 
-function sectionNameByField(memoryMap: RadioMemoryMap): Map<string, string> {
-  const names = new Map<string, string>();
+function settingSectionOrder(field: RadioMemoryMapField): number | undefined {
+  const order = (field as RadioSettingDefinition).ui?.sectionOrder;
+
+  if (typeof order !== 'number' || !Number.isFinite(order)) {
+    return undefined;
+  }
+
+  return order;
+}
+
+function sectionMetaByField(memoryMap: RadioMemoryMap): Map<string, { section: string; order?: number }> {
+  const meta = new Map<string, { section: string; order?: number }>();
 
   for (const struct of memoryMap.structs) {
     for (const field of struct.fields) {
       const section = settingSection(field);
 
-      if (section) {
-        names.set(`${struct.id}\0${field.id}`, section);
+      if (!section) {
+        continue;
       }
+
+      const order = settingSectionOrder(field);
+      meta.set(`${struct.id}\0${field.id}`, order === undefined ? { section } : { section, order });
     }
   }
 
-  return names;
+  return meta;
+}
+
+/**
+ * Ordered sections first, by the smallest `ui.sectionOrder` on their fields.
+ * Equal ranks and sections with no rank keep first-seen order. Unranked
+ * sections follow every ranked section.
+ */
+function sortSectionNames(names: readonly string[], rank: Map<string, number>, firstSeen: Map<string, number>): string[] {
+  return [...names].sort((left, right) => {
+    const leftRank = rank.get(left);
+    const rightRank = rank.get(right);
+    const leftOrdered = leftRank !== undefined;
+    const rightOrdered = rightRank !== undefined;
+
+    if (leftOrdered && rightOrdered && leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    if (leftOrdered !== rightOrdered) {
+      return leftOrdered ? -1 : 1;
+    }
+
+    return (firstSeen.get(left) ?? 0) - (firstSeen.get(right) ?? 0);
+  });
 }
 
 function sectionGroupId(label: string, used: Set<string>): string {
@@ -230,39 +269,51 @@ function toSectionGroup(id: string, label: string, fields: RadioMemoryMapUiField
 /**
  * Group settings by the driver's `section` name.
  * Returns undefined when no visible setting has a section, so the caller keeps
- * the legacy group layout. Sections follow first-seen order. Fields stay in
- * memory-map order. Menu numbers are not consulted. Settings with no section
- * share a final Other group with any section explicitly named Other.
+ * the legacy group layout. Ranked sections sort by the smallest `ui.sectionOrder`.
+ * Unranked sections keep first-seen order after those. Fields stay in memory-map
+ * order. Menu numbers are not consulted. Settings with no section share a final
+ * Other group with any section explicitly named Other.
  */
 function collectSectionGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapUiField[]): SettingsUiGroup[] | undefined {
-  const sectionNames = sectionNameByField(memoryMap);
+  const sectionMeta = sectionMetaByField(memoryMap);
   const buckets = new Map<string, RadioMemoryMapUiField[]>();
   const order: string[] = [];
+  const firstSeen = new Map<string, number>();
+  const rank = new Map<string, number>();
   const otherFields: RadioMemoryMapUiField[] = [];
   let sawSection = false;
 
   for (const field of fields) {
-    const section = sectionNames.get(`${field.structId}\0${field.fieldId}`);
+    const meta = sectionMeta.get(`${field.structId}\0${field.fieldId}`);
 
-    if (!section) {
+    if (!meta) {
       otherFields.push(field);
       continue;
     }
 
     sawSection = true;
 
-    if (section === OTHER_SECTION_LABEL) {
+    if (meta.section === OTHER_SECTION_LABEL) {
       otherFields.push(field);
       continue;
     }
 
-    const existing = buckets.get(section);
+    const existing = buckets.get(meta.section);
 
     if (existing) {
       existing.push(field);
     } else {
-      buckets.set(section, [field]);
-      order.push(section);
+      buckets.set(meta.section, [field]);
+      order.push(meta.section);
+      firstSeen.set(meta.section, firstSeen.size);
+    }
+
+    if (meta.order !== undefined) {
+      const current = rank.get(meta.section);
+
+      if (current === undefined || meta.order < current) {
+        rank.set(meta.section, meta.order);
+      }
     }
   }
 
@@ -271,7 +322,9 @@ function collectSectionGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapU
   }
 
   const usedIds = new Set<string>();
-  const groups = order.map((name) => toSectionGroup(sectionGroupId(name, usedIds), name, buckets.get(name) ?? []));
+  const groups = sortSectionNames(order, rank, firstSeen).map((name) =>
+    toSectionGroup(sectionGroupId(name, usedIds), name, buckets.get(name) ?? []),
+  );
 
   if (otherFields.length > 0) {
     groups.push(toSectionGroup(sectionGroupId(OTHER_SECTION_ID, usedIds), OTHER_SECTION_LABEL, otherFields));
@@ -311,9 +364,11 @@ function collectLegacyUiGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMap
  * Collect radio-wide UI fields grouped for the Settings tab.
  *
  * When any visible setting defines `ui.section` (or a top-level `section`),
- * those names become the left-nav groups and the panel heading. Order is the
- * driver's field order, and sections follow the first name seen. Settings with
- * no section land in a final Other group. Menu numbers are never used as headings.
+ * those names become the left-nav groups and the panel heading. Fields stay in
+ * memory-map order. Sections with `ui.sectionOrder` sort by the smallest value
+ * in the section (lower first). Sections without one keep first-seen order
+ * after the ordered sections. Other is always last. Menu numbers are never
+ * used as headings.
  *
  * When no setting defines a section, top-level `memoryMap.groups` stay the left
  * nav. Nested `groups` plus field `ui.subgroup` stay headed sections in the

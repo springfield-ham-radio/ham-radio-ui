@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMap, RadioMemoryMapField } from '@springfield/ham-radio-api';
 import { collectMemoryMapUiGroups } from '../../app/utils/settings-groups.ts';
 
-function setting(id: string, label: string, section?: string, order?: number): RadioMemoryMapField {
+function setting(
+  id: string,
+  label: string,
+  section?: string,
+  order?: number,
+  sectionOrder?: number,
+): RadioMemoryMapField {
   return {
     id,
     type: 'u8',
@@ -14,6 +20,7 @@ function setting(id: string, label: string, section?: string, order?: number): R
       menu: { number: 900 + (order ?? 0), code: 'SQL' },
       ...(order === undefined ? {} : { order }),
       ...(section === undefined ? {} : { section }),
+      ...(sectionOrder === undefined ? {} : { sectionOrder }),
     },
   } as RadioMemoryMapField;
 }
@@ -289,6 +296,64 @@ describe('collectMemoryMapUiGroups', () => {
     expect(grouped.map((group) => group.label)).toEqual(['Audio', 'Display']);
     expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['beep', 'volume']);
     expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['contrast']);
+  });
+
+  it('should sort sections by the smallest ui.sectionOrder and keep Other last', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('group', 'Group name', 'Memory', undefined, 2),
+        setting('callsign', 'My Callsign', 'Digital', undefined, 6),
+        setting('inhibit', 'TX Inhibit', 'TX/RX', undefined, 9),
+        setting('pitch', 'CW Pitch', 'TX/RX', undefined, 1),
+        setting('monitor', 'TX Monitor', 'Audio File', undefined, 3),
+        setting('beep', 'Key Beep', 'Configuration', undefined, 9),
+        setting('ssid', 'SSID', 'APRS', undefined, 5),
+        setting('plain', 'Squelch'),
+        setting('notes', 'Notes'),
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual([
+      'TX/RX',
+      'Memory',
+      'Audio File',
+      'APRS',
+      'Digital',
+      'Configuration',
+      'Other',
+    ]);
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['inhibit', 'pitch']);
+    expect(grouped.at(-1)?.fields.map((field) => field.fieldId)).toEqual(['plain', 'notes']);
+  });
+
+  it('should place sections without sectionOrder after ordered ones, in first-seen order', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('group', 'Group name', 'Memory'),
+        setting('beep', 'Key Beep', 'Configuration', undefined, 9),
+        setting('ssid', 'SSID', 'APRS'),
+        setting('inhibit', 'TX Inhibit', 'TX/RX', undefined, 1),
+        setting('misc', 'Notes', 'Other', undefined, 0),
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['TX/RX', 'Configuration', 'Memory', 'APRS', 'Other']);
+    expect(grouped.at(-1)?.fields.map((field) => field.fieldId)).toEqual(['misc']);
+  });
+
+  it('should ignore a non-finite sectionOrder and keep equal ranks in first-seen order', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('monitor', 'TX Monitor', 'Audio File', undefined, 3),
+        setting('ssid', 'SSID', 'APRS', undefined, 3),
+        {
+          ...setting('group', 'Group name', 'Memory'),
+          ui: { ...setting('group', 'Group name', 'Memory').ui, sectionOrder: Number.NaN },
+        } as RadioMemoryMapField,
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio File', 'APRS', 'Memory']);
   });
 
   it('should trim section names and keep a single Other group when that is the only section', () => {
