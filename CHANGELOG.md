@@ -1,3 +1,9 @@
+## [3.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.2...v3.2.0) (2026-10-31)
+
+### Features
+
+* **ui:** group radio settings by driver section names ([#188](https://github.com/springfield-ham-radio/ham-radio-ui/issues/188)) ([df146cc](https://github.com/springfield-ham-radio/ham-radio-ui/commit/df146ccf866e32ff91e1ace00d6d69a77c77083f))
+
 ## [3.1.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.1...v3.1.2) (2026-10-31)
 
 ### Bug Fixes
