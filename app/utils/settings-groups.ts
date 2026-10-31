@@ -7,13 +7,19 @@ import {
 import { resolveModuleIcon } from './module-icons';
 
 /**
- * Menu-group name on a setting definition.
- * `@springfield/ham-radio-api` does not type this yet. Drivers may still send it,
- * and the same optional field stays valid after `section?: string` is added to
- * `RadioMemoryMapField`.
+ * Menu-group name on a setting.
+ * Kenwood config 1.16.0 sends this as `ui.section`. A top-level `section` is
+ * accepted when `ui.section` is absent. `@springfield/ham-radio-api` does not
+ * type either field yet. Both stay valid after `section?: string` is added to
+ * `RadioMemoryMapFieldUi`.
  */
+type RadioSettingUi = NonNullable<RadioMemoryMapField['ui']> & {
+  section?: string;
+};
+
 type RadioSettingDefinition = RadioMemoryMapField & {
   section?: string;
+  ui?: RadioSettingUi;
 };
 
 const OTHER_SECTION_LABEL = 'Other';
@@ -164,15 +170,18 @@ function toUiGroup(id: string, label: string, fields: RadioMemoryMapUiField[], d
   };
 }
 
-function settingSection(field: RadioMemoryMapField): string | undefined {
-  const section = (field as RadioSettingDefinition).section;
-
-  if (typeof section !== 'string') {
+function namedSection(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
     return undefined;
   }
 
-  const trimmed = section.trim();
+  const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function settingSection(field: RadioMemoryMapField): string | undefined {
+  const definition = field as RadioSettingDefinition;
+  return namedSection(definition.ui?.section) ?? namedSection(definition.section);
 }
 
 function sectionNameByField(memoryMap: RadioMemoryMap): Map<string, string> {
@@ -301,12 +310,12 @@ function collectLegacyUiGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMap
 /**
  * Collect radio-wide UI fields grouped for the Settings tab.
  *
- * When any visible setting defines `section`, those names become the left-nav
- * groups and the panel heading. Order is the driver's field order, and sections
- * follow the first name seen. Settings with no section land in a final Other
- * group. Menu numbers are never used as headings.
+ * When any visible setting defines `ui.section` (or a top-level `section`),
+ * those names become the left-nav groups and the panel heading. Order is the
+ * driver's field order, and sections follow the first name seen. Settings with
+ * no section land in a final Other group. Menu numbers are never used as headings.
  *
- * When no setting defines `section`, top-level `memoryMap.groups` stay the left
+ * When no setting defines a section, top-level `memoryMap.groups` stay the left
  * nav. Nested `groups` plus field `ui.subgroup` stay headed sections in the
  * panel, and `ui.order` still sorts fields.
  */

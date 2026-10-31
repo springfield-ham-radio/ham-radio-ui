@@ -13,8 +13,8 @@ function setting(id: string, label: string, section?: string, order?: number): R
       widget: 'switch',
       menu: { number: 900 + (order ?? 0), code: 'SQL' },
       ...(order === undefined ? {} : { order }),
+      ...(section === undefined ? {} : { section }),
     },
-    ...(section === undefined ? {} : { section }),
   } as RadioMemoryMapField;
 }
 
@@ -211,7 +211,10 @@ describe('collectMemoryMapUiGroups', () => {
       sectionMap(
         [
           setting('tx', 'TX Inhibit', 'Transmit', 10),
-          { ...setting('pitch', 'CW Pitch', undefined, 70), section: 100 } as RadioMemoryMapField,
+          {
+            ...setting('pitch', 'CW Pitch', undefined, 70),
+            ui: { ...setting('pitch', 'CW Pitch', undefined, 70).ui, section: 100 },
+          } as RadioMemoryMapField,
         ],
         [{ id: 'misc', label: 'Should Not Show', icon: 'i-lucide-wrench' }],
       ),
@@ -260,13 +263,32 @@ describe('collectMemoryMapUiGroups', () => {
       sectionMap(
         [
           setting('squelch', 'Squelch', '   '),
-          { ...setting('timeout', 'Timeout'), section: 100 } as RadioMemoryMapField,
+          {
+            ...setting('timeout', 'Timeout'),
+            ui: { ...setting('timeout', 'Timeout').ui, section: 100 },
+          } as RadioMemoryMapField,
         ],
         [{ id: 'misc', label: 'Basic Settings' }],
       ),
     );
 
     expect(grouped.map((group) => group.label)).toEqual(['Basic Settings']);
+  });
+
+  it('should prefer ui.section and fall back to a top-level section', () => {
+    const contrast = setting('contrast', 'Contrast');
+    const volume = setting('volume', 'Volume', 'Audio');
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([
+        setting('beep', 'Key Beep', 'Audio'),
+        { ...contrast, section: 'Display' } as RadioMemoryMapField,
+        { ...volume, section: 'Ignored' } as RadioMemoryMapField,
+      ]),
+    );
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio', 'Display']);
+    expect(grouped[0]?.fields.map((field) => field.fieldId)).toEqual(['beep', 'volume']);
+    expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['contrast']);
   });
 
   it('should trim section names and keep a single Other group when that is the only section', () => {
