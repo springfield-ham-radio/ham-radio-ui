@@ -5,6 +5,7 @@ import {
   removeSavedRadio,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
+  rememberSavedRadioSerialPort,
   updateSavedRadio,
   upsertSavedRadio,
   applyRadioPrivilege,
@@ -79,6 +80,26 @@ export function useSavedRadios() {
     return radio;
   }
 
+  function rememberSavedRadioPort(id: string | undefined, serialPort: string): void {
+    if (!id) {
+      return;
+    }
+
+    const current = radioById(id);
+
+    if (!current) {
+      return;
+    }
+
+    const next = rememberSavedRadioSerialPort(current, serialPort);
+
+    if (next === current) {
+      return;
+    }
+
+    persist(upsertSavedRadio(store.value, next));
+  }
+
   function deleteRadio(id: string): void {
     persist(removeSavedRadio(store.value, id));
   }
@@ -106,6 +127,7 @@ export function useSavedRadios() {
     draftFromSavedRadio,
     addRadio,
     saveRadio,
+    rememberSavedRadioPort,
     deleteRadio,
     assignPrivilege,
   };

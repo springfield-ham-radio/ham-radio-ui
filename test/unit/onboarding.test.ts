@@ -838,7 +838,7 @@ describe('onboarding step transitions', () => {
     expect(stepper).not.toContain('onboardingReadContinue');
     expect(stepper).not.toContain('refreshReadBackups');
     expect(stepper).not.toContain('z-50');
-    expect(portDialog).toContain("overlay: 'z-50'");
+    expect(portDialog).not.toContain('z-50');
     expect(progressDialog).toContain("overlay: 'z-50'");
     expect(progressDialog).toContain('RadioErrorDetails');
     expect(readStep).toContain('label="Read my radio when I finish"');

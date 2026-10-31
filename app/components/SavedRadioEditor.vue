@@ -212,7 +212,6 @@ function save(): void {
     :title="title"
     :description="description"
     class="max-w-lg"
-    :ui="{ overlay: 'z-50', content: 'z-50' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>

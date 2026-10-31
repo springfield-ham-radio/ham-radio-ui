@@ -13,6 +13,7 @@ import {
   txPowerTextForSavedRadio,
   txPowerWattsFieldError,
   txPowerWattsFromText,
+  rememberSavedRadioSerialPort,
   updateSavedRadio,
   upsertSavedRadio,
   type SavedRadio,
@@ -127,6 +128,22 @@ describe('saved radios', () => {
     const store = upsertSavedRadio(upsertSavedRadio({ radios: [] }, created), base);
 
     expect(removeSavedRadio(store, created.id).radios).toEqual([base]);
+  });
+
+  it('should remember a chosen serial port on the saved radio', () => {
+    const blank = { ...mobile, serialPort: '' };
+    const first = rememberSavedRadioSerialPort(blank, ' usbserial-A703DBTL ', 20);
+    const replaced = rememberSavedRadioSerialPort(first, 'usbmodem31101', 21);
+    const same = rememberSavedRadioSerialPort(replaced, ' usbmodem31101 ', 22);
+    const empty = rememberSavedRadioSerialPort(replaced, '  ', 23);
+
+    expect(first.serialPort).toBe('usbserial-A703DBTL');
+    expect(first.updatedAt).toBe(20);
+    expect(first.createdAt).toBe(mobile.createdAt);
+    expect(replaced.serialPort).toBe('usbmodem31101');
+    expect(replaced.updatedAt).toBe(21);
+    expect(same).toBe(replaced);
+    expect(empty).toBe(replaced);
   });
 
   it('should store the license selected for channel warnings', () => {

@@ -22,7 +22,7 @@ const props = defineProps<{
 }>();
 
 const { configurations, openModulesInstall } = useRadio();
-const { radioById } = useSavedRadios();
+const { radioById, rememberSavedRadioPort } = useSavedRadios();
 const { cardById, setCatPort } = useRadioBoard();
 const { choiceForRadio, identityFor } = useOperatorLicense();
 const { antennas, selected: selectedAntenna, selectedStation, stations } = useStationAntennas();
@@ -186,6 +186,8 @@ watch(
 );
 
 async function connectSavedRadio(serialPortPath: string): Promise<void> {
+  rememberSavedRadioPort(props.savedRadioId, serialPortPath);
+
   const radio = savedRadio.value;
   const config = boundConfig.value;
 

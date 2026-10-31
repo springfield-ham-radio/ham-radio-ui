@@ -14,7 +14,7 @@ const readEntry = importExportEntry(IMPORT_EXPORT_IDS.readFromRadio);
 
 const { readFromRadio, readOpen, configurations, transferInFlight } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
-const { radioById } = useSavedRadios();
+const { radioById, rememberSavedRadioPort } = useSavedRadios();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
 
@@ -45,6 +45,8 @@ watch(readOpen, (open) => {
 });
 
 async function importRadio(serialPortPath: string): Promise<void> {
+  rememberSavedRadioPort(cardById(transferCardId.value)?.savedRadioId, serialPortPath);
+
   const radio = saved.value;
 
   if (!radio) {

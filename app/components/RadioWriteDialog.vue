@@ -27,7 +27,7 @@ const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
 
 const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview, transferInFlight } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
-const { radioById } = useSavedRadios();
+const { radioById, rememberSavedRadioPort } = useSavedRadios();
 const { choiceForRadio, assessmentFor } = useOperatorLicense();
 const { lockedPorts } = useCatPortLock();
 const toast = useToast();
@@ -220,6 +220,8 @@ async function readForReview(serialPortPath: string): Promise<void> {
 }
 
 async function writeRadio(serialPortPath: string): Promise<void> {
+  rememberSavedRadioPort(cardById(transferCardId.value)?.savedRadioId, serialPortPath);
+
   const radio = saved.value;
   const selected = config.value;
 

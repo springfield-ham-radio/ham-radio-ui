@@ -107,6 +107,21 @@ function fieldChanged(path: string): boolean {
   return changedPathSet.value.has(path);
 }
 
+/**
+ * Dirty marker painted on the control itself.
+ *
+ * `highlight` plus `color="warning"` is Nuxt UI's inset ring (`rounded-md` on
+ * inputs and selects, `rounded-full` on a switch), so the indicator shares
+ * the field's radius instead of a square border beside it.
+ */
+function changedControlBindings(path: string): { color: 'warning'; highlight: true } | undefined {
+  if (!fieldChanged(path)) {
+    return undefined;
+  }
+
+  return { color: 'warning', highlight: true };
+}
+
 const groupSelectItems = computed(() => {
   return groupEntries.value.map((entry) => ({
     label: groupHasChanges(entry) ? `${entry.label} · Changed` : entry.label,
@@ -301,7 +316,6 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
                 :key="field.path"
                 :label="field.ui.label"
                 :ui="fieldFormUi(field)"
-                :class="fieldChanged(field.path) ? 'rounded-md border-s-2 border-warning bg-warning/10 ps-2' : undefined"
               >
                 <template v-if="fieldChanged(field.path)" #label>
                   <span class="inline-flex items-center gap-1.5">
@@ -327,6 +341,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
 
                 <UInputNumber
                   v-if="field.ui.widget === 'integer' || field.ui.widget === 'number'"
+                  v-bind="changedControlBindings(field.path)"
                   :model-value="numberValue(field)"
                   :min="field.value?.kind === 'integer' ? field.value.min : undefined"
                   :max="field.value?.kind === 'integer' ? field.value.max : undefined"
@@ -337,6 +352,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
 
                 <USelect
                   v-else-if="field.ui.widget === 'select'"
+                  v-bind="changedControlBindings(field.path)"
                   :model-value="selectValue(field)"
                   :items="enumSelectItems(field)"
                   :disabled="!isWritable(field)"
@@ -346,6 +362,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
 
                 <USwitch
                   v-else-if="field.ui.widget === 'switch'"
+                  v-bind="changedControlBindings(field.path)"
                   :model-value="Boolean(fieldValue(field))"
                   :disabled="!isWritable(field)"
                   @update:model-value="updateField(field, Boolean($event))"
@@ -353,6 +370,7 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
 
                 <UInput
                   v-else
+                  v-bind="changedControlBindings(field.path)"
                   :model-value="textValue(field)"
                   :disabled="!isWritable(field)"
                   class="w-full"
