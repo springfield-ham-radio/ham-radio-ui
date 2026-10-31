@@ -30,6 +30,10 @@ export function useAppearanceSettings() {
     'appearance-custom-map-style-url',
     () => readAppearanceSettings().customMapStyleUrl,
   );
+  const showMenuNumbers = useState<boolean>(
+    'appearance-show-menu-numbers',
+    () => readAppearanceSettings().showMenuNumbers,
+  );
 
   const settingsFieldsGridStyleValue = computed(() => settingsFieldsGridStyle(settingsColumns.value));
 
@@ -38,6 +42,7 @@ export function useAppearanceSettings() {
       settingsColumns: settingsColumns.value,
       mapStyle: mapStyle.value,
       customMapStyleUrl: customMapStyleUrl.value,
+      showMenuNumbers: showMenuNumbers.value,
     });
   }
 
@@ -56,13 +61,20 @@ export function useAppearanceSettings() {
     persist();
   }
 
+  function setShowMenuNumbers(value: unknown): void {
+    showMenuNumbers.value = value === true;
+    persist();
+  }
+
   return {
     settingsColumns,
     mapStyle,
     customMapStyleUrl,
+    showMenuNumbers,
     settingsFieldsGridStyle: settingsFieldsGridStyleValue,
     setSettingsColumns,
     setMapStyle,
     setCustomMapStyleUrl,
+    setShowMenuNumbers,
   };
 }

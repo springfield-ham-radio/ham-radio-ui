@@ -107,6 +107,28 @@
               <SettingsColumnsSelect />
             </div>
           </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Radio menu numbers</p>
+                <p class="text-xs text-muted">
+                  Show each setting's front-panel menu number before its label, such as 500 My Callsign. Fields without a
+                  menu number stay as they are. Settings sections do not change.
+                </p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="showMenuNumbers"
+                  aria-label="Show radio menu numbers"
+                  @update:model-value="setShowMenuNumbers"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
         </section>
 
         <section v-else-if="currentSection === 'updates'" class="flex flex-col gap-4">
@@ -391,7 +413,7 @@ import { APP_NAME } from '~/utils/app-name';
 import { onboardingHomeIsDone, showOnboardingPreferencesEntry } from '~/utils/onboarding';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
-const { customMapStyleUrl, setCustomMapStyleUrl } = useAppearanceSettings();
+const { customMapStyleUrl, setCustomMapStyleUrl, showMenuNumbers, setShowMenuNumbers } = useAppearanceSettings();
 const { persisted, reopen: reopenOnboarding } = useOnboarding();
 const { directory } = useOperatorLicense();
 const { stations } = useStationAntennas();

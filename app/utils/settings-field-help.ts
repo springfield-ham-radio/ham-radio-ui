@@ -15,14 +15,10 @@ export interface SettingsFieldHelp {
   ariaLabel: string;
 }
 
-type FieldUiWithMenu = RadioMemoryMapFieldUi & {
-  menu?: SettingsFieldMenu;
-};
-
 const CHOICE_LIMIT = 8;
 
 function fieldMenu(ui: RadioMemoryMapFieldUi): SettingsFieldMenu | undefined {
-  const menu = (ui as FieldUiWithMenu).menu;
+  const menu = ui.menu;
 
   if (!menu || typeof menu.number !== 'number' || !Number.isInteger(menu.number) || menu.number < 0) {
     return undefined;
@@ -57,6 +53,35 @@ function fieldConstraint(value: RadioMemoryMapValueKind | undefined, fieldWidget
   }
 
   return undefined;
+}
+
+/**
+ * Front-panel menu index from `ui.menu.number`.
+ *
+ * `@springfield/ham-radio-api` types this as `RadioMemoryMapFieldMenu.number`, and
+ * `collectMemoryMapUiFields` copies `ui` onto each settings field. A missing or
+ * invalid menu stays undefined so the label is unchanged.
+ */
+export function settingsFieldMenuNumber(field: RadioMemoryMapUiField): number | undefined {
+  return fieldMenu(field.ui)?.number;
+}
+
+/**
+ * Settings label, optionally prefixed with the radio menu number (`500 My Callsign`).
+ * Does not change section grouping. Fields without a menu number keep `ui.label`.
+ */
+export function settingsFieldLabel(field: RadioMemoryMapUiField, showMenuNumbers: boolean): string {
+  if (!showMenuNumbers) {
+    return field.ui.label;
+  }
+
+  const number = settingsFieldMenuNumber(field);
+
+  if (number === undefined) {
+    return field.ui.label;
+  }
+
+  return `${number} ${field.ui.label}`;
 }
 
 /**

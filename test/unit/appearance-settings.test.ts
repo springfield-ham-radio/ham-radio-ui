@@ -4,6 +4,7 @@ import {
   defaultAppearanceSettings,
   parseAppearanceSettings,
   parseSettingsColumnCount,
+  parseShowMenuNumbers,
   serializeAppearanceSettings,
   settingsFieldsGridStyle,
 } from '../../app/utils/appearance-settings.ts';
@@ -13,6 +14,7 @@ describe('appearance settings', () => {
     expect(defaultAppearanceSettings()).toEqual({
       settingsColumns: DEFAULT_SETTINGS_COLUMNS,
       mapStyle: 'theme',
+      showMenuNumbers: false,
     });
     expect(DEFAULT_SETTINGS_COLUMNS).toBe(2);
   });
@@ -35,6 +37,7 @@ describe('appearance settings', () => {
     expect(parsed).toEqual({
       settingsColumns: 3,
       mapStyle: 'theme',
+      showMenuNumbers: false,
     });
   });
 
@@ -55,6 +58,7 @@ describe('appearance settings', () => {
     const settings = {
       settingsColumns: 4 as const,
       mapStyle: 'bright' as const,
+      showMenuNumbers: true,
     };
 
     expect(parseAppearanceSettings(serializeAppearanceSettings(settings))).toEqual(settings);
@@ -66,6 +70,7 @@ describe('appearance settings', () => {
       settingsColumns: 2 as const,
       mapStyle: 'theme' as const,
       customMapStyleUrl: custom,
+      showMenuNumbers: false,
     };
 
     expect(parseAppearanceSettings(serializeAppearanceSettings(withCustom))).toEqual(withCustom);
@@ -80,6 +85,7 @@ describe('appearance settings', () => {
     ).toEqual({
       settingsColumns: 2,
       mapStyle: 'theme',
+      showMenuNumbers: false,
     });
   });
 
@@ -87,10 +93,31 @@ describe('appearance settings', () => {
     expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 1 }))).toEqual({
       settingsColumns: 1,
       mapStyle: 'theme',
+      showMenuNumbers: false,
     });
     expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 2, mapStyle: 'watercolor' }))).toEqual({
       settingsColumns: 2,
       mapStyle: 'theme',
+      showMenuNumbers: false,
+    });
+  });
+
+  it('should keep menu numbers off unless the stored flag is true', () => {
+    expect(parseShowMenuNumbers(undefined)).toBe(false);
+    expect(parseShowMenuNumbers('true')).toBe(false);
+    expect(parseShowMenuNumbers(1)).toBe(false);
+    expect(parseShowMenuNumbers(false)).toBe(false);
+    expect(parseShowMenuNumbers(true)).toBe(true);
+
+    expect(parseAppearanceSettings(JSON.stringify({ showMenuNumbers: true }))).toEqual({
+      settingsColumns: DEFAULT_SETTINGS_COLUMNS,
+      mapStyle: 'theme',
+      showMenuNumbers: true,
+    });
+    expect(parseAppearanceSettings(JSON.stringify({ settingsColumns: 1, showMenuNumbers: 'yes' }))).toEqual({
+      settingsColumns: 1,
+      mapStyle: 'theme',
+      showMenuNumbers: false,
     });
   });
 
