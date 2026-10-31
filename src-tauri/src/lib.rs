@@ -762,7 +762,12 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
-                app.handle().plugin(tauri_plugin_mcp_bridge::init())?;
+                // The crate default listens on 0.0.0.0. Dev builds bind loopback only.
+                app.handle().plugin(
+                    tauri_plugin_mcp_bridge::Builder::new()
+                        .bind_address("127.0.0.1")
+                        .build(),
+                )?;
             }
 
             if cfg!(debug_assertions) {
