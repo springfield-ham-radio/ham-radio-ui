@@ -20,6 +20,8 @@ yarn install
 yarn tauri:dev
 ```
 
+Debug builds register `tauri-plugin-mcp-bridge` on `127.0.0.1` and scan ports 9223–9322. Release builds leave the plugin out. [@hypothesi/tauri-mcp-server](https://www.npmjs.com/package/@hypothesi/tauri-mcp-server) drives `yarn tauri:dev` over that loopback WebSocket. Start a driver session on the port the dev process logs at startup (usually 9223).
+
 Radio-module settings icons must come from the bundled Lucide set in [docs/module-icons.md](docs/module-icons.md). HamBench does not call Iconify at runtime.
 
 ## License
