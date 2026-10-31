@@ -2,6 +2,7 @@
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import { markCatBusySerialPorts } from '~/utils/cat-memory-transfer';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
+import { resolveRadioPortChoices, type RadioPortChoice } from '~/utils/radio-port-selection';
 import { serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import type { RadioDialogMessageAlert } from '~/utils/radio-dialog-message';
@@ -45,7 +46,7 @@ const isOpen = computed({
 });
 
 const selectedPort = shallowRef<string | undefined>();
-const ports = ref<Array<{ label: string; value: string; description?: string }>>([]);
+const ports = ref<RadioPortChoice[]>([]);
 const loadingPorts = shallowRef(false);
 const unavailable = computed(() => props.unavailablePorts ?? []);
 const portItems = computed(() =>
@@ -54,11 +55,15 @@ const portItems = computed(() =>
   }),
 );
 const canSubmit = computed(() => {
-  if (!selectedPort.value) {
+  const path = selectedPort.value;
+
+  if (!path || unavailable.value.includes(path)) {
     return false;
   }
 
-  return !unavailable.value.includes(selectedPort.value);
+  const item = portItems.value.find((port) => port.value === path);
+
+  return Boolean(item && !item.disabled);
 });
 
 watch([selectedPort, ports, loadingPorts], () => {
@@ -92,19 +97,16 @@ async function loadPorts(): Promise<void> {
     const available = await SerialPort.available_ports();
     const settings = readSerialPortSettings();
     const listed = serialPortSelectItems(Object.keys(available), settings);
-    const fallback = props.embedded ? undefined : props.defaultPort?.trim();
+    const resolved = resolveRadioPortChoices({
+      livePorts: listed,
+      savedPort: props.embedded ? undefined : props.defaultPort,
+      currentPort: previous,
+      unavailablePorts: unavailable.value,
+      aliases: settings.portAliases,
+    });
 
-    if (fallback && !listed.some((port) => port.value === fallback)) {
-      listed.unshift(serialPortOption(fallback, settings.portAliases, { suffix: ' (saved)' }));
-    }
-
-    ports.value = listed;
-    const preferred = previous ?? fallback;
-    selectedPort.value = preferred && listed.some((port) => port.value === preferred) ? preferred : undefined;
-
-    if (selectedPort.value && unavailable.value.includes(selectedPort.value)) {
-      selectedPort.value = listed.find((port) => !unavailable.value.includes(port.value))?.value;
-    }
+    ports.value = resolved.ports;
+    selectedPort.value = resolved.selectedPort;
   } catch (cause) {
     console.error('Failed to list serial ports', cause);
     const fallback = props.embedded ? undefined : props.defaultPort?.trim();
@@ -128,7 +130,7 @@ async function loadPorts(): Promise<void> {
 }
 
 async function confirm(): Promise<void> {
-  if (!selectedPort.value || unavailable.value.includes(selectedPort.value)) {
+  if (!canSubmit.value || !selectedPort.value) {
     return;
   }
 
@@ -152,7 +154,7 @@ watch(
     }
 
     if (open) {
-      selectedPort.value = props.defaultPort;
+      selectedPort.value = undefined;
       void loadPorts();
       return;
     }
@@ -169,7 +171,6 @@ watch(
     :title="title"
     :description="slots.description ? undefined : description"
     :class="panelClass ?? 'max-w-lg'"
-    :ui="{ overlay: 'z-50', content: 'z-50' }"
   >
     <template v-if="slots.description" #description>
       <slot name="description" />
