@@ -41,14 +41,24 @@ describe('resolveRadioPortChoices', () => {
     });
   });
 
-  it('should preselect a saved port that is plugged in', () => {
+  it('should preselect a plugged-in saved port and label it saved', () => {
     const result = resolveRadioPortChoices({
       livePorts: live,
       savedPort: 'usbmodem31101',
     });
 
     expect(result.selectedPort).toBe('usbmodem31101');
-    expect(result.ports).toEqual(live);
+    expect(result.ports).toEqual([live[0], { ...live[1], label: 'usbmodem31101 (saved)' }]);
+  });
+
+  it('should keep an alias on a plugged-in saved port', () => {
+    const result = resolveRadioPortChoices({
+      livePorts: live,
+      savedPort: 'usbserial-DU0E6KWR',
+    });
+
+    expect(result.selectedPort).toBe('usbserial-DU0E6KWR');
+    expect(result.ports[0]).toEqual({ ...live[0], label: 'Baofeng Cable (saved)' });
   });
 
   it('should keep a refreshed selection when that port is still present', () => {
@@ -117,6 +127,16 @@ describe('select menus inside overlays', () => {
     for (const path of sources) {
       expect(readFileSync(path, 'utf8'), path).not.toContain('z-50');
     }
+  });
+
+  it('should store the chosen port on the saved radio from Read, Write, and CAT', () => {
+    const readDialog = readFileSync('app/components/RadioReadDialog.vue', 'utf8');
+    const writeDialog = readFileSync('app/components/RadioWriteDialog.vue', 'utf8');
+    const cat = readFileSync('app/components/RadioCat.vue', 'utf8');
+
+    expect(readDialog).toContain('rememberSavedRadioPort(cardById(transferCardId.value)?.savedRadioId, serialPortPath)');
+    expect(writeDialog).toContain('rememberSavedRadioPort(cardById(transferCardId.value)?.savedRadioId, serialPortPath)');
+    expect(cat).toContain('rememberSavedRadioPort(props.savedRadioId, serialPortPath)');
   });
 
   it('should resolve a missing saved port in the read and write port dialog', () => {

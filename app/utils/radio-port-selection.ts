@@ -7,7 +7,7 @@ export interface RadioPortChoice extends SerialPortOption {
 /**
  * Ports for Read, Write, and CAT connect.
  *
- * A saved path that is plugged in stays selected. A saved path that is not in
+ * A saved path that is plugged in is labeled "(saved)" and stays selected. A saved path that is not in
  * the live list is shown disabled and is not selected, so the dialog cannot
  * open a cable that is not connected. Another plugged-in port is not chosen
  * in its place: more than one cable may be attached.
@@ -29,6 +29,15 @@ export function resolveRadioPortChoices(input: {
   const current = input.currentPort?.trim() || undefined;
   const ports: RadioPortChoice[] = input.livePorts.map((port) => ({ ...port }));
   const liveValues = new Set(ports.map((port) => port.value));
+
+  if (saved && liveValues.has(saved)) {
+    const index = ports.findIndex((port) => port.value === saved);
+    const current = ports[index];
+
+    if (current && !current.label.endsWith(' (saved)')) {
+      ports[index] = { ...current, label: `${current.label} (saved)` };
+    }
+  }
 
   if (saved && !liveValues.has(saved)) {
     const option = serialPortOption(saved, aliases, { suffix: ' (saved)' });

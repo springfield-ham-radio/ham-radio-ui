@@ -355,6 +355,26 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
   return next;
 }
 
+/**
+ * Cable chosen in Read, Write, or CAT connect.
+ *
+ * Replaces the stored port, including when the radio had none. The same path
+ * is returned unchanged.
+ */
+export function rememberSavedRadioSerialPort(radio: SavedRadio, serialPort: string, now = Date.now()): SavedRadio {
+  const trimmed = serialPort.trim();
+
+  if (trimmed.length === 0 || trimmed === radio.serialPort) {
+    return radio;
+  }
+
+  return {
+    ...radio,
+    serialPort: trimmed,
+    updatedAt: now,
+  };
+}
+
 export function draftFromSavedRadio(radio: SavedRadio): SavedRadioDraft {
   return {
     name: radio.name,
