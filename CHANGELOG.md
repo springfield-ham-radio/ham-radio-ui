@@ -1,3 +1,11 @@
+## [3.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.0...v3.1.1) (2026-10-31)
+
+### Bug Fixes
+
+* **deps:** bump maplibre-gl ([#184](https://github.com/springfield-ham-radio/ham-radio-ui/issues/184)) ([39f86a2](https://github.com/springfield-ham-radio/ham-radio-ui/commit/39f86a2ab758f999385cf2fe426eeb93d4471382))
+* **deps:** bump the rust-crates group in /src-tauri with 4 updates ([#183](https://github.com/springfield-ham-radio/ham-radio-ui/issues/183)) ([89de683](https://github.com/springfield-ham-radio/ham-radio-ui/commit/89de6839e66e39b7674c75a26d6aa14908219ceb))
+* **ui:** keep select menus above dialogs ([#186](https://github.com/springfield-ham-radio/ham-radio-ui/issues/186)) ([65f25d8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/65f25d88fa691488880d6f222c2aeeacd9f82b89))
+
 ## [3.1.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.0.0...v3.1.0) (2026-10-26)
 
 ### Features
