@@ -1,3 +1,9 @@
+## [3.1.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.1...v3.1.2) (2026-10-31)
+
+### Bug Fixes
+
+* **tauri:** bind the debug MCP bridge to loopback ([#187](https://github.com/springfield-ham-radio/ham-radio-ui/issues/187)) ([8701d2e](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8701d2ecaf0ee9c2826d46ed7d53b8f3a948da36))
+
 ## [3.1.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.0...v3.1.1) (2026-10-31)
 
 ### Bug Fixes
