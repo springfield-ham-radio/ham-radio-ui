@@ -1,10 +1,23 @@
-import type { RadioMemoryMap } from '@springfield/ham-radio-api';
+import type { RadioMemoryMap, RadioMemoryMapField } from '@springfield/ham-radio-api';
 import {
   collectMemoryMapUiFields,
   groupMemoryMapUiFields,
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
 import { resolveModuleIcon } from './module-icons';
+
+/**
+ * Menu-group name on a setting definition.
+ * `@springfield/ham-radio-api` does not type this yet. Drivers may still send it,
+ * and the same optional field stays valid after `section?: string` is added to
+ * `RadioMemoryMapField`.
+ */
+type RadioSettingDefinition = RadioMemoryMapField & {
+  section?: string;
+};
+
+const OTHER_SECTION_LABEL = 'Other';
+const OTHER_SECTION_ID = 'other';
 
 export interface SettingsGroupWarning {
   title: string;
@@ -151,35 +164,153 @@ function toUiGroup(id: string, label: string, fields: RadioMemoryMapUiField[], d
   };
 }
 
+function settingSection(field: RadioMemoryMapField): string | undefined {
+  const section = (field as RadioSettingDefinition).section;
+
+  if (typeof section !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = section.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function sectionNameByField(memoryMap: RadioMemoryMap): Map<string, string> {
+  const names = new Map<string, string>();
+
+  for (const struct of memoryMap.structs) {
+    for (const field of struct.fields) {
+      const section = settingSection(field);
+
+      if (section) {
+        names.set(`${struct.id}\0${field.id}`, section);
+      }
+    }
+  }
+
+  return names;
+}
+
+function sectionGroupId(label: string, used: Set<string>): string {
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  let id = slug.length > 0 ? slug : 'section';
+  let suffix = 2;
+
+  while (used.has(id)) {
+    id = `${slug.length > 0 ? slug : 'section'}-${suffix}`;
+    suffix += 1;
+  }
+
+  used.add(id);
+  return id;
+}
+
+function toSectionGroup(id: string, label: string, fields: RadioMemoryMapUiField[]): SettingsUiGroup {
+  return {
+    id,
+    label,
+    icon: resolveModuleIcon(undefined),
+    fields,
+    groups: [],
+  };
+}
+
 /**
- * Collect radio-wide UI fields grouped for the Settings tab.
- * Top-level `memoryMap.groups` become the left nav. Nested `groups` plus
- * field `ui.subgroup` become headed sections in the panel.
- * `ui.order` sorts fields within a group or section.
+ * Group settings by the driver's `section` name.
+ * Returns undefined when no visible setting has a section, so the caller keeps
+ * the legacy group layout. Sections follow first-seen order. Fields stay in
+ * memory-map order. Menu numbers are not consulted. Settings with no section
+ * share a final Other group with any section explicitly named Other.
  */
-export function collectMemoryMapUiGroups(memoryMap: RadioMemoryMap): SettingsUiGroup[] {
-  const grouped = groupMemoryMapUiFields(collectMemoryMapUiFields(memoryMap));
+function collectSectionGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapUiField[]): SettingsUiGroup[] | undefined {
+  const sectionNames = sectionNameByField(memoryMap);
+  const buckets = new Map<string, RadioMemoryMapUiField[]>();
+  const order: string[] = [];
+  const otherFields: RadioMemoryMapUiField[] = [];
+  let sawSection = false;
+
+  for (const field of fields) {
+    const section = sectionNames.get(`${field.structId}\0${field.fieldId}`);
+
+    if (!section) {
+      otherFields.push(field);
+      continue;
+    }
+
+    sawSection = true;
+
+    if (section === OTHER_SECTION_LABEL) {
+      otherFields.push(field);
+      continue;
+    }
+
+    const existing = buckets.get(section);
+
+    if (existing) {
+      existing.push(field);
+    } else {
+      buckets.set(section, [field]);
+      order.push(section);
+    }
+  }
+
+  if (!sawSection) {
+    return undefined;
+  }
+
+  const usedIds = new Set<string>();
+  const groups = order.map((name) => toSectionGroup(sectionGroupId(name, usedIds), name, buckets.get(name) ?? []));
+
+  if (otherFields.length > 0) {
+    groups.push(toSectionGroup(sectionGroupId(OTHER_SECTION_ID, usedIds), OTHER_SECTION_LABEL, otherFields));
+  }
+
+  return groups;
+}
+
+function collectLegacyUiGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapUiField[]): SettingsUiGroup[] {
+  const grouped = groupMemoryMapUiFields(fields);
   const result: SettingsUiGroup[] = [];
   const seen = new Set<string>();
 
   for (const group of declaredGroups(memoryMap)) {
-    const fields = grouped.get(group.id);
+    const groupFields = grouped.get(group.id);
 
-    if (!fields || fields.length === 0) {
+    if (!groupFields || groupFields.length === 0) {
       continue;
     }
 
     seen.add(group.id);
-    result.push(toUiGroup(group.id, group.label, fields, group));
+    result.push(toUiGroup(group.id, group.label, groupFields, group));
   }
 
-  for (const [id, fields] of grouped) {
+  for (const [id, groupFields] of grouped) {
     if (seen.has(id)) {
       continue;
     }
 
-    result.push(toUiGroup(id, fallbackGroupLabel(id), fields));
+    result.push(toUiGroup(id, fallbackGroupLabel(id), groupFields));
   }
 
   return result;
+}
+
+/**
+ * Collect radio-wide UI fields grouped for the Settings tab.
+ *
+ * When any visible setting defines `section`, those names become the left-nav
+ * groups and the panel heading. Order is the driver's field order, and sections
+ * follow the first name seen. Settings with no section land in a final Other
+ * group. Menu numbers are never used as headings.
+ *
+ * When no setting defines `section`, top-level `memoryMap.groups` stay the left
+ * nav. Nested `groups` plus field `ui.subgroup` stay headed sections in the
+ * panel, and `ui.order` still sorts fields.
+ */
+export function collectMemoryMapUiGroups(memoryMap: RadioMemoryMap): SettingsUiGroup[] {
+  const fields = collectMemoryMapUiFields(memoryMap);
+  return collectSectionGroups(memoryMap, fields) ?? collectLegacyUiGroups(memoryMap, fields);
 }
