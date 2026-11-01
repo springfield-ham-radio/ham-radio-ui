@@ -1,3 +1,9 @@
+## [3.3.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.0...v3.3.1) (2026-11-01)
+
+### Bug Fixes
+
+* **deps:** patch zip, glob, and minimatch advisories ([#194](https://github.com/springfield-ham-radio/ham-radio-ui/issues/194)) ([946ed92](https://github.com/springfield-ham-radio/ham-radio-ui/commit/946ed923f648155fb43f17526323728d23eb3cb3))
+
 ## [3.3.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.2.0...v3.3.0) (2026-11-01)
 
 ### Features
