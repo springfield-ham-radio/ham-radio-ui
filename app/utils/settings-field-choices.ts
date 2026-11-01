@@ -1,25 +1,5 @@
-import type { RadioMemoryMapValueKind, RadioSettingValue } from '@springfield/ham-radio-api';
+import type { RadioMemoryMapStringChoice, RadioMemoryMapValueKind, RadioSettingValue } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-
-/**
- * Named option on a string memory-map field (`value.choices`).
- *
- * `@springfield/ham-radio-api` 18.3.0 (and current main) types `kind: "ascii"` as
- * `{ length, pad? }` only. `@springfield/ham-radio-utils` 4.16.1 marks that object
- * `additionalProperties: false`, so the published schema rejects `choices`.
- * Kenwood TH-D74 menu 501 sends `{ label, value }` here anyway. `value` is the
- * stored character string (Radio is `\Y`, RV is `/R`), not an enum index.
- */
-export interface SettingsStringChoice {
-  label: string;
-  value: string;
-}
-
-const STRING_VALUE_KINDS = new Set(['ascii', 'dtmf']);
-
-type ValueWithChoices = RadioMemoryMapValueKind & {
-  choices?: unknown;
-};
 
 export interface SettingsSelectItem {
   label: string;
@@ -28,20 +8,21 @@ export interface SettingsSelectItem {
 
 /**
  * Valid `{ label, value }` options on an ascii or dtmf field.
+ * `RadioMemoryMapStringChoice.value` is the stored character string.
  * Returns undefined when the field has no usable list, so enum selects stay on `values`.
  */
-export function settingsStringChoices(value: RadioMemoryMapValueKind | undefined): SettingsStringChoice[] | undefined {
-  if (!value || !STRING_VALUE_KINDS.has(value.kind)) {
+export function settingsStringChoices(value: RadioMemoryMapValueKind | undefined): RadioMemoryMapStringChoice[] | undefined {
+  if (!value || (value.kind !== 'ascii' && value.kind !== 'dtmf')) {
     return undefined;
   }
 
-  const raw = (value as ValueWithChoices).choices;
+  const raw = value.choices;
 
-  if (!Array.isArray(raw)) {
+  if (!raw || raw.length === 0) {
     return undefined;
   }
 
-  const choices: SettingsStringChoice[] = [];
+  const choices: RadioMemoryMapStringChoice[] = [];
   const seen = new Set<string>();
 
   for (const entry of raw) {
@@ -94,7 +75,7 @@ function selectItemValue(stored: string, emptyValue: string): string {
  * so the control can show it and write the same characters back.
  */
 export function stringChoiceSelectItems(
-  choices: readonly SettingsStringChoice[],
+  choices: readonly RadioMemoryMapStringChoice[],
   current: RadioSettingValue | undefined,
   emptyValue: string,
 ): SettingsSelectItem[] {
