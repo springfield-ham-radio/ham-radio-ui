@@ -3127,6 +3127,7 @@ __metadata:
     "@springfield/ham-radio-registry": "npm:2.1.0"
     "@springfield/ham-radio-utils": "npm:^4.19.0"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
+    "@tanstack/vue-virtual": "npm:^3.13.40"
     "@tauri-apps/api": "npm:^2.12.4"
     "@tauri-apps/cli": "npm:^2.12.4"
     "@tauri-apps/plugin-dialog": "npm:^2.8.3"

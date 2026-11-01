@@ -8,6 +8,16 @@ import {
   type CodecByteHit,
   type CodecSelection,
 } from '~/utils/codec-display';
+import {
+  formatHexDumpAddress,
+  formatHexDumpAscii,
+  formatHexDumpByte,
+  HEX_DUMP_BYTES_PER_ROW,
+  HEX_DUMP_ROW_HEIGHT_PX,
+  hexDumpRowCount,
+  hexDumpRowIndex,
+} from '~/utils/hex-dump';
+import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
 
 const props = defineProps<{
   memory: RadioMemory;
@@ -22,35 +32,16 @@ const emit = defineEmits<{
   select: [hit: CodecByteHit];
 }>();
 
-interface HexRow {
-  address: string;
-  offsets: number[];
-}
+const dumpRef = useTemplateRef<HTMLElement>('dumpRef');
 
-const BYTES_PER_ROW = 16;
-const dumpRef = ref<HTMLElement>();
+const rowCount = computed(() => hexDumpRowCount(props.memory.contents.length));
 
-const formattedRows = computed(() => {
-  const rows: HexRow[] = [];
-  const contents = props.memory.contents;
-  const memoryConfig = props.memoryConfig;
-
-  for (let i = 0; i < contents.length; i += BYTES_PER_ROW) {
-    const length = Math.min(BYTES_PER_ROW, contents.length - i);
-    const offsets = Array.from({ length }, (_, byteIndex) => i + byteIndex);
-    const radioAddress =
-      memoryConfig === undefined
-        ? i
-        : (bufferOffsetToRadioAddress(i, memoryConfig, contents.length) ?? i);
-
-    rows.push({
-      address: radioAddress.toString(16).padStart(8, '0').toUpperCase(),
-      offsets,
-    });
-  }
-
-  return rows;
-});
+const { virtualRows, paddingTop, paddingBottom, scrollToIndex } = useFixedVirtualRows(
+  rowCount,
+  dumpRef,
+  HEX_DUMP_ROW_HEIGHT_PX,
+  8,
+);
 
 const selectedFieldOffsets = computed(() => new Set(props.fieldOffsets ?? []));
 const selectedInstanceOffsets = computed(() => new Set(props.instanceOffsets ?? []));
@@ -61,13 +52,35 @@ const firstSelectedOffset = computed(() => {
   return source[0];
 });
 
+function rowOffsets(rowIndex: number): number[] {
+  const start = rowIndex * HEX_DUMP_BYTES_PER_ROW;
+  const length = Math.min(HEX_DUMP_BYTES_PER_ROW, props.memory.contents.length - start);
+  const offsets = new Array<number>(length);
+
+  for (let index = 0; index < length; index += 1) {
+    offsets[index] = start + index;
+  }
+
+  return offsets;
+}
+
+function rowAddress(rowIndex: number): string {
+  const offset = rowIndex * HEX_DUMP_BYTES_PER_ROW;
+  const memoryConfig = props.memoryConfig;
+  const radioAddress =
+    memoryConfig === undefined
+      ? offset
+      : (bufferOffsetToRadioAddress(offset, memoryConfig, props.memory.contents.length) ?? offset);
+
+  return formatHexDumpAddress(radioAddress);
+}
+
 function byteValue(offset: number): string {
-  return (props.memory.contents[offset] ?? 0).toString(16).padStart(2, '0').toUpperCase();
+  return formatHexDumpByte(props.memory.contents[offset] ?? 0);
 }
 
 function asciiChar(offset: number): string {
-  const byte = props.memory.contents[offset] ?? 0;
-  return byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.';
+  return formatHexDumpAscii(props.memory.contents[offset] ?? 0);
 }
 
 function asciiClass(offset: number): string {
@@ -126,18 +139,21 @@ function onDumpClick(event: MouseEvent): void {
   }
 }
 
-watch(firstSelectedOffset, (offset) => {
-  if (offset === undefined) {
-    return;
-  }
+watch(
+  firstSelectedOffset,
+  (offset) => {
+    if (offset === undefined) {
+      return;
+    }
 
-  nextTick(() => {
-    dumpRef.value?.querySelector('[data-hex-selected="true"]')?.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
+    const index = Math.min(hexDumpRowIndex(offset), Math.max(rowCount.value - 1, 0));
+
+    nextTick(() => {
+      scrollToIndex(index, 'auto');
     });
-  });
-});
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -147,24 +163,28 @@ watch(firstSelectedOffset, (offset) => {
       <div class="mr-8 min-w-[48ch]">Data</div>
       <div class="min-w-[16ch]">ASCII</div>
     </div>
-    <div ref="dumpRef" class="min-h-0 flex-1 overflow-y-auto px-4 py-2" @click="onDumpClick">
-      <div v-for="row in formattedRows" :key="row.offsets[0]" class="mb-0.5 flex">
-        <div class="mr-8 min-w-[8ch] text-toned">{{ row.address }}</div>
-        <div class="mr-8 flex min-w-[48ch]">
-          <span
-            v-for="offset in row.offsets"
-            :key="offset"
-            class="mr-2 w-[2ch] cursor-pointer text-center"
-            :class="byteClass(offset)"
-            :title="byteTitle(offset)"
-            :data-offset="offset"
-            :data-hex-selected="offset === firstSelectedOffset ? 'true' : undefined"
-          >
-            {{ byteValue(offset) }}
-          </span>
-        </div>
-        <div class="min-w-[16ch]">
-          <span v-for="offset in row.offsets" :key="offset" :class="asciiClass(offset)">{{ asciiChar(offset) }}</span>
+    <div ref="dumpRef" class="min-h-0 flex-1 overflow-y-auto px-4" @click="onDumpClick">
+      <div :style="{ paddingTop: `${paddingTop}px`, paddingBottom: `${paddingBottom}px` }">
+        <div v-for="virtualRow in virtualRows" :key="virtualRow.key" class="flex h-5" :data-hex-row="virtualRow.index">
+          <div class="mr-8 min-w-[8ch] text-toned">{{ rowAddress(virtualRow.index) }}</div>
+          <div class="mr-8 flex min-w-[48ch]">
+            <span
+              v-for="offset in rowOffsets(virtualRow.index)"
+              :key="offset"
+              class="mr-2 w-[2ch] cursor-pointer text-center"
+              :class="byteClass(offset)"
+              :title="byteTitle(offset)"
+              :data-offset="offset"
+              :data-hex-selected="offset === firstSelectedOffset ? 'true' : undefined"
+            >
+              {{ byteValue(offset) }}
+            </span>
+          </div>
+          <div class="min-w-[16ch]">
+            <span v-for="offset in rowOffsets(virtualRow.index)" :key="offset" :class="asciiClass(offset)">{{
+              asciiChar(offset)
+            }}</span>
+          </div>
         </div>
       </div>
     </div>

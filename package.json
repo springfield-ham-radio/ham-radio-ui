@@ -38,6 +38,7 @@
     "@springfield/ham-radio-driver": "^3.8.0",
     "@springfield/ham-radio-registry": "2.1.0",
     "@springfield/ham-radio-utils": "^4.19.0",
+    "@tanstack/vue-virtual": "^3.13.40",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.3",
     "@tauri-apps/plugin-opener": "^2.7.2",

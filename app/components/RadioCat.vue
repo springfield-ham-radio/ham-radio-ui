@@ -6,7 +6,6 @@ import { stationLogDraftFromCatVfo } from '~/utils/cat-log-draft';
 import type { CatVfo } from '~/utils/kenwood-cat-session';
 import type { RadioConnectionSelection } from '~/composables/useRadioConnectionForm';
 import { resolveProgrammingBaudRate } from '~/utils/radio-baud-rate';
-import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { serialLogEntryCount } from '~/utils/serial-log-file';
 import { serialPortLabel } from '~/utils/serial-port-list';
@@ -479,23 +478,14 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
-              <p v-if="debugPackets.length === 0" class="text-muted">
-                {{
-                  debugLogging
-                    ? 'Connect CAT to capture serial traffic. Failed connects stay here so you can see the wake CR and ID exchange.'
-                    : 'Capture is off, so live CAT traffic is not recorded. Connect still logs the handshake, including failed connects.'
-                }}
-              </p>
-              <div v-for="packet in debugPackets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
-                <span class="text-muted">{{ packet.timestamp }}</span>
-                <span :class="packet.direction === 'COMPUTER->RADIO' ? 'text-warning' : 'text-success'">
-                  {{ packet.direction }}
-                </span>
-                <span class="text-highlighted">{{ snifferPacketToHex(packet.data) }}</span>
-                <span v-if="packet.description" class="text-muted">{{ packet.description }}</span>
-              </div>
-            </div>
+            <SerialTrafficList
+              :packets="debugPackets"
+              :empty="
+                debugLogging
+                  ? 'Connect CAT to capture serial traffic. Failed connects stay here so you can see the wake CR and ID exchange.'
+                  : 'Capture is off, so live CAT traffic is not recorded. Connect still logs the handshake, including failed connects.'
+              "
+            />
           </div>
         </div>
       </template>
