@@ -193,6 +193,19 @@ describe('collectMemoryMapUiGroups', () => {
     ]);
   });
 
+  it('should keep section order when menu numbers would sort the other way', () => {
+    const callsign = setting('callsign', 'My Callsign', 'APRS', undefined, 5);
+    const beacon = setting('beacon', 'Beacon', 'APRS', undefined, 5);
+    callsign.ui = { ...callsign.ui!, menu: { number: 500, code: 'My Callsign' } };
+    beacon.ui = { ...beacon.ui!, menu: { number: 100, code: 'Beacon' } };
+
+    const grouped = collectMemoryMapUiGroups(sectionMap([callsign, beacon, setting('beep', 'Key Beep', 'Audio', undefined, 1)]));
+
+    expect(grouped.map((group) => group.label)).toEqual(['Audio', 'APRS']);
+    expect(grouped[1]?.fields.map((field) => field.ui.label)).toEqual(['My Callsign', 'Beacon']);
+    expect(grouped[1]?.fields.map((field) => field.ui.menu?.number)).toEqual([500, 100]);
+  });
+
   it('should group settings by driver section names in first-seen order', () => {
     const grouped = collectMemoryMapUiGroups(
       sectionMap([

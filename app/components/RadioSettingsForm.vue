@@ -3,7 +3,8 @@ import type { RadioMemoryMap, RadioSettings, RadioSettingValue } from '@springfi
 import { type RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { resolveModuleIcon } from '~/utils/module-icons';
 import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups';
-import { settingsFieldHelp } from '~/utils/settings-field-help';
+import { fieldHasStringChoices, settingsStringChoices, stringChoiceSelectItems } from '~/utils/settings-field-choices';
+import { settingsFieldHelp, settingsFieldLabel, settingsFieldMenuNumber } from '~/utils/settings-field-help';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
 
 const props = withDefaults(
@@ -24,7 +25,7 @@ const emit = defineEmits<{
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
-const { settingsFieldsGridStyle } = useAppearanceSettings();
+const { settingsFieldsGridStyle, showMenuNumbers } = useAppearanceSettings();
 const contentPane = useTemplateRef<HTMLElement>('contentPane');
 
 const groupEntries = computed(() => collectMemoryMapUiGroups(props.memoryMap));
@@ -155,6 +156,20 @@ function selectValue(field: RadioMemoryMapUiField): string {
   return String(value);
 }
 
+function selectItems(field: RadioMemoryMapUiField): { label: string; value: string }[] {
+  const choices = settingsStringChoices(field.value);
+
+  if (choices) {
+    return stringChoiceSelectItems(choices, fieldValue(field), EMPTY_SELECT_VALUE);
+  }
+
+  return enumSelectItems(field);
+}
+
+function showsSelect(field: RadioMemoryMapUiField): boolean {
+  return field.ui.widget === 'select' || fieldHasStringChoices(field);
+}
+
 function enumSelectItems(field: RadioMemoryMapUiField): { label: string; value: string }[] {
   if (field.value?.kind !== 'enum') {
     return [];
@@ -215,6 +230,19 @@ function isWritable(field: RadioMemoryMapUiField): boolean {
 
 function selectGroup(group: string): void {
   selectedGroup.value = group;
+}
+
+function fieldLabel(field: RadioMemoryMapUiField): string {
+  return settingsFieldLabel(field, showMenuNumbers.value);
+}
+
+/** Menu index drawn as a muted prefix. Hidden when the preference is off or the field has no menu. */
+function visibleMenuNumber(field: RadioMemoryMapUiField): number | undefined {
+  if (!showMenuNumbers.value) {
+    return undefined;
+  }
+
+  return settingsFieldMenuNumber(field);
 }
 
 function fieldFormUi(field: RadioMemoryMapUiField) {
@@ -314,13 +342,17 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
               <UFormField
                 v-for="field in section.fields"
                 :key="field.path"
-                :label="field.ui.label"
+                :label="fieldLabel(field)"
                 :ui="fieldFormUi(field)"
               >
-                <template v-if="fieldChanged(field.path)" #label>
-                  <span class="inline-flex items-center gap-1.5">
-                    {{ field.ui.label }}
-                    <UTooltip text="Changed">
+                <template v-if="fieldChanged(field.path) || visibleMenuNumber(field) !== undefined" #label>
+                  <span class="inline-flex min-w-0 items-center gap-1.5">
+                    <span
+                      v-if="visibleMenuNumber(field) !== undefined"
+                      class="shrink-0 font-mono text-xs tabular-nums text-muted"
+                    >{{ visibleMenuNumber(field) }}</span>
+                    <span>{{ field.ui.label }}</span>
+                    <UTooltip v-if="fieldChanged(field.path)" text="Changed">
                       <UBadge
                         color="warning"
                         variant="subtle"
@@ -351,10 +383,10 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
                 />
 
                 <USelect
-                  v-else-if="field.ui.widget === 'select'"
+                  v-else-if="showsSelect(field)"
                   v-bind="changedControlBindings(field.path)"
                   :model-value="selectValue(field)"
-                  :items="enumSelectItems(field)"
+                  :items="selectItems(field)"
                   :disabled="!isWritable(field)"
                   class="w-full"
                   @update:model-value="updateSelect(field, $event)"

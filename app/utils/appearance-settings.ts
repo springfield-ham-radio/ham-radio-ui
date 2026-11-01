@@ -21,6 +21,11 @@ export interface AppearanceSettings {
   mapStyle: StationLogMapStylePreference;
   /** Optional HTTPS MapLibre style JSON. Blank uses OpenFreeMap for `mapStyle`. */
   customMapStyleUrl?: string;
+  /**
+   * Prefix radio Settings labels with the front-panel menu number (`ui.menu.number`).
+   * Off by default. Section grouping is unchanged.
+   */
+  showMenuNumbers: boolean;
 }
 
 /**
@@ -39,12 +44,18 @@ export function parseSettingsColumnCount(value: unknown): SettingsColumnCount {
   return DEFAULT_SETTINGS_COLUMNS;
 }
 
-/** Default appearance preferences: two settings columns. */
+/** Default appearance preferences: two settings columns, menu numbers hidden. */
 export function defaultAppearanceSettings(): AppearanceSettings {
   return {
     settingsColumns: DEFAULT_SETTINGS_COLUMNS,
     mapStyle: DEFAULT_STATION_LOG_MAP_STYLE,
+    showMenuNumbers: false,
   };
+}
+
+/** Only an explicit true turns menu numbers on. Missing or other values stay off. */
+export function parseShowMenuNumbers(value: unknown): boolean {
+  return value === true;
 }
 
 /**
@@ -75,6 +86,7 @@ export function parseAppearanceSettings(raw: string | null): AppearanceSettings 
       settingsColumns: parseSettingsColumnCount(record.settingsColumns),
       mapStyle: parseStationLogMapStyle(record.mapStyle),
       ...(customMapStyleUrl ? { customMapStyleUrl } : {}),
+      showMenuNumbers: parseShowMenuNumbers(record.showMenuNumbers),
     };
   } catch {
     return defaults;
@@ -88,6 +100,7 @@ export function serializeAppearanceSettings(settings: AppearanceSettings): strin
     settingsColumns: parseSettingsColumnCount(settings.settingsColumns),
     mapStyle: parseStationLogMapStyle(settings.mapStyle),
     ...(customMapStyleUrl ? { customMapStyleUrl } : {}),
+    showMenuNumbers: parseShowMenuNumbers(settings.showMenuNumbers),
   });
 }
 

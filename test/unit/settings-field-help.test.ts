@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { settingsFieldHelp } from '../../app/utils/settings-field-help.ts';
+import { settingsFieldHelp, settingsFieldLabel, settingsFieldMenuNumber } from '../../app/utils/settings-field-help.ts';
 
 function field(partial: Partial<RadioMemoryMapUiField> & Pick<RadioMemoryMapUiField, 'ui'>): RadioMemoryMapUiField {
   return {
@@ -74,5 +74,73 @@ describe('settingsFieldHelp', () => {
     );
 
     expect(help).toBeUndefined();
+  });
+});
+
+describe('settingsFieldLabel', () => {
+  it('should leave labels unchanged when menu numbers are hidden', () => {
+    const labeled = field({
+      ui: {
+        group: 'aprs',
+        label: 'My Callsign',
+        widget: 'text',
+        menu: { number: 500, code: 'My Callsign' },
+      } as RadioMemoryMapUiField['ui'],
+    });
+
+    expect(settingsFieldMenuNumber(labeled)).toBe(500);
+    expect(settingsFieldLabel(labeled, false)).toBe('My Callsign');
+  });
+
+  it('should prefix the menu number when the preference is on', () => {
+    const labeled = field({
+      ui: {
+        group: 'aprs',
+        label: 'My Callsign',
+        widget: 'text',
+        menu: { number: 500, code: 'My Callsign' },
+      } as RadioMemoryMapUiField['ui'],
+    });
+
+    expect(settingsFieldLabel(labeled, true)).toBe('500 My Callsign');
+  });
+
+  it('should keep the label when a field has no menu number', () => {
+    const labeled = field({
+      ui: { group: 'basic', label: 'Beep', widget: 'switch' },
+    });
+
+    expect(settingsFieldMenuNumber(labeled)).toBeUndefined();
+    expect(settingsFieldLabel(labeled, true)).toBe('Beep');
+  });
+
+  it('should ignore a menu number that is not a whole number of 0 or more', () => {
+    const negative = field({
+      ui: {
+        group: 'basic',
+        label: 'Squelch',
+        widget: 'integer',
+        menu: { number: -1 },
+      } as RadioMemoryMapUiField['ui'],
+    });
+    const fractional = field({
+      ui: {
+        group: 'basic',
+        label: 'Squelch',
+        widget: 'integer',
+        menu: { number: 1.5 },
+      } as RadioMemoryMapUiField['ui'],
+    });
+
+    expect(settingsFieldLabel(negative, true)).toBe('Squelch');
+    expect(settingsFieldLabel(fractional, true)).toBe('Squelch');
+    expect(
+      settingsFieldLabel(
+        field({
+          ui: { group: 'basic', label: 'SQL', widget: 'integer', menu: { number: 0, code: 'SQL' } } as RadioMemoryMapUiField['ui'],
+        }),
+        true,
+      ),
+    ).toBe('0 SQL');
   });
 });

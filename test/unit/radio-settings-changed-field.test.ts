@@ -9,6 +9,13 @@ describe('changed settings fields', () => {
     expect(source).not.toContain('bg-warning/10');
     expect(source).toContain("color: 'warning'");
     expect(source).toContain('highlight: true');
+    expect(source).toContain('showMenuNumbers');
+    expect(source).toContain('settingsFieldLabel');
+    expect(source).toContain('visibleMenuNumber(field)');
+
+    const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
+    expect(preferences).toContain('aria-label="Show radio menu numbers"');
+    expect(preferences).toContain('setShowMenuNumbers');
 
     const fields = source.slice(source.indexOf('v-for="field in section.fields"'));
 
