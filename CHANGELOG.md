@@ -1,3 +1,9 @@
+## [3.3.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.1...v3.3.2) (2026-11-01)
+
+### Performance Improvements
+
+* virtualize hex dump, debug logs, and driver diff ([#195](https://github.com/springfield-ham-radio/ham-radio-ui/issues/195)) ([e7679d9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e7679d9421142294149a80a2a6dccd6f75f13bd3))
+
 ## [3.3.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.0...v3.3.1) (2026-11-01)
 
 ### Bug Fixes
