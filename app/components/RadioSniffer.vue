@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { serialPortLabel, type SerialPortOption } from '~/utils/serial-port-list';
 import { readSnifferSettings, snifferHttpUrl } from '~/utils/sniffer-settings';
 
@@ -284,16 +283,7 @@ onBeforeUnmount(() => {
           </div>
           <p v-if="status.running" class="text-xs text-muted">{{ bridgeDiagnostics }}</p>
         </div>
-        <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
-          <p v-if="packets.length === 0" class="text-muted">{{ emptyTrafficHint }}</p>
-          <div v-for="packet in packets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
-            <span class="text-muted">{{ packet.timestamp }}</span>
-            <span :class="packet.direction === 'COMPUTER->RADIO' ? 'text-warning' : 'text-success'">
-              {{ packet.direction }}
-            </span>
-            <span class="text-highlighted">{{ snifferPacketToHex(packet.data) }}</span>
-          </div>
-        </div>
+        <SerialTrafficList :packets="packets" :empty="emptyTrafficHint" />
       </div>
     </div>
   </div>

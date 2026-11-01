@@ -5,6 +5,7 @@ import {
   formatMemoryDiffRun,
   memoryDiffByteCount,
   memoryHexDiff,
+  summarizeMemoryImages,
 } from '../../app/utils/driver-debug.ts';
 
 describe('memory clone comparison', () => {
@@ -24,6 +25,7 @@ describe('memory clone comparison', () => {
       { start: 4, before: [0x44], after: [0x99] },
     ]);
     expect(memoryDiffByteCount(runs)).toBe(3);
+    expect(summarizeMemoryImages(before, after)).toEqual({ byteCount: 3, runCount: 2 });
     expect(formatMemoryDiffRun(runs[0]!)).toBe('0x0001  11 22 → 1A 2B');
   });
 

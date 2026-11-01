@@ -25,7 +25,6 @@ import {
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
-import { snifferPacketToHex } from '~/utils/sniffer-api';
 import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
 import { privilegeValue } from '~/utils/license-people';
 import {
@@ -1444,18 +1443,10 @@ async function onSaveSerialLog(): Promise<void> {
             />
           </div>
           <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
-            <div class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
-              <p v-if="debugPackets.length === 0" class="text-muted">
-                Read from or write to a radio to capture serial traffic.
-              </p>
-              <div v-for="packet in debugPackets" :key="packet.id" class="flex gap-3 whitespace-nowrap">
-                <span class="text-muted">{{ packet.timestamp }}</span>
-                <span :class="packet.direction === 'COMPUTER->RADIO' ? 'text-warning' : 'text-success'">
-                  {{ packet.direction }}
-                </span>
-                <span class="text-highlighted">{{ snifferPacketToHex(packet.data) }}</span>
-              </div>
-            </div>
+            <SerialTrafficList
+              :packets="debugPackets"
+              empty="Read from or write to a radio to capture serial traffic."
+            />
           </div>
         </div>
       </template>

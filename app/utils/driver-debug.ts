@@ -46,6 +46,106 @@ function formatDiffByte(value: number | undefined): string {
 const HEX_ROW_BYTES = 16;
 const HEX_ROW_LIMIT = 64;
 
+/** One changed 16-byte row, or a marker for a skipped unchanged stretch. */
+export type MemoryHexDiffItem = { kind: 'row'; address: number } | { kind: 'gap'; address: number };
+
+/**
+ * Addresses of changed 16-byte rows, without building a cell for every byte.
+ * A full 500 KB image that differs in every row is about 31k entries.
+ */
+export function listMemoryHexDiffItems(before: Uint8Array, after: Uint8Array): MemoryHexDiffItem[] {
+  const length = Math.max(before.length, after.length);
+  const items: MemoryHexDiffItem[] = [];
+  let previousRow = 0;
+  let seenRow = false;
+
+  for (let start = 0; start < length; start += HEX_ROW_BYTES) {
+    const count = Math.min(HEX_ROW_BYTES, length - start);
+    let changed = false;
+
+    for (let index = 0; index < count; index += 1) {
+      const address = start + index;
+      const left = address < before.length ? before[address] : undefined;
+      const right = address < after.length ? after[address] : undefined;
+
+      if (left !== right) {
+        changed = true;
+        break;
+      }
+    }
+
+    if (!changed) {
+      continue;
+    }
+
+    if (seenRow && start > previousRow + HEX_ROW_BYTES) {
+      items.push({ kind: 'gap', address: start });
+    }
+
+    seenRow = true;
+    previousRow = start;
+    items.push({ kind: 'row', address: start });
+  }
+
+  return items;
+}
+
+/** Cells for one changed row. Built only for rows the virtual list paints. */
+export function memoryHexDiffCells(
+  before: Uint8Array,
+  after: Uint8Array,
+  address: number,
+): { before: MemoryHexCell[]; after: MemoryHexCell[] } {
+  const length = Math.max(before.length, after.length);
+  const count = Math.min(HEX_ROW_BYTES, Math.max(length - address, 0));
+  const left: MemoryHexCell[] = [];
+  const right: MemoryHexCell[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const offset = address + index;
+    const leftByte = offset < before.length ? before[offset] : undefined;
+    const rightByte = offset < after.length ? after[offset] : undefined;
+    const differs = leftByte !== rightByte;
+    left.push(hexCell(leftByte, differs));
+    right.push(hexCell(rightByte, differs));
+  }
+
+  return { before: left, after: right };
+}
+
+/**
+ * Counts differing bytes and runs without retaining each byte.
+ * A pair of 500 KB images stays a single pass.
+ */
+export function summarizeMemoryImages(
+  before: Uint8Array,
+  after: Uint8Array,
+): { byteCount: number; runCount: number } {
+  const length = Math.max(before.length, after.length);
+  let byteCount = 0;
+  let runCount = 0;
+  let inRun = false;
+
+  for (let address = 0; address < length; address += 1) {
+    const left = address < before.length ? before[address] : undefined;
+    const right = address < after.length ? after[address] : undefined;
+
+    if (left === right) {
+      inRun = false;
+      continue;
+    }
+
+    byteCount += 1;
+
+    if (!inRun) {
+      runCount += 1;
+      inRun = true;
+    }
+  }
+
+  return { byteCount, runCount };
+}
+
 /** One byte in a side-by-side hex dump. */
 export interface MemoryHexCell {
   text: string;

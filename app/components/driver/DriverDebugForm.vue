@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Radio, RadioModelId, RadioProgressIndicator } from '@springfield/ham-radio-api';
 import { ConsoleTransport, LogLayer } from 'loglayer';
-import { compareMemoryImages, memoryDiffByteCount } from '~/utils/driver-debug';
+import { summarizeMemoryImages } from '~/utils/driver-debug';
 import { serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { releaseSerialPortHold } from '~/utils/serial-idle-hold';
@@ -34,15 +34,13 @@ const canRead = computed(() => {
   return Boolean(port.value) && compiled.value.errorCount === 0 && compiled.value.document.readMemory.length > 0 && !reading.value;
 });
 
-const runs = computed(() => {
+const diffSummary = computed(() => {
   if (!firstImage.value || !secondImage.value) {
-    return [];
+    return undefined;
   }
 
-  return compareMemoryImages(firstImage.value, secondImage.value);
+  return summarizeMemoryImages(firstImage.value, secondImage.value);
 });
-
-const changedBytes = computed(() => memoryDiffByteCount(runs.value));
 
 const fieldSummary = computed(() => {
   const name = fieldName.value.trim() || 'this field';
@@ -272,12 +270,16 @@ onMounted(() => {
       </p>
       <template v-else>
         <p class="text-sm text-highlighted">{{ fieldSummary }}</p>
-        <p v-if="runs.length === 0" class="text-sm text-muted">The two images match. No byte changed.</p>
-        <p v-else class="text-sm text-muted">
-          {{ changedBytes }} {{ changedBytes === 1 ? 'byte' : 'bytes' }} changed in
-          {{ runs.length }} {{ runs.length === 1 ? 'run' : 'runs' }}.
+        <p v-if="diffSummary && diffSummary.runCount === 0" class="text-sm text-muted">The two images match. No byte changed.</p>
+        <p v-else-if="diffSummary" class="text-sm text-muted">
+          {{ diffSummary.byteCount }} {{ diffSummary.byteCount === 1 ? 'byte' : 'bytes' }} changed in
+          {{ diffSummary.runCount }} {{ diffSummary.runCount === 1 ? 'run' : 'runs' }}.
         </p>
-        <DriverMemoryHexDiff v-if="firstImage && secondImage && runs.length > 0" :before="firstImage" :after="secondImage" />
+        <DriverMemoryHexDiff
+          v-if="firstImage && secondImage && diffSummary && diffSummary.runCount > 0"
+          :before="firstImage"
+          :after="secondImage"
+        />
       </template>
     </DriverFormSection>
   </div>
