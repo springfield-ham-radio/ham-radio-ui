@@ -1,3 +1,15 @@
+## [3.3.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.2.0...v3.3.0) (2026-11-01)
+
+### Features
+
+* **ui:** show menu numbers and named string choices ([#191](https://github.com/springfield-ham-radio/ham-radio-ui/issues/191)) ([0273757](https://github.com/springfield-ham-radio/ham-radio-ui/commit/027375722eb66506bab974677469458d5aa99d8e))
+
+### Bug Fixes
+
+* **deps:** bump node-forge from 1.4.0 to 1.4.2 ([#189](https://github.com/springfield-ham-radio/ham-radio-ui/issues/189)) ([46925dd](https://github.com/springfield-ham-radio/ham-radio-ui/commit/46925dda40f2d3767728c06a1a161558c3dbe7e5))
+* **deps:** bump nuxt from 4.6.2 to 4.6.3 ([#190](https://github.com/springfield-ham-radio/ham-radio-ui/issues/190)) ([ea54ba7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ea54ba7b40f156764ce1bc5dde8fe54fefb81e39))
+* **deps:** bump rustls from 0.23.45 to 0.23.46 in /src-tauri ([#192](https://github.com/springfield-ham-radio/ham-radio-ui/issues/192)) ([eeeb157](https://github.com/springfield-ham-radio/ham-radio-ui/commit/eeeb15727a16fbc9cf1b32b967e132c170d1e66d))
+
 ## [3.2.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.1.2...v3.2.0) (2026-10-31)
 
 ### Features
