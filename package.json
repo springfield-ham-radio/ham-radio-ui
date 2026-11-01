@@ -44,7 +44,7 @@
     "@tauri-apps/plugin-os": "^2.2.0",
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-sql": "^2.6.0",
-    "@tauri-apps/plugin-updater": "^2.14.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "buffer": "^6.0.3",
     "eventemitter3": "^5.0.4",
     "katex": "^0.19.0",
@@ -79,6 +79,8 @@
     "@springfield/ham-radio-api": "18.5.0",
     "conventional-changelog-conventionalcommits": "9.3.1",
     "esbuild@npm:^0.27.0": "0.28.2",
+    "glob": "14.0.3",
+    "minimatch": "11.0.3",
     "vite": "^8.2.4"
   },
   "release": {
