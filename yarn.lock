@@ -1033,14 +1033,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@maplibre/vt-pbf@npm:^4.3.2":
-  version: 4.3.2
-  resolution: "@maplibre/vt-pbf@npm:4.3.2"
+"@maplibre/vt-pbf@npm:^4.3.3":
+  version: 4.3.3
+  resolution: "@maplibre/vt-pbf@npm:4.3.3"
   dependencies:
     "@mapbox/point-geometry": "npm:^1.1.0"
     "@types/geojson": "npm:^7946.0.16"
-    pbf: "npm:^5.1.0"
-  checksum: 10c0/3fd235b16f8070b2c1eabc8c68b44d60d4585db59f28821c846d25b2c84eabc3dc78c9a417b711e104819962ea0bede36770bc22a92c17e530c5ecce84a66ec5
+    pbf: "npm:^5.1.2"
+  checksum: 10c0/62cf2e714c819f9448302d922e9fd415c5182fd208d1a3e38cb453641aea7d8b740c3d9225dec4594435d4952a9ca0aee87fd538aecd3698572bb6e7598ac17f
   languageName: node
   linkType: hard
 
@@ -3127,10 +3127,10 @@ __metadata:
     "@springfield/ham-radio-registry": "npm:2.1.0"
     "@springfield/ham-radio-utils": "npm:^4.19.0"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
-    "@tanstack/vue-virtual": "npm:^3.13.40"
+    "@tanstack/vue-virtual": "npm:^3.13.50"
     "@tauri-apps/api": "npm:^2.12.4"
     "@tauri-apps/cli": "npm:^2.12.4"
-    "@tauri-apps/plugin-dialog": "npm:^2.8.3"
+    "@tauri-apps/plugin-dialog": "npm:^2.8.4"
     "@tauri-apps/plugin-opener": "npm:^2.7.2"
     "@tauri-apps/plugin-os": "npm:^2.2.0"
     "@tauri-apps/plugin-process": "npm:^2.4.0"
@@ -3141,9 +3141,9 @@ __metadata:
     buffer: "npm:^6.0.3"
     conventional-changelog-conventionalcommits: "npm:9.3.1"
     eventemitter3: "npm:^5.0.4"
-    katex: "npm:^0.19.0"
+    katex: "npm:^0.19.1"
     loglayer: "npm:^9.4.0"
-    maplibre-gl: "npm:^6.15.0"
+    maplibre-gl: "npm:^6.16.0"
     nuxt: "npm:^4.6.3"
     oxlint: "npm:1.89.0"
     semantic-release: "npm:25.0.9"
@@ -3423,6 +3423,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tanstack/virtual-core@npm:3.19.9":
+  version: 3.19.9
+  resolution: "@tanstack/virtual-core@npm:3.19.9"
+  checksum: 10c0/874183b370f4d0ba072b9ea2716680bd523e569f6aac92e877f195a53ac7bf68b1198a8704a7fc7d3b6d5299694b2ff37e49c33b5b7a88ef75c1a18d3b31dc9b
+  languageName: node
+  linkType: hard
+
 "@tanstack/vue-table@npm:^8.21.3":
   version: 8.21.3
   resolution: "@tanstack/vue-table@npm:8.21.3"
@@ -3453,6 +3460,17 @@ __metadata:
   peerDependencies:
     vue: ^2.7.0 || ^3.0.0
   checksum: 10c0/b742a7e194abe945ef9d577dc0faac4cb952146981511cf9e4037b974da7735214698ee897408e56ddb46610665047cdb8aa4e8e349d15da3e97bb5772d6905c
+  languageName: node
+  linkType: hard
+
+"@tanstack/vue-virtual@npm:^3.13.50":
+  version: 3.13.50
+  resolution: "@tanstack/vue-virtual@npm:3.13.50"
+  dependencies:
+    "@tanstack/virtual-core": "npm:3.19.9"
+  peerDependencies:
+    vue: ^2.7.0 || ^3.0.0
+  checksum: 10c0/d879a8561f970e58cb45cda29afec3f230d9b2abc213bb70f1c86657a546f416d415c2ae756f1dfe0b51208121678a18ca4d84106a4554cbae07d38b76f66160
   languageName: node
   linkType: hard
 
@@ -3598,12 +3616,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/plugin-dialog@npm:^2.8.3":
-  version: 2.8.3
-  resolution: "@tauri-apps/plugin-dialog@npm:2.8.3"
+"@tauri-apps/plugin-dialog@npm:^2.8.4":
+  version: 2.8.4
+  resolution: "@tauri-apps/plugin-dialog@npm:2.8.4"
   dependencies:
     "@tauri-apps/api": "npm:^2.12.0"
-  checksum: 10c0/b527bd260841b56df32b707867c537e0035508bc58d71c5cd2183c56f687378d140b90190bb9e2eb9d9d658af43a34d7a52b381ae7bd02eb3d64e301cdd1e107
+  checksum: 10c0/45210576621c0d0c592cd1e0d00b045f267ff5bd5f3263816f069f3ba78d8851efb36b71990180a5b6d0baf92e70df96e5af474a1c02552244cd7f1891de3bd3
   languageName: node
   linkType: hard
 
@@ -8144,14 +8162,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"katex@npm:^0.19.0":
-  version: 0.19.0
-  resolution: "katex@npm:0.19.0"
+"katex@npm:^0.19.1":
+  version: 0.19.1
+  resolution: "katex@npm:0.19.1"
   dependencies:
     commander: "npm:^15.0.0"
   bin:
     katex: cli.js
-  checksum: 10c0/c418ae625c0d30ca2d96b3fa619d1ea8eca53729989804aa4ad1c75e19112249ee5fe887ba7bef10e472ff5601b9cca43357a525fd52c243128dd601f2b75e2a
+  checksum: 10c0/20ceeefe75b852acfb1739aa1fe64322acee332cdd7ccefb6e952285c27201ccfb92c65afb38d555d53a41756fba77b7cd60462f8cfce7323a3902ef2e57ad91
   languageName: node
   linkType: hard
 
@@ -8864,9 +8882,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"maplibre-gl@npm:^6.15.0":
-  version: 6.15.0
-  resolution: "maplibre-gl@npm:6.15.0"
+"maplibre-gl@npm:^6.16.0":
+  version: 6.16.0
+  resolution: "maplibre-gl@npm:6.16.0"
   dependencies:
     "@mapbox/point-geometry": "npm:^1.1.0"
     "@mapbox/tiny-sdf": "npm:^2.3.0"
@@ -8875,7 +8893,7 @@ __metadata:
     "@maplibre/geojson-vt": "npm:^6.3.0"
     "@maplibre/maplibre-gl-style-spec": "npm:^26.4.4"
     "@maplibre/mlt": "npm:^1.3.0"
-    "@maplibre/vt-pbf": "npm:^4.3.2"
+    "@maplibre/vt-pbf": "npm:^4.3.3"
     "@types/geojson": "npm:^7946.0.16"
     bidi-js: "npm:^1.1.0"
     earcut: "npm:^3.2.4"
@@ -8886,7 +8904,7 @@ __metadata:
     potpack: "npm:^2.1.0"
     quickselect: "npm:^3.0.0"
     tinyqueue: "npm:^3.0.0"
-  checksum: 10c0/a696fc8431873134537dce938f448471acfbef65742cda3f3223521890d50c2f1c65d3f1f9e6576d08c18225ce7cbe303b45ab64f995dfe8ce48e54a3b9ea98f
+  checksum: 10c0/7230677a8f053bedf7f23eb0922911698d842cd34e7098c7d26d78f4cb652d4cc801447dadf18d320976b237a448712ec0e9d2434f233e22b6e837f57fb323b6
   languageName: node
   linkType: hard
 
@@ -10299,7 +10317,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pbf@npm:^5.0.0, pbf@npm:^5.1.0, pbf@npm:^5.1.2":
+"pbf@npm:^5.0.0, pbf@npm:^5.1.2":
   version: 5.1.2
   resolution: "pbf@npm:5.1.2"
   dependencies:
