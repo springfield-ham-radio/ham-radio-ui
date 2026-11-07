@@ -31,6 +31,6 @@ export const APRS_HOST_SETUP = [
 
 export const APRS_HOST_RECOVERY = [
   'HamBench does not power-cycle the radio and does not send the TM-D700 bytes C0 FF C0.',
-  'On a TM-D710A/E, with the KISS parameter ON, the manual says power OFF then ON enters or exits KISS. Read the display. If STA and CON blink together, it entered KISS; power OFF then ON once more.',
-  'When a command prompt is back, press [TNC] until the display shows APRS. Confirm menu 604 OUTPUT is ON before using Stations. The G manual names RESTART for that toggle once command mode is available.',
+  'The IDM says STA and CON blink together 6 times while KISS is being entered. That blink is not a lamp that stays on. On the PACKET display, a steady STA means packets are still in the buffer, and a steady CON means a connection. Lights that are off do not prove KISS failed, and PACKET12 by itself does not prove KISS is on or off.',
+  'On a TM-D710A/E, with the KISS parameter ON, the manual says power OFF then ON enters or exits KISS. That is a toggle. HamBench does not tell you to keep cycling until the blink stops. When a command prompt is back, press [TNC] until APRS is shown and confirm menu 604. The G manual names RESTART for that toggle once command mode is available.',
 ] as const;

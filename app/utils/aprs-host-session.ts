@@ -1,4 +1,4 @@
-import { canonicalAx25Call, formatAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
+import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
 import { APRS_KISS_ENTER_TEXT } from '~/utils/aprs-kiss-restore';
 import { createKissDecoderState, pushKissBytes } from '~/utils/aprs-kiss';
 import {
@@ -10,6 +10,12 @@ import {
   parseAprsMessageFrame,
 } from '~/utils/aprs-message';
 import type { AprsBytePort } from '~/utils/aprs-session';
+import {
+  makeTraceLine,
+  pushTraceLine,
+  type AprsTraceDirection,
+  type AprsTraceLine,
+} from '~/utils/aprs-serial-trace';
 
 const INBOX_CAP = 200;
 const OUTBOX_CAP = 50;
@@ -36,12 +42,24 @@ export interface AprsHostSnapshot {
   path?: string;
   error?: string;
   frames: number;
-  nonKissBytes: number;
+  /** Bytes outside a KISS frame. A prompt, echo, or error lands here. */
+  commandTextBytes: number;
+  /** Bytes of a KISS frame that has not reached FEND yet. */
+  incompleteBytes: number;
+  /** Bytes dropped on a bad escape. */
+  invalidBytes: number;
+  overflowDrops: number;
+  rxBytes: number;
+  rxChunks: number;
   bytesWritten: number;
   hardwareTransmit: boolean;
   ackOptIn: boolean;
   /** True after Enter host KISS has written the documented command. Not set by Listen. */
   hostEnterRequested: boolean;
+  /** True only after a KISS data frame parses as an AX.25 UI frame. */
+  kissConfirmed: boolean;
+  trace: AprsTraceLine[];
+  traceDropped: number;
   messages: AprsHostMessage[];
 }
 
@@ -54,6 +72,7 @@ export interface AprsHostSession {
   setAckOptIn(on: boolean): string | undefined;
   /** Writes the IDM enter sequence. Does not send a message. Refuses when Listen is closed. */
   enterHostKiss(): Promise<string | undefined>;
+  clearTrace(): void;
   send(input: { mine: string; to: string; text: string; transmitRequested: boolean }): Promise<AprsHostMessage>;
   cancel(key: string): void;
   /** Move the test clock. Waiting messages retry or time out. Disconnect clears them first. */
@@ -99,11 +118,19 @@ export function createAprsHostSession(options?: {
   let error: string | undefined;
   let generation = 0;
   let frames = 0;
-  let nonKissBytes = 0;
+  let commandTextBytes = 0;
+  let incompleteBytes = 0;
+  let invalidBytes = 0;
+  let overflowDrops = 0;
+  let rxBytes = 0;
+  let rxChunks = 0;
   let bytesWritten = 0;
   let sequence = 0;
   let ackOptIn = false;
   let hostEnterRequested = false;
+  let kissConfirmed = false;
+  const trace: AprsTraceLine[] = [];
+  let traceDropped = 0;
   let identity: Ax25Call | undefined;
   let clock = now();
   let retryTimer: ReturnType<typeof setInterval> | undefined;
@@ -112,6 +139,10 @@ export function createAprsHostSession(options?: {
     for (const listener of listeners) {
       listener();
     }
+  }
+
+  function record(direction: AprsTraceDirection, bytes: Uint8Array, note: string): void {
+    traceDropped += pushTraceLine(trace, makeTraceLine(clock, direction, bytes, note));
   }
 
   function stopRetryIfIdle(): void {
@@ -172,6 +203,7 @@ export function createAprsHostSession(options?: {
 
     item.attempts += 1;
     item.lastAttemptAt = clock;
+    record('tx-frame', frame, `Message frame ${item.attempts} of ${APRS_MESSAGE_ATTEMPTS}. Not a KISS enter command.`);
 
     if (current) {
       current.status = 'waiting-ack';
@@ -204,6 +236,7 @@ export function createAprsHostSession(options?: {
     }
 
     acked.add(`${source}|${id}`);
+    record('tx-frame', frame, 'Ack frame. Not a KISS enter command.');
   }
 
   async function takeFrame(payload: Uint8Array): Promise<void> {
@@ -263,10 +296,45 @@ export function createAprsHostSession(options?: {
 
   const onData = (chunk: Uint8Array): void => {
     const current = generation;
+    rxBytes += chunk.length;
+    rxChunks += 1;
     const decoded = pushKissBytes(kiss, chunk);
-    nonKissBytes += decoded.ignored + decoded.overflow;
+    commandTextBytes += decoded.ignored;
+    invalidBytes += decoded.invalid;
+    overflowDrops += decoded.overflow;
+    incompleteBytes = decoded.holding;
     const payloads = decoded.frames.filter((frame) => (frame.command & 0x0f) === 0).map((frame) => frame.data);
     frames += decoded.frames.length;
+    const notes: string[] = [];
+
+    if (decoded.ignored > 0) {
+      notes.push(`${decoded.ignored} command-text`);
+    }
+
+    if (decoded.frames.length > 0) {
+      notes.push(`${decoded.frames.length} KISS`);
+    }
+
+    if (decoded.holding > 0) {
+      notes.push(`incomplete, ${decoded.holding} held`);
+    }
+
+    if (decoded.invalid > 0) {
+      notes.push(`${decoded.invalid} invalid`);
+    }
+
+    if (decoded.overflow > 0) {
+      notes.push('overflow drop');
+    }
+
+    for (const payload of payloads) {
+      if (parseAx25Ui(payload)) {
+        kissConfirmed = true;
+        notes.push('AX.25 UI');
+      }
+    }
+
+    record('rx', chunk, notes.join(', ') || 'empty');
 
     void (async () => {
       for (const payload of payloads) {
@@ -295,11 +363,19 @@ export function createAprsHostSession(options?: {
         path,
         error,
         frames,
-        nonKissBytes,
+        commandTextBytes,
+        incompleteBytes,
+        invalidBytes,
+        overflowDrops,
+        rxBytes,
+        rxChunks,
         bytesWritten,
         hardwareTransmit: allowHardwareTransmit,
         ackOptIn,
         hostEnterRequested,
+        kissConfirmed,
+        trace: trace.map((line) => ({ ...line })),
+        traceDropped,
         messages: messages.map((message) => ({ ...message })),
       };
     },
@@ -310,7 +386,13 @@ export function createAprsHostSession(options?: {
       generation = current;
       error = undefined;
       frames = 0;
-      nonKissBytes = 0;
+      commandTextBytes = 0;
+      incompleteBytes = 0;
+      invalidBytes = 0;
+      overflowDrops = 0;
+      rxBytes = 0;
+      rxChunks = 0;
+      kissConfirmed = false;
 
       try {
         const opened = await openPort();
@@ -320,10 +402,15 @@ export function createAprsHostSession(options?: {
           return;
         }
 
-        opened.on('data', onData);
-        opened.on('error', onError);
         port = opened;
         path = nextPath;
+        record(
+          'note',
+          new Uint8Array(),
+          'Listen opened. Bytes already waiting are kept. Flow control is software, so 0x11 and 0x13 may be taken by the driver before they are listed. That is a capture limit, not a conclusion. KISS is unconfirmed.',
+        );
+        opened.on('data', onData);
+        opened.on('error', onError);
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'The APRS port did not open';
         port = undefined;
@@ -358,6 +445,7 @@ export function createAprsHostSession(options?: {
 
       current.off('data', onData);
       current.off('error', onError);
+      record('note', new Uint8Array(), 'Disconnected. The reply log is kept until Clear. Nothing was sent.');
       await current.close();
       publish();
     },
@@ -394,8 +482,14 @@ export function createAprsHostSession(options?: {
       }
 
       hostEnterRequested = true;
+      record('tx-command', bytes, 'Command written. KISS unconfirmed. No message was sent. This is not repeated.');
       publish();
       return undefined;
+    },
+    clearTrace() {
+      trace.splice(0, trace.length);
+      traceDropped = 0;
+      publish();
     },
     async send(input) {
       const mine = canonicalAx25Call(input.mine);

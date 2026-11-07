@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call } from '../../app/utils/aprs-ax25.ts';
 import { createAprsHostSession, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
 import { APRS_KISS_ENTER_TEXT } from '../../app/utils/aprs-kiss-restore.ts';
-import { aprsHostSerialOpenOptions, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
+import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
+import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
 import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
 import { aprsHoldPaths } from '../../app/utils/aprs-session.ts';
 
@@ -51,6 +52,8 @@ describe('APRS host session', () => {
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).flowControl).toBe('software');
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).rts).toBe(false);
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).dtr).toBe(false);
+    expect(aprsOpenKeepsIncoming('monitor')).toBe(false);
+    expect(aprsOpenKeepsIncoming('host')).toBe(true);
   });
 
   it('opens and closes without writing until transmit is requested', async () => {
@@ -74,7 +77,8 @@ describe('APRS host session', () => {
     fake.push(Uint8Array.from([...'K5KTF-4>APRS,WIDE1-1:Hi\r'].map((character) => character.charCodeAt(0))));
     await settle();
     expect(session.snapshot().messages.filter((message) => message.direction === 'in')).toEqual([]);
-    expect(session.snapshot().nonKissBytes).toBeGreaterThan(0);
+    expect(session.snapshot().commandTextBytes).toBeGreaterThan(0);
+    expect(session.snapshot().trace.some((line) => line.direction === 'rx' && line.text.includes('K5KTF-4'))).toBe(true);
     expect(fake.writes).toEqual([]);
 
     await session.disconnect();
@@ -141,6 +145,7 @@ describe('APRS host session', () => {
     fake.push(incoming);
     await settle();
     expect(session.snapshot().messages.some((message) => message.text === 'Ping')).toBe(true);
+    expect(session.snapshot().kissConfirmed).toBe(true);
     expect(fake.writes).toEqual([]);
 
     fake.push(incoming);
@@ -219,10 +224,112 @@ describe('APRS host session', () => {
     expect(new TextDecoder().decode(fake.writes[0])).toBe(APRS_KISS_ENTER_TEXT);
     expect(APRS_KISS_ENTER_TEXT).not.toContain('HB');
     expect(session.snapshot().hostEnterRequested).toBe(true);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().trace.some((line) => line.direction === 'tx-command' && line.note.includes('unconfirmed'))).toBe(true);
     expect(fake.writes).toHaveLength(1);
 
     await session.disconnect();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     expect(fake.writes).toHaveLength(1);
+  });
+
+  it('keeps a prompt that arrives as the listener is attached, and splits a banner, echo, and error', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const waiting: Uint8Array[] = [];
+    let dataListener: ((chunk: Uint8Array) => void) | undefined;
+    const writes: Uint8Array[] = [];
+    const port = {
+      isOpen: true,
+      on(event: string, handler: (chunk: Uint8Array) => void) {
+        if (event === 'data') {
+          dataListener = handler;
+
+          for (const chunk of waiting.splice(0)) {
+            handler(chunk);
+          }
+        }
+      },
+      off() {
+        dataListener = undefined;
+      },
+      write(bytes: Uint8Array) {
+        writes.push(bytes);
+      },
+      close() {
+        this.isOpen = false;
+        return Promise.resolve();
+      },
+    };
+    waiting.push(Uint8Array.from([...'Kenwood\r\n'].map((character) => character.charCodeAt(0))));
+    await session.connect('/dev/cu.pg5g', async () => port);
+    dataListener?.(Uint8Array.from([...'TNC\r\ncmd:'].map((character) => character.charCodeAt(0))));
+    dataListener?.(Uint8Array.from([...'KISS'].map((character) => character.charCodeAt(0))));
+    dataListener?.(Uint8Array.from([...' ON\r\n?EH\r\n'].map((character) => character.charCodeAt(0))));
+    await Promise.resolve();
+
+    const snap = session.snapshot();
+    expect(snap.rxChunks).toBe(4);
+    expect(snap.commandTextBytes).toBe(snap.rxBytes);
+    expect(snap.frames).toBe(0);
+    expect(snap.incompleteBytes).toBe(0);
+    expect(snap.kissConfirmed).toBe(false);
+    expect(snap.trace[0]?.direction).toBe('note');
+    expect(snap.trace.map((line) => line.text).join(' ')).toContain('cmd:');
+    expect(snap.trace.map((line) => line.text).join(' ')).toContain('?EH');
+    expect(writes).toEqual([]);
+
+    const partial = Uint8Array.from([0xc0, 0x00, 0x01]);
+    dataListener?.(partial);
+    expect(session.snapshot().incompleteBytes).toBe(2);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().trace.at(-1)?.note).toContain('incomplete');
+
+    session.clearTrace();
+    expect(session.snapshot().trace).toEqual([]);
+    expect(session.snapshot().rxBytes).toBeGreaterThan(0);
+  });
+
+  it('escapes binary and markup, and drops only the oldest lines', () => {
+    const hostile = Uint8Array.from([0x00, 0x11, 0x13, 0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e, 0xc0]);
+    const escaped = escapeSerialText(hostile);
+
+    expect(escaped).not.toContain('<');
+    expect(escaped).not.toContain('>');
+    expect(escaped).toContain('\\x00');
+    expect(escaped).toContain('\\x11');
+    expect(escaped).toContain('\\xc0');
+    expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).toContain('FIXTURE, not from the radio');
+    expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).not.toContain('<script>');
+
+    const session = createAprsHostSession();
+    const chunks = Array.from({ length: APRS_TRACE_CAP + 5 }, (_, index) => Uint8Array.from([index & 0xff]));
+    let listener: ((chunk: Uint8Array) => void) | undefined;
+    const port = {
+      isOpen: true,
+      on(event: string, handler: (chunk: Uint8Array) => void) {
+        if (event === 'data') {
+          listener = handler;
+        }
+      },
+      off() {
+        listener = undefined;
+      },
+      close() {
+        this.isOpen = false;
+        return Promise.resolve();
+      },
+    };
+
+    return session.connect('/dev/cu.pg5g', async () => port).then(() => {
+      for (const chunk of chunks) {
+        listener?.(chunk);
+      }
+
+      const snap = session.snapshot();
+      expect(snap.trace.filter((line) => line.direction === 'rx')).toHaveLength(APRS_TRACE_CAP);
+      expect(snap.traceDropped).toBe(6);
+      expect(snap.rxChunks).toBe(APRS_TRACE_CAP + 5);
+      expect(snap.rxBytes).toBe(APRS_TRACE_CAP + 5);
+    });
   });
 });

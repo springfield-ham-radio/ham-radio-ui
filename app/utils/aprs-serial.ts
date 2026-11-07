@@ -103,6 +103,7 @@ export async function openAprsHostPort(path: string, baudRate: number): Promise<
     flowControl: options.flowControl,
     rts: false,
     dtr: false,
+    retainIncoming: true,
   });
   const queued: Uint8Array[] = [];
   let dataListener: ((chunk: Uint8Array) => void) | undefined;

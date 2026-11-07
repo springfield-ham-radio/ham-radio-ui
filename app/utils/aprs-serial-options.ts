@@ -46,6 +46,15 @@ export function aprsSerialOpenOptions(path: string, baudRate: number): AprsSeria
  * those pins, so it is not selected here. RTS and DTR are still deasserted:
  * on this jack they are flow-control lines, not the DATA-terminal PKS key.
  */
+/**
+ * The passive monitor drops the opening fraction of a second. The host
+ * listener keeps it. That difference is not a claim about why a particular
+ * radio returned only two bytes.
+ */
+export function aprsOpenKeepsIncoming(role: 'monitor' | 'host'): boolean {
+  return role === 'host';
+}
+
 export function aprsHostSerialOpenOptions(
   path: string,
   baudRate: number,

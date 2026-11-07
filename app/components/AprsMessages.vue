@@ -2,6 +2,7 @@
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
 import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '~/utils/aprs-kiss-restore';
+import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
 import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX } from '~/utils/aprs-message';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
 
@@ -14,9 +15,10 @@ const props = defineProps<{
 }>();
 
 const route = useRoute();
-const example = computed(() => import.meta.dev && route.query.fixture === 'aprs-messages');
+const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
+const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const host = useAprsHost();
-const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, enterHostKiss } = host;
+const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, enterHostKiss, clearTrace } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -115,7 +117,42 @@ async function onEnterHost(): Promise<void> {
     return;
   }
 
-  enterNote.value = (await enterHostKiss(props.cardId)) ?? 'Enter command written. No message was sent. Recovery is the power-cycle toggle below.';
+  enterNote.value = (await enterHostKiss(props.cardId)) ?? 'Command written. KISS unconfirmed. No message was sent.';
+}
+
+const traceLines = computed(() => (traceFixture.value ? APRS_HOST_TRACE_FIXTURE : (snapshot.value?.trace ?? [])));
+const traceText = computed(() => formatTrace(traceLines.value));
+
+const kissStatus = computed(() => {
+  if (traceFixture.value) {
+    return 'FIXTURE. KISS unconfirmed. These lines were not read from a radio.';
+  }
+
+  if (snapshot.value?.kissConfirmed) {
+    return 'AX.25 UI seen.';
+  }
+
+  if (snapshot.value?.hostEnterRequested || enterNote.value) {
+    return 'Command written. KISS unconfirmed. No message was sent, and the command is not repeated.';
+  }
+
+  return 'KISS has not been requested. Listen does not send a command.';
+});
+
+async function onCopyTrace(): Promise<void> {
+  const body = traceText.value;
+
+  if (!body || !import.meta.client) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(body);
+}
+
+function onClearTrace(): void {
+  if (props.cardId) {
+    clearTrace(props.cardId);
+  }
 }
 
 async function onSend(): Promise<void> {
@@ -163,8 +200,10 @@ function onCancel(key: string): void {
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="min-w-0 text-xs text-muted">
         <template v-if="isConnected">
-          Listening on {{ portLabel }} at {{ baud }} baud. Frames {{ snapshot?.frames ?? 0 }}. Not KISS
-          {{ snapshot?.nonKissBytes ?? 0 }}. Bytes written {{ snapshot?.bytesWritten ?? 0 }}.
+          Listening on {{ portLabel }} at {{ baud }} baud. RX {{ snapshot?.rxBytes ?? 0 }} bytes in
+          {{ snapshot?.rxChunks ?? 0 }} chunks. Command text {{ snapshot?.commandTextBytes ?? 0 }}. Incomplete
+          {{ snapshot?.incompleteBytes ?? 0 }}. Invalid {{ snapshot?.invalidBytes ?? 0 }}. KISS frames
+          {{ snapshot?.frames ?? 0 }}. Bytes written {{ snapshot?.bytesWritten ?? 0 }}.
         </template>
         <template v-else-if="monitorUsingPort">
           The monitor is using this port. Disconnect it on the Stations tab before listening here. The monitor is left as it is.
@@ -192,6 +231,23 @@ function onCancel(key: string): void {
     </div>
 
     <UAlert v-if="snapshot?.error" color="error" variant="subtle" icon="i-lucide-circle-alert" title="COM port" :description="snapshot.error" />
+
+    <section class="flex flex-col gap-2 rounded-md border border-default p-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-medium text-highlighted">Serial reply</h3>
+        <div class="flex items-center gap-1.5">
+          <UButton size="xs" color="neutral" variant="outline" label="Copy" :disabled="traceText.length === 0" @click="onCopyTrace" />
+          <UButton size="xs" color="neutral" variant="outline" label="Clear" :disabled="!cardId || traceFixture" @click="onClearTrace" />
+        </div>
+      </div>
+      <p class="text-xs text-muted">{{ kissStatus }}</p>
+      <p class="text-xs text-muted">
+        The log stays on this card when you change tabs. Clear removes the lines and keeps the counters. It does not
+        write to the radio. Text is shown as characters, not run.
+        <template v-if="(snapshot?.traceDropped ?? 0) > 0"> Oldest lines dropped: {{ snapshot?.traceDropped }}. The counters still include them. </template>
+      </p>
+      <pre class="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-highlighted">{{ traceText || 'No bytes yet.' }}</pre>
+    </section>
 
     <div class="grid gap-3 lg:grid-cols-[16rem_1fr]">
       <div class="flex flex-col gap-1">
@@ -283,7 +339,7 @@ function onCancel(key: string): void {
           @click="onEnterHost"
         />
         <p v-if="enterNote || snapshot?.hostEnterRequested" class="mb-2 text-xs text-muted">
-          {{ enterNote ?? 'Enter host KISS was sent on this connection. No message frame was included.' }}
+          {{ snapshot?.kissConfirmed ? 'AX.25 UI seen.' : (enterNote ?? 'Command written. KISS unconfirmed. No message was sent.') }}
         </p>
         <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
           <li v-for="step in APRS_HOST_SETUP" :key="step">{{ step }}</li>

@@ -121,6 +121,11 @@ export function useAprsHost() {
     return reason;
   }
 
+  function clearTrace(cardId: string): void {
+    sessions.get(cardId)?.clearTrace();
+    publish(cardId);
+  }
+
   function setAckOptIn(cardId: string, on: boolean): string | undefined {
     const reason = sessionFor(cardId).setAckOptIn(on);
     publish(cardId);
@@ -140,5 +145,6 @@ export function useAprsHost() {
     setIdentity,
     setAckOptIn,
     enterHostKiss,
+    clearTrace,
   };
 }

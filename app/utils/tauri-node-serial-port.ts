@@ -100,6 +100,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   private pipedDestination: PipedDestination | undefined;
   private pipedHandler: ((chunk: Buffer) => void) | undefined;
   private discardRx = false;
+  private readonly retainIncoming: boolean;
   private openGeneration = 0;
 
   constructor(options: {
@@ -113,12 +114,21 @@ export class TauriNodeSerialPort extends EventEmitter {
     flowControl?: 'none' | 'software' | 'hardware';
     rts?: boolean;
     dtr?: boolean;
+    /**
+     * Keep bytes that arrive while the port is opening.
+     * The passive monitor leaves this off. That path drops the first fraction
+     * of a second and clears the input buffer, which is the programming-cable
+     * behavior already verified for menu 604. The host listener sets it so a
+     * TNC banner is not discarded before the log is attached.
+     */
+    retainIncoming?: boolean;
   }) {
     super();
 
     this.path = options.path;
     this.rts = options.rts ?? true;
     this.dtr = options.dtr ?? true;
+    this.retainIncoming = options.retainIncoming === true;
 
     const serialOptions: SerialportOptions = {
       path: options.path,
@@ -241,7 +251,7 @@ export class TauriNodeSerialPort extends EventEmitter {
       await this.waitForPathThenOpen(generation);
       await this.tauriPort.writeDataTerminalReady(this.dtr);
       await this.tauriPort.writeRequestToSend(this.rts);
-      this.discardRx = true;
+      this.discardRx = !this.retainIncoming;
       this.watchHandle = await this.tauriPort.watch(
         {
           onData: (incoming) => {
@@ -264,17 +274,19 @@ export class TauriNodeSerialPort extends EventEmitter {
           serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
         },
       );
-      await delay(SERIAL_OPEN_SETTLE_MS);
+      if (!this.retainIncoming) {
+        await delay(SERIAL_OPEN_SETTLE_MS);
 
-      if (generation !== this.openGeneration) {
-        return;
-      }
+        if (generation !== this.openGeneration) {
+          return;
+        }
 
-      await this.tauriPort.clearBuffer(ClearBuffer.Input).catch(() => undefined);
-      await delay(SERIAL_OPEN_DRAIN_MS);
+        await this.tauriPort.clearBuffer(ClearBuffer.Input).catch(() => undefined);
+        await delay(SERIAL_OPEN_DRAIN_MS);
 
-      if (generation !== this.openGeneration) {
-        return;
+        if (generation !== this.openGeneration) {
+          return;
+        }
       }
 
       this.discardRx = false;

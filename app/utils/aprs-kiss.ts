@@ -28,10 +28,14 @@ export interface KissFrame {
 
 export interface KissDecoder {
   frames: KissFrame[];
-  /** Bytes discarded because a partial frame passed the cap. */
+  /** Times a partial frame passed the cap and was dropped. */
   overflow: number;
-  /** Bytes seen before a frame starts. Monitor text lands here. */
+  /** Bytes seen before a frame starts. Command text lands here. */
   ignored: number;
+  /** Bytes dropped because an escape was not FEND or FESC. */
+  invalid: number;
+  /** Bytes of a KISS frame still waiting for FEND. */
+  holding: number;
 }
 
 export interface KissDecoderState {
@@ -78,6 +82,7 @@ export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissD
   const frames: KissFrame[] = [];
   let overflow = 0;
   let ignored = 0;
+  let invalid = 0;
 
   const dropPartial = (): void => {
     state.pending = [];
@@ -113,6 +118,7 @@ export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissD
       } else if (byte === KISS_TFESC) {
         state.pending.push(KISS_FESC);
       } else {
+        invalid += state.pending.length + 1;
         dropPartial();
       }
 
@@ -132,5 +138,11 @@ export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissD
     }
   }
 
-  return { frames, overflow, ignored };
+  return {
+    frames,
+    overflow,
+    ignored,
+    invalid,
+    holding: state.inFrame ? state.pending.length : 0,
+  };
 }
