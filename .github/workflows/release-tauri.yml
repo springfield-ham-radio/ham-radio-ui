@@ -108,14 +108,18 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # Node 26 does not ship Corepack. windows-latest also has Yarn 1.22
-      # ahead of the Node 22 Corepack shims: PowerShell picks yarn.ps1 and
-      # Git bash picks the extensionless yarn script. Wrappers at the front
-      # of PATH make every later step, including Tauri's beforeBuildCommand,
-      # call `corepack yarn` (the version in packageManager).
+      # Node 26 does not ship Corepack. Install 0.36.0, the release the
+      # Node.js 26 line last tracked, into this Node prefix. windows-latest
+      # also has Yarn 1.22 ahead of Corepack shims: PowerShell picks yarn.ps1
+      # and Git bash picks the extensionless yarn script. Wrappers at the
+      # front of PATH make every later step, including Tauri's
+      # beforeBuildCommand, call `corepack yarn` (the version in
+      # packageManager). Do not replace those wrappers with `corepack enable`
+      # on Windows.
       - name: Install dependencies
         shell: bash
         run: |
+          npm install -g corepack@0.36.0
           if [ "$RUNNER_OS" = "Windows" ]; then
             shim_dir="$(cygpath -u "$RUNNER_TEMP")/corepack-bin"
             mkdir -p "$shim_dir"

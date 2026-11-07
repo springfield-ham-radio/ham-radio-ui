@@ -19,6 +19,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+      # Official Node.js 26 binaries do not ship Corepack. 0.36.0 is the
+      # Corepack release the Node.js 26 line last tracked.
+      - run: npm install -g corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn build
@@ -89,6 +92,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+      # Official Node.js 26 binaries do not ship Corepack. 0.36.0 is the
+      # Corepack release the Node.js 26 line last tracked.
+      - run: npm install -g corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn release
