@@ -30,7 +30,7 @@ The A/E instruction manual uses the same APRS menu numbers and the 5xx port menu
 
 ## Radio settings
 
-HamBench does not change these. Set them on the radio. Under **Preferences → Radios**, edit the saved radio and set **APRS serial port** and **APRS baud**. Those fields are stored on that radio and are not the memory or CAT port. **Connect** opens the saved APRS port. If that adapter is unplugged, the port stays in the list as saved and not connected, and Connect explains that the memory port was left unchanged.
+HamBench does not change these. Set them on the radio. Under **Preferences → Radios**, edit the saved radio and set **APRS serial port** and **APRS baud**. Those fields are stored separately from the memory port and baud. The same adapter name may be saved for both, because one USB device can be moved between jacks. Only one live session can hold that adapter: Read, Write, and CAT stay blocked while APRS is connected, and APRS will not open an adapter CAT already holds. **Connect** opens the saved APRS port. Saving APRS settings does not change the memory port. If that adapter is unplugged, the port stays in the list as saved and not connected, and Connect explains that the memory port was left unchanged.
 
 1. Press **[TNC]** until the display shows **APRS** (not PACKET12 and not blank).
 2. Menu **604** OUTPUT = **ON**. This is the switch that copies received APRS traffic and TNC monitor text to the COM jack. Default is OFF.

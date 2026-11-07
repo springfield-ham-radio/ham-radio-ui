@@ -330,10 +330,6 @@ export function savedRadioDraftIssues(
   const aprsPort = draft.aprsSerialPort?.trim() ?? '';
   const aprsRates = options.aprsBaudRates ?? [];
 
-  if (aprsPort.length > 0 && aprsPort === draft.serialPort.trim()) {
-    issues.aprsSerialPort = 'Choose the COM adapter. This is the memory port.';
-  }
-
   if (aprsPort.length > 0 && aprsRates.length > 0 && (draft.aprsBaudRate === undefined || !aprsRates.includes(draft.aprsBaudRate))) {
     issues.aprsBaudRate = 'Choose an APRS baud rate';
   }

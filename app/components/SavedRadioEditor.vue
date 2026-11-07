@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { aprsSerialPortMenuItems } from '~/utils/aprs-port-select';
 import {
   defaultProgrammingBaudRate,
   listedProgrammingBaudRates,
@@ -122,10 +123,17 @@ function portItemsFor(current: string | undefined, missingSuffix: string): Array
 
 const portItems = computed(() => portItemsFor(serialPort.value, ' (saved)'));
 
-const aprsPortItems = computed(() => [
-  { label: 'No APRS port', value: '' },
-  ...portItemsFor(aprsSerialPort.value, ' (saved, not connected)'),
-]);
+const aprsFieldsReady = ref(false);
+
+const aprsPortItems = computed(() =>
+  aprsSerialPortMenuItems(
+    ports.value,
+    aprsSerialPort.value,
+    aprsSerialPort.value
+      ? serialPortOption(aprsSerialPort.value, readSerialPortSettings().portAliases, { suffix: ' (saved, not connected)' })
+      : undefined,
+  ),
+);
 
 function onManufacturer(value: string | undefined): void {
   if (value !== manufacturer.value) {
@@ -167,7 +175,8 @@ watch(
     baudRate.value = draft?.baudRate;
     serialPort.value = draft?.serialPort;
     aprsBaudRate.value = draft?.aprsBaudRate;
-    aprsSerialPort.value = draft?.aprsSerialPort ?? '';
+    aprsSerialPort.value = draft?.aprsSerialPort;
+    aprsFieldsReady.value = false;
     txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
     nameError.value = undefined;
     manufacturerError.value = undefined;
@@ -178,6 +187,9 @@ watch(
     aprsPortError.value = undefined;
     txPowerError.value = undefined;
     void loadPorts();
+    void nextTick(() => {
+      aprsFieldsReady.value = true;
+    });
   },
 );
 
@@ -206,6 +218,41 @@ watch(aprsProfile, (profile) => {
     aprsBaudRate.value = profile.baudRate;
   }
 });
+
+function aprsDraftIssues() {
+  return savedRadioDraftIssues(
+    {
+      name: name.value,
+      manufacturer: manufacturer.value ?? '',
+      model: model.value ?? '',
+      baudRate: showBaudRate.value ? baudRate.value : undefined,
+      serialPort: serialPort.value ?? '',
+      txPowerWatts: txPowerWattsFromText(txPower.value),
+      aprsSerialPort: aprsSerialPort.value,
+      aprsBaudRate: aprsBaudRate.value,
+    },
+    {
+      radios: radios.value,
+      ignoreId: props.radio?.id,
+      aprsBaudRates: aprsProfile.value?.baudRates,
+    },
+  );
+}
+
+function onAprsFieldBlur(): void {
+  if (!aprsFieldsReady.value || !aprsProfile.value) {
+    return;
+  }
+
+  const issues = aprsDraftIssues();
+  aprsBaudError.value = issues.aprsBaudRate;
+  aprsPortError.value = issues.aprsSerialPort;
+}
+
+function clearAprsPort(): void {
+  aprsSerialPort.value = undefined;
+  aprsPortError.value = undefined;
+}
 
 function close(): void {
   emit('update:open', false);
@@ -336,12 +383,13 @@ function save(): void {
               value-key="value"
               placeholder="Select APRS baud"
               class="w-full"
+              @blur="onAprsFieldBlur"
             />
           </UFormField>
 
           <UFormField
             label="APRS serial port"
-            description="USB adapter on the control-head COM cable. A saved port that is unplugged stays in the list."
+            description="USB adapter on the control-head COM cable. The same adapter can be saved here and for memory. A saved port that is unplugged stays in the list."
             :error="aprsPortError"
           >
             <div class="flex gap-2">
@@ -349,10 +397,22 @@ function save(): void {
                 v-model="aprsSerialPort"
                 :items="aprsPortItems"
                 value-key="value"
-                placeholder="Select the APRS port"
+                placeholder="No APRS port"
                 class="w-full"
                 :loading="loadingPorts"
+                @blur="onAprsFieldBlur"
+                @update:model-value="aprsPortError = undefined"
               />
+              <UTooltip text="Clear APRS serial port">
+                <UButton
+                  icon="i-lucide-x"
+                  color="neutral"
+                  variant="outline"
+                  :disabled="!aprsSerialPort"
+                  aria-label="Clear APRS serial port"
+                  @click="clearAprsPort"
+                />
+              </UTooltip>
               <UTooltip text="Refresh serial ports">
                 <UButton
                   icon="i-lucide-refresh-cw"

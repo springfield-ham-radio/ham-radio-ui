@@ -1,3 +1,4 @@
+import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { openAprsReceivePort } from '~/utils/aprs-serial';
 import { isPortMissingError } from '~/utils/serial-port-reconnect';
@@ -63,7 +64,7 @@ export function useAprs() {
   }
 
   async function connect(cardId: string, path: string, baudRate: number): Promise<void> {
-    if (lockedPorts.value.includes(path) && cardPorts.value[cardId] !== path) {
+    if (aprsConnectBlocked(lockedPorts.value, path, cardPorts.value[cardId])) {
       const session = sessionFor(cardId);
       await session.disconnect();
       syncHolds(nextAprsPortHolds(cardPorts.value, cardId, undefined));

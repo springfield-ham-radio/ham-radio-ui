@@ -153,12 +153,24 @@ describe('saved radios', () => {
     expect(aprs.aprsSerialPort).toBe('/dev/cu.com');
     expect(aprs.aprsBaudRate).toBe(38400);
 
+    const samePort = 'usbserial-AI2SP9LC';
+    const shared = updateSavedRadio(
+      withAprs,
+      { ...draftFromSavedRadio(withAprs), serialPort: samePort, aprsSerialPort: samePort },
+      32,
+    );
+
+    expect(shared.serialPort).toBe(samePort);
+    expect(shared.aprsSerialPort).toBe(samePort);
     expect(
-      savedRadioDraftIssues(
-        { ...draftFromSavedRadio(withAprs), aprsSerialPort: withAprs.serialPort },
-        { radios: [], aprsBaudRates: [9600, 19200] },
-      ).aprsSerialPort,
-    ).toBe('Choose the COM adapter. This is the memory port.');
+      savedRadioDraftIssues(draftFromSavedRadio(shared), { radios: [], aprsBaudRates: [9600, 19200] }).aprsSerialPort,
+    ).toBeUndefined();
+
+    const cleared = updateSavedRadio(shared, { ...draftFromSavedRadio(shared), aprsSerialPort: '' }, 33);
+
+    expect(cleared.aprsSerialPort).toBeUndefined();
+    expect(cleared.serialPort).toBe(samePort);
+    expect(cleared.baudRate).toBe(57600);
   });
 
   it('should remember a chosen serial port on the saved radio', () => {

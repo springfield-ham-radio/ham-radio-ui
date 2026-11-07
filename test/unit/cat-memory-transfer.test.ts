@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+  aprsConnectBlocked,
   isCatMemoryTransferBlocked,
   markCatBusySerialPorts,
   writeToRadioTooltip,
@@ -14,6 +15,16 @@ describe('CAT memory transfer guard', () => {
     expect(isCatMemoryTransferBlocked(lockedPorts, undefined)).toBe(false);
     expect(isCatMemoryTransferBlocked(lockedPorts, '/dev/cu.usbserial-other')).toBe(false);
     expect(isCatMemoryTransferBlocked(lockedPorts, '/dev/cu.usbserial-cat')).toBe(true);
+  });
+
+  it('allows the same saved adapter name and blocks only a live session', () => {
+    const path = 'usbserial-AI2SP9LC';
+
+    expect(isCatMemoryTransferBlocked([], path)).toBe(false);
+    expect(isCatMemoryTransferBlocked([path], path)).toBe(true);
+    expect(aprsConnectBlocked([path], path, path)).toBe(false);
+    expect(aprsConnectBlocked([path], path, undefined)).toBe(true);
+    expect(aprsConnectBlocked(['usbserial-other'], path)).toBe(false);
   });
 
   it('should label CAT-busy ports so a second adapter stays selectable', () => {

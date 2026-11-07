@@ -35,6 +35,21 @@ export function isCatMemoryTransferBlocked(
   return Boolean(serialPortPath && lockedPorts.includes(serialPortPath));
 }
 
+/**
+ * True when another live session already holds this adapter.
+ *
+ * The same saved name may be stored for memory and APRS. This only refuses a
+ * second open while the first session is still connected. The card that
+ * already holds the port is not blocked from its own session.
+ */
+export function aprsConnectBlocked(
+  lockedPorts: readonly string[],
+  path: string,
+  heldByThisCard?: string,
+): boolean {
+  return lockedPorts.includes(path) && heldByThisCard !== path;
+}
+
 /** Toolbar tooltip for Write to Radio. */
 export function writeToRadioTooltip(options: {
   hasLoadedMemory: boolean;
