@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import {
   defaultProgrammingBaudRate,
   listedProgrammingBaudRates,
@@ -40,6 +41,8 @@ const manufacturer = shallowRef<string | undefined>();
 const model = shallowRef<string | undefined>();
 const baudRate = shallowRef<number | undefined>();
 const serialPort = shallowRef<string | undefined>();
+const aprsBaudRate = shallowRef<number | undefined>();
+const aprsSerialPort = shallowRef<string | undefined>();
 const txPower = shallowRef('');
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = shallowRef(false);
@@ -48,6 +51,8 @@ const manufacturerError = shallowRef<string | undefined>();
 const modelError = shallowRef<string | undefined>();
 const baudError = shallowRef<string | undefined>();
 const portError = shallowRef<string | undefined>();
+const aprsBaudError = shallowRef<string | undefined>();
+const aprsPortError = shallowRef<string | undefined>();
 const txPowerError = shallowRef<string | undefined>();
 
 const isCreate = computed(() => props.radio === undefined);
@@ -79,6 +84,16 @@ const selectedConfig = computed(() => {
   return configurations.value.find((config) => String(config.id.model) === model.value);
 });
 
+const aprsProfile = computed(() =>
+  aprsReceiveProfile({
+    config: selectedConfig.value,
+    model: model.value,
+    name: selectedConfig.value?.id.name ?? props.radio?.name,
+  }),
+);
+
+const aprsBaudItems = computed(() => (aprsProfile.value?.baudRates ?? []).map((rate) => ({ label: `${rate} baud`, value: rate })));
+
 const showBaudRate = computed(() => {
   if (!selectedConfig.value) {
     return false;
@@ -95,16 +110,22 @@ const baudItems = computed(() => {
   return programmingBaudRateSelectItems(selectedConfig.value.serialConfig);
 });
 
-const portItems = computed(() => {
+function portItemsFor(current: string | undefined, missingSuffix: string): Array<{ label: string; value: string }> {
   const items = ports.value.slice();
-  const current = serialPort.value;
 
   if (current && !items.some((port) => port.value === current)) {
-    items.unshift(serialPortOption(current, readSerialPortSettings().portAliases, { suffix: ' (saved)' }));
+    items.unshift(serialPortOption(current, readSerialPortSettings().portAliases, { suffix: missingSuffix }));
   }
 
   return items;
-});
+}
+
+const portItems = computed(() => portItemsFor(serialPort.value, ' (saved)'));
+
+const aprsPortItems = computed(() => [
+  { label: 'No APRS port', value: '' },
+  ...portItemsFor(aprsSerialPort.value, ' (saved, not connected)'),
+]);
 
 function onManufacturer(value: string | undefined): void {
   if (value !== manufacturer.value) {
@@ -145,12 +166,16 @@ watch(
     model.value = draft?.model ?? (props.radio ? undefined : props.initialModel);
     baudRate.value = draft?.baudRate;
     serialPort.value = draft?.serialPort;
+    aprsBaudRate.value = draft?.aprsBaudRate;
+    aprsSerialPort.value = draft?.aprsSerialPort ?? '';
     txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
     nameError.value = undefined;
     manufacturerError.value = undefined;
     modelError.value = undefined;
     baudError.value = undefined;
     portError.value = undefined;
+    aprsBaudError.value = undefined;
+    aprsPortError.value = undefined;
     txPowerError.value = undefined;
     void loadPorts();
   },
@@ -170,12 +195,25 @@ async function loadPorts(): Promise<void> {
   }
 }
 
+watch(aprsProfile, (profile) => {
+  if (!profile) {
+    return;
+  }
+
+  const rate = aprsBaudRate.value;
+
+  if (rate === undefined || !profile.baudRates.some((entry) => entry === rate)) {
+    aprsBaudRate.value = profile.baudRate;
+  }
+});
+
 function close(): void {
   emit('update:open', false);
 }
 
 function save(): void {
   const txPowerWatts = txPowerWattsFromText(txPower.value);
+  const profile = aprsProfile.value;
   const draft: SavedRadioDraft = {
     name: name.value,
     manufacturer: manufacturer.value ?? '',
@@ -183,12 +221,15 @@ function save(): void {
     baudRate: showBaudRate.value ? baudRate.value : undefined,
     serialPort: serialPort.value ?? '',
     txPowerWatts,
+    aprsSerialPort: profile ? (aprsSerialPort.value ?? '') : props.radio?.aprsSerialPort,
+    aprsBaudRate: profile ? aprsBaudRate.value : props.radio?.aprsBaudRate,
   };
   const listed = selectedConfig.value ? listedProgrammingBaudRates(selectedConfig.value.serialConfig) : [];
   const issues = savedRadioDraftIssues(draft, {
     radios: radios.value,
     ignoreId: props.radio?.id,
     baudRates: listed,
+    aprsBaudRates: profile?.baudRates,
   });
 
   nameError.value = issues.name;
@@ -196,6 +237,8 @@ function save(): void {
   modelError.value = issues.model;
   baudError.value = issues.baudRate;
   portError.value = issues.serialPort;
+  aprsBaudError.value = issues.aprsBaudRate;
+  aprsPortError.value = issues.aprsSerialPort;
   txPowerError.value = txPowerWattsFieldError(txPower.value);
 
   if (savedRadioDraftHasIssues(issues) || txPowerError.value) {
@@ -258,8 +301,8 @@ function save(): void {
         </UFormField>
 
         <UFormField
-          label="Default serial port"
-          description="Used when you connect. You can pick a different port at that time."
+          label="Memory serial port"
+          :description="aprsProfile ? 'Read, write, and CAT. Not the APRS COM port.' : 'Used when you connect. You can pick a different port at that time.'"
           :error="portError"
           required
         >
@@ -284,6 +327,45 @@ function save(): void {
             </UTooltip>
           </div>
         </UFormField>
+
+        <template v-if="aprsProfile">
+          <UFormField label="APRS baud" :description="aprsProfile.help" :error="aprsBaudError" required>
+            <USelect
+              v-model="aprsBaudRate"
+              :items="aprsBaudItems"
+              value-key="value"
+              placeholder="Select APRS baud"
+              class="w-full"
+            />
+          </UFormField>
+
+          <UFormField
+            label="APRS serial port"
+            description="USB adapter on the control-head COM cable. A saved port that is unplugged stays in the list."
+            :error="aprsPortError"
+          >
+            <div class="flex gap-2">
+              <USelectMenu
+                v-model="aprsSerialPort"
+                :items="aprsPortItems"
+                value-key="value"
+                placeholder="Select the APRS port"
+                class="w-full"
+                :loading="loadingPorts"
+              />
+              <UTooltip text="Refresh serial ports">
+                <UButton
+                  icon="i-lucide-refresh-cw"
+                  color="neutral"
+                  variant="outline"
+                  :disabled="loadingPorts"
+                  aria-label="Refresh APRS serial ports"
+                  @click="loadPorts"
+                />
+              </UTooltip>
+            </div>
+          </UFormField>
+        </template>
 
         <UFormField
           label="TX power (W)"

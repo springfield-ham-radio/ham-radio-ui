@@ -1,4 +1,6 @@
+import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { openAprsReceivePort } from '~/utils/aprs-serial';
+import { isPortMissingError } from '~/utils/serial-port-reconnect';
 import {
   createAprsReceiveSession,
   nextAprsPortHolds,
@@ -81,7 +83,17 @@ export function useAprs() {
     try {
       await session.disconnect();
       syncHolds(nextAprsPortHolds(cardPorts.value, cardId, undefined));
-      await session.connect(path, () => openAprsReceivePort(path, baudRate));
+      await session.connect(path, async () => {
+        try {
+          return await openAprsReceivePort(path, baudRate);
+        } catch (cause) {
+          if (isPortMissingError(cause)) {
+            throw new Error(aprsPortMissingMessage(path));
+          }
+
+          throw cause;
+        }
+      });
       const opened = session.snapshot();
 
       if (opened.connected) {
@@ -91,6 +103,18 @@ export function useAprs() {
       connecting.value = { ...connecting.value, [cardId]: false };
       publish(cardId);
     }
+  }
+
+  function receiveText(cardId: string, text: string): void {
+    const session = sessionFor(cardId);
+    session.receiveText(text);
+    publish(cardId);
+  }
+
+  function unavailable(cardId: string, message: string): void {
+    const session = sessionFor(cardId);
+    session.unavailable(message);
+    publish(cardId);
   }
 
   async function disconnect(cardId: string): Promise<void> {
@@ -111,5 +135,5 @@ export function useAprs() {
     publish(cardId);
   }
 
-  return { snapshots, connecting, cardPorts, lockedPorts, watchCard, connect, disconnect, clear };
+  return { snapshots, connecting, cardPorts, lockedPorts, watchCard, connect, unavailable, receiveText, disconnect, clear };
 }

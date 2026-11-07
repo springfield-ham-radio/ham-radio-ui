@@ -91,35 +91,74 @@ export function isAprsComBaudRate(value: number): value is AprsComBaudRate {
   return (APRS_COM_BAUD_RATES as readonly number[]).includes(value);
 }
 
-const BAUD_STORAGE_KEY = 'ham-radio-aprs-com-baud';
+/** One line for the radio preferences form. Full menu steps stay in docs/aprs.md. */
+export function d710AprsPreferenceHelp(family: D710AprsFamily): string {
+  const menus = d710AprsMenus(family);
 
-export function readAprsComBaud(storage: Pick<Storage, 'getItem'>, radioId: string): AprsComBaudRate {
-  const raw = storage.getItem(BAUD_STORAGE_KEY);
-
-  if (!raw) {
-    return 9600;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const value = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)[radioId] : undefined;
-    return typeof value === 'number' && isAprsComBaudRate(value) ? value : 9600;
-  } catch {
-    return 9600;
-  }
+  return `Control-head COM jack (PG-5G), not the memory or CAT port. Match COM baud menu ${menus.comBaudMenu}. Menu ${menus.comOutputMenu} OUTPUT must be ON on the radio. HamBench does not change it.`;
 }
 
-const PORT_STORAGE_KEY = 'ham-radio-aprs-com-port';
-
-/** Remember the COM-port adapter separately from the radio's PC-port programming cable. */
-export function readAprsComPort(storage: Pick<Storage, 'getItem'>, radioId: string): string | undefined {
-  return readAprsStringMap(storage, PORT_STORAGE_KEY)[radioId];
+export function aprsPortMissingMessage(path: string): string {
+  return `APRS port ${path} is not connected. Plug in that adapter or choose another port under Preferences → Radios. The memory port was left unchanged.`;
 }
 
-export function writeAprsComPort(storage: Pick<Storage, 'getItem' | 'setItem'>, radioId: string, path: string): void {
-  const current = readAprsStringMap(storage, PORT_STORAGE_KEY);
-  current[radioId] = path;
-  storage.setItem(PORT_STORAGE_KEY, JSON.stringify(current));
+/**
+ * First-tab storage, keyed by saved-radio id.
+ * Folded into the saved radio once, then removed for ids that were claimed.
+ */
+export const LEGACY_APRS_BAUD_STORAGE_KEY = 'ham-radio-aprs-com-baud';
+export const LEGACY_APRS_PORT_STORAGE_KEY = 'ham-radio-aprs-com-port';
+
+export interface LegacyAprsRadio {
+  id: string;
+  serialPort: string;
+  baudRate?: number;
+  aprsSerialPort?: string;
+  aprsBaudRate?: number;
+}
+
+/**
+ * Copy a legacy COM port and baud onto the matching saved radio.
+ *
+ * Fills only missing APRS fields. Never writes `serialPort` or `baudRate`.
+ * Legacy entries for radios already in the list are dropped so a later edit
+ * cannot put them back onto the memory port.
+ */
+export function adoptLegacyAprsConnection<T extends LegacyAprsRadio>(
+  radios: readonly T[],
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
+): { radios: T[]; changed: boolean } {
+  const ports = readAprsStringMap(storage, LEGACY_APRS_PORT_STORAGE_KEY);
+  const bauds = readAprsBaudMap(storage);
+  const known = new Set(radios.map((radio) => radio.id));
+  let changed = false;
+  const next = radios.map((radio) => {
+    const legacyPort = ports[radio.id];
+    const legacyBaud = bauds[radio.id];
+    let copy = radio;
+
+    if (legacyPort && !radio.aprsSerialPort) {
+      copy = { ...copy, aprsSerialPort: legacyPort };
+      changed = true;
+    }
+
+    if (legacyBaud !== undefined && copy.aprsBaudRate === undefined) {
+      copy = { ...copy, aprsBaudRate: legacyBaud };
+      changed = true;
+    }
+
+    return copy;
+  });
+
+  for (const id of known) {
+    delete ports[id];
+    delete bauds[id];
+  }
+
+  writeAprsStringMap(storage, LEGACY_APRS_PORT_STORAGE_KEY, ports);
+  writeAprsBaudMap(storage, bauds);
+
+  return { radios: changed ? next : [...radios], changed };
 }
 
 function readAprsStringMap(storage: Pick<Storage, 'getItem'>, key: string): Record<string, string> {
@@ -140,6 +179,34 @@ function readAprsStringMap(storage: Pick<Storage, 'getItem'>, key: string): Reco
 
     for (const [id, value] of Object.entries(parsed)) {
       if (typeof value === 'string' && value.trim().length > 0) {
+        entries[id] = value.trim();
+      }
+    }
+
+    return entries;
+  } catch {
+    return {};
+  }
+}
+
+function readAprsBaudMap(storage: Pick<Storage, 'getItem'>): Record<string, AprsComBaudRate> {
+  const raw = storage.getItem(LEGACY_APRS_BAUD_STORAGE_KEY);
+
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    const entries: Record<string, AprsComBaudRate> = {};
+
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value === 'number' && isAprsComBaudRate(value)) {
         entries[id] = value;
       }
     }
@@ -150,26 +217,20 @@ function readAprsStringMap(storage: Pick<Storage, 'getItem'>, key: string): Reco
   }
 }
 
-export function writeAprsComBaud(storage: Pick<Storage, 'getItem' | 'setItem'>, radioId: string, baud: AprsComBaudRate): void {
-  let current: Record<string, number> = {};
-  const raw = storage.getItem(BAUD_STORAGE_KEY);
-
-  if (raw) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-
-      if (parsed && typeof parsed === 'object') {
-        for (const [key, value] of Object.entries(parsed)) {
-          if (typeof value === 'number' && isAprsComBaudRate(value)) {
-            current[key] = value;
-          }
-        }
-      }
-    } catch {
-      current = {};
-    }
+function writeAprsStringMap(storage: Pick<Storage, 'setItem' | 'removeItem'>, key: string, entries: Record<string, string>): void {
+  if (Object.keys(entries).length === 0) {
+    storage.removeItem(key);
+    return;
   }
 
-  current[radioId] = baud;
-  storage.setItem(BAUD_STORAGE_KEY, JSON.stringify(current));
+  storage.setItem(key, JSON.stringify(entries));
+}
+
+function writeAprsBaudMap(storage: Pick<Storage, 'setItem' | 'removeItem'>, entries: Record<string, number>): void {
+  if (Object.keys(entries).length === 0) {
+    storage.removeItem(LEGACY_APRS_BAUD_STORAGE_KEY);
+    return;
+  }
+
+  storage.setItem(LEGACY_APRS_BAUD_STORAGE_KEY, JSON.stringify(entries));
 }

@@ -1,6 +1,6 @@
 # APRS receive (Kenwood TM-D710)
 
-The **APRS** tab is receive-only. It listens to the built-in TNC on the control-head **COM** jack and lists stations, decoded fields, and the raw line log. It does not transmit, send TNC commands, upload to APRS-IS, igate, beacon, or change radio menus. Map and outbound messages are not in this tab.
+The **APRS** tab is receive-only. It listens to the built-in TNC on the control-head **COM** jack and lists stations, a map of decoded positions, packet fields, and the raw line log. It does not transmit, send TNC commands, upload to APRS-IS, igate, beacon, or change radio menus. Outbound messages are not in this tab.
 
 The PC jack on the TX/RX unit is the programming and CAT port. It is a different connector and a different baud menu. The DATA mini-DIN is for an external TNC; its PKS pin keys the transmitter when low. Do not use either jack for this tab.
 
@@ -30,7 +30,7 @@ The A/E instruction manual uses the same APRS menu numbers and the 5xx port menu
 
 ## Radio settings
 
-HamBench does not change these. Set them on the radio, then press **Connect** and pick the PG-5G adapter. The programming port saved on the radio card is not filled in.
+HamBench does not change these. Set them on the radio. Under **Preferences → Radios**, edit the saved radio and set **APRS serial port** and **APRS baud**. Those fields are stored on that radio and are not the memory or CAT port. **Connect** opens the saved APRS port. If that adapter is unplugged, the port stays in the list as saved and not connected, and Connect explains that the memory port was left unchanged.
 
 1. Press **[TNC]** until the display shows **APRS** (not PACKET12 and not blank).
 2. Menu **604** OUTPUT = **ON**. This is the switch that copies received APRS traffic and TNC monitor text to the COM jack. Default is OFF.
@@ -40,11 +40,17 @@ HamBench does not change these. Set them on the radio, then press **Connect** an
    - Choices are 9600, 19200, 38400, and 57600. Default **9600**. Power-cycle the radio after changing it. The computer side is 8 data bits, 1 stop bit, no parity.
 4. Menu **601** INTERNAL TNC: data band on the band that is receiving APRS, packet speed **1200 bps** unless that network is 9600.
 5. Leave menu **519** / **920** (PC port) and menu **529** / **930** (packet-mode data band) as they are. They do not select this feed.
-6. In HamBench, set the same COM baud, then **Connect**. **Disconnect** closes the handle. Read, Write, and CAT will not take that adapter until then.
+6. In HamBench, set that same COM baud and the PG-5G adapter on the saved radio, then **Connect**. **Disconnect** closes the handle. Read, Write, and CAT will not take that adapter until then.
 
 RTS and DTR are written deasserted, and hardware flow control is off. The session never writes a payload byte. No TNC command is proposed for automatic send: menu 604 already enables the monitor copy, and commands such as `KISS ON` or `RESTART` are how a program takes over the TNC and can transmit. `MON ON` is the PACKET-mode default in the TNC command list and is not sent either.
 
 ## What the tab shows
+
+The station list includes every heard station. The map shows only stations whose own position was decoded. A message with no position, a Mic-E ambiguous position, a malformed line, and an unsupported format stay off the map and stay in the raw log. An object or item position is not drawn as the sending station. The map fits the stations once, then leaves pan and zoom alone when later packets arrive. **Fit stations** fits them again.
+
+Positions exist only for this listening session. Menu 604 OUTPUT copies new packets to the COM jack. It does not dump the radio's station list. The TNC `LIST` and `READ` commands are the packet mailbox, not an APRS station export, and HamBench does not send them.
+
+## Decoded fields
 
 Stations are AX.25 sources. A later packet replaces only fields it actually contains, so a message keeps the last position. An object or item position is labeled as a reported object and does not replace the sender's position. Course is omitted for Mic-E when the decoded course is 0, which the protocol uses for unknown. Weather uses the packet's own units (mph, °F, inches, hPa). Mic-E altitude is meters. Uncompressed `/A=` altitude is feet.
 

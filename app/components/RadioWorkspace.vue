@@ -37,7 +37,7 @@ import {
 } from '~/utils/channel-print';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
-import { d710AprsFamily } from '~/utils/aprs-d710';
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import {
   diffPendingRadioState,
@@ -124,7 +124,17 @@ function modelSupportsCat(model: string | undefined): boolean {
 }
 
 const supportsCat = computed(() => modelSupportsCat(cardRadio.value?.model));
-const supportsAprs = computed(() => d710AprsFamily(cardRadio.value?.model, cardRadio.value?.name) !== undefined);
+const supportsAprs = computed(() => {
+  const radio = cardRadio.value;
+
+  if (!radio) {
+    return false;
+  }
+
+  const config = configurations.value.find((item) => String(item.id.model) === radio.model);
+
+  return aprsReceiveProfile({ config, model: radio.model, name: radio.name }) !== undefined;
+});
 const { disconnect: disconnectAprs } = useAprs();
 const anyOpenCardSupportsCat = computed(() =>
   cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model ?? card.guest?.model)),

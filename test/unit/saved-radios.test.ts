@@ -130,6 +130,37 @@ describe('saved radios', () => {
     expect(removeSavedRadio(store, created.id).radios).toEqual([base]);
   });
 
+  it('keeps the APRS port independent of the memory port', () => {
+    const withAprs: SavedRadio = {
+      ...base,
+      serialPort: '/dev/cu.programming',
+      baudRate: 57600,
+      aprsSerialPort: '/dev/cu.pg5g',
+      aprsBaudRate: 19200,
+    };
+
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withAprs] })).radios[0]).toEqual(withAprs);
+
+    const memory = rememberSavedRadioSerialPort(withAprs, '/dev/cu.other', 30);
+    expect(memory.serialPort).toBe('/dev/cu.other');
+    expect(memory.aprsSerialPort).toBe('/dev/cu.pg5g');
+    expect(memory.baudRate).toBe(57600);
+    expect(memory.aprsBaudRate).toBe(19200);
+
+    const aprs = updateSavedRadio(withAprs, { ...draftFromSavedRadio(withAprs), aprsSerialPort: '/dev/cu.com', aprsBaudRate: 38400 }, 31);
+    expect(aprs.serialPort).toBe('/dev/cu.programming');
+    expect(aprs.baudRate).toBe(57600);
+    expect(aprs.aprsSerialPort).toBe('/dev/cu.com');
+    expect(aprs.aprsBaudRate).toBe(38400);
+
+    expect(
+      savedRadioDraftIssues(
+        { ...draftFromSavedRadio(withAprs), aprsSerialPort: withAprs.serialPort },
+        { radios: [], aprsBaudRates: [9600, 19200] },
+      ).aprsSerialPort,
+    ).toBe('Choose the COM adapter. This is the memory port.');
+  });
+
   it('should remember a chosen serial port on the saved radio', () => {
     const blank = { ...mobile, serialPort: '' };
     const first = rememberSavedRadioSerialPort(blank, ' usbserial-A703DBTL ', 20);

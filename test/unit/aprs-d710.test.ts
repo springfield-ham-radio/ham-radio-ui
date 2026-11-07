@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { d710AprsFamily, d710AprsMenus, readAprsComBaud, writeAprsComBaud, writeAprsComPort, readAprsComPort } from '../../app/utils/aprs-d710.ts';
+import {
+  adoptLegacyAprsConnection,
+  d710AprsFamily,
+  d710AprsMenus,
+  LEGACY_APRS_BAUD_STORAGE_KEY,
+  LEGACY_APRS_PORT_STORAGE_KEY,
+} from '../../app/utils/aprs-d710.ts';
 import { memoryTransferBlockedMessage, markCatBusySerialPorts } from '../../app/utils/cat-memory-transfer.ts';
 
 describe('TM-D710 APRS setup', () => {
@@ -22,21 +28,38 @@ describe('TM-D710 APRS setup', () => {
     expect(d710AprsFamily('baofeng-uv5r', 'UV-5R')).toBeUndefined();
   });
 
-  it('remembers COM baud and port apart from the programming port', () => {
-    const saved = new Map<string, string>();
+  it('folds a legacy COM port onto the APRS fields and leaves the memory port', () => {
+    const saved = new Map<string, string>([
+      [LEGACY_APRS_PORT_STORAGE_KEY, JSON.stringify({ 'radio-1': '/dev/cu.pg5g', 'radio-later': '/dev/cu.later' })],
+      [LEGACY_APRS_BAUD_STORAGE_KEY, JSON.stringify({ 'radio-1': 19200 })],
+    ]);
     const storage = {
       getItem: (key: string) => saved.get(key) ?? null,
       setItem: (key: string, value: string) => {
         saved.set(key, value);
       },
+      removeItem: (key: string) => {
+        saved.delete(key);
+      },
+    };
+    const radio = {
+      id: 'radio-1',
+      serialPort: '/dev/cu.programming',
+      baudRate: 9600,
     };
 
-    expect(readAprsComBaud(storage, 'radio-1')).toBe(9600);
-    writeAprsComBaud(storage, 'radio-1', 19200);
-    writeAprsComPort(storage, 'radio-1', '/dev/cu.pg5g');
+    const adopted = adoptLegacyAprsConnection([radio], storage);
 
-    expect(readAprsComBaud(storage, 'radio-1')).toBe(19200);
-    expect(readAprsComPort(storage, 'radio-1')).toBe('/dev/cu.pg5g');
+    expect(adopted.changed).toBe(true);
+    expect(adopted.radios[0]).toMatchObject({
+      serialPort: '/dev/cu.programming',
+      baudRate: 9600,
+      aprsSerialPort: '/dev/cu.pg5g',
+      aprsBaudRate: 19200,
+    });
+    expect(saved.get(LEGACY_APRS_PORT_STORAGE_KEY)).toContain('radio-later');
+    expect(saved.get(LEGACY_APRS_PORT_STORAGE_KEY)).not.toContain('radio-1');
+    expect(saved.has(LEGACY_APRS_BAUD_STORAGE_KEY)).toBe(false);
   });
 
   it('labels an APRS hold differently from CAT', () => {

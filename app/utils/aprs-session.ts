@@ -21,6 +21,10 @@ export interface AprsSessionSnapshot {
 export interface AprsReceiveSession {
   snapshot(): AprsSessionSnapshot;
   connect(path: string, openPort: () => Promise<AprsBytePort>): Promise<void>;
+  /** Record a connect refusal without opening a port or clearing the log. */
+  unavailable(message: string): void;
+  /** Feed monitor text already received. Does not write to the port. */
+  receiveText(text: string): void;
   disconnect(): Promise<void>;
   clear(): void;
   subscribe(listener: () => void): void;
@@ -151,6 +155,25 @@ export function createAprsReceiveSession(now: () => string = () => new Date().to
     publish();
   }
 
+  function receiveText(text: string): void {
+    const bytes = new Uint8Array(text.length);
+
+    for (let index = 0; index < text.length; index += 1) {
+      bytes[index] = text.charCodeAt(index) & 0xff;
+    }
+
+    onData(bytes);
+  }
+
+  function unavailable(message: string): void {
+    if (port?.isOpen) {
+      return;
+    }
+
+    error = message;
+    publish();
+  }
+
   async function disconnect(): Promise<void> {
     generation += 1;
     await closePort();
@@ -166,6 +189,8 @@ export function createAprsReceiveSession(now: () => string = () => new Date().to
   return {
     snapshot,
     connect,
+    unavailable,
+    receiveText,
     disconnect,
     clear,
     subscribe(listener) {

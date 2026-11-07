@@ -1,19 +1,14 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
-import {
-  APRS_COM_BAUD_RATES,
-  d710AprsFamily,
-  d710AprsMenus,
-  isAprsComBaudRate,
-  readAprsComBaud,
-  readAprsComPort,
-  writeAprsComBaud,
-  writeAprsComPort,
-  type AprsComBaudRate,
-} from '~/utils/aprs-d710';
+import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
+import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
-import type { RadioDialogMessageAlert } from '~/utils/radio-dialog-message';
+import { serialPortLabel } from '~/utils/serial-port-list';
+import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
 
 const props = defineProps<{
   cardId?: string;
@@ -21,12 +16,13 @@ const props = defineProps<{
   radioName?: string;
 }>();
 
-const { snapshots, connecting, lockedPorts, watchCard, connect, disconnect, clear } = useAprs();
-const family = computed(() => d710AprsFamily(props.model, props.radioName) ?? 'unconfirmed');
-const menus = computed(() => d710AprsMenus(family.value));
-const baudRate = ref<AprsComBaudRate>(9600);
-const portOpen = ref(false);
+const { snapshots, connecting, watchCard, connect, unavailable, receiveText, disconnect, clear } = useAprs();
+const { radioById } = useSavedRadios();
+const { configurations } = useRadio();
+const route = useRoute();
+const examplePackets = computed(() => import.meta.dev && route.query.fixture === 'aprs-map');
 const activeTab = ref('stations');
+const aprsMap = useTemplateRef('aprsMap');
 const selectedCall = ref<string | undefined>();
 const stationScroller = useTemplateRef<HTMLElement>('stationScroller');
 const logScroller = useTemplateRef<HTMLElement>('logScroller');
@@ -36,12 +32,18 @@ if (props.cardId) {
 }
 
 onMounted(() => {
-  if (!props.cardId || typeof localStorage === 'undefined') {
+  if (!examplePackets.value || !props.cardId) {
     return;
   }
 
-  baudRate.value = readAprsComBaud(localStorage, props.cardId);
-  rememberedPort.value = readAprsComPort(localStorage, props.cardId);
+  receiveText(props.cardId, `${APRS_MAP_EXAMPLE_TEXT}\n`);
+});
+
+const savedRadio = computed(() => radioById(props.cardId));
+const profile = computed(() => {
+  const config = configurations.value.find((item) => String(item.id.model) === props.model);
+
+  return aprsReceiveProfile({ config, model: props.model, name: props.radioName ?? savedRadio.value?.name });
 });
 
 const snapshot = computed(() => (props.cardId ? snapshots.value[props.cardId] : undefined));
@@ -50,9 +52,11 @@ const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardI
 const stations = computed(() => snapshot.value?.stations ?? []);
 const log = computed(() => snapshot.value?.log ?? []);
 const selected = computed(() => stations.value.find((station) => station.callsign === selectedCall.value) ?? stations.value[0]);
-const rememberedPort = ref<string | undefined>();
-
-const baudItems = APRS_COM_BAUD_RATES.map((rate) => ({ label: `${rate} baud`, value: rate }));
+const aprsPort = computed(() => savedRadio.value?.aprsSerialPort);
+const aprsBaud = computed(() => savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600);
+const portLabel = computed(() =>
+  aprsPort.value ? serialPortLabel(aprsPort.value, readSerialPortSettings().portAliases) : undefined,
+);
 const stationCount = computed(() => stations.value.length);
 const logCount = computed(() => log.value.length);
 const { virtualRows: stationRows, paddingTop: stationPadTop, paddingBottom: stationPadBottom } = useFixedVirtualRows(
@@ -64,9 +68,12 @@ const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom
 
 const tabs: TabsItem[] = [
   { label: 'Stations', icon: 'i-lucide-list', slot: 'stations' as const, value: 'stations' },
+  { label: 'Map', icon: 'i-lucide-map', slot: 'map' as const, value: 'map' },
   { label: 'Packet', icon: 'i-lucide-file-text', slot: 'packet' as const, value: 'packet' },
   { label: 'Raw log', icon: 'i-lucide-scroll-text', slot: 'log' as const, value: 'log' },
 ];
+const plottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
+const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
 
 const connectionBadge = computed(() => {
   if (isConnected.value) {
@@ -76,29 +83,20 @@ const connectionBadge = computed(() => {
   return { label: 'Disconnected', color: 'neutral' as const, icon: 'i-lucide-plug' };
 });
 
-const setupAlert = computed<RadioDialogMessageAlert>(() => ({
-  title: 'Receive only, on the COM jack',
-  body: setupBody.value,
-  color: 'warning',
-  icon: 'i-lucide-info',
-}));
-
-const setupBody = computed(() => {
-  const menu = menus.value;
-  const lines = [
-    'Plug the optional PG-5G into the control-head COM jack (2.5 mm, 3 conductors: radio TXD, radio RXD, ground). Do not use the TX/RX-unit PC jack, and do not use the DATA mini-DIN. DATA pin PKS is active-low transmit.',
-    `Set COM baud in menu ${menu.comBaudMenu} to 9600, 19200, 38400, or 57600, then power-cycle the radio. Match that rate here. The port is 8 data bits, 1 stop bit, no parity. Default 9600.`,
-    `Menu ${menu.pcBaudMenu} is the PC-port programming and CAT baud. It is a different jack and is not selected for this tab.`,
-    `Press [TNC] until APRS is shown. Set menu ${menu.comOutputMenu} OUTPUT to ON. The default is OFF, and nothing is copied to the COM jack until it is ON.`,
-    `Menu ${menu.aprsInternalTncMenu} is the APRS data band and RF packet speed (1200 bps on the usual APRS channel). Menu ${menu.packetDataBandMenu} is the separate packet-mode data band.`,
-    'HamBench does not transmit, does not send TNC commands, and does not change radio menus. RTS and DTR are left deasserted.',
-  ];
-
-  if (family.value === 'unconfirmed') {
-    lines.unshift('Confirm whether this radio is a TM-D710A/E/S or a TM-D710G/GA/GE/GS. The COM and PC menu numbers are different.');
+const statusLine = computed(() => {
+  if (isConnected.value && snapshot.value?.path) {
+    return `Listening on ${serialPortLabel(snapshot.value.path, readSerialPortSettings().portAliases)} at ${aprsBaud.value} baud.`;
   }
 
-  return lines.join('\n\n');
+  if (!savedRadio.value) {
+    return 'Save this radio under Preferences to choose an APRS port. The memory port is not used.';
+  }
+
+  if (!aprsPort.value || !portLabel.value) {
+    return 'Choose an APRS serial port under Preferences → Radios. The memory port is not used.';
+  }
+
+  return `Saved APRS port ${portLabel.value} at ${aprsBaud.value} baud.`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
@@ -111,29 +109,26 @@ watch(stations, (rows) => {
   selectedCall.value = rows[0]?.callsign;
 });
 
-function onBaud(value: unknown): void {
-  if (typeof value !== 'number' || !isAprsComBaudRate(value) || !props.cardId) {
+async function onConnect(): Promise<void> {
+  const cardId = props.cardId;
+  const path = aprsPort.value;
+
+  if (!cardId || !path) {
     return;
   }
 
-  const rate = value;
-  baudRate.value = rate;
+  try {
+    const present = await isSerialPortPathAvailable(path);
 
-  if (typeof localStorage !== 'undefined') {
-    writeAprsComBaud(localStorage, props.cardId, rate);
-  }
-}
-
-async function onConnect(path: string): Promise<void> {
-  if (!props.cardId) {
-    return;
+    if (!present) {
+      unavailable(cardId, aprsPortMissingMessage(path));
+      return;
+    }
+  } catch {
+    // The port list is unavailable outside the desktop shell. Open reports that failure.
   }
 
-  if (typeof localStorage !== 'undefined') {
-    writeAprsComPort(localStorage, props.cardId, path);
-  }
-
-  await connect(props.cardId, path, baudRate.value);
+  await connect(cardId, path, aprsBaud.value);
 }
 
 async function onDisconnect(): Promise<void> {
@@ -142,6 +137,15 @@ async function onDisconnect(): Promise<void> {
   }
 
   await disconnect(props.cardId);
+}
+
+function selectStation(callsign: string | undefined): void {
+  if (!callsign) {
+    return;
+  }
+
+  selectedCall.value = callsign;
+  aprsMap.value?.focus(callsign);
 }
 
 function onClear(): void {
@@ -158,18 +162,10 @@ function onClear(): void {
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
     <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
       <p class="min-w-0 text-xs text-muted">
-        Receive-only APRS from the control-head COM port. The saved programming port is not used.
+        {{ statusLine }}
+        <NuxtLink v-if="!isConnected" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
       </p>
       <div class="flex flex-wrap items-center gap-1.5">
-        <USelect
-          :model-value="baudRate"
-          :items="baudItems"
-          value-key="value"
-          :disabled="isConnected || isConnecting"
-          class="w-36"
-          aria-label="COM port baud"
-          @update:model-value="onBaud"
-        />
         <UBadge :label="connectionBadge.label" :color="connectionBadge.color" variant="subtle" :icon="connectionBadge.icon" />
         <UButton
           v-if="!isConnected"
@@ -178,8 +174,8 @@ function onClear(): void {
           icon="i-lucide-cable"
           label="Connect"
           :loading="isConnecting"
-          :disabled="!cardId"
-          @click="portOpen = true"
+          :disabled="!cardId || !aprsPort"
+          @click="onConnect"
         />
         <UButton
           v-else
@@ -194,42 +190,14 @@ function onClear(): void {
     </div>
 
     <UAlert
-      color="warning"
+      v-if="examplePackets"
+      color="neutral"
       variant="subtle"
-      icon="i-lucide-info"
-      title="Radio setup is manual"
+      icon="i-lucide-map"
+      title="Example packets"
+      description="These stations are sample monitor lines for the map layout, not a live radio. A connected TM-D710 only sends packets heard after menu 604 OUTPUT is ON."
       class="mb-2 shrink-0"
-    >
-      <template #description>
-        <p class="whitespace-pre-line">{{ setupBody }}</p>
-        <ul class="mt-2 list-disc space-y-1 ps-4">
-          <li>
-            <a class="text-primary underline" href="https://manuals.jvckenwood.com/download/files/B62-2562-10.pdf" target="_blank" rel="noreferrer">
-              TM-D710GA/GE instruction manual, B62-2562-10
-            </a>
-            — menus 604, 601, 920, 929, 930
-          </li>
-          <li>
-            <a class="text-primary underline" href="https://kasc.kenwood.com/files/prod/2681/5/TM-D710GE_GA_Instruction_Manual_CD-ROM_V1.01.pdf" target="_blank" rel="noreferrer">
-              TM-D710G CD-ROM English V1.01
-            </a>
-            — COM port on the operation panel; do not use the PC terminal for the built-in TNC
-          </li>
-          <li>
-            <a class="text-primary underline" href="https://www.kenwood.com/i/products/info/amateur/pdf/TM-D710A_E_GA_GE_IDM.pdf" target="_blank" rel="noreferrer">
-              Getting More Acquainted with APRS and EchoLink
-            </a>
-            — PG-5G on the operation-panel COM port. KISS is a host command and is not used here.
-          </li>
-          <li>
-            <a class="text-primary underline" href="https://origin.kenwood.com/jp/products/amateur/mobile/tm_d710_d710s/tm-d710_s_g_gs_in-depth_manual_j.pdf" target="_blank" rel="noreferrer">
-              TM-D710/S/G/GS in-depth manual
-            </a>
-            — menu 528 on D710/S, menu 929 on D710G/GS
-          </li>
-        </ul>
-      </template>
-    </UAlert>
+    />
 
     <UAlert
       v-if="snapshot?.error"
@@ -258,7 +226,7 @@ function onClear(): void {
       <template #stations>
         <div ref="stationScroller" class="min-h-0 flex-1 overflow-auto">
           <p v-if="stations.length === 0" class="px-1 py-6 text-sm text-muted">
-            No stations yet. Connect the COM port with menu {{ menus.comOutputMenu }} OUTPUT set to ON.
+            No stations yet. Connect uses the APRS port saved for this radio.
           </p>
           <div v-else :style="{ paddingTop: `${stationPadTop}px`, paddingBottom: `${stationPadBottom}px` }">
             <button
@@ -267,7 +235,7 @@ function onClear(): void {
               type="button"
               class="flex h-11 w-full items-center gap-3 border-b border-default px-2 text-left"
               :class="selected?.callsign === stations[row.index]?.callsign ? 'bg-elevated' : ''"
-              @click="selectedCall = stations[row.index]?.callsign"
+              @click="selectStation(stations[row.index]?.callsign)"
             >
               <template v-if="stations[row.index]">
                 <span class="w-28 shrink-0 font-mono text-sm text-highlighted">{{ stations[row.index]!.callsign }}</span>
@@ -278,6 +246,38 @@ function onClear(): void {
               </template>
             </button>
           </div>
+        </div>
+      </template>
+
+      <template #map>
+        <div class="flex min-h-0 flex-1 flex-col gap-2 py-2">
+          <div class="flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <p class="min-w-0 text-xs text-muted">
+              {{ plottedCount }} on the map
+              <template v-if="unlocatedCount > 0"> · {{ unlocatedCount }} without a position</template>
+              . Heard this session only. The radio does not export its stored station list.
+            </p>
+            <UButton
+              icon="i-lucide-locate"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              label="Fit stations"
+              :disabled="plottedCount === 0"
+              @click="aprsMap?.fit()"
+            />
+          </div>
+          <AprsMap
+            v-if="activeTab === 'map'"
+            ref="aprsMap"
+            class="min-h-64 flex-1"
+            :stations="stations"
+            :selected-call="selected?.callsign"
+            @select="selectStation"
+          />
+          <p v-if="plottedCount === 0" class="shrink-0 text-sm text-muted">
+            No decoded positions yet. Stations without a position stay in the list.
+          </p>
         </div>
       </template>
 
@@ -385,19 +385,5 @@ function onClear(): void {
         </div>
       </template>
     </UTabs>
-
-    <RadioPortDialog
-      v-model:open="portOpen"
-      title="Connect APRS receive"
-      description="Choose the USB serial adapter on the PG-5G COM cable. The radio's saved programming port is not filled in."
-      confirm-label="Connect"
-      :confirm-loading="isConnecting"
-      :default-port="rememberedPort"
-      :unavailable-ports="lockedPorts"
-      omit-unavailable-ports
-      :setup-alert="setupAlert"
-      panel-class="max-w-xl"
-      @confirm="onConnect"
-    />
   </div>
 </template>

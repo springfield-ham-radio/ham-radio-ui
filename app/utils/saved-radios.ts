@@ -21,6 +21,13 @@ export interface SavedRadio {
   privilegePersonId?: string;
   /** Grant to check. Absent when that person holds no license (FRS only). */
   privilegeLicenseId?: string;
+  /**
+   * Adapter on the TNC/COM jack. Independent of `serialPort`.
+   * Absent until the operator chooses one under Preferences.
+   */
+  aprsSerialPort?: string;
+  /** Baud for `aprsSerialPort`. Not the programming `baudRate`. */
+  aprsBaudRate?: number;
 }
 
 export interface SavedRadioDraft {
@@ -30,6 +37,9 @@ export interface SavedRadioDraft {
   baudRate?: number;
   serialPort: string;
   txPowerWatts?: number;
+  /** Empty string clears a stored APRS port. Omit to leave it unchanged. */
+  aprsSerialPort?: string;
+  aprsBaudRate?: number;
 }
 
 export interface SavedRadioStore {
@@ -43,6 +53,8 @@ export interface SavedRadioDraftIssues {
   baudRate?: string;
   serialPort?: string;
   txPowerWatts?: string;
+  aprsSerialPort?: string;
+  aprsBaudRate?: string;
 }
 
 export function emptySavedRadioStore(): SavedRadioStore {
@@ -142,6 +154,14 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     radio.baudRate = value.baudRate;
   }
 
+  if (nonEmpty(value.aprsSerialPort)) {
+    radio.aprsSerialPort = value.aprsSerialPort.trim();
+  }
+
+  if (isStoredBaudRate(value.aprsBaudRate)) {
+    radio.aprsBaudRate = value.aprsBaudRate;
+  }
+
   const txPowerWatts = parseTxPowerWatts(value.txPowerWatts);
 
   if (txPowerWatts !== undefined) {
@@ -211,6 +231,14 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
         stored.baudRate = radio.baudRate;
       }
 
+      if (radio.aprsSerialPort) {
+        stored.aprsSerialPort = radio.aprsSerialPort;
+      }
+
+      if (radio.aprsBaudRate !== undefined) {
+        stored.aprsBaudRate = radio.aprsBaudRate;
+      }
+
       if (radio.txPowerWatts !== undefined) {
         stored.txPowerWatts = radio.txPowerWatts;
       }
@@ -264,6 +292,8 @@ export function savedRadioDraftIssues(
     radios: readonly SavedRadio[];
     ignoreId?: string;
     baudRates?: readonly number[];
+    /** Rates the APRS COM port accepts. Checked only when an APRS port is set. */
+    aprsBaudRates?: readonly number[];
   },
 ): SavedRadioDraftIssues {
   const issues: SavedRadioDraftIssues = {};
@@ -297,6 +327,17 @@ export function savedRadioDraftIssues(
     issues.serialPort = 'Choose a default serial port';
   }
 
+  const aprsPort = draft.aprsSerialPort?.trim() ?? '';
+  const aprsRates = options.aprsBaudRates ?? [];
+
+  if (aprsPort.length > 0 && aprsPort === draft.serialPort.trim()) {
+    issues.aprsSerialPort = 'Choose the COM adapter. This is the memory port.';
+  }
+
+  if (aprsPort.length > 0 && aprsRates.length > 0 && (draft.aprsBaudRate === undefined || !aprsRates.includes(draft.aprsBaudRate))) {
+    issues.aprsBaudRate = 'Choose an APRS baud rate';
+  }
+
   if (draft.txPowerWatts !== undefined && parseTxPowerWatts(draft.txPowerWatts) === undefined) {
     issues.txPowerWatts = 'Enter a TX power in watts';
   }
@@ -327,6 +368,16 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
     radio.txPowerWatts = draft.txPowerWatts;
   }
 
+  const aprsPort = draft.aprsSerialPort?.trim() ?? '';
+
+  if (aprsPort.length > 0) {
+    radio.aprsSerialPort = aprsPort;
+  }
+
+  if (draft.aprsBaudRate !== undefined) {
+    radio.aprsBaudRate = draft.aprsBaudRate;
+  }
+
   return radio;
 }
 
@@ -350,6 +401,20 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
     delete next.txPowerWatts;
   } else {
     next.txPowerWatts = draft.txPowerWatts;
+  }
+
+  if (draft.aprsSerialPort !== undefined) {
+    const aprsPort = draft.aprsSerialPort.trim();
+
+    if (aprsPort.length === 0) {
+      delete next.aprsSerialPort;
+    } else {
+      next.aprsSerialPort = aprsPort;
+    }
+  }
+
+  if (draft.aprsBaudRate !== undefined) {
+    next.aprsBaudRate = draft.aprsBaudRate;
   }
 
   return next;
@@ -383,6 +448,8 @@ export function draftFromSavedRadio(radio: SavedRadio): SavedRadioDraft {
     baudRate: radio.baudRate,
     serialPort: radio.serialPort,
     txPowerWatts: radio.txPowerWatts,
+    aprsSerialPort: radio.aprsSerialPort,
+    aprsBaudRate: radio.aprsBaudRate,
   };
 }
 
