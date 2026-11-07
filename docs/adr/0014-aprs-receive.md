@@ -6,7 +6,7 @@
 
 ## Context
 
-The TM-D710 CAT and clone path uses the PC jack on the TX/RX unit. The built-in TNC uses a different connector: the COM jack on the control head, with the optional PG-5G cable. Menu numbers for that jack are not the PC-port baud menu. Messaging and transmit stay out of scope. The map shows positions decoded in the current session.
+The TM-D710 CAT and clone path uses the PC jack on the TX/RX unit. The built-in TNC uses a different connector: the COM jack on the control head, with the optional PG-5G cable. Menu numbers for that jack are not the PC-port baud menu. Host messaging is a separate session in [ADR 0015](./0015-aprs-host-messaging.md). This monitor does not write. The map shows positions decoded in the current session.
 
 Kenwood copies received APRS traffic to the COM jack when menu 604 OUTPUT is ON. That is a radio menu, not a host command. Entering KISS requires the computer to send TNC commands, and those commands can put the TNC on a path that transmits.
 

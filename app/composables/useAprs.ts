@@ -3,6 +3,7 @@ import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { openAprsReceivePort } from '~/utils/aprs-serial';
 import { isPortMissingError } from '~/utils/serial-port-reconnect';
 import {
+  aprsHoldPaths,
   createAprsReceiveSession,
   nextAprsPortHolds,
   type AprsReceiveSession,
@@ -32,6 +33,7 @@ function sessionFor(cardId: string): AprsReceiveSession {
 export function useAprs() {
   const { lockedPorts, setHolderPorts } = useCatPortLock();
   const cardPorts = useState<Record<string, string>>('aprs-card-ports', () => ({}));
+  const hostPorts = useState<Record<string, string>>('aprs-host-card-ports', () => ({}));
   const snapshots = useState<Record<string, AprsSessionSnapshot>>('aprs-snapshots', () => ({}));
   const connecting = useState<Record<string, boolean>>('aprs-connecting', () => ({}));
 
@@ -50,7 +52,7 @@ export function useAprs() {
 
   function syncHolds(next: Record<string, string>): void {
     cardPorts.value = next;
-    setHolderPorts('aprs', Object.values(next));
+    setHolderPorts('aprs', aprsHoldPaths(next, hostPorts.value));
   }
 
   function watchCard(cardId: string): void {

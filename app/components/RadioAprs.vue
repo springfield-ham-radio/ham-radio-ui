@@ -16,7 +16,7 @@ const props = defineProps<{
   radioName?: string;
 }>();
 
-const { snapshots, connecting, watchCard, connect, unavailable, receiveText, disconnect, clear } = useAprs();
+const { snapshots, connecting, cardPorts, watchCard, connect, unavailable, receiveText, disconnect, clear } = useAprs();
 const { radioById } = useSavedRadios();
 const { configurations } = useRadio();
 const route = useRoute();
@@ -69,6 +69,7 @@ const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom
 const tabs: TabsItem[] = [
   { label: 'Stations', icon: 'i-lucide-list', slot: 'stations' as const, value: 'stations' },
   { label: 'Map', icon: 'i-lucide-map', slot: 'map' as const, value: 'map' },
+  { label: 'Messages', icon: 'i-lucide-message-square', slot: 'messages' as const, value: 'messages' },
   { label: 'Packet', icon: 'i-lucide-file-text', slot: 'packet' as const, value: 'packet' },
   { label: 'Raw log', icon: 'i-lucide-scroll-text', slot: 'log' as const, value: 'log' },
 ];
@@ -279,6 +280,16 @@ function onClear(): void {
             No decoded positions yet. Stations without a position stay in the list.
           </p>
         </div>
+      </template>
+
+      <template #messages>
+        <AprsMessages
+          :card-id="cardId"
+          :port="aprsPort"
+          :port-label="portLabel"
+          :baud="aprsBaud"
+          :monitor-using-port="Boolean(cardId && cardPorts[cardId])"
+        />
       </template>
 
       <template #packet>

@@ -203,6 +203,14 @@ export function createAprsReceiveSession(now: () => string = () => new Date().to
 }
 
 /** APRS port holds keyed by radio card, replaced as a group so CAT holds stay. */
+/** Ports held by the monitor and the host listener together. */
+export function aprsHoldPaths(
+  monitor: Readonly<Record<string, string>>,
+  host: Readonly<Record<string, string>>,
+): string[] {
+  return [...new Set([...Object.values(monitor), ...Object.values(host)])];
+}
+
 export function nextAprsPortHolds(current: Readonly<Record<string, string>>, cardId: string, path: string | undefined): Record<string, string> {
   const next = { ...current };
 
