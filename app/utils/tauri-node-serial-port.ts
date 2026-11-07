@@ -37,6 +37,84 @@ const SERIAL_LISTENER_FLUSH_MS = 1;
 const SERIAL_OPEN_SETTLE_MS = 300;
 const SERIAL_OPEN_DRAIN_MS = 20;
 
+/**
+ * Host open reads before `watch`. Plugin 3.0.7 `attach_watch` clears the hub
+ * idle buffer (`attach_watch_clears_idle`), so a one-shot banner that arrives
+ * between `open()` and `watch()` is deleted. These bounds take that buffer,
+ * then keep reading until a short quiet gap, and hand the bytes to the log
+ * before `watch` is attached. The passive monitor does not use this path.
+ */
+export const HOST_STARTUP_READ_WINDOW_MS = 250;
+export const HOST_STARTUP_QUIET_MS = 30;
+const HOST_STARTUP_READ_SIZE = 4096;
+
+function isQuietRead(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no data|timed out|timeout/i.test(message);
+}
+
+/**
+ * Read bytes the serial hub has already taken, until it stays quiet or the window ends.
+ * A quiet read is the plugin timeout. Any other failure is rethrown.
+ */
+export async function collectBytesBeforeWatch(
+  readBinary: (options: { timeout: number; size: number }) => Promise<Uint8Array | number[]>,
+  options?: {
+    windowMs?: number;
+    quietMs?: number;
+    size?: number;
+    now?: () => number;
+    stopped?: () => boolean;
+  },
+): Promise<Uint8Array> {
+  const windowMs = options?.windowMs ?? HOST_STARTUP_READ_WINDOW_MS;
+  const quietMs = options?.quietMs ?? HOST_STARTUP_QUIET_MS;
+  const size = options?.size ?? HOST_STARTUP_READ_SIZE;
+  const now = options?.now ?? Date.now;
+  const started = now();
+  const parts: Uint8Array[] = [];
+
+  while (!options?.stopped?.() && now() - started < windowMs) {
+    let chunk: Uint8Array;
+
+    try {
+      const raw = await readBinary({ timeout: quietMs, size });
+      chunk = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
+    } catch (error) {
+      if (!isQuietRead(error)) {
+        throw error;
+      }
+
+      if (parts.length > 0) {
+        break;
+      }
+
+      continue;
+    }
+
+    if (chunk.length === 0) {
+      if (parts.length > 0) {
+        break;
+      }
+
+      continue;
+    }
+
+    parts.push(chunk);
+  }
+
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+
+  for (const part of parts) {
+    merged.set(part, offset);
+    offset += part.length;
+  }
+
+  return merged;
+}
+
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -119,7 +197,7 @@ export class TauriNodeSerialPort extends EventEmitter {
      * The passive monitor leaves this off. That path drops the first fraction
      * of a second and clears the input buffer, which is the programming-cable
      * behavior already verified for menu 604. The host listener sets it so a
-     * TNC banner is not discarded before the log is attached.
+     * TNC banner is read out of the hub before `watch` clears that buffer.
      */
     retainIncoming?: boolean;
   }) {
@@ -251,6 +329,23 @@ export class TauriNodeSerialPort extends EventEmitter {
       await this.waitForPathThenOpen(generation);
       await this.tauriPort.writeDataTerminalReady(this.dtr);
       await this.tauriPort.writeRequestToSend(this.rts);
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      let startup = new Uint8Array();
+
+      if (this.retainIncoming) {
+        startup = await collectBytesBeforeWatch((readOptions) => this.tauriPort.readBinary(readOptions), {
+          stopped: () => generation !== this.openGeneration,
+        });
+      }
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
       this.discardRx = !this.retainIncoming;
       this.watchHandle = await this.tauriPort.watch(
         {
@@ -290,6 +385,11 @@ export class TauriNodeSerialPort extends EventEmitter {
       }
 
       this.discardRx = false;
+
+      if (startup.length > 0 && generation === this.openGeneration) {
+        this.emit('data', Buffer.from(startup));
+      }
+
       this.isOpen = true;
       this.emit('open');
     } catch (error) {

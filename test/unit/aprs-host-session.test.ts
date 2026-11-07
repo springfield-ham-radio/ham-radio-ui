@@ -375,6 +375,38 @@ describe('APRS host session', () => {
     expect(session.snapshot().rxBytes).toBeGreaterThan(0);
   });
 
+  it('records every byte of an arbitrarily split banner, including a trailing colon, and still requires that colon after Request', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const banner = '0\r\nHB 1200\r\ncmd:';
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+
+    for (let index = 0; index < banner.length; index += 1) {
+      fake.push(Uint8Array.of(banner.charCodeAt(index)));
+    }
+
+    const before = session.snapshot();
+    const recorded = before.trace
+      .filter((line) => line.direction === 'rx')
+      .map((line) => line.text)
+      .join('');
+    expect(recorded).toBe(escapeSerialText(Uint8Array.from([...banner].map((character) => character.charCodeAt(0)))));
+    expect(recorded.endsWith(':')).toBe(true);
+    expect(before.rxChunks).toBe(banner.length);
+    expect(before.rxBytes).toBe(banner.length);
+    expect(before.commandPhase).toBe('idle');
+    expect(fake.writes).toEqual([]);
+
+    await session.requestCommandPrompt();
+    fake.push(Uint8Array.from([...'cmd'].map((character) => character.charCodeAt(0))));
+    expect(session.snapshot().commandPhase).toBe('waiting-prompt');
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+
+    fake.push(Uint8Array.of(':'.charCodeAt(0)));
+    expect(session.snapshot().commandPhase).toBe('prompt');
+    expect(fake.writes).toHaveLength(1);
+  });
+
   it('escapes binary and markup, and drops only the oldest lines', () => {
     const hostile = Uint8Array.from([0x00, 0x11, 0x13, 0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e, 0xc0]);
     const escaped = escapeSerialText(hostile);
