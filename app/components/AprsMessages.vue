@@ -18,7 +18,7 @@ const route = useRoute();
 const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
 const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const host = useAprsHost();
-const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, enterHostKiss, clearTrace } = host;
+const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, requestCommandPrompt, cancelCommand, enterHostKiss, clearTrace } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -30,6 +30,8 @@ const transmitRequested = ref(false);
 const ackRequested = ref(false);
 const ackReason = ref<string | undefined>();
 const enterNote = ref<string | undefined>();
+const commandNote = ref<string | undefined>();
+const flowOff = ref(false);
 const selectedOther = ref<string | undefined>();
 
 if (props.cardId) {
@@ -96,7 +98,7 @@ async function onListen(): Promise<void> {
     // The port list is unavailable outside the desktop shell. Open reports that failure.
   }
 
-  await connect(props.cardId, props.port, props.baud);
+  await connect(props.cardId, props.port, props.baud, flowOff.value ? 'none' : 'software');
 }
 
 async function onDisconnect(): Promise<void> {
@@ -110,6 +112,23 @@ async function onDisconnect(): Promise<void> {
 async function onAck(next: boolean): Promise<void> {
   ackReason.value = props.cardId ? setAckOptIn(props.cardId, next) : 'Save this radio before changing ack replies.';
   ackRequested.value = !ackReason.value && next;
+}
+
+async function onRequestPrompt(): Promise<void> {
+  if (!props.cardId) {
+    return;
+  }
+
+  commandNote.value = (await requestCommandPrompt(props.cardId)) ?? 'Ctrl+C written. Waiting for cmd:.';
+}
+
+function onCancelCommand(): void {
+  if (!props.cardId) {
+    return;
+  }
+
+  cancelCommand(props.cardId);
+  commandNote.value = 'Cancelled.';
 }
 
 async function onEnterHost(): Promise<void> {
@@ -229,6 +248,15 @@ function onCancel(key: string): void {
         <UButton v-else size="sm" color="neutral" variant="outline" icon="i-lucide-unplug" label="Disconnect" @click="onDisconnect" />
       </div>
     </div>
+    <p v-if="!isConnected" class="text-xs text-muted">
+      Host flow control stays software unless you choose otherwise before Listen. Off matches the passive monitor, which is the path that already received. Changing it does not write to the radio, and it applies on the next Listen.
+    </p>
+    <USwitch
+      v-if="!isConnected"
+      v-model="flowOff"
+      label="Flow control off, same as the passive monitor"
+      description="Leave this off to keep software flow. It is not switched for you if the radio stays quiet."
+    />
 
     <UAlert v-if="snapshot?.error" color="error" variant="subtle" icon="i-lucide-circle-alert" title="COM port" :description="snapshot.error" />
 
@@ -240,6 +268,7 @@ function onCancel(key: string): void {
           <UButton size="xs" color="neutral" variant="outline" label="Clear" :disabled="!cardId || traceFixture" @click="onClearTrace" />
         </div>
       </div>
+      <p class="text-xs text-muted">{{ snapshot?.commandDetail ?? 'No command requested.' }}</p>
       <p class="text-xs text-muted">{{ kissStatus }}</p>
       <p class="text-xs text-muted">
         The log stays on this card when you change tabs. Clear removes the lines and keeps the counters. It does not
@@ -328,16 +357,38 @@ function onCancel(key: string): void {
     <div class="grid gap-3 md:grid-cols-2">
       <section>
         <h3 class="mb-1 text-sm font-medium text-highlighted">Host KISS, only when you leave standalone APRS</h3>
-        <UButton
-          class="mb-2"
-          size="sm"
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-arrow-right-left"
-          label="Enter host KISS"
-          :disabled="!cardId || !isConnected"
-          @click="onEnterHost"
-        />
+        <div class="mb-2 flex flex-wrap gap-1.5">
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-terminal"
+            label="Request command prompt"
+            :disabled="!cardId || !isConnected"
+            @click="onRequestPrompt"
+          />
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="ghost"
+            label="Cancel command"
+            :disabled="!cardId || (snapshot?.commandPhase !== 'waiting-prompt' && snapshot?.commandPhase !== 'waiting-accept')"
+            @click="onCancelCommand"
+          />
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-arrow-right-left"
+            label="Enter host KISS"
+            :disabled="!cardId || snapshot?.commandPhase !== 'prompt'"
+            @click="onEnterHost"
+          />
+        </div>
+        <p class="mb-2 text-xs text-muted">
+          Request command prompt writes Ctrl+C three times and no carriage return. Enter host KISS stays off until cmd: arrives after that write. It then writes KISS ON, and writes RESTART only after another cmd:. A prompt from an earlier connection does not count.
+        </p>
+        <p v-if="commandNote" class="mb-2 text-xs text-muted">{{ commandNote }}</p>
         <p v-if="enterNote || snapshot?.hostEnterRequested" class="mb-2 text-xs text-muted">
           {{ snapshot?.kissConfirmed ? 'AX.25 UI seen.' : (enterNote ?? 'Command written. KISS unconfirmed. No message was sent.') }}
         </p>

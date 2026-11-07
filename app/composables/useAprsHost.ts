@@ -53,7 +53,7 @@ export function useAprsHost() {
     });
   }
 
-  async function connect(cardId: string, path: string, baudRate: number): Promise<void> {
+  async function connect(cardId: string, path: string, baudRate: number, flowControl: 'software' | 'none' = 'software'): Promise<void> {
     if (aprsConnectBlocked(lockedPorts.value, path, cardPorts.value[cardId])) {
       const session = sessionFor(cardId);
       session.unavailable('That serial port is already open for CAT, the monitor, or APRS. Disconnect it first.');
@@ -67,7 +67,7 @@ export function useAprsHost() {
     try {
       await session.connect(path, async () => {
         try {
-          return await openAprsHostPort(path, baudRate);
+          return await openAprsHostPort(path, baudRate, flowControl);
         } catch (cause) {
           if (isPortMissingError(cause)) {
             throw new Error(aprsPortMissingMessage(path));
@@ -75,7 +75,7 @@ export function useAprsHost() {
 
           throw cause;
         }
-      });
+      }, { flowControl });
 
       if (session.snapshot().connected) {
         syncHolds(nextAprsPortHolds(cardPorts.value, cardId, path));
@@ -115,6 +115,17 @@ export function useAprsHost() {
     return sessionFor(cardId).setIdentity(call);
   }
 
+  async function requestCommandPrompt(cardId: string): Promise<string | undefined> {
+    const reason = await sessionFor(cardId).requestCommandPrompt();
+    publish(cardId);
+    return reason;
+  }
+
+  function cancelCommand(cardId: string): void {
+    sessionFor(cardId).cancelCommand();
+    publish(cardId);
+  }
+
   async function enterHostKiss(cardId: string): Promise<string | undefined> {
     const reason = await sessionFor(cardId).enterHostKiss();
     publish(cardId);
@@ -144,6 +155,8 @@ export function useAprsHost() {
     cancel,
     setIdentity,
     setAckOptIn,
+    requestCommandPrompt,
+    cancelCommand,
     enterHostKiss,
     clearTrace,
   };

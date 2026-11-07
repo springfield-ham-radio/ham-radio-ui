@@ -23,14 +23,14 @@ export const APRS_KISS_ENTER_TEXT = '\rKISS ON\rRESTART\r';
 
 export const APRS_HOST_SETUP = [
   'Stations is the passive test. Leave the radio showing APRS for that test. This page is the host session and is not required for it.',
-  'Host KISS starts from PACKET12, which you select on the radio. HamBench does not switch the radio until you press Enter host KISS.',
-  'Enter host KISS sends only a carriage return, KISS ON, and RESTART. It does not send a message, a beacon, or HB.',
-  'COM baud is menu 528 on A/E/S and menu 929 on G. HBAUD 1200 is the usual RF packet speed and is not that baud. Menu 529 or 930 is the packet band.',
-  'While the TNC is in host KISS, menus 600–612 do not control it. The radio’s station list and beacon are not promised to keep running, and HamBench does not erase them.',
+  'Request command prompt writes Ctrl+C three times and no carriage return. The A/E and G command lists say one Ctrl+C returns from Converse, and three return from Transparent. SENDPAC defaults to carriage return, which sends a packet in Converse, so no line is sent until cmd: is seen.',
+  'Enter host KISS writes KISS ON only after that cmd:, then RESTART only after another cmd:. It does not send a message, a beacon, HB, or RESET.',
+  'A bare Ctrl+C is not a KISS frame. The D710 manuals do not say an already-KISS TNC answers it. The TM-D700 bytes C0 FF C0 are not sent.',
+  'COM baud is menu 528 on A/E/S and menu 929 on G. HBAUD 1200 is the usual RF packet speed and is not that baud.',
 ] as const;
 
 export const APRS_HOST_RECOVERY = [
-  'HamBench does not power-cycle the radio and does not send the TM-D700 bytes C0 FF C0.',
-  'The IDM says STA and CON blink together 6 times while KISS is being entered. That blink is not a lamp that stays on. On the PACKET display, a steady STA means packets are still in the buffer, and a steady CON means a connection. Lights that are off do not prove KISS failed, and PACKET12 by itself does not prove KISS is on or off.',
-  'On a TM-D710A/E, with the KISS parameter ON, the manual says power OFF then ON enters or exits KISS. That is a toggle. HamBench does not tell you to keep cycling until the blink stops. When a command prompt is back, press [TNC] until APRS is shown and confirm menu 604. The G manual names RESTART for that toggle once command mode is available.',
+  'HamBench does not power-cycle the radio.',
+  'The IDM says STA and CON blink together 6 times while KISS is being entered. That blink is not a lamp that stays on. A steady STA means packets remain in the buffer. A steady CON means connected. Lights that are off do not prove the mode, and PACKET12 alone does not either.',
+  'A/E command list, KISS: “When ON, switching the power OFF then ON causes the TNC to enter (or exit) KISS mode.” G command list, KISS: “When ON, entering a RESTART command causes the TNC to enter (or exit) KISS mode.” Both say enter or exit. Neither says to repeat the power cycle until the blink stops.',
 ] as const;

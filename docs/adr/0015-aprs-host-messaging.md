@@ -14,7 +14,7 @@ The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm 
 
 - ADR 0014 stands for Stations, Map, Packet, and Raw log. That session still opens with flow control off and RTS and DTR low, and it has no write method.
 - Messages are a second session on the same port hold. Listen reads and writes nothing. Connect does not enter KISS and does not send a frame.
-- **Enter host KISS** is a separate control. It writes only the IDM enter sequence. It does not send `HB`, a beacon, or a message.
+- **Request command prompt** writes three Ctrl+C bytes and no carriage return, once. **Enter host KISS** writes `KISS ON` only after `cmd:` on that connection, then `RESTART` only after another `cmd:`. No `HB`, beacon, message, or `RESET`. A prompt does not survive Disconnect.
 - **Allow transmit** defaults off. **Send** writes a KISS data frame only when that switch is on, at most 3 times, 15 seconds apart, and only while the session stays open. Cancel stops it. Disconnect clears the queue. A new Listen does not send it again.
 - Ack generation is a second switch, default off. An ack or reject is accepted only from the addressed station with the same message id. Duplicates of a numbered message are ignored.
 - Host open uses software flow control. Hardware flow control is available in the plugin and is not selected, because the adapter wiring is unverified. RTS and DTR stay low and are not treated as PTT.

@@ -58,9 +58,10 @@ export function aprsOpenKeepsIncoming(role: 'monitor' | 'host'): boolean {
 export function aprsHostSerialOpenOptions(
   path: string,
   baudRate: number,
-): Omit<AprsSerialOpenOptions, 'flowControl'> & { flowControl: 'software' } {
+  flowControl: 'software' | 'none' = 'software',
+): Omit<AprsSerialOpenOptions, 'flowControl'> & { flowControl: 'software' | 'none' } {
   return {
     ...aprsSerialOpenOptions(path, baudRate),
-    flowControl: 'software',
+    flowControl,
   };
 }

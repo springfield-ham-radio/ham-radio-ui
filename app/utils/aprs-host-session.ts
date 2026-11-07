@@ -1,5 +1,13 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
-import { APRS_KISS_ENTER_TEXT } from '~/utils/aprs-kiss-restore';
+import {
+  APRS_COMMAND_INTERRUPT,
+  APRS_COMMAND_WAIT_MS,
+  APRS_KISS_ON_COMMAND,
+  APRS_RESTART_COMMAND,
+  appendCommandBytes,
+  hasCommandPrompt,
+  hasTncError,
+} from '~/utils/aprs-command';
 import { createKissDecoderState, pushKissBytes } from '~/utils/aprs-kiss';
 import {
   APRS_MESSAGE_ATTEMPTS,
@@ -58,6 +66,16 @@ export interface AprsHostSnapshot {
   hostEnterRequested: boolean;
   /** True only after a KISS data frame parses as an AX.25 UI frame. */
   kissConfirmed: boolean;
+  /**
+   * idle: no command on this connection.
+   * waiting-prompt: Ctrl+C was written, cmd: not seen yet.
+   * prompt: cmd: arrived after that write.
+   * waiting-accept: KISS ON was written, waiting for another cmd:.
+   * restart-sent: RESTART was written once. KISS is still unconfirmed.
+   */
+  commandPhase: 'idle' | 'waiting-prompt' | 'prompt' | 'timed-out' | 'cancelled' | 'waiting-accept' | 'restart-sent' | 'rejected' | 'kiss-framed';
+  commandDetail: string;
+  hostFlow: 'software' | 'none';
   trace: AprsTraceLine[];
   traceDropped: number;
   messages: AprsHostMessage[];
@@ -65,12 +83,18 @@ export interface AprsHostSnapshot {
 
 export interface AprsHostSession {
   snapshot(): AprsHostSnapshot;
-  connect(path: string, openPort: () => Promise<AprsHostBytePort>): Promise<void>;
+  connect(path: string, openPort: () => Promise<AprsHostBytePort>, capture?: { flowControl?: 'software' | 'none' }): Promise<void>;
   unavailable(message: string): void;
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
   setAckOptIn(on: boolean): string | undefined;
-  /** Writes the IDM enter sequence. Does not send a message. Refuses when Listen is closed. */
+  /** Writes three Ctrl+C bytes and no carriage return. One shot. */
+  requestCommandPrompt(): Promise<string | undefined>;
+  /** Stops a wait. Does not write. */
+  cancelCommand(): void;
+  /** Check the command timeout against now(). */
+  poll(): void;
+  /** Writes KISS ON only after cmd: on this connection, then RESTART only after another cmd:. */
   enterHostKiss(): Promise<string | undefined>;
   clearTrace(): void;
   send(input: { mine: string; to: string; text: string; transmitRequested: boolean }): Promise<AprsHostMessage>;
@@ -129,6 +153,13 @@ export function createAprsHostSession(options?: {
   let ackOptIn = false;
   let hostEnterRequested = false;
   let kissConfirmed = false;
+  let commandPhase: AprsHostSnapshot['commandPhase'] = 'idle';
+  let commandDetail = 'No command requested.';
+  let commandBytes = new Uint8Array();
+  let commandDeadline = 0;
+  let commandActive = false;
+  let commandTimer: ReturnType<typeof setInterval> | undefined;
+  let hostFlow: 'software' | 'none' = 'software';
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   let identity: Ax25Call | undefined;
@@ -142,7 +173,7 @@ export function createAprsHostSession(options?: {
   }
 
   function record(direction: AprsTraceDirection, bytes: Uint8Array, note: string): void {
-    traceDropped += pushTraceLine(trace, makeTraceLine(clock, direction, bytes, note));
+    traceDropped += pushTraceLine(trace, makeTraceLine(now(), direction, bytes, note));
   }
 
   function stopRetryIfIdle(): void {
@@ -166,19 +197,117 @@ export function createAprsHostSession(options?: {
     return messages.find((message) => message.key === key);
   }
 
-  async function writeFrame(frame: Uint8Array): Promise<boolean> {
-    if (!allowHardwareTransmit || !port?.isOpen || !port.write) {
+  async function writeBytes(bytes: Uint8Array): Promise<boolean> {
+    if (!port?.isOpen || !port.write) {
       return false;
     }
 
     try {
-      await port.write(frame);
+      await port.write(bytes);
     } catch {
       return false;
     }
 
-    bytesWritten += frame.length;
+    bytesWritten += bytes.length;
     return true;
+  }
+
+  async function writeFrame(frame: Uint8Array): Promise<boolean> {
+    if (!allowHardwareTransmit) {
+      return false;
+    }
+
+    return writeBytes(frame);
+  }
+
+  function expireCommand(): void {
+    if (!commandActive || now() < commandDeadline) {
+      return;
+    }
+
+    const waitingForAccept = commandPhase === 'waiting-accept';
+    commandActive = false;
+    commandPhase = 'timed-out';
+    commandDetail = waitingForAccept
+      ? 'No cmd: after KISS ON. RESTART was not sent.'
+      : 'No cmd: prompt. Ctrl+C was not repeated, and no carriage return was sent.';
+    record('note', new Uint8Array(), commandDetail);
+    publish();
+  }
+
+  function armCommandWait(): void {
+    commandBytes = new Uint8Array();
+    commandActive = true;
+    commandDeadline = now() + APRS_COMMAND_WAIT_MS;
+
+    if (options?.useRetryClock && !commandTimer) {
+      commandTimer = setInterval(() => {
+        expireCommand();
+
+        if (!commandActive && commandTimer) {
+          clearInterval(commandTimer);
+          commandTimer = undefined;
+        }
+      }, 250);
+    }
+  }
+
+  function considerCommandReply(kissFrames: number): void {
+    if (!commandActive) {
+      return;
+    }
+
+    if (commandPhase === 'waiting-prompt' && kissFrames > 0 && !hasCommandPrompt(commandBytes)) {
+      commandActive = false;
+      commandPhase = 'kiss-framed';
+      commandDetail = 'KISS-framed bytes arrived. That is not a cmd: prompt. No carriage return was sent.';
+      record('note', new Uint8Array(), commandDetail);
+      return;
+    }
+
+    if (commandPhase === 'waiting-accept' && hasTncError(commandBytes) && !hasCommandPrompt(commandBytes)) {
+      commandActive = false;
+      commandPhase = 'rejected';
+      commandDetail = 'The TNC answered ?EH. RESTART was not sent.';
+      record('note', new Uint8Array(), commandDetail);
+      return;
+    }
+
+    if (!hasCommandPrompt(commandBytes)) {
+      return;
+    }
+
+    if (commandPhase === 'waiting-prompt') {
+      commandActive = false;
+      commandPhase = 'prompt';
+      commandDetail = 'cmd: arrived after Ctrl+C. A carriage return is still not sent until Enter host KISS.';
+      record('note', new Uint8Array(), commandDetail);
+      return;
+    }
+
+    if (commandPhase === 'waiting-accept') {
+      commandActive = false;
+      void acceptKissOn();
+    }
+  }
+
+  async function acceptKissOn(): Promise<void> {
+    const bytes = new TextEncoder().encode(APRS_RESTART_COMMAND);
+    const wrote = await writeBytes(bytes);
+
+    if (!wrote) {
+      commandPhase = 'rejected';
+      commandDetail = 'RESTART was not written. The port did not accept it.';
+      record('note', new Uint8Array(), commandDetail);
+      publish();
+      return;
+    }
+
+    commandPhase = 'restart-sent';
+    hostEnterRequested = true;
+    commandDetail = 'RESTART written once after cmd:. KISS unconfirmed. This is not repeated.';
+    record('tx-command', bytes, commandDetail);
+    publish();
   }
 
   async function transmitWaiting(item: Waiting): Promise<void> {
@@ -336,6 +465,11 @@ export function createAprsHostSession(options?: {
 
     record('rx', chunk, notes.join(', ') || 'empty');
 
+    if (commandActive) {
+      commandBytes = appendCommandBytes(commandBytes, chunk);
+      considerCommandReply(decoded.frames.length);
+    }
+
     void (async () => {
       for (const payload of payloads) {
         if (current !== generation) {
@@ -374,12 +508,15 @@ export function createAprsHostSession(options?: {
         ackOptIn,
         hostEnterRequested,
         kissConfirmed,
+        commandPhase,
+        commandDetail,
+        hostFlow,
         trace: trace.map((line) => ({ ...line })),
         traceDropped,
         messages: messages.map((message) => ({ ...message })),
       };
     },
-    async connect(nextPath, openPort) {
+    async connect(nextPath, openPort, capture) {
       generation += 1;
       const current = generation;
       await this.disconnect();
@@ -393,6 +530,11 @@ export function createAprsHostSession(options?: {
       rxBytes = 0;
       rxChunks = 0;
       kissConfirmed = false;
+      commandPhase = 'idle';
+      commandDetail = 'No command requested on this connection.';
+      commandBytes = new Uint8Array();
+      commandActive = false;
+      hostFlow = capture?.flowControl === 'none' ? 'none' : 'software';
 
       try {
         const opened = await openPort();
@@ -407,7 +549,9 @@ export function createAprsHostSession(options?: {
         record(
           'note',
           new Uint8Array(),
-          'Listen opened. Bytes already waiting are kept. Flow control is software, so 0x11 and 0x13 may be taken by the driver before they are listed. That is a capture limit, not a conclusion. KISS is unconfirmed.',
+          hostFlow === 'none'
+            ? 'Listen opened. Flow control is off, the same as the passive monitor. No command was sent.'
+            : 'Listen opened. Flow control is software. The passive monitor uses none. 0x11 and 0x13 may be taken by the driver before they are listed. That is a capture limit, not a conclusion. No command was sent.',
         );
         opened.on('data', onData);
         opened.on('error', onError);
@@ -431,6 +575,16 @@ export function createAprsHostSession(options?: {
       }
 
       cancelWaiting('Disconnected. This message will not be sent again.');
+      commandActive = false;
+      commandBytes = new Uint8Array();
+      if (commandTimer) {
+        clearInterval(commandTimer);
+        commandTimer = undefined;
+      }
+      if (commandPhase !== 'idle') {
+        commandPhase = 'idle';
+        commandDetail = 'Disconnected. A cmd: prompt from this connection is not kept.';
+      }
       const current = port;
       port = undefined;
       path = undefined;
@@ -469,20 +623,62 @@ export function createAprsHostSession(options?: {
       ackOptIn = on && allowHardwareTransmit;
       return undefined;
     },
-    async enterHostKiss() {
+    async requestCommandPrompt() {
       if (!port?.isOpen || !port.write) {
-        return 'Listen is not open. The radio was not changed.';
+        return 'Listen is not open. Nothing was sent.';
       }
 
-      const bytes = new TextEncoder().encode(APRS_KISS_ENTER_TEXT);
-      const wrote = await writeFrame(bytes);
+      if (commandActive) {
+        return 'Already waiting. Nothing more was sent.';
+      }
+
+      const wrote = await writeBytes(APRS_COMMAND_INTERRUPT);
 
       if (!wrote) {
-        return 'The COM port did not accept the KISS enter command. The radio was not changed.';
+        return 'The port did not accept Ctrl+C. Nothing else was sent.';
       }
 
-      hostEnterRequested = true;
-      record('tx-command', bytes, 'Command written. KISS unconfirmed. No message was sent. This is not repeated.');
+      armCommandWait();
+      commandPhase = 'waiting-prompt';
+      commandDetail = 'Three Ctrl+C bytes written. No carriage return. Waiting for cmd:.';
+      record('tx-command', APRS_COMMAND_INTERRUPT, commandDetail);
+      publish();
+      return undefined;
+    },
+    cancelCommand() {
+      if (!commandActive) {
+        return;
+      }
+
+      commandActive = false;
+      commandPhase = 'cancelled';
+      commandDetail = 'Cancelled. No further command bytes will be written for this request.';
+      record('note', new Uint8Array(), commandDetail);
+      publish();
+    },
+    poll() {
+      expireCommand();
+    },
+    async enterHostKiss() {
+      if (!port?.isOpen || !port.write) {
+        return 'Listen is not open. Nothing was sent.';
+      }
+
+      if (commandPhase !== 'prompt') {
+        return 'No cmd: prompt on this connection. Nothing was sent.';
+      }
+
+      const bytes = new TextEncoder().encode(APRS_KISS_ON_COMMAND);
+      const wrote = await writeBytes(bytes);
+
+      if (!wrote) {
+        return 'The port did not accept KISS ON. RESTART was not sent.';
+      }
+
+      armCommandWait();
+      commandPhase = 'waiting-accept';
+      commandDetail = 'KISS ON written once. Waiting for another cmd: before RESTART.';
+      record('tx-command', bytes, commandDetail);
       publish();
       return undefined;
     },

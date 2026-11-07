@@ -92,8 +92,12 @@ export async function openAprsReceivePort(path: string, baudRate: number): Promi
  * The returned object can write. Callers must not write on connect.
  * Software flow control follows the TNC `XFLOW` default. RTS and DTR stay low.
  */
-export async function openAprsHostPort(path: string, baudRate: number): Promise<AprsBytePort & { write(bytes: Uint8Array): void }> {
-  const options = aprsHostSerialOpenOptions(path, baudRate);
+export async function openAprsHostPort(
+  path: string,
+  baudRate: number,
+  flowControl: 'software' | 'none' = 'software',
+): Promise<AprsBytePort & { write(bytes: Uint8Array): void }> {
+  const options = aprsHostSerialOpenOptions(path, baudRate, flowControl);
   const port = new TauriNodeSerialPort({
     path: options.path,
     baudRate: options.baudRate,

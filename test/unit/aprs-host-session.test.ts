@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call } from '../../app/utils/aprs-ax25.ts';
+import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
 import { createAprsHostSession, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
-import { APRS_KISS_ENTER_TEXT } from '../../app/utils/aprs-kiss-restore.ts';
+import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND } from '../../app/utils/aprs-command.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
 import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
@@ -212,25 +213,110 @@ describe('APRS host session', () => {
   });
 
   it('writes the documented KISS enter command only when asked', async () => {
-    const session = createAprsHostSession();
+    let time = 1_000;
+    const session = createAprsHostSession({ now: () => time });
     const fake = fakePort();
 
     expect(await session.enterHostKiss()).toMatch(/not open/);
+    expect(await session.requestCommandPrompt()).toMatch(/not open/);
     expect(fake.writes).toEqual([]);
 
     await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(await session.enterHostKiss()).toMatch(/No cmd:/);
     expect(fake.writes).toEqual([]);
+
+    fake.push(Uint8Array.from([...'cmd:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(await session.enterHostKiss()).toMatch(/No cmd:/);
+    expect(fake.writes).toEqual([]);
+
+    expect(await session.requestCommandPrompt()).toBeUndefined();
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).not.toContain('\r');
+    expect(await session.requestCommandPrompt()).toMatch(/Already waiting/);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(Uint8Array.from([...'cm'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('waiting-prompt');
+    fake.push(Uint8Array.from([...'d:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('prompt');
+
     expect(await session.enterHostKiss()).toBeUndefined();
-    expect(new TextDecoder().decode(fake.writes[0])).toBe(APRS_KISS_ENTER_TEXT);
-    expect(APRS_KISS_ENTER_TEXT).not.toContain('HB');
-    expect(session.snapshot().hostEnterRequested).toBe(true);
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(2);
+
+    fake.push(Uint8Array.from([...'?EH\r\n'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('rejected');
+    expect(fake.writes).toHaveLength(2);
     expect(session.snapshot().kissConfirmed).toBe(false);
-    expect(session.snapshot().trace.some((line) => line.direction === 'tx-command' && line.note.includes('unconfirmed'))).toBe(true);
+  });
+
+  it('stamps listen notes from the wall clock and does not freeze them', async () => {
+    let time = 1_000;
+    const session = createAprsHostSession({ now: () => time });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    time = 31_000;
+    await session.disconnect();
+    const lines = session.snapshot().trace.filter((line) => line.direction === 'note');
+
+    expect(lines[0]?.at).toBe(1_000);
+    expect(lines.at(-1)?.at).toBe(31_000);
+    expect(formatTrace(lines)).toContain('00:00:01.000');
+    expect(formatTrace(lines)).toContain('00:00:31.000');
+  });
+
+  it('times out a quiet port without a second write, and drops a prompt on reconnect', async () => {
+    let time = 10_000;
+    const session = createAprsHostSession({ now: () => time });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    await session.requestCommandPrompt();
+    time += 4_999;
+    session.poll();
+    expect(session.snapshot().commandPhase).toBe('waiting-prompt');
+    time += 1;
+    session.poll();
+    expect(session.snapshot().commandPhase).toBe('timed-out');
     expect(fake.writes).toHaveLength(1);
 
+    await session.requestCommandPrompt();
+    fake.push(Uint8Array.from([...'cmd:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('prompt');
     await session.disconnect();
+    expect(session.snapshot().commandDetail).toMatch(/not kept/);
     await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(session.snapshot().commandPhase).toBe('idle');
+    expect(await session.enterHostKiss()).toMatch(/Nothing was sent/);
+    expect(fake.writes).toHaveLength(2);
+  });
+
+  it('does not answer a KISS frame with a carriage return, and sends RESTART only after a second prompt', async () => {
+    const session = createAprsHostSession();
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    await session.requestCommandPrompt();
+    fake.push(encodeKissData(Uint8Array.from([1, 2, 3])));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('kiss-framed');
     expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]?.includes(0x0d)).toBe(false);
+
+    session.cancelCommand();
+    await session.requestCommandPrompt();
+    fake.push(Uint8Array.from([...'cmd:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    await session.enterHostKiss();
+    fake.push(Uint8Array.from([...'KISS ON\r\ncmd:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    await settle();
+    expect(new TextDecoder().decode(fake.writes.at(-1) ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(session.snapshot().commandPhase).toBe('restart-sent');
+    expect(session.snapshot().kissConfirmed).toBe(false);
   });
 
   it('keeps a prompt that arrives as the listener is attached, and splits a banner, echo, and error', async () => {
