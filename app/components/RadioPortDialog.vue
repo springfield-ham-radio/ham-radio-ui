@@ -48,10 +48,12 @@ const isOpen = computed({
 const selectedPort = shallowRef<string | undefined>();
 const ports = ref<RadioPortChoice[]>([]);
 const loadingPorts = shallowRef(false);
+const { holdersByPath } = useCatPortLock();
 const unavailable = computed(() => props.unavailablePorts ?? []);
 const portItems = computed(() =>
   markCatBusySerialPorts(ports.value, unavailable.value, {
     omitBusy: props.omitUnavailablePorts ?? false,
+    holders: holdersByPath.value,
   }),
 );
 const canSubmit = computed(() => {

@@ -37,6 +37,7 @@ import {
 } from '~/utils/channel-print';
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
+import { d710AprsFamily } from '~/utils/aprs-d710';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import {
   diffPendingRadioState,
@@ -123,6 +124,8 @@ function modelSupportsCat(model: string | undefined): boolean {
 }
 
 const supportsCat = computed(() => modelSupportsCat(cardRadio.value?.model));
+const supportsAprs = computed(() => d710AprsFamily(cardRadio.value?.model, cardRadio.value?.name) !== undefined);
+const { disconnect: disconnectAprs } = useAprs();
 const anyOpenCardSupportsCat = computed(() =>
   cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model ?? card.guest?.model)),
 );
@@ -134,6 +137,10 @@ const items = computed<TabsItem[]>(() => {
 
   if (supportsCat.value) {
     tabs.push({ label: 'CAT', icon: 'i-lucide-antenna', slot: 'cat' as const, value: 'cat' });
+  }
+
+  if (supportsAprs.value) {
+    tabs.push({ label: 'APRS', icon: 'i-lucide-radio', slot: 'aprs' as const, value: 'aprs' });
   }
 
   tabs.push(
@@ -1081,6 +1088,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   unregisterRadioProvider(radioPrintProvider);
+  const id = injectedCardId?.value;
+
+  if (id) {
+    void disconnectAprs(id);
+  }
 });
 
 async function onSaveSerialLog(): Promise<void> {
@@ -1402,6 +1414,14 @@ async function onSaveSerialLog(): Promise<void> {
       </template>
       <template #cat>
         <RadioCat v-if="supportsCat && activeTab === 'cat'" :saved-radio-id="cardRadio?.id" />
+      </template>
+      <template #aprs>
+        <RadioAprs
+          v-if="supportsAprs && activeTab === 'aprs'"
+          :card-id="cardRadio?.id"
+          :model="cardRadio?.model"
+          :radio-name="cardRadio?.name"
+        />
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />

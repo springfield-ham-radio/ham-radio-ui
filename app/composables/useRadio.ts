@@ -23,9 +23,8 @@ import {
 } from '~/utils/channel-edit';
 import { useCatPortLock } from '~/composables/useCatPortLock';
 import {
-  CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
-  CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
   isCatMemoryTransferBlocked,
+  memoryTransferBlockedMessage,
 } from '~/utils/cat-memory-transfer';
 import {
   type LoadedRadioConfig,
@@ -239,7 +238,7 @@ export function useRadio() {
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const catalogLoaded = useState('radio-catalog-loaded', () => false);
-  const { lockedPorts: catLockedPorts } = useCatPortLock();
+  const { lockedPorts: catLockedPorts, holderFor } = useCatPortLock();
   const { radios } = useSavedRadios();
   const { transferCardId, focusedCardId, cards, openGuestCard, focusCard, beginTransfer, clearTransfer } = useRadioBoard();
   const addToRadioFixtureCardId = useState<string | undefined>('add-to-radio-fixture-card', () => undefined);
@@ -667,9 +666,10 @@ export function useRadio() {
       return false;
     }
 
+    const blocked = memoryTransferBlockedMessage(holderFor(serialPortPath) ?? 'cat');
     toast.add({
-      title: CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
-      description: CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+      title: blocked.title,
+      description: blocked.description,
       color: 'warning',
       icon: 'i-lucide-unplug',
     });

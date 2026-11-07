@@ -21,6 +21,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0011](./0011-channel-pack-url.md) | accepted | Channel pack URL import and manual updates |
 | [0012](./0012-installed-module-version.md) | accepted | Installed module version is the directory version |
 | [0013](./0013-first-run-onboarding-stepper.md) | accepted | First-run onboarding stepper |
+| [0014](./0014-aprs-receive.md) | accepted | Receive-only APRS on the TM-D710 COM port |
 
 Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 

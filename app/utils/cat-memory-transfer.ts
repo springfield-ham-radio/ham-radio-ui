@@ -1,3 +1,4 @@
+import type { SerialSessionKind } from '~/composables/useCatPortLock';
 import type { SerialPortOption } from '~/utils/serial-port-list';
 
 /** Shown when Read or Write targets a port CAT already holds. */
@@ -6,6 +7,21 @@ export const CAT_MEMORY_TRANSFER_BLOCKED_TITLE = 'CAT session is using this port
 /** Toast copy when memory I/O is aimed at a live CAT serial port. */
 export const CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION =
   'Choose another serial port, or disconnect CAT on this one.';
+
+/** Read/Write refusal copy for whichever session already holds the port. */
+export function memoryTransferBlockedMessage(kind: SerialSessionKind = 'cat'): { title: string; description: string } {
+  if (kind === 'aprs') {
+    return {
+      title: 'APRS receive is using this port',
+      description: 'Choose another serial port, or disconnect APRS on this one.',
+    };
+  }
+
+  return {
+    title: CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
+    description: CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
+  };
+}
 
 /**
  * True when CAT already owns `serialPortPath`.
@@ -45,7 +61,7 @@ export function writeToRadioTooltip(options: {
 export function markCatBusySerialPorts(
   ports: SerialPortOption[],
   lockedPorts: readonly string[],
-  options?: { omitBusy?: boolean },
+  options?: { omitBusy?: boolean; holders?: Partial<Record<string, SerialSessionKind>> },
 ): Array<SerialPortOption & { disabled?: boolean; description?: string }> {
   if (options?.omitBusy) {
     return ports.filter((port) => !lockedPorts.includes(port.value));
@@ -56,10 +72,12 @@ export function markCatBusySerialPorts(
       return port;
     }
 
+    const name = options?.holders?.[port.value] === 'aprs' ? 'APRS' : 'CAT';
+
     return {
       ...port,
-      label: `${port.label} (CAT)`,
-      description: 'Disconnect CAT to use this port',
+      label: `${port.label} (${name})`,
+      description: `Disconnect ${name} to use this port`,
       disabled: true,
     };
   });
