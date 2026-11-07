@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
-import {
-  APRS_HOST_RECOVERY,
-  APRS_HOST_SETUP,
-  APRS_HOST_TRANSMIT_BLOCKER,
-} from '~/utils/aprs-kiss-restore';
+import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '~/utils/aprs-kiss-restore';
 import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX } from '~/utils/aprs-message';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
 
@@ -20,7 +16,7 @@ const props = defineProps<{
 const route = useRoute();
 const example = computed(() => import.meta.dev && route.query.fixture === 'aprs-messages');
 const host = useAprsHost();
-const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn } = host;
+const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, enterHostKiss } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -31,6 +27,7 @@ const text = ref('');
 const transmitRequested = ref(false);
 const ackRequested = ref(false);
 const ackReason = ref<string | undefined>();
+const enterNote = ref<string | undefined>();
 const selectedOther = ref<string | undefined>();
 
 if (props.cardId) {
@@ -109,12 +106,16 @@ async function onDisconnect(): Promise<void> {
 }
 
 async function onAck(next: boolean): Promise<void> {
-  ackRequested.value = false;
-  ackReason.value = props.cardId ? setAckOptIn(props.cardId, next) : APRS_HOST_TRANSMIT_BLOCKER;
+  ackReason.value = props.cardId ? setAckOptIn(props.cardId, next) : 'Save this radio before changing ack replies.';
+  ackRequested.value = !ackReason.value && next;
+}
 
-  if (!ackReason.value) {
-    ackRequested.value = next;
+async function onEnterHost(): Promise<void> {
+  if (!props.cardId) {
+    return;
   }
+
+  enterNote.value = (await enterHostKiss(props.cardId)) ?? 'Enter command written. No message was sent. Recovery is the power-cycle toggle below.';
 }
 
 async function onSend(): Promise<void> {
@@ -143,11 +144,11 @@ function onCancel(key: string): void {
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-auto py-2">
     <UAlert
-      color="warning"
+      color="neutral"
       variant="subtle"
-      icon="i-lucide-triangle-alert"
-      title="Host messaging does not transmit in this build"
-      :description="APRS_HOST_TRANSMIT_BLOCKER"
+      icon="i-lucide-radio"
+      title="This is the host session, not the passive APRS test"
+      description="Stations listens with the radio left on APRS. Nothing on that tab asks you to select PACKET. Listen here only reads. Allow transmit and Send write a message only when that switch is on. Enter host KISS is a separate mode change."
     />
 
     <UAlert
@@ -241,12 +242,12 @@ function onCancel(key: string): void {
           <USwitch
             v-model="transmitRequested"
             label="Allow transmit"
-            description="Standalone APRS menus 600–612 do not run during host KISS. This switch does not send by itself, and this build still will not write a frame."
+            description="Off: Send does not write. On: Send writes the message frame. The switch alone does not send, and it does not enter KISS."
           />
           <USwitch
             :model-value="ackRequested"
             label="Reply to incoming messages with an ack"
-            description="An ack is a transmission. It stays off for the connection test."
+            description="Off for a listen test. On: a message addressed to your callsign is answered with an ack frame. That answer is a transmission."
             @update:model-value="onAck"
           />
           <p v-if="ackReason" class="text-xs text-muted">{{ ackReason }}</p>
@@ -256,7 +257,13 @@ function onCancel(key: string): void {
               {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart. Cancel stops it. Disconnect does not send it again.
               An ack counts only when it comes from that station and carries your message id.
             </p>
-            <UButton color="primary" icon="i-lucide-send" label="Send" :disabled="!cardId" @click="onSend" />
+            <UButton
+              color="primary"
+              icon="i-lucide-send"
+              :label="transmitRequested ? 'Send' : 'Send (transmit off)'"
+              :disabled="!cardId"
+              @click="onSend"
+            />
           </div>
         </div>
       </div>
@@ -264,7 +271,20 @@ function onCancel(key: string): void {
 
     <div class="grid gap-3 md:grid-cols-2">
       <section>
-        <h3 class="mb-1 text-sm font-medium text-highlighted">Before using PACKET</h3>
+        <h3 class="mb-1 text-sm font-medium text-highlighted">Host KISS, only when you leave standalone APRS</h3>
+        <UButton
+          class="mb-2"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-arrow-right-left"
+          label="Enter host KISS"
+          :disabled="!cardId || !isConnected"
+          @click="onEnterHost"
+        />
+        <p v-if="enterNote || snapshot?.hostEnterRequested" class="mb-2 text-xs text-muted">
+          {{ enterNote ?? 'Enter host KISS was sent on this connection. No message frame was included.' }}
+        </p>
         <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
           <li v-for="step in APRS_HOST_SETUP" :key="step">{{ step }}</li>
         </ol>

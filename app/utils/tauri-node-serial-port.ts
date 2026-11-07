@@ -109,6 +109,8 @@ export class TauriNodeSerialPort extends EventEmitter {
     stopBits?: number;
     parity?: string;
     rtscts?: boolean;
+    /** Overrides `rtscts` when the TNC command `XFLOW` calls for software or hardware flow control. */
+    flowControl?: 'none' | 'software' | 'hardware';
     rts?: boolean;
     dtr?: boolean;
   }) {
@@ -124,7 +126,12 @@ export class TauriNodeSerialPort extends EventEmitter {
       dataBits: toDataBits(options.dataBits),
       stopBits: toStopBits(options.stopBits),
       parity: toParity(options.parity),
-      flowControl: options.rtscts ? FlowControl.Hardware : FlowControl.None,
+      flowControl:
+        options.flowControl === 'software'
+          ? FlowControl.Software
+          : options.flowControl === 'hardware' || options.rtscts
+            ? FlowControl.Hardware
+            : FlowControl.None,
       serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
     };
 

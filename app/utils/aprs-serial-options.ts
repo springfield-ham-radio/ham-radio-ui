@@ -1,11 +1,11 @@
 import { isAprsComBaudRate, type AprsComBaudRate } from '~/utils/aprs-d710';
 
 /**
- * Line state for the TM-D710 control-head COM jack.
+ * Line state for the passive menu 604 monitor.
  *
- * RTS and DTR stay deasserted and hardware flow control stays off.
- * The PG-5G cable has no RTS, DTR, or PTT conductor. HamBench still
- * refuses to raise those lines so a misplugged adapter is not driven high.
+ * RTS and DTR stay deasserted. Flow control stays off because that is the
+ * session Bryan already verified. The host listener uses software flow
+ * control instead, matching the TNC `XFLOW` default.
  */
 export interface AprsSerialOpenOptions {
   path: string;
@@ -14,6 +14,7 @@ export interface AprsSerialOpenOptions {
   stopBits: 1;
   parity: 'none';
   rtscts: false;
+  flowControl: 'none';
   rts: false;
   dtr: false;
 }
@@ -30,7 +31,27 @@ export function aprsSerialOpenOptions(path: string, baudRate: number): AprsSeria
     stopBits: 1,
     parity: 'none',
     rtscts: false,
+    flowControl: 'none',
     rts: false,
     dtr: false,
+  };
+}
+
+/**
+ * Host KISS port.
+ *
+ * The TNC command list defaults `XFLOW` to ON, which is software flow
+ * control. The Tauri serial plugin supports that mode. Hardware RTS/CTS is
+ * present on the operation-panel COM jack, but a USB adapter may not wire
+ * those pins, so it is not selected here. RTS and DTR are still deasserted:
+ * on this jack they are flow-control lines, not the DATA-terminal PKS key.
+ */
+export function aprsHostSerialOpenOptions(
+  path: string,
+  baudRate: number,
+): Omit<AprsSerialOpenOptions, 'flowControl'> & { flowControl: 'software' } {
+  return {
+    ...aprsSerialOpenOptions(path, baudRate),
+    flowControl: 'software',
   };
 }

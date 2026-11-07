@@ -86,7 +86,7 @@ const connectionBadge = computed(() => {
 
 const statusLine = computed(() => {
   if (isConnected.value && snapshot.value?.path) {
-    return `Listening on ${serialPortLabel(snapshot.value.path, readSerialPortSettings().portAliases)} at ${aprsBaud.value} baud.`;
+    return `Passive APRS monitor on ${serialPortLabel(snapshot.value.path, readSerialPortSettings().portAliases)} at ${aprsBaud.value} baud. Leave the radio showing APRS.`;
   }
 
   if (!savedRadio.value) {
@@ -97,7 +97,7 @@ const statusLine = computed(() => {
     return 'Choose an APRS serial port under Preferences → Radios. The memory port is not used.';
   }
 
-  return `Saved APRS port ${portLabel.value} at ${aprsBaud.value} baud.`;
+  return `Passive APRS. Saved port ${portLabel.value} at ${aprsBaud.value} baud. Leave the radio showing APRS with menu 604 OUTPUT on.`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));

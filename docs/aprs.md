@@ -1,13 +1,13 @@
 # APRS receive (Kenwood TM-D710)
 
-The **APRS** tab listens to the built-in TNC on the control-head **COM** jack. Stations, the map, packet fields, and the raw log are the menu 604 monitor. That monitor does not transmit, send TNC commands, upload to APRS-IS, igate, beacon, or change radio menus. **Messages** is a separate host listener on the same jack. This build does not write KISS frames or TNC commands there either. See [Host messaging](#host-messaging).
+The **APRS** tab listens to the built-in TNC on the control-head **COM** jack. Stations, the map, packet fields, and the raw log are the menu 604 monitor. That monitor does not transmit, send TNC commands, upload to APRS-IS, igate, beacon, or change radio menus. Leave the radio showing **APRS** for that test. **Messages** is a separate host session on the same jack. See [Host messaging](#host-messaging).
 
 The PC jack on the TX/RX unit is the programming and CAT port. It is a different connector and a different baud menu. The DATA mini-DIN is for an external TNC; its PKS pin keys the transmitter when low. Do not use either jack for this tab.
 
 ## What Bryan needs to confirm
 
 - The faceplate is TM-D710A, E, or S, or it is TM-D710G, GA, GE, or GS. A saved radio named only "TM-D710" shows both menu sets.
-- The cable is the optional PG-5G, or the same 2.5 mm 3-conductor wiring, in the control-head COM jack. Tip is radio TXD, ring is radio RXD, sleeve is ground. There is no PTT wire on that plug.
+- The cable is on the operation-panel **COM** jack. That jack is an 8-pin connector: RTS out, CTS in, TXD out, GND, RXD in, and three unused pins (TM-D710A/E PACKET OPERATION, “PC/COM terminal pins”; the G manual lists the same COM pins). The optional PG-5G is the cable from that jack to a 9-pin serial connector. The 2.5 mm 3-conductor plug is the **GPS** jack, not COM. Whether a USB adapter actually wires RTS and CTS is not known from software.
 - Menu 604 OUTPUT is ON. The Kenwood default is OFF, so a correct cable still produces no lines until that menu is ON.
 - The radio's own APRS beacon schedule is whatever is already programmed. HamBench does not change it. A beacon that is already enabled can still go out on the air.
 
@@ -23,7 +23,7 @@ Sources:
 
 - [TM-D710GA/GE instruction manual, B62-2562-10](https://manuals.jvckenwood.com/download/files/B62-2562-10.pdf) — menu table: 604 COM port output, 601 internal TNC, 920 PC port baud, 929 COM port baud, 930 packet data band. Panel: COM is the PC connection for the built-in TNC; GPS is the separate 2.5 mm jack for a GPS or weather station.
 - [TM-D710G CD-ROM English V1.01](https://kasc.kenwood.com/files/prod/2681/5/TM-D710GE_GA_Instruction_Manual_CD-ROM_V1.01.pdf) — PACKET: the COM terminal is on the operation panel; do not connect the computer to the PC terminal. DATA is unused with the built-in TNC. PKS low transmits and mutes the microphone. Menu 929 COM PORT SPEED. Menu 920 PC PORT SPEED.
-- [Getting More Acquainted with APRS and EchoLink](https://www.kenwood.com/i/products/info/amateur/pdf/TM-D710A_E_GA_GE_IDM.pdf) — PG-5G from the operation-panel COM port to a 9-pin serial port. KISS is entered by a command from the computer. HamBench does not send that command.
+- [Getting More Acquainted with APRS and EchoLink](https://www.kenwood.com/i/products/info/amateur/pdf/TM-D710A_E_GA_GE_IDM.pdf) — PG-5G from the operation-panel COM port to a 9-pin serial port. KISS is entered from PACKET12 by carriage return, `KISS ON`, and `RESTART`. HamBench sends that only from **Enter host KISS** on the Messages tab.
 - [TM-D710/S/G/GS in-depth manual](https://origin.kenwood.com/jp/products/amateur/mobile/tm_d710_d710s/tm-d710_s_g_gs_in-depth_manual_j.pdf) — COM baud is menu 528 on TM-D710/S and menu 929 on TM-D710G/GS.
 
 The A/E instruction manual uses the same APRS menu numbers and the 5xx port menus: COM speed **528**, PC speed **519**, packet data band **529**, internal TNC **601**, COM output **604**. Those numbers are the ones printed in the Kenwood TM-D710A/E PACKET OPERATION and APRS chapters (COM PORT Speed, PC Port Speed, Data Band, INTERNAL TNC, COM PORT ON/OFF).
@@ -42,7 +42,7 @@ HamBench does not change these. Set them on the radio. Under **Preferences → R
 5. Leave menu **519** / **920** (PC port) and menu **529** / **930** (packet-mode data band) as they are. They do not select this feed.
 6. In HamBench, set that same COM baud and the PG-5G adapter on the saved radio, then **Connect**. **Disconnect** closes the handle. Read, Write, and CAT will not take that adapter until then.
 
-RTS and DTR are written deasserted, and hardware flow control is off. The session never writes a payload byte. No TNC command is proposed for automatic send: menu 604 already enables the monitor copy, and commands such as `KISS ON` or `RESTART` are how a program takes over the TNC and can transmit. `MON ON` is the PACKET-mode default in the TNC command list and is not sent either.
+The passive session writes RTS and DTR deasserted and leaves flow control off. That is the setup already confirmed on the air. It never writes a payload byte. `KISS ON` and `RESTART` are not sent from Stations. `MON ON` is the PACKET-mode default in the TNC command list and is not sent either.
 
 ## What the tab shows
 
@@ -60,14 +60,14 @@ Packet format follows [APRS Protocol Reference 1.0.1](https://www.aprs.org/doc/A
 
 ## Host messaging
 
-Messages use the same COM jack and the same saved port. They do not use the memory port. The monitor stays the default: **Connect** on Stations only reads menu 604 text. **Listen** on Messages only reads. Neither button sends `KISS ON`, `RESTART`, `HB`, or a message.
+Messages use the same COM jack and the same saved port. They do not use the memory port. **Connect** on Stations only reads menu 604 text and does not mention PACKET. **Listen** on Messages only reads. **Allow transmit** defaults off: **Send** then writes nothing and says so. With the switch on, **Send** writes one APRS UI message in a KISS data frame, up to 3 times, 15 seconds apart. **Cancel** stops that. **Disconnect** drops the queue, and the next Listen does not send it again. **Reply with an ack** is a separate switch and defaults off, because an ack is also a transmission. An ack or reject counts only when it comes from the station you addressed and carries your message number.
 
-Kenwood's [Getting More Acquainted with APRS and EchoLink](https://www.kenwood.com/i/products/info/amateur/pdf/TM-D710A_E_GA_GE_IDM.pdf) (PC APRS, about pages 26–27) says the radio has to show **PACKET12**, and the PC then sends `KISS ON` and `RESTART`. The G CD-ROM command list says that while KISS is ON, `RESTART` enters or leaves KISS. The A/E command list says that while KISS is ON, powering the radio off and on enters or leaves KISS. Those are command-mode instructions. They do not document a host byte sequence that leaves KISS after the TNC is already in it. HamBench does not send the D700 init file, does not power-cycle the radio, and does not invent that exit sequence.
+**Enter host KISS** is not Listen and not Send. It writes a carriage return, `KISS ON`, and `RESTART`, which is the sequence in the IDM, and nothing else. The radio must already be on PACKET12. Menus 600–612 do not control the TNC after that. The radio’s station list and beacon are not promised to keep running, and HamBench does not erase them. Menu 604 is not a message input. Menu 602 is GPS or weather. `HBAUD` 1200 is the usual RF speed and is not menu 528 or 929.
 
-Until that exit is verified, **Allow transmit** and **Send** do not write. An incoming ack is also a transmission, and that switch stays off. A message is not queued across Disconnect or a restart.
+Recovery is manual. The A/E command list says that while KISS is ON, power OFF then ON enters or exits KISS. That is a toggle: read the display, and if STA and CON blink together, power OFF then ON once more. Then press **[TNC]** until **APRS** is shown and confirm menu 604. The G command list names `RESTART` for the same toggle; that command is available once a command prompt is back, because `RESTART` means the TNC behaves as if power was cycled. HamBench does not power-cycle the radio. The TM-D700 bytes `C0 FF C0` are not used: the IDM says D700 PC commands are not compatible with the D710.
 
-Menus 600–612 do not control the TNC during host KISS. The radio's own station list, messages, and beacon are not promised to keep running, and HamBench does not erase them. Menu 604 is the monitor copy, not a way to inject a message. Menu 602 is GPS or weather input, not message input. `HBAUD` 1200 is the usual RF packet speed and is not menu 528 or 929.
+Converse mode can return to command with Ctrl+C, which is documented. It was not used, because the TNC would own `MYCALL`, `UNPROTO`, and connected-mode `RETRY`, and APRS acks are the host’s job.
 
-The PG-5G is TXD, RXD, and ground. RTS and DTR are not on that plug and are not PTT. The TNC command `XFLOW` defaults to ON (software flow control). That handshake is not verified here, so it is not used as permission to transmit.
+`XFLOW` defaults to ON, software flow control. The host port asks the Tauri serial plugin for software flow control. Hardware RTS/CTS exists on the COM jack, but it is not selected, because a USB adapter may leave those pins unwired. RTS and DTR are driven low. They are not the DATA-terminal PKS key. EchoLink’s use of RTS as PTT is the PG-5H data cable, not this TNC session. Whether this particular adapter’s TX and handshake lines work is still a hardware question, separate from the mock-tested frames.
 
-The TNC has 4 kB of KISS buffer. A partial frame longer than that is dropped. Message text is at most 67 characters, the addressee is a 9-character field, and a message number is 1 to 5 characters, as in APRS Protocol Reference 1.0.1. When a future build is allowed to transmit, a user message is sent at most 3 times, 15 seconds apart, and only after **Allow transmit** and **Send**. Cancel stops it. An ack is accepted only from the station that was addressed and only with that message number. See [ADR 0015](adr/0015-aprs-host-messaging.md).
+The TNC has 4 kB of KISS buffer. A partial frame longer than that is dropped. Message text is at most 67 characters. See [ADR 0015](adr/0015-aprs-host-messaging.md).

@@ -1,5 +1,5 @@
 import { canonicalAx25Call, formatAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
-import { APRS_HOST_HARDWARE_TRANSMIT, APRS_HOST_TRANSMIT_BLOCKER } from '~/utils/aprs-kiss-restore';
+import { APRS_KISS_ENTER_TEXT } from '~/utils/aprs-kiss-restore';
 import { createKissDecoderState, pushKissBytes } from '~/utils/aprs-kiss';
 import {
   APRS_MESSAGE_ATTEMPTS,
@@ -40,6 +40,8 @@ export interface AprsHostSnapshot {
   bytesWritten: number;
   hardwareTransmit: boolean;
   ackOptIn: boolean;
+  /** True after Enter host KISS has written the documented command. Not set by Listen. */
+  hostEnterRequested: boolean;
   messages: AprsHostMessage[];
 }
 
@@ -50,6 +52,8 @@ export interface AprsHostSession {
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
   setAckOptIn(on: boolean): string | undefined;
+  /** Writes the IDM enter sequence. Does not send a message. Refuses when Listen is closed. */
+  enterHostKiss(): Promise<string | undefined>;
   send(input: { mine: string; to: string; text: string; transmitRequested: boolean }): Promise<AprsHostMessage>;
   cancel(key: string): void;
   /** Move the test clock. Waiting messages retry or time out. Disconnect clears them first. */
@@ -77,9 +81,13 @@ interface Waiting {
  * it is also a transmission. Disconnect cancels waiting messages and does not
  * send an exit command. A later connect does not send them again.
  */
-export function createAprsHostSession(options?: { now?: () => number; allowHardwareTransmit?: boolean }): AprsHostSession {
+export function createAprsHostSession(options?: {
+  now?: () => number;
+  allowHardwareTransmit?: boolean;
+  useRetryClock?: boolean;
+}): AprsHostSession {
   const now = options?.now ?? (() => Date.now());
-  const allowHardwareTransmit = options?.allowHardwareTransmit ?? APRS_HOST_HARDWARE_TRANSMIT;
+  const allowHardwareTransmit = options?.allowHardwareTransmit !== false;
   const kiss = createKissDecoderState();
   const listeners = new Set<() => void>();
   const messages: AprsHostMessage[] = [];
@@ -95,12 +103,21 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
   let bytesWritten = 0;
   let sequence = 0;
   let ackOptIn = false;
+  let hostEnterRequested = false;
   let identity: Ax25Call | undefined;
   let clock = now();
+  let retryTimer: ReturnType<typeof setInterval> | undefined;
 
   function publish(): void {
     for (const listener of listeners) {
       listener();
+    }
+  }
+
+  function stopRetryIfIdle(): void {
+    if (waiting.size === 0 && retryTimer) {
+      clearInterval(retryTimer);
+      retryTimer = undefined;
     }
   }
 
@@ -147,7 +164,7 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
 
       if (current) {
         current.status = 'blocked';
-        current.detail = frame ? APRS_HOST_TRANSMIT_BLOCKER : 'The message could not be encoded';
+        current.detail = frame ? 'The COM port did not accept the frame.' : 'The message could not be encoded';
       }
 
       return;
@@ -282,6 +299,7 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
         bytesWritten,
         hardwareTransmit: allowHardwareTransmit,
         ackOptIn,
+        hostEnterRequested,
         messages: messages.map((message) => ({ ...message })),
       };
     },
@@ -320,6 +338,11 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
     },
     async disconnect() {
       generation += 1;
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = undefined;
+      }
+
       cancelWaiting('Disconnected. This message will not be sent again.');
       const current = port;
       port = undefined;
@@ -352,10 +375,26 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
     setAckOptIn(on) {
       if (on && !allowHardwareTransmit) {
         ackOptIn = false;
-        return APRS_HOST_TRANSMIT_BLOCKER;
+        return 'Ack replies are off.';
       }
 
       ackOptIn = on && allowHardwareTransmit;
+      return undefined;
+    },
+    async enterHostKiss() {
+      if (!port?.isOpen || !port.write) {
+        return 'Listen is not open. The radio was not changed.';
+      }
+
+      const bytes = new TextEncoder().encode(APRS_KISS_ENTER_TEXT);
+      const wrote = await writeFrame(bytes);
+
+      if (!wrote) {
+        return 'The COM port did not accept the KISS enter command. The radio was not changed.';
+      }
+
+      hostEnterRequested = true;
+      publish();
       return undefined;
     },
     async send(input) {
@@ -393,7 +432,13 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
       }
 
       if (!allowHardwareTransmit) {
-        return blocked(APRS_HOST_TRANSMIT_BLOCKER);
+        return blocked('Transmit is off. Nothing was sent.');
+      }
+
+      if (options?.useRetryClock && !retryTimer) {
+        retryTimer = setInterval(() => {
+          void this.advance(1000);
+        }, 1000);
       }
 
       const id = sequence.toString(36);
@@ -418,6 +463,7 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
         at: clock,
       });
       await transmitWaiting(item);
+      stopRetryIfIdle();
       publish();
       return { ...(row(key) as AprsHostMessage) };
     },
@@ -428,6 +474,7 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
       if (current?.status === 'waiting-ack') {
         current.status = 'cancelled';
         current.detail = 'Cancelled. No further transmissions.';
+        stopRetryIfIdle();
         publish();
       }
     },
@@ -454,6 +501,7 @@ export function createAprsHostSession(options?: { now?: () => number; allowHardw
         await transmitWaiting(item);
       }
 
+      stopRetryIfIdle();
       publish();
     },
     subscribe(listener) {

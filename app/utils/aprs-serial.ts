@@ -1,6 +1,6 @@
 import { TauriNodeSerialPort } from '~/utils/tauri-node-serial-port';
 import type { AprsBytePort } from '~/utils/aprs-session';
-import { aprsSerialOpenOptions } from '~/utils/aprs-serial-options';
+import { aprsHostSerialOpenOptions, aprsSerialOpenOptions } from '~/utils/aprs-serial-options';
 
 const OPEN_TIMEOUT_MS = 5000;
 
@@ -19,6 +19,7 @@ export async function openAprsReceivePort(path: string, baudRate: number): Promi
     stopBits: options.stopBits,
     parity: options.parity,
     rtscts: false,
+    flowControl: 'none',
     rts: false,
     dtr: false,
   });
@@ -67,6 +68,90 @@ export async function openAprsReceivePort(path: string, baudRate: number): Promi
       }
 
       errorListener = undefined;
+    },
+    close() {
+      port.off('data', onData);
+      port.off('error', onError);
+      return new Promise<void>((resolve, reject) => {
+        port.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    },
+  };
+}
+
+/**
+ * Open the COM port for host KISS.
+ *
+ * The returned object can write. Callers must not write on connect.
+ * Software flow control follows the TNC `XFLOW` default. RTS and DTR stay low.
+ */
+export async function openAprsHostPort(path: string, baudRate: number): Promise<AprsBytePort & { write(bytes: Uint8Array): void }> {
+  const options = aprsHostSerialOpenOptions(path, baudRate);
+  const port = new TauriNodeSerialPort({
+    path: options.path,
+    baudRate: options.baudRate,
+    dataBits: options.dataBits,
+    stopBits: options.stopBits,
+    parity: options.parity,
+    flowControl: options.flowControl,
+    rts: false,
+    dtr: false,
+  });
+  const queued: Uint8Array[] = [];
+  let dataListener: ((chunk: Uint8Array) => void) | undefined;
+  let errorListener: ((error: Error) => void) | undefined;
+
+  const onData = (chunk: Uint8Array): void => {
+    if (dataListener) {
+      dataListener(chunk);
+      return;
+    }
+
+    queued.push(chunk);
+  };
+
+  const onError = (cause: Error): void => {
+    errorListener?.(cause);
+  };
+
+  port.on('data', onData);
+  port.on('error', onError);
+  await waitForAprsPort(port);
+
+  return {
+    get isOpen() {
+      return port.isOpen;
+    },
+    on(event, handler) {
+      if (event === 'data') {
+        dataListener = handler as (chunk: Uint8Array) => void;
+
+        for (const chunk of queued.splice(0)) {
+          dataListener(chunk);
+        }
+
+        return;
+      }
+
+      errorListener = handler as (error: Error) => void;
+    },
+    off(event) {
+      if (event === 'data') {
+        dataListener = undefined;
+        return;
+      }
+
+      errorListener = undefined;
+    },
+    write(bytes) {
+      port.write(bytes);
     },
     close() {
       port.off('data', onData);

@@ -6,19 +6,24 @@
 
 ## Context
 
-Bryan approved trying two-way APRS messages after the tradeoff was written down. The menu 604 monitor cannot carry a host message: Kenwood's IDM enters PC APRS from PACKET mode with `KISS ON` and `RESTART`, and menus 600–612 do not apply while that host session is running. The same manuals do not document a host byte sequence that leaves KISS once the TNC is already in it. The PG-5G has no RTS or DTR conductor, and `XFLOW` software flow control is not verified on this cable.
+The menu 604 monitor is confirmed on the air and must keep writing nothing. Host messages need KISS, which the IDM enters from PACKET12 with a carriage return, `KISS ON`, and `RESTART`. The A/E command list says that while KISS is ON, powering the radio off and on enters or exits KISS. The G list describes that toggle as `RESTART`. Neither English D710 text documents the TM-D700 bytes `C0 FF C0`, and the IDM says those PC commands are not compatible.
+
+The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm plug is the GPS jack. PG-5G is the COM-to-DE-9 cable. `XFLOW` defaults to software flow control. The Tauri serial plugin can select none, software, or hardware. A particular USB adapter’s RTS/CTS wiring is not known from here.
 
 ## Decision
 
-- The monitor in ADR 0014 is unchanged. It never writes, and it remains the path behind Stations, Map, Packet, and Raw log.
-- Messages are a second session on the same saved COM port and the same port-hold list. CAT, memory read/write, the monitor, and this listener cannot hold that adapter together. Disconnect releases the hold and does not send an exit command.
-- This build does not send `KISS ON`, `KISS OFF`, `RESTART`, `HB`, a KISS return frame, or any message frame. It does not power-cycle the radio and it does not copy D700 init bytes. It does not read or write `MYCALL`, `UNPROTO`, `KISS`, `XFLOW`, or `HBAUD`.
-- **Allow transmit** and **Send** are separate from Listen. Opening the composer does not transmit. An ack reply is a third control and stays off, because an ack is also a transmission. Nothing is retried after Disconnect or a new connect.
-- The KISS codec, AX.25 UI frame, and retry state machine exist so a later build can turn on writes without guessing the framing. Hardware transmit stays off until a Kenwood-documented KISS exit, and a verified flow-control behavior for this cable, are both in hand. Tests may enable writes only against an in-memory port.
-- No APRS-IS, igate, beacon, or GPS. No new registry or driver fields. A module `aprs.mode` other than `monitor` is still ignored.
+- ADR 0014 stands for Stations, Map, Packet, and Raw log. That session still opens with flow control off and RTS and DTR low, and it has no write method.
+- Messages are a second session on the same port hold. Listen reads and writes nothing. Connect does not enter KISS and does not send a frame.
+- **Enter host KISS** is a separate control. It writes only the IDM enter sequence. It does not send `HB`, a beacon, or a message.
+- **Allow transmit** defaults off. **Send** writes a KISS data frame only when that switch is on, at most 3 times, 15 seconds apart, and only while the session stays open. Cancel stops it. Disconnect clears the queue. A new Listen does not send it again.
+- Ack generation is a second switch, default off. An ack or reject is accepted only from the addressed station with the same message id. Duplicates of a numbered message are ignored.
+- Host open uses software flow control. Hardware flow control is available in the plugin and is not selected, because the adapter wiring is unverified. RTS and DTR stay low and are not treated as PTT.
+- Converse mode was not adopted. Ctrl+C would leave it, but the TNC would own the callsign, path, and connected-mode retry.
+- No APRS-IS, igate, beacon, or GPS. No registry or driver change.
 
 ## Consequences
 
-- The first hardware check is Listen, then Disconnect, with transmit off. The radio must already be in whatever mode the operator set. HamBench will not change it.
-- If the operator enters KISS with another program, they leave it with the Kenwood procedure they used, then press **[TNC]** until **APRS** is shown and confirm menu 604 before using the monitor.
-- A future transmit build still does not need a driver or registry change for the frame format. It must not ship until the exit and the flow-control check are documented.
+- The passive test stays: radio showing APRS, menu 604 ON, Stations **Connect**. Do not select PACKET for that test.
+- A listen test on Messages, with both switches off and without **Enter host KISS**, writes nothing.
+- Leaving KISS is the operator’s power-cycle toggle, then **[TNC]** until APRS is shown. One cycle is not guaranteed. HamBench does not perform it.
+- A real transmission still requires **Allow transmit** and **Send**, and the radio already in host KISS. That hardware step is not authorized by this record.

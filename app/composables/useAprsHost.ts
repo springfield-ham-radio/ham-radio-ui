@@ -1,9 +1,8 @@
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
-import { APRS_HOST_HARDWARE_TRANSMIT } from '~/utils/aprs-kiss-restore';
 import { createAprsHostSession, type AprsHostMessage, type AprsHostSession, type AprsHostSnapshot } from '~/utils/aprs-host-session';
 import { aprsHoldPaths, nextAprsPortHolds } from '~/utils/aprs-session';
-import { openAprsReceivePort } from '~/utils/aprs-serial';
+import { openAprsHostPort } from '~/utils/aprs-serial';
 import { isPortMissingError } from '~/utils/serial-port-reconnect';
 
 const sessions = new Map<string, AprsHostSession>();
@@ -15,7 +14,7 @@ function sessionFor(cardId: string): AprsHostSession {
     return existing;
   }
 
-  const created = createAprsHostSession({ allowHardwareTransmit: APRS_HOST_HARDWARE_TRANSMIT });
+  const created = createAprsHostSession({ useRetryClock: true });
   sessions.set(cardId, created);
   return created;
 }
@@ -25,7 +24,7 @@ function sessionFor(cardId: string): AprsHostSession {
  *
  * This is a different session from the menu 604 monitor. It uses the same
  * port hold list, so CAT, memory transfer, and the monitor cannot open the
- * adapter at the same time. The port object has no write method.
+ * adapter at the same time. Listen does not write. Message frames are written only after Allow transmit and Send.
  */
 export function useAprsHost() {
   const { lockedPorts, setHolderPorts } = useCatPortLock();
@@ -68,7 +67,7 @@ export function useAprsHost() {
     try {
       await session.connect(path, async () => {
         try {
-          return await openAprsReceivePort(path, baudRate);
+          return await openAprsHostPort(path, baudRate);
         } catch (cause) {
           if (isPortMissingError(cause)) {
             throw new Error(aprsPortMissingMessage(path));
@@ -116,11 +115,30 @@ export function useAprsHost() {
     return sessionFor(cardId).setIdentity(call);
   }
 
+  async function enterHostKiss(cardId: string): Promise<string | undefined> {
+    const reason = await sessionFor(cardId).enterHostKiss();
+    publish(cardId);
+    return reason;
+  }
+
   function setAckOptIn(cardId: string, on: boolean): string | undefined {
     const reason = sessionFor(cardId).setAckOptIn(on);
     publish(cardId);
     return reason;
   }
 
-  return { snapshots, connecting, cardPorts, watchCard, connect, unavailable, disconnect, send, cancel, setIdentity, setAckOptIn };
+  return {
+    snapshots,
+    connecting,
+    cardPorts,
+    watchCard,
+    connect,
+    unavailable,
+    disconnect,
+    send,
+    cancel,
+    setIdentity,
+    setAckOptIn,
+    enterHostKiss,
+  };
 }

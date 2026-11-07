@@ -153,6 +153,7 @@ describe('APRS receive session', () => {
       stopBits: 1,
       parity: 'none',
       rtscts: false,
+      flowControl: 'none',
       rts: false,
       dtr: false,
     });

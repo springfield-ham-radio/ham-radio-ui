@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call } from '../../app/utils/aprs-ax25.ts';
 import { createAprsHostSession, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
-import { APRS_HOST_HARDWARE_TRANSMIT, APRS_HOST_TRANSMIT_BLOCKER } from '../../app/utils/aprs-kiss-restore.ts';
+import { APRS_KISS_ENTER_TEXT } from '../../app/utils/aprs-kiss-restore.ts';
+import { aprsHostSerialOpenOptions, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
 import { aprsHoldPaths } from '../../app/utils/aprs-session.ts';
 
@@ -44,26 +45,30 @@ async function settle(): Promise<void> {
 const draft = { mine: 'N0TST', to: 'K5KTF-4', text: 'Hello' };
 
 describe('APRS host session', () => {
-  it('does not write on connect, and the app build cannot transmit', () => {
-    expect(APRS_HOST_HARDWARE_TRANSMIT).toBe(false);
+  it('keeps the passive port without flow control and uses software flow for the host', () => {
     expect(aprsHoldPaths({ a: '/dev/monitor' }, { b: '/dev/host' })).toEqual(['/dev/monitor', '/dev/host']);
+    expect(aprsSerialOpenOptions('/dev/cu.pg5g', 9600).flowControl).toBe('none');
+    expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).flowControl).toBe('software');
+    expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).rts).toBe(false);
+    expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).dtr).toBe(false);
   });
 
-  it('opens and closes without writing, including when transmit was requested', async () => {
+  it('opens and closes without writing until transmit is requested', async () => {
     const session = createAprsHostSession();
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
 
     expect(session.snapshot().connected).toBe(true);
     expect(session.snapshot().bytesWritten).toBe(0);
+    expect(session.snapshot().hostEnterRequested).toBe(false);
     expect(fake.writes).toEqual([]);
 
-    const blocked = await session.send({ ...draft, transmitRequested: true });
+    const held = await session.send({ ...draft, transmitRequested: false });
 
-    expect(blocked.status).toBe('blocked');
-    expect(blocked.detail).toBe(APRS_HOST_TRANSMIT_BLOCKER);
+    expect(held.status).toBe('blocked');
+    expect(held.detail).toBe('Transmit is off. Nothing was sent.');
     expect(fake.writes).toEqual([]);
-    expect(session.setAckOptIn(true)).toBe(APRS_HOST_TRANSMIT_BLOCKER);
+    expect(session.setAckOptIn(false)).toBeUndefined();
     expect(session.snapshot().ackOptIn).toBe(false);
 
     fake.push(Uint8Array.from([...'K5KTF-4>APRS,WIDE1-1:Hi\r'].map((character) => character.charCodeAt(0))));
@@ -199,5 +204,25 @@ describe('APRS host session', () => {
 
     expect(invalid.status).toBe('blocked');
     expect(fake.writes).toEqual([]);
+  });
+
+  it('writes the documented KISS enter command only when asked', async () => {
+    const session = createAprsHostSession();
+    const fake = fakePort();
+
+    expect(await session.enterHostKiss()).toMatch(/not open/);
+    expect(fake.writes).toEqual([]);
+
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(fake.writes).toEqual([]);
+    expect(await session.enterHostKiss()).toBeUndefined();
+    expect(new TextDecoder().decode(fake.writes[0])).toBe(APRS_KISS_ENTER_TEXT);
+    expect(APRS_KISS_ENTER_TEXT).not.toContain('HB');
+    expect(session.snapshot().hostEnterRequested).toBe(true);
+    expect(fake.writes).toHaveLength(1);
+
+    await session.disconnect();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(fake.writes).toHaveLength(1);
   });
 });
