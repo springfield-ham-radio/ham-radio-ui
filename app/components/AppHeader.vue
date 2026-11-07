@@ -30,6 +30,7 @@ const sectionItems = computed<TabsItem[]>(() => {
     { label: 'Map', icon: 'i-lucide-map', value: 'map' },
     { label: 'Propagation', icon: 'i-lucide-sun', value: 'propagation' },
     { label: 'WaveBench', icon: 'i-lucide-audio-waveform', value: 'wavebench' },
+    { label: 'Reference', icon: 'i-lucide-book-open', value: 'reference' },
   ];
 
   if (developerMode.value) {
@@ -61,6 +62,10 @@ const activeSection = computed({
       return 'wavebench';
     }
 
+    if (route.path.startsWith('/reference')) {
+      return 'reference';
+    }
+
     if (route.path.startsWith('/driver')) {
       return 'driver';
     }
@@ -90,6 +95,11 @@ const activeSection = computed({
 
     if (value === 'wavebench') {
       void router.push('/wavebench');
+      return;
+    }
+
+    if (value === 'reference') {
+      void router.push('/reference');
       return;
     }
 
@@ -193,9 +203,9 @@ defineShortcuts(memoryShortcuts);
         color="primary"
         variant="pill"
         size="sm"
-        class="pointer-events-auto w-auto"
+        class="pointer-events-auto max-w-full overflow-x-auto"
         :ui="{
-          list: 'w-auto',
+          list: 'w-max',
           trigger: 'grow-0 data-[state=active]:text-highlighted',
           leadingIcon: 'text-current',
           indicator: 'bg-primary/35 shadow-none',
