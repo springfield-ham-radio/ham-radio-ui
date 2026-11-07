@@ -1,3 +1,9 @@
+## [3.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.3...v3.4.0) (2026-11-07)
+
+### Features
+
+* add offline reference and Morse practice ([#201](https://github.com/springfield-ham-radio/ham-radio-ui/issues/201)) ([ffb6453](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ffb64530c67a5e9e0b25db611a4ae7814467ea24))
+
 ## [3.3.3](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.2...v3.3.3) (2026-11-07)
 
 ### Bug Fixes
