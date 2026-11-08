@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { canonicalAx25Call, encodeAx25Ui } from '../../app/utils/aprs-ax25.ts';
 import { createAprsReceiveSession, nextAprsPortHolds, type AprsBytePort } from '../../app/utils/aprs-session.ts';
 import { aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 
@@ -57,6 +58,23 @@ function clock(): { now: () => string; advance: () => void } {
 }
 
 describe('APRS receive session', () => {
+  it('folds a KISS UI position without opening a port', () => {
+    const session = createAprsReceiveSession(() => '2026-01-01T00:00:00.000Z');
+    const source = canonicalAx25Call('K5KTF-4');
+    const via = canonicalAx25Call('WIDE1-1');
+    const frame = source && via ? encodeAx25Ui(source, '!3031.12NI09752.74W&K5KTF TX/RX-iGate', [via]) : undefined;
+
+    expect(frame).toBeDefined();
+    session.ingestAx25Ui(frame!);
+    session.ingestAx25Ui(Uint8Array.of(1, 2, 3));
+
+    expect(session.snapshot().connected).toBe(false);
+    expect(session.snapshot().stations).toHaveLength(1);
+    expect(session.snapshot().stations[0]?.callsign).toBe('K5KTF-4');
+    expect(session.snapshot().stations[0]?.position?.value.label).toBe('30° 31.12′ N 97° 52.74′ W');
+    expect(session.snapshot().log).toHaveLength(1);
+  });
+
   it('opens without writing, decodes a split line, and ignores bytes after disconnect', async () => {
     const time = clock();
     const session = createAprsReceiveSession(time.now);

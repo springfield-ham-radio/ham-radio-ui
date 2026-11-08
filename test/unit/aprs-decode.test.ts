@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { decodeAprsMonitorLine } from '../../app/utils/aprs-decode.ts';
+import { canonicalAx25Call, encodeAx25Ui, parseAx25Ui } from '../../app/utils/aprs-ax25.ts';
+import { decodeAprsMonitorLine, decodeAx25UiAprs } from '../../app/utils/aprs-decode.ts';
 import { aprsWeatherLines } from '../../app/utils/aprs-display.ts';
 import { createAprsFoldState, foldAprsLine } from '../../app/utils/aprs-stations.ts';
 
@@ -108,6 +109,38 @@ describe('APRS station updates', () => {
     expect(state.stations[0]?.position?.value.label).toContain('49° 03.50′ N');
     expect(state.stations[0]?.reportedName?.value).toBe('OBJECT');
     expect(state.stations[0]?.reportedPosition?.value.label).toContain('36° 00.00′ N');
+  });
+
+  it('decodes the K5KTF-4 position from an AX.25 UI frame without inventing weather', () => {
+    const source = canonicalAx25Call('K5KTF-4');
+    const via = canonicalAx25Call('WIDE1-1');
+    const info = '!3031.12NI09752.74W&K5KTF TX/RX-iGate';
+    const frame = source && via ? encodeAx25Ui(source, info, [{ ...via, repeated: true }]) : undefined;
+    const ax25 = frame ? parseAx25Ui(frame) : undefined;
+    const packet = ax25 ? decodeAx25UiAprs(ax25) : undefined;
+
+    expect(packet?.kind).toBe('position');
+    expect(packet?.source).toBe('K5KTF-4');
+    expect(packet?.destination).toBe('APRS');
+    expect(packet?.path).toEqual(['WIDE1-1*']);
+    expect(packet?.position?.symbolTable).toBe('I');
+    expect(packet?.position?.symbolCode).toBe('&');
+    expect(packet?.position?.label).toBe('30° 31.12′ N 97° 52.74′ W');
+    expect(packet?.comment).toBe('K5KTF TX/RX-iGate');
+    expect(packet?.weather).toBeUndefined();
+    expect(packet?.raw).toBe('K5KTF-4>APRS,WIDE1-1*:!3031.12NI09752.74W&K5KTF TX/RX-iGate');
+  });
+
+  it('keeps a status frame off the map and drops a frame that is not UI', () => {
+    const source = canonicalAx25Call('N0HRD');
+    const status = source ? encodeAx25Ui(source, '>On duty') : undefined;
+    const parsed = status ? parseAx25Ui(status) : undefined;
+    const packet = parsed ? decodeAx25UiAprs(parsed) : undefined;
+
+    expect(packet?.kind).toBe('status');
+    expect(packet?.statusText).toBe('On duty');
+    expect(packet?.position).toBeUndefined();
+    expect(parseAx25Ui(Uint8Array.of(0x00, 0x03))).toBeUndefined();
   });
 
   it('stores a malformed line and does not create a station for it', () => {

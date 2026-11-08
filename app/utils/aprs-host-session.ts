@@ -135,6 +135,8 @@ export function createAprsHostSession(options?: {
   now?: () => number;
   allowHardwareTransmit?: boolean;
   useRetryClock?: boolean;
+  /** Parsed UI payload. The callback must not write to the port. */
+  onAx25Ui?: (payload: Uint8Array) => void;
 }): AprsHostSession {
   const now = options?.now ?? (() => Date.now());
   const allowHardwareTransmit = options?.allowHardwareTransmit !== false;
@@ -531,11 +533,14 @@ export function createAprsHostSession(options?: {
     }
 
     for (const payload of payloads) {
-      if (parseAx25Ui(payload)) {
-        kissConfirmed = true;
-        commandTextAtConfirm = commandText.length;
-        notes.push('AX.25 UI');
+      if (!parseAx25Ui(payload)) {
+        continue;
       }
+
+      kissConfirmed = true;
+      commandTextAtConfirm = commandText.length;
+      notes.push('AX.25 UI');
+      options?.onAx25Ui?.(payload);
     }
 
     if (decoded.ignoredBytes.length > 0) {

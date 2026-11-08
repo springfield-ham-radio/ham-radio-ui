@@ -1,3 +1,5 @@
+import { formatAx25Call, type Ax25UiFrame } from '~/utils/aprs-ax25';
+
 /**
  * Decode TNC2 monitor lines and APRS information fields.
  *
@@ -123,6 +125,28 @@ export function decodeAprsMonitorLine(line: string): AprsDecodedPacket {
     destination,
     path,
     raw: line,
+  };
+}
+
+/**
+ * Decode one parsed AX.25 UI frame with the same information-field rules as a TNC2 line.
+ *
+ * Source, destination, and path come from the address fields. A digipeater H bit
+ * is the trailing star. No position is invented when the information field is not one.
+ */
+export function decodeAx25UiAprs(frame: Ax25UiFrame): AprsDecodedPacket {
+  const source = formatAx25Call(frame.source);
+  const destination = formatAx25Call(frame.destination);
+  const path = frame.path.map((hop) => `${formatAx25Call(hop)}${hop.repeated ? '*' : ''}`);
+  const via = path.length > 0 ? `,${path.join(',')}` : '';
+  const decoded = decodeAprsInfo(destination, frame.info);
+
+  return {
+    ...decoded,
+    source,
+    destination,
+    path,
+    raw: `${source}>${destination}${via}:${frame.info}`,
   };
 }
 

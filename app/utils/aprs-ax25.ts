@@ -12,6 +12,8 @@ const ADDRESS_BYTES = 7;
 export interface Ax25Station {
   call: string;
   ssid: number;
+  /** Digipeater H bit. Set only on a path hop that has already repeated. */
+  repeated?: boolean;
 }
 
 export interface Ax25UiFrame {
@@ -24,6 +26,8 @@ export interface Ax25UiFrame {
 export interface Ax25Call {
   call: string;
   ssid: number;
+  /** Digipeater H bit when this call is used in a path. */
+  repeated?: boolean;
 }
 
 /**
@@ -74,7 +78,7 @@ function encodeAddress(station: Ax25Station, last: boolean, command: boolean): U
   return bytes;
 }
 
-function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Station; last: boolean } | undefined {
+function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Station; last: boolean; repeated: boolean } | undefined {
   if (offset + ADDRESS_BYTES > bytes.length) {
     return undefined;
   }
@@ -101,7 +105,7 @@ function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Statio
     return undefined;
   }
 
-  return { station, last: (ssidByte & 0x01) === 0x01 };
+  return { station, last: (ssidByte & 0x01) === 0x01, repeated: (ssidByte & 0x80) !== 0 };
 }
 
 /**
@@ -109,14 +113,17 @@ function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Statio
  *
  * No digipeaters are added. The FCS is not included; a KISS TNC adds it.
  */
-export function encodeAx25Ui(source: Ax25Call, info: string): Uint8Array | undefined {
+export function encodeAx25Ui(source: Ax25Call, info: string, path: readonly Ax25Call[] = []): Uint8Array | undefined {
   const destination = canonicalAx25Call(APRS_AX25_DESTINATION);
 
-  if (!destination || !canonicalAx25Call(formatAx25Call(source))) {
+  if (!destination || !canonicalAx25Call(formatAx25Call(source)) || path.some((hop) => !canonicalAx25Call(formatAx25Call(hop)))) {
     return undefined;
   }
 
-  const addresses = [encodeAddress(destination, false, true), encodeAddress(source, true, false)];
+  const stations = [destination, source, ...path];
+  const addresses = stations.map((station, index) =>
+    encodeAddress(station, index === stations.length - 1, index === 0 || (index > 1 && station.repeated === true)),
+  );
   const infoBytes = [...info].map((character) => character.charCodeAt(0));
 
   if (infoBytes.some((code) => code < 0x20 || code > 0x7e)) {
@@ -143,7 +150,7 @@ export function parseAx25Ui(frame: Uint8Array): Ax25UiFrame | undefined {
       return undefined;
     }
 
-    addresses.push(decoded.station);
+    addresses.push(decoded.repeated ? { ...decoded.station, repeated: true } : decoded.station);
     last = decoded.last;
     offset += ADDRESS_BYTES;
   }
@@ -184,6 +191,9 @@ export function parseAx25Ui(frame: Uint8Array): Ax25UiFrame | undefined {
   if (!destination || !source) {
     return undefined;
   }
+
+  delete destination.repeated;
+  delete source.repeated;
 
   return {
     destination,

@@ -391,6 +391,34 @@ describe('APRS host session', () => {
     expect(fake.writes).toHaveLength(1);
   });
 
+  it('feeds a split KISS position to the station callback and does not write', async () => {
+    const seen: Uint8Array[] = [];
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      onAx25Ui(payload) {
+        seen.push(payload);
+      },
+    });
+    const fake = fakePort();
+    const source = canonicalAx25Call('K5KTF-4');
+    const via = canonicalAx25Call('WIDE1-1');
+    const ax25 = source && via ? encodeAx25Ui(source, '!3031.12NI09752.74W&K5KTF TX/RX-iGate', [via]) : undefined;
+    const kiss = ax25 ? encodeKissData(ax25) : undefined;
+
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(kiss).toBeDefined();
+    fake.push(kiss!.subarray(0, 8));
+    fake.push(kiss!.subarray(8));
+    await settle();
+
+    expect(seen).toHaveLength(1);
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(fake.writes).toEqual([]);
+    const again = await session.send({ ...draft, transmitRequested: true });
+    expect(again.status).toBe('waiting-ack');
+    expect(fake.writes).toHaveLength(1);
+  });
+
   it('does not write an invalid message', async () => {
     const session = createAprsHostSession({ allowHardwareTransmit: true });
     const fake = fakePort();

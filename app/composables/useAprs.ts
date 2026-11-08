@@ -12,6 +12,11 @@ import {
 
 const sessions = new Map<string, AprsReceiveSession>();
 
+/** Fold a KISS UI payload into the station list. No port is opened and nothing is written. */
+export function ingestAprsAx25Ui(cardId: string, payload: Uint8Array): void {
+  sessionFor(cardId).ingestAx25Ui(payload);
+}
+
 function sessionFor(cardId: string): AprsReceiveSession {
   const existing = sessions.get(cardId);
 
@@ -114,6 +119,11 @@ export function useAprs() {
     publish(cardId);
   }
 
+  function ingestAx25Ui(cardId: string, payload: Uint8Array): void {
+    ingestAprsAx25Ui(cardId, payload);
+    publish(cardId);
+  }
+
   function unavailable(cardId: string, message: string): void {
     const session = sessionFor(cardId);
     session.unavailable(message);
@@ -138,5 +148,5 @@ export function useAprs() {
     publish(cardId);
   }
 
-  return { snapshots, connecting, cardPorts, lockedPorts, watchCard, connect, unavailable, receiveText, disconnect, clear };
+  return { snapshots, connecting, cardPorts, lockedPorts, watchCard, connect, unavailable, receiveText, ingestAx25Ui, disconnect, clear };
 }

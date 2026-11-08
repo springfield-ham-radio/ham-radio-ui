@@ -1,4 +1,5 @@
-import { decodeAprsMonitorLine, type AprsDecodedPacket } from '~/utils/aprs-decode';
+import { parseAx25Ui } from '~/utils/aprs-ax25';
+import { decodeAprsMonitorLine, decodeAx25UiAprs, type AprsDecodedPacket } from '~/utils/aprs-decode';
 import { consumeAprsBytes, createAprsLineBuffer, takeAprsPartial, type AprsLineBuffer } from '~/utils/aprs-line-buffer';
 import { createAprsFoldState, foldAprsLine, type AprsFoldState, type AprsLogLine, type AprsStation } from '~/utils/aprs-stations';
 
@@ -25,6 +26,8 @@ export interface AprsReceiveSession {
   unavailable(message: string): void;
   /** Feed monitor text already received. Does not write to the port. */
   receiveText(text: string): void;
+  /** Fold one KISS AX.25 UI payload. Does not open a port or write. */
+  ingestAx25Ui(payload: Uint8Array): void;
   disconnect(): Promise<void>;
   clear(): void;
   subscribe(listener: () => void): void;
@@ -155,6 +158,18 @@ export function createAprsReceiveSession(now: () => string = () => new Date().to
     publish();
   }
 
+  function ingestAx25Ui(payload: Uint8Array): void {
+    const ax25 = parseAx25Ui(payload);
+
+    if (!ax25) {
+      return;
+    }
+
+    const packet = decodeAx25UiAprs(ax25);
+    foldAprsLine(folded, packet.raw, packet, now());
+    publish();
+  }
+
   function receiveText(text: string): void {
     const bytes = new Uint8Array(text.length);
 
@@ -191,6 +206,7 @@ export function createAprsReceiveSession(now: () => string = () => new Date().to
     connect,
     unavailable,
     receiveText,
+    ingestAx25Ui,
     disconnect,
     clear,
     subscribe(listener) {

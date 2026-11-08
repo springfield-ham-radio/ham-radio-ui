@@ -1,3 +1,4 @@
+import { ingestAprsAx25Ui } from '~/composables/useAprs';
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { createAprsHostSession, type AprsHostMessage, type AprsHostSession, type AprsHostSnapshot } from '~/utils/aprs-host-session';
@@ -15,7 +16,12 @@ function sessionFor(cardId: string): AprsHostSession {
     return existing;
   }
 
-  const created = createAprsHostSession({ useRetryClock: true });
+  const created = createAprsHostSession({
+    useRetryClock: true,
+    onAx25Ui(payload) {
+      ingestAprsAx25Ui(cardId, payload);
+    },
+  });
   sessions.set(cardId, created);
   return created;
 }

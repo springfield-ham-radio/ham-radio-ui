@@ -250,7 +250,7 @@ function onCancel(key: string): void {
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="min-w-0 text-xs text-muted">
         <template v-if="isConnected">
-          Listening on {{ portLabel }} at {{ baud }} baud. RX {{ snapshot?.rxBytes ?? 0 }} bytes in
+          Listening on {{ portLabel }} at {{ baud }} baud. Stations and Map use this Listen. RX {{ snapshot?.rxBytes ?? 0 }} bytes in
           {{ snapshot?.rxChunks ?? 0 }} chunks. Command text {{ snapshot?.commandTextBytes ?? 0 }}. Incomplete
           {{ snapshot?.incompleteBytes ?? 0 }}. Invalid {{ snapshot?.invalidBytes ?? 0 }}. KISS frames
           {{ snapshot?.frames ?? 0 }}. Bytes written {{ snapshot?.bytesWritten ?? 0 }}.
