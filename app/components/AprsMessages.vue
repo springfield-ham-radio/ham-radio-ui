@@ -19,7 +19,7 @@ const route = useRoute();
 const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
 const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const host = useAprsHost();
-const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, requestCommandPrompt, cancelCommand, enterHostKiss, clearTrace } = host;
+const { connecting, connect, unavailable, disconnect, send, cancel, setAckOptIn, setTransmitOptIn, requestCommandPrompt, cancelCommand, enterHostKiss, clearTrace } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -178,8 +178,16 @@ const kissStatus = computed(() => {
     return 'Command written. KISS unconfirmed. No message was sent, and the command is not repeated.';
   }
 
-  return 'KISS has not been requested. Listen does not send a command.';
+  return 'No AX.25 UI frame on this Listen. Send does not write a message.';
 });
+
+function onTransmit(next: boolean): void {
+  transmitRequested.value = next;
+
+  if (props.cardId) {
+    setTransmitOptIn(props.cardId, next);
+  }
+}
 
 async function onCopyTrace(): Promise<void> {
   const body = traceText.value;
@@ -353,9 +361,10 @@ function onCancel(key: string): void {
             <UTextarea v-model="text" class="w-full" :rows="2" :maxlength="APRS_MESSAGE_TEXT_MAX" placeholder="Message text" />
           </UFormField>
           <USwitch
-            v-model="transmitRequested"
+            :model-value="transmitRequested"
             label="Allow transmit"
-            description="Off: Send does not write. On: Send writes the message frame. The switch alone does not send, and it does not enter KISS."
+            description="Off: Send writes nothing, and a message already waiting is cancelled. On: Send can write only after this Listen has parsed an AX.25 UI frame. A KISS frame that is not a UI frame does not count. The switch alone does not send, and it does not enter KISS."
+            @update:model-value="onTransmit"
           />
           <USwitch
             :model-value="ackRequested"
@@ -366,8 +375,8 @@ function onCancel(key: string): void {
           <p v-if="ackReason" class="text-xs text-muted">{{ ackReason }}</p>
           <div class="flex items-center justify-between gap-2">
             <p class="text-xs text-muted">
-              When transmit is allowed, a message is sent at most {{ APRS_MESSAGE_ATTEMPTS }} times,
-              {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart. Cancel stops it. Disconnect does not send it again.
+              When transmit is allowed and this Listen has an AX.25 UI frame, a message is sent at most {{ APRS_MESSAGE_ATTEMPTS }} times,
+              {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart. Allow transmit off stops it, and so does Cancel. Disconnect does not send it again.
               An ack counts only when it comes from that station and carries your message id.
             </p>
             <UButton

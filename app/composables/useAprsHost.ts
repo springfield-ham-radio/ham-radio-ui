@@ -144,6 +144,11 @@ export function useAprsHost() {
     return reason;
   }
 
+  function setTransmitOptIn(cardId: string, on: boolean): void {
+    sessionFor(cardId).setTransmitOptIn(on);
+    publish(cardId);
+  }
+
   return {
     snapshots,
     connecting,
@@ -156,6 +161,7 @@ export function useAprsHost() {
     cancel,
     setIdentity,
     setAckOptIn,
+    setTransmitOptIn,
     requestCommandPrompt,
     cancelCommand,
     enterHostKiss,

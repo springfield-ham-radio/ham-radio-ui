@@ -32,6 +32,8 @@ export interface KissDecoder {
   overflow: number;
   /** Bytes seen before a frame starts. Command text lands here. */
   ignored: number;
+  /** Those same bytes, so a `cmd:` outside a KISS frame can be told from one inside. */
+  ignoredBytes: Uint8Array;
   /** Bytes dropped because an escape was not FEND or FESC. */
   invalid: number;
   /** Bytes of a KISS frame still waiting for FEND. */
@@ -80,6 +82,7 @@ export function encodeKissData(payload: Uint8Array): Uint8Array {
  */
 export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissDecoder {
   const frames: KissFrame[] = [];
+  const ignoredBytes: number[] = [];
   let overflow = 0;
   let ignored = 0;
   let invalid = 0;
@@ -107,6 +110,7 @@ export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissD
 
     if (!state.inFrame) {
       ignored += 1;
+      ignoredBytes.push(byte);
       continue;
     }
 
@@ -142,6 +146,7 @@ export function pushKissBytes(state: KissDecoderState, chunk: Uint8Array): KissD
     frames,
     overflow,
     ignored,
+    ignoredBytes: Uint8Array.from(ignoredBytes),
     invalid,
     holding: state.inFrame ? state.pending.length : 0,
   };

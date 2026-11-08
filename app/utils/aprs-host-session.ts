@@ -90,6 +90,8 @@ export interface AprsHostSession {
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
   setAckOptIn(on: boolean): string | undefined;
+  /** Off cancels a queued message. On does not write and does not enter KISS. */
+  setTransmitOptIn(on: boolean): void;
   /** Writes three Ctrl+C bytes and no carriage return. One shot. */
   requestCommandPrompt(): Promise<string | undefined>;
   /** Stops a wait. Does not write. */
@@ -122,9 +124,12 @@ interface Waiting {
  *
  * Connect, disconnect, and an open composer do not write. A message frame is
  * written only when the session is constructed with hardware transmit allowed
- * and the caller sets the transmit opt-in. An ack is a second opt-in, because
- * it is also a transmission. Disconnect cancels waiting messages and does not
- * send an exit command. A later connect does not send them again.
+ * and the caller sets the transmit opt-in. A message or retry is written only
+ * after this connection has parsed an AX.25 UI frame. A KISS frame that does
+ * not parse does not count. Turning transmit off cancels the queue. An ack is
+ * a second opt-in and is also a transmission. Disconnect cancels waiting
+ * messages and does not send an exit command. A later connect does not send
+ * them again.
  */
 export function createAprsHostSession(options?: {
   now?: () => number;
@@ -153,8 +158,11 @@ export function createAprsHostSession(options?: {
   let bytesWritten = 0;
   let sequence = 0;
   let ackOptIn = false;
+  let transmitOptIn = false;
   let hostEnterRequested = false;
   let kissConfirmed = false;
+  let commandText = new Uint8Array();
+  let commandTextAtConfirm = 0;
   let commandPhase: AprsHostSnapshot['commandPhase'] = 'idle';
   let commandDetail = 'No command requested.';
   let commandBytes = new Uint8Array();
@@ -351,7 +359,32 @@ export function createAprsHostSession(options?: {
     publish();
   }
 
+  function loseKissConfirmation(reason: string): void {
+    if (!kissConfirmed) {
+      return;
+    }
+
+    kissConfirmed = false;
+    commandTextAtConfirm = commandText.length;
+    cancelWaiting(reason);
+    record('note', new Uint8Array(), reason);
+  }
+
   async function transmitWaiting(item: Waiting): Promise<void> {
+    if (!transmitOptIn || !kissConfirmed) {
+      waiting.delete(item.key);
+      const current = row(item.key);
+
+      if (current?.status === 'waiting-ack') {
+        current.status = 'cancelled';
+        current.detail = transmitOptIn
+          ? 'This Listen has no AX.25 UI frame. No further transmissions.'
+          : 'Transmit is off. No further transmissions.';
+      }
+
+      return;
+    }
+
     const frame = encodeAprsMessageFrame(item.source, {
       addressee: item.to,
       kind: 'text',
@@ -395,7 +428,7 @@ export function createAprsHostSession(options?: {
   }
 
   async function maybeAck(source: string, addressee: string, id: string): Promise<void> {
-    if (!ackOptIn || !identity || !allowHardwareTransmit || formatAx25Call(identity) !== addressee || acked.has(`${source}|${id}`)) {
+    if (!ackOptIn || !transmitOptIn || !kissConfirmed || !identity || !allowHardwareTransmit || formatAx25Call(identity) !== addressee || acked.has(`${source}|${id}`)) {
       return;
     }
 
@@ -500,11 +533,23 @@ export function createAprsHostSession(options?: {
     for (const payload of payloads) {
       if (parseAx25Ui(payload)) {
         kissConfirmed = true;
+        commandTextAtConfirm = commandText.length;
         notes.push('AX.25 UI');
       }
     }
 
+    if (decoded.ignoredBytes.length > 0) {
+      commandText = appendCommandBytes(commandText, decoded.ignoredBytes);
+    }
+
     record('rx', chunk, notes.join(', ') || 'empty');
+
+    const pending = Uint8Array.from(kiss.pending);
+    const pendingIsCommandText = pending.length > 0 && pending[0] !== 0x00 && hasCommandPrompt(pending);
+
+    if (kissConfirmed && (hasCommandPrompt(commandText.subarray(commandTextAtConfirm)) || pendingIsCommandText)) {
+      loseKissConfirmation('cmd: arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.');
+    }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
     noteConnectionPrompt();
@@ -574,6 +619,8 @@ export function createAprsHostSession(options?: {
       rxBytes = 0;
       rxChunks = 0;
       kissConfirmed = false;
+      commandText = new Uint8Array();
+      commandTextAtConfirm = 0;
       commandPhase = 'idle';
       commandDetail = 'No command requested on this connection.';
       commandBytes = new Uint8Array();
@@ -617,6 +664,9 @@ export function createAprsHostSession(options?: {
       commandActive = false;
       commandBytes = new Uint8Array();
       sessionBytes = new Uint8Array();
+      commandText = new Uint8Array();
+      commandTextAtConfirm = 0;
+      kissConfirmed = false;
       if (commandTimer) {
         clearInterval(commandTimer);
         commandTimer = undefined;
@@ -662,6 +712,13 @@ export function createAprsHostSession(options?: {
 
       ackOptIn = on && allowHardwareTransmit;
       return undefined;
+    },
+    setTransmitOptIn(on) {
+      transmitOptIn = on && allowHardwareTransmit;
+
+      if (!transmitOptIn) {
+        cancelWaiting('Transmit is off. No further transmissions.');
+      }
     },
     async requestCommandPrompt() {
       if (!port?.isOpen || !port.write) {
@@ -765,12 +822,16 @@ export function createAprsHostSession(options?: {
         return blocked('Too many unfinished messages');
       }
 
-      if (!input.transmitRequested) {
+      if (!input.transmitRequested || !allowHardwareTransmit) {
+        transmitOptIn = false;
+        cancelWaiting('Transmit is off. No further transmissions.');
         return blocked('Transmit is off. Nothing was sent.');
       }
 
-      if (!allowHardwareTransmit) {
-        return blocked('Transmit is off. Nothing was sent.');
+      transmitOptIn = true;
+
+      if (!kissConfirmed) {
+        return blocked('This Listen has no AX.25 UI frame. A KISS frame that is not a UI frame does not count. Nothing was sent.');
       }
 
       if (options?.useRetryClock && !retryTimer) {
