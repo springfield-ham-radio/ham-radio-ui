@@ -7,7 +7,9 @@ import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
+import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, type AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
@@ -18,7 +20,7 @@ const props = defineProps<{
   radioName?: string;
 }>();
 
-const { snapshots, connecting, cardPorts, watchCard, connect, unavailable, receiveText, ingestAx25Ui, disconnect, clear } = useAprs();
+const { snapshots, connecting, watchCard, connect, unavailable, receiveText, ingestAx25Ui, disconnect, clear } = useAprs();
 const host = useAprsHost();
 const { radioById } = useSavedRadios();
 const { configurations } = useRadio();
@@ -69,6 +71,40 @@ const traceText = computed(() => formatTrace(traceLines.value));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const kissListening = computed(() => hostSnapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
+const hostConnecting = computed(() => (props.cardId ? host.connecting.value[props.cardId] === true : false));
+const requestedMode = ref<AprsConnectionMode>('passive');
+const requestedFlow = ref<AprsHostFlowControl>('software');
+const activeMode = computed<AprsConnectionMode>(() => {
+  if (kissListening.value) {
+    return 'host';
+  }
+
+  if (isConnected.value) {
+    return 'passive';
+  }
+
+  return requestedMode.value;
+});
+const activeFlow = computed(() => (kissListening.value ? (hostSnapshot.value?.hostFlow ?? requestedFlow.value) : requestedFlow.value));
+const connection = computed(() =>
+  aprsConnectionView({
+    mode: activeMode.value,
+    passiveOpen: isConnected.value,
+    hostOpen: kissListening.value,
+    passiveConnecting: isConnecting.value,
+    hostConnecting: hostConnecting.value,
+    kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
+  }),
+);
+const modeItems: Array<{ label: string; value: AprsConnectionMode }> = [
+  { label: 'Passive monitor', value: 'passive' },
+  { label: 'Host session', value: 'host' },
+];
+const flowItems: Array<{ label: string; value: AprsHostFlowControl }> = [
+  { label: 'Software (XON/XOFF)', value: 'software' },
+  { label: 'Off', value: 'none' },
+  { label: 'Hardware (RTS/CTS)', value: 'hardware' },
+];
 const stations = computed(() => snapshot.value?.stations ?? []);
 const log = computed(() => snapshot.value?.log ?? []);
 const selected = computed(() => stations.value.find((station) => station.callsign === selectedCall.value) ?? stations.value[0]);
@@ -90,45 +126,29 @@ const tabs: TabsItem[] = [
   { label: 'Stations', icon: 'i-lucide-list', slot: 'stations' as const, value: 'stations' },
   { label: 'Map', icon: 'i-lucide-map', slot: 'map' as const, value: 'map' },
   { label: 'Messages', icon: 'i-lucide-message-square', slot: 'messages' as const, value: 'messages' },
-  { label: 'Packet', icon: 'i-lucide-file-text', slot: 'packet' as const, value: 'packet' },
+  { label: 'Station details', icon: 'i-lucide-file-text', slot: 'packet' as const, value: 'packet' },
   { label: 'Raw log', icon: 'i-lucide-scroll-text', slot: 'log' as const, value: 'log' },
 ];
 const plottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
 const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
 
-const connectionBadge = computed(() => {
-  if (isConnected.value || kissListening.value) {
-    return { label: 'Listening', color: 'success' as const, icon: 'i-lucide-radio' };
-  }
-
-  return { label: 'Disconnected', color: 'neutral' as const, icon: 'i-lucide-plug' };
-});
-
 const statusLine = computed(() => {
-  if (kissListening.value) {
-    const where = hostSnapshot.value?.path
-      ? serialPortLabel(hostSnapshot.value.path, readSerialPortSettings().portAliases)
-      : (portLabel.value ?? 'the saved APRS port');
-    return `KISS Listen on ${where} at ${aprsBaud.value} baud is feeding this list and map. Listen does not send. Disconnect is on Messages.`;
+  if (kissFixture.value && !kissListening.value && !isConnected.value) {
+    return 'Fixture AX.25 UI frame. Not a radio, and no port was opened. This is not the CAT connection.';
   }
 
-  if (kissFixture.value) {
-    return 'Fixture AX.25 UI frame. Not a radio, and no port was opened.';
-  }
-
-  if (isConnected.value && snapshot.value?.path) {
-    return `Passive APRS monitor on ${serialPortLabel(snapshot.value.path, readSerialPortSettings().portAliases)} at ${aprsBaud.value} baud. Leave the radio showing APRS.`;
-  }
+  const openPath = kissListening.value ? hostSnapshot.value?.path : isConnected.value ? snapshot.value?.path : undefined;
+  const where = openPath ? serialPortLabel(openPath, readSerialPortSettings().portAliases) : portLabel.value;
 
   if (!savedRadio.value) {
-    return 'Save this radio under Preferences to choose an APRS port. The memory port is not used.';
+    return `${connection.value.detail} Save this radio under Preferences to choose an APRS port. The memory port is not used.`;
   }
 
-  if (!aprsPort.value || !portLabel.value) {
-    return 'Choose an APRS serial port under Preferences → Radios. The memory port is not used.';
+  if (!where) {
+    return `${connection.value.detail} Choose an APRS serial port under Preferences. The memory port is not used.`;
   }
 
-  return `Passive APRS. Saved port ${portLabel.value} at ${aprsBaud.value} baud. Leave the radio showing APRS with menu 604 OUTPUT on.`;
+  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
@@ -141,11 +161,36 @@ watch(stations, (rows) => {
   selectedCall.value = rows[0]?.callsign;
 });
 
+function onMode(value: unknown): void {
+  if (connection.value.open) {
+    return;
+  }
+
+  if (value === 'passive' || value === 'host') {
+    requestedMode.value = value;
+  }
+}
+
+function onFlow(value: unknown): void {
+  if (connection.value.open) {
+    return;
+  }
+
+  if (value === 'software' || value === 'none' || value === 'hardware') {
+    requestedFlow.value = value;
+  }
+}
+
 async function onConnect(): Promise<void> {
   const cardId = props.cardId;
   const path = aprsPort.value;
+  const action = aprsConnectAction({
+    mode: activeMode.value,
+    passiveOpen: isConnected.value,
+    hostOpen: kissListening.value,
+  });
 
-  if (!cardId || !path) {
+  if (!cardId || !path || action.kind === 'blocked') {
     return;
   }
 
@@ -153,11 +198,21 @@ async function onConnect(): Promise<void> {
     const present = await isSerialPortPathAvailable(path);
 
     if (!present) {
-      unavailable(cardId, aprsPortMissingMessage(path));
+      if (action.kind === 'open-host') {
+        host.unavailable(cardId, aprsPortMissingMessage(path));
+      } else {
+        unavailable(cardId, aprsPortMissingMessage(path));
+      }
+
       return;
     }
   } catch {
     // The port list is unavailable outside the desktop shell. Open reports that failure.
+  }
+
+  if (action.kind === 'open-host') {
+    await host.connect(cardId, path, aprsBaud.value, activeFlow.value);
+    return;
   }
 
   await connect(cardId, path, aprsBaud.value);
@@ -168,7 +223,15 @@ async function onDisconnect(): Promise<void> {
     return;
   }
 
-  await disconnect(props.cardId);
+  const action = aprsDisconnectAction({ passiveOpen: isConnected.value, hostOpen: kissListening.value });
+
+  if (action.kind === 'close-passive' || action.kind === 'close-both') {
+    await disconnect(props.cardId);
+  }
+
+  if (action.kind === 'close-host' || action.kind === 'close-both') {
+    await host.disconnect(props.cardId);
+  }
 }
 
 function selectStation(callsign: string | undefined): void {
@@ -210,20 +273,47 @@ function onClear(): void {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-    <div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
-      <p class="min-w-0 text-xs text-muted">
-        {{ statusLine }}
-        <NuxtLink v-if="!isConnected" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
-      </p>
+    <div class="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
+      <div class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+        <UFormField label="APRS COM" class="w-44">
+          <USelect
+            :model-value="activeMode"
+            :items="modeItems"
+            value-key="value"
+            class="w-full"
+            :disabled="Boolean(connection.open)"
+            @update:model-value="onMode"
+          />
+        </UFormField>
+        <UFormField v-if="activeMode === 'host'" label="Flow control" class="w-52">
+          <USelect
+            :model-value="activeFlow"
+            :items="flowItems"
+            value-key="value"
+            class="w-full"
+            :disabled="Boolean(connection.open)"
+            @update:model-value="onFlow"
+          />
+        </UFormField>
+        <p class="min-w-0 flex-1 pb-1.5 text-xs text-muted">
+          {{ statusLine }}
+          <NuxtLink v-if="!connection.open" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-1.5">
-        <UBadge :label="connectionBadge.label" :color="connectionBadge.color" variant="subtle" :icon="connectionBadge.icon" />
+        <UBadge
+          :label="connection.badge"
+          :color="connection.badge === 'Connected' ? 'success' : 'neutral'"
+          variant="subtle"
+          :icon="connection.badge === 'Connected' ? 'i-lucide-plug-zap' : 'i-lucide-plug'"
+        />
         <UButton
-          v-if="!isConnected && !kissListening"
+          v-if="!connection.open"
           color="primary"
           size="sm"
           icon="i-lucide-cable"
           label="Connect"
-          :loading="isConnecting"
+          :loading="isConnecting || hostConnecting"
           :disabled="!cardId || !aprsPort"
           @click="onConnect"
         />
@@ -250,12 +340,12 @@ function onClear(): void {
     />
 
     <UAlert
-      v-if="snapshot?.error"
+      v-if="snapshot?.error || hostSnapshot?.error"
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"
-      title="COM port"
-      :description="snapshot.error"
+      title="APRS COM"
+      :description="hostSnapshot?.error ?? snapshot?.error"
       class="mb-2 shrink-0"
     />
 
@@ -276,7 +366,7 @@ function onClear(): void {
       <template #stations>
         <div ref="stationScroller" class="min-h-0 flex-1 overflow-auto">
           <p v-if="stations.length === 0" class="px-1 py-6 text-sm text-muted">
-            {{ kissListening ? 'No stations yet. Packets from the KISS Listen show up here.' : 'No stations yet. Connect uses the APRS port saved for this radio.' }}
+            No stations yet. Connect opens the APRS COM port above. This list is what arrived this session.
           </p>
           <div v-else :style="{ paddingTop: `${stationPadTop}px`, paddingBottom: `${stationPadBottom}px` }">
             <button
@@ -305,7 +395,7 @@ function onClear(): void {
             <p class="min-w-0 text-xs text-muted">
               {{ plottedCount }} on the map
               <template v-if="unlocatedCount > 0"> · {{ unlocatedCount }} without a position</template>
-              . {{ kissListening ? 'Heard on the KISS Listen.' : 'Heard this session only.' }} The radio does not export its stored station list.
+              . Heard this session only. The radio does not export its stored station list.
             </p>
             <UButton
               icon="i-lucide-locate"
@@ -332,13 +422,7 @@ function onClear(): void {
       </template>
 
       <template #messages>
-        <AprsMessages
-          :card-id="cardId"
-          :port="aprsPort"
-          :port-label="portLabel"
-          :baud="aprsBaud"
-          :monitor-using-port="Boolean(cardId && cardPorts[cardId])"
-        />
+        <AprsMessages :card-id="cardId" />
       </template>
 
       <template #packet>
@@ -430,12 +514,12 @@ function onClear(): void {
           </div>
           <p class="text-xs text-muted">
             <template v-if="kissListening">
-              KISS Listen. RX {{ hostSnapshot?.rxBytes ?? 0 }} bytes in {{ hostSnapshot?.rxChunks ?? 0 }} chunks.
+              Host session. RX {{ hostSnapshot?.rxBytes ?? 0 }} bytes in {{ hostSnapshot?.rxChunks ?? 0 }} chunks.
               Command text {{ hostSnapshot?.commandTextBytes ?? 0 }}. Incomplete {{ hostSnapshot?.incompleteBytes ?? 0 }}.
               Invalid {{ hostSnapshot?.invalidBytes ?? 0 }}. KISS frames {{ hostSnapshot?.frames ?? 0 }}.
               Bytes written {{ hostSnapshot?.bytesWritten ?? 0 }}.
             </template>
-            <template v-else-if="isConnected">Passive monitor. This byte log fills when Messages Listen is open. Decoded lines below are the menu 604 text.</template>
+            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session. Decoded lines below are the menu 604 text.</template>
             <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
             <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
           </p>
