@@ -7,6 +7,7 @@ import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
+import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
@@ -24,6 +25,7 @@ const { configurations } = useRadio();
 const route = useRoute();
 const examplePackets = computed(() => import.meta.dev && route.query.fixture === 'aprs-map');
 const kissFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-kiss-feed');
+const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const activeTab = ref('stations');
 const aprsMap = useTemplateRef('aprsMap');
 const selectedCall = ref<string | undefined>();
@@ -62,6 +64,8 @@ const profile = computed(() => {
 
 const snapshot = computed(() => (props.cardId ? snapshots.value[props.cardId] : undefined));
 const hostSnapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
+const traceLines = computed(() => (traceFixture.value ? APRS_HOST_TRACE_FIXTURE : (hostSnapshot.value?.trace ?? [])));
+const traceText = computed(() => formatTrace(traceLines.value));
 const isConnected = computed(() => snapshot.value?.connected === true);
 const kissListening = computed(() => hostSnapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -174,6 +178,24 @@ function selectStation(callsign: string | undefined): void {
 
   selectedCall.value = callsign;
   aprsMap.value?.focus(callsign);
+}
+
+async function onCopyTrace(): Promise<void> {
+  const body = traceText.value;
+
+  if (!body || !import.meta.client) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(body);
+}
+
+function onClearTrace(): void {
+  if (!props.cardId || traceFixture.value) {
+    return;
+  }
+
+  host.clearTrace(props.cardId);
 }
 
 function onClear(): void {
@@ -397,17 +419,42 @@ function onClear(): void {
       </template>
 
       <template #log>
-        <div class="mb-2 flex shrink-0 justify-end">
+        <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden py-2">
+        <section class="flex max-h-[45%] min-h-36 shrink-0 flex-col gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-medium text-highlighted">Serial reply</h3>
+            <div class="flex items-center gap-1.5">
+              <UButton size="xs" color="neutral" variant="outline" label="Copy" :disabled="traceText.length === 0" @click="onCopyTrace" />
+              <UButton size="xs" color="neutral" variant="outline" label="Clear serial reply" :disabled="!cardId || traceFixture || traceLines.length === 0" @click="onClearTrace" />
+            </div>
+          </div>
+          <p class="text-xs text-muted">
+            <template v-if="kissListening">
+              KISS Listen. RX {{ hostSnapshot?.rxBytes ?? 0 }} bytes in {{ hostSnapshot?.rxChunks ?? 0 }} chunks.
+              Command text {{ hostSnapshot?.commandTextBytes ?? 0 }}. Incomplete {{ hostSnapshot?.incompleteBytes ?? 0 }}.
+              Invalid {{ hostSnapshot?.invalidBytes ?? 0 }}. KISS frames {{ hostSnapshot?.frames ?? 0 }}.
+              Bytes written {{ hostSnapshot?.bytesWritten ?? 0 }}.
+            </template>
+            <template v-else-if="isConnected">Passive monitor. This byte log fills when Messages Listen is open. Decoded lines below are the menu 604 text.</template>
+            <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
+            <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
+          </p>
+          <p class="text-xs text-muted">{{ hostSnapshot?.commandDetail ?? 'No command requested.' }} Clear serial reply removes these lines and keeps the counters. It does not disconnect or write.</p>
+          <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap font-mono text-xs text-highlighted">{{ traceText || 'No serial bytes yet.' }}</pre>
+        </section>
+        <div class="flex shrink-0 items-center justify-between gap-2">
+          <h3 class="text-sm font-medium text-highlighted">Decoded lines</h3>
           <UButton
             icon="i-lucide-eraser"
             color="neutral"
             variant="outline"
             size="sm"
-            label="Clear"
+            label="Clear decoded lines"
             :disabled="log.length === 0 && stations.length === 0"
             @click="onClear"
           />
         </div>
+        <p class="shrink-0 text-xs text-muted">Passive text and KISS UI frames land here. Clear decoded lines also clears the station list. It does not write.</p>
         <div ref="logScroller" class="min-h-0 flex-1 overflow-auto font-mono text-xs leading-6">
           <p v-if="log.length === 0" class="py-3 text-muted">Raw lines stay here even when the packet is malformed or not decoded.</p>
           <div v-else :style="{ paddingTop: `${logPadTop}px`, paddingBottom: `${logPadBottom}px` }">
@@ -420,6 +467,7 @@ function onClear(): void {
               </template>
             </div>
           </div>
+        </div>
         </div>
       </template>
     </UTabs>
