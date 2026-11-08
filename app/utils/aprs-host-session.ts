@@ -29,7 +29,8 @@ const INBOX_CAP = 200;
 const OUTBOX_CAP = 50;
 
 export interface AprsHostBytePort extends AprsBytePort {
-  write?(bytes: Uint8Array): void | Promise<void>;
+  /** A number is the plugin's accepted count. Void is a test double that already queued the bytes. */
+  write?(bytes: Uint8Array): void | number | Promise<void | number>;
 }
 
 export type AprsHostMessageStatus = 'heard' | 'waiting-ack' | 'acked' | 'rejected' | 'timed-out' | 'cancelled' | 'blocked';
@@ -198,19 +199,33 @@ export function createAprsHostSession(options?: {
     return messages.find((message) => message.key === key);
   }
 
-  async function writeBytes(bytes: Uint8Array): Promise<boolean> {
+  async function writeBytes(bytes: Uint8Array): Promise<{ ok: true; accepted: number; plugin: boolean } | { ok: false; reason: string }> {
     if (!port?.isOpen || !port.write) {
-      return false;
+      return { ok: false, reason: 'Listen is not open.' };
     }
 
+    let result: void | number;
+
     try {
-      await port.write(bytes);
-    } catch {
-      return false;
+      result = await port.write(bytes);
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : 'The port did not accept the bytes.';
+      return { ok: false, reason };
+    }
+
+    const plugin = typeof result === 'number';
+    const accepted = plugin ? result : bytes.length;
+
+    if (accepted !== bytes.length) {
+      return { ok: false, reason: `The serial plugin accepted ${accepted} of ${bytes.length} bytes.` };
     }
 
     bytesWritten += bytes.length;
-    return true;
+    return { ok: true, accepted, plugin };
+  }
+
+  function acceptanceNote(wrote: { accepted: number; plugin: boolean }): string {
+    return wrote.plugin ? `Plugin accepted ${wrote.accepted} bytes. That is kernel acceptance, not a radio echo. ` : '';
   }
 
   async function writeFrame(frame: Uint8Array): Promise<boolean> {
@@ -218,7 +233,7 @@ export function createAprsHostSession(options?: {
       return false;
     }
 
-    return writeBytes(frame);
+    return (await writeBytes(frame)).ok;
   }
 
   function expireCommand(): void {
@@ -320,9 +335,9 @@ export function createAprsHostSession(options?: {
     const bytes = new TextEncoder().encode(APRS_RESTART_COMMAND);
     const wrote = await writeBytes(bytes);
 
-    if (!wrote) {
+    if (!wrote.ok) {
       commandPhase = 'rejected';
-      commandDetail = 'RESTART was not written. The port did not accept it.';
+      commandDetail = `RESTART was not written. ${wrote.reason}`;
       record('note', new Uint8Array(), commandDetail);
       publish();
       return;
@@ -330,7 +345,7 @@ export function createAprsHostSession(options?: {
 
     commandPhase = 'restart-sent';
     hostEnterRequested = true;
-    commandDetail = 'RESTART written once after cmd:. KISS unconfirmed. This is not repeated.';
+    commandDetail = `RESTART written once after cmd:. ${acceptanceNote(wrote)}KISS unconfirmed. This is not repeated.`;
     record('tx-command', bytes, commandDetail);
     publish();
   }
@@ -668,13 +683,13 @@ export function createAprsHostSession(options?: {
 
       const wrote = await writeBytes(APRS_COMMAND_INTERRUPT);
 
-      if (!wrote) {
-        return 'The port did not accept Ctrl+C. Nothing else was sent.';
+      if (!wrote.ok) {
+        return `Ctrl+C was not accepted. ${wrote.reason} Nothing else was sent.`;
       }
 
       armCommandWait();
       commandPhase = 'waiting-prompt';
-      commandDetail = 'Three Ctrl+C bytes written. No carriage return. Waiting for cmd:.';
+      commandDetail = `Three Ctrl+C bytes written. ${acceptanceNote(wrote)}No carriage return. Waiting for cmd:.`;
       record('tx-command', APRS_COMMAND_INTERRUPT, commandDetail);
       publish();
       return undefined;
@@ -705,13 +720,17 @@ export function createAprsHostSession(options?: {
       const bytes = new TextEncoder().encode(APRS_KISS_ON_COMMAND);
       const wrote = await writeBytes(bytes);
 
-      if (!wrote) {
-        return 'The port did not accept KISS ON. RESTART was not sent.';
+      if (!wrote.ok) {
+        commandPhase = 'rejected';
+        commandDetail = `KISS ON was not accepted. ${wrote.reason} RESTART was not sent.`;
+        record('note', new Uint8Array(), commandDetail);
+        publish();
+        return commandDetail;
       }
 
       armCommandWait();
       commandPhase = 'waiting-accept';
-      commandDetail = 'KISS ON written once. Waiting for another cmd: before RESTART.';
+      commandDetail = `KISS ON written once. ${acceptanceNote(wrote)}Waiting for another cmd: before RESTART.`;
       record('tx-command', bytes, commandDetail);
       publish();
       return undefined;

@@ -399,4 +399,29 @@ describe('TauriNodeSerialPort host startup capture', () => {
     expect(tauri?.clearBuffer).not.toHaveBeenCalled();
     expect(tauri?.writeDataTerminalReady).toHaveBeenCalledWith(false);
   });
+
+  it('waits for write_binary before reporting the accepted count', async () => {
+    const { port, tauri } = await openAdapterPort({ dtr: false, rts: false });
+    let release: (count: number) => void = () => undefined;
+    tauri.writeBinary.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = port.writeCommitted(Uint8Array.from([0x4b, 0x49, 0x53, 0x53, 0x20, 0x4f, 0x4e, 0x0d]));
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release(8);
+    await expect(pending).resolves.toBe(8);
+
+    tauri.writeBinary.mockResolvedValueOnce(3);
+    await expect(port.writeCommitted(Uint8Array.of(1, 2, 3, 4))).rejects.toThrow('accepted 3 of 4');
+    tauri.writeBinary.mockRejectedValueOnce(new Error('serial port lock timeout after 250 ms'));
+    await expect(port.writeCommitted(Uint8Array.of(1))).rejects.toThrow('lock timeout');
+  });
 });

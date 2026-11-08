@@ -465,6 +465,53 @@ describe('APRS host session', () => {
     expect(fake.writes).toEqual([]);
   });
 
+  it('keeps a 28-byte DA/HB tail without a colon idle, and logs KISS ON only after the plugin accepts 8 bytes', async () => {
+    const tail = new TextEncoder().encode('A 110101000000\r\nHB 1200\r\ncmd');
+    expect(tail).toHaveLength(28);
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const fake = fakePort();
+    let release: (count: number) => void = () => undefined;
+    fake.port.write = (bytes) =>
+      new Promise<number>((resolve) => {
+        fake.writes.push(bytes);
+        release = resolve;
+      });
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    fake.push(tail);
+    expect(session.snapshot().commandPhase).toBe('idle');
+    expect(session.snapshot().rxBytes).toBe(28);
+
+    fake.push(new TextEncoder().encode('HBAUD    was 1200\r\ncmd:'));
+    expect(session.snapshot().commandPhase).toBe('prompt');
+    const pending = session.enterHostKiss();
+    expect(session.snapshot().commandPhase).toBe('prompt');
+    expect(session.snapshot().trace.some((line) => line.direction === 'tx-command')).toBe(false);
+    release(8);
+    expect(await pending).toBeUndefined();
+    expect(session.snapshot().commandPhase).toBe('waiting-accept');
+    expect(session.snapshot().commandDetail).toMatch(/Plugin accepted 8 bytes/);
+    expect(session.snapshot().bytesWritten).toBe(8);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+  });
+
+  it('does not wait for cmd: when the plugin rejects KISS ON', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const fake = fakePort();
+    fake.port.write = () => {
+      throw new Error('serial port lock timeout after 250 ms');
+    };
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    fake.push(new TextEncoder().encode('cmd:'));
+    const reason = await session.enterHostKiss();
+    expect(reason).toMatch(/lock timeout/);
+    expect(reason).toMatch(/RESTART was not sent/);
+    expect(session.snapshot().commandPhase).toBe('rejected');
+    expect(session.snapshot().bytesWritten).toBe(0);
+    expect(session.snapshot().trace.some((line) => line.direction === 'tx-command')).toBe(false);
+    session.poll();
+    expect(session.snapshot().commandPhase).toBe('rejected');
+  });
+
   it('escapes binary and markup, and drops only the oldest lines', () => {
     const hostile = Uint8Array.from([0x00, 0x11, 0x13, 0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e, 0xc0]);
     const escaped = escapeSerialText(hostile);

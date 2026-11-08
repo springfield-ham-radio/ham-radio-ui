@@ -155,8 +155,8 @@ export async function openAprsHostPort(
 
       errorListener = undefined;
     },
-    write(bytes) {
-      port.write(bytes);
+    async write(bytes) {
+      return port.writeCommitted(bytes);
     },
     close() {
       port.off('data', onData);

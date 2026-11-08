@@ -253,8 +253,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   write(data: Uint8Array | Buffer | number[] | string, encodingOrCallback?: BufferEncoding | WriteCallback, callback?: WriteCallback): boolean {
     const done = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback;
 
-    void this.tauriPort
-      .writeBinary(toBytes(data))
+    void this.writeCommitted(data)
       .then(() => done?.(null))
       .catch((error: unknown) => {
         const writeError = error instanceof Error ? error : new Error(String(error));
@@ -263,6 +262,27 @@ export class TauriNodeSerialPort extends EventEmitter {
       });
 
     return true;
+  }
+
+  /**
+   * Wait until `write_binary` returns.
+   *
+   * `write()` above returns true before that IPC finishes, which is the
+   * node-serialport shape the radio driver uses. The host session has to wait:
+   * plugin 3.0.9 `write_all` reports the buffer length after the kernel
+   * `write()` accepts it, and it does not call `tcdrain`. A returned count is
+   * not a radio echo.
+   */
+  writeCommitted(data: Uint8Array | Buffer | number[] | string): Promise<number> {
+    const bytes = toBytes(data);
+
+    return this.tauriPort.writeBinary(bytes).then((accepted) => {
+      if (accepted !== bytes.length) {
+        throw new Error(`Serial plugin accepted ${accepted} of ${bytes.length} bytes.`);
+      }
+
+      return accepted;
+    });
   }
 
   close(callback?: WriteCallback): void {
