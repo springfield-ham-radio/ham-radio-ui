@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { aprsConversationCall, aprsConversations, aprsHeardAudience, formatAprsChatTime } from '~/utils/aprs-conversations';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
 import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '~/utils/aprs-kiss-restore';
-import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX } from '~/utils/aprs-message';
+import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX, callsignError } from '~/utils/aprs-message';
 
 const props = defineProps<{
   cardId?: string;
@@ -16,14 +17,17 @@ const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardI
 const hostOpen = computed(() => snapshot.value?.connected === true);
 
 const mine = ref('');
-const to = ref('');
 const text = ref('');
 const transmitRequested = ref(false);
 const ackRequested = ref(false);
 const ackReason = ref<string | undefined>();
 const enterNote = ref<string | undefined>();
 const commandNote = ref<string | undefined>();
-const selectedOther = ref<string | undefined>();
+const selectedCall = ref<string | undefined>();
+const showChat = ref(false);
+const drafting = ref(false);
+const draftCall = ref('');
+const draftError = ref<string | undefined>();
 
 if (props.cardId) {
   host.watchCard(props.cardId);
@@ -31,47 +35,38 @@ if (props.cardId) {
 
 const exampleMessages: AprsHostMessage[] = [
   {
+    key: 'example-overheard',
+    direction: 'in',
+    other: 'KF5UFJ-1',
+    text: 'Sample heard on the channel. Not addressed to this station.',
+    addressee: 'K5KTF-4',
+    status: 'heard',
+    at: 1_700_000_000_000,
+  },
+  {
     key: 'example-in',
     direction: 'in',
-    other: 'K5KTF-4',
-    text: 'Sample thread only. This did not come from the radio.',
-    messageId: '1',
+    other: 'KF5UFJ-7',
+    text: 'Sample line addressed to N0CALL. Not from a radio.',
+    addressee: 'N0CALL',
     status: 'heard',
-    at: 0,
+    at: 1_700_000_100_000,
   },
   {
     key: 'example-out',
     direction: 'out',
-    other: 'K5KTF-4',
+    other: 'KF5UFJ-7',
     text: 'Sample reply. Allow transmit is off, so this was not sent.',
-    messageId: '2',
+    addressee: 'KF5UFJ-7',
     status: 'blocked',
-    detail: 'Allow transmit is off.',
-    at: 1,
+    detail: 'Transmit is off. Nothing was sent.',
+    at: 1_700_000_200_000,
   },
 ];
 
 const messages = computed(() => [...(example.value ? exampleMessages : []), ...(snapshot.value?.messages ?? [])]);
-const others = computed(() => {
-  const names: string[] = [];
-
-  for (const message of messages.value) {
-    if (message.other && !names.includes(message.other)) {
-      names.push(message.other);
-    }
-  }
-
-  return names;
-});
-const thread = computed(() => messages.value.filter((message) => message.other === selectedOther.value));
-
-watch(others, (names) => {
-  if (selectedOther.value && names.includes(selectedOther.value)) {
-    return;
-  }
-
-  selectedOther.value = names[0];
-}, { immediate: true });
+const conversations = computed(() => aprsConversations(messages.value));
+const thread = computed(() => conversations.value.find((row) => row.callsign === selectedCall.value)?.messages ?? []);
 
 const statusLabel: Record<AprsHostMessage['status'], string> = {
   heard: 'Heard',
@@ -93,8 +88,32 @@ const statusColor: Record<AprsHostMessage['status'], 'neutral' | 'success' | 'wa
   blocked: 'neutral',
 };
 
-function latestFor(name: string): AprsHostMessage | undefined {
-  return [...messages.value].reverse().find((message) => message.other === name);
+function openCall(callsign: string): void {
+  selectedCall.value = callsign;
+  showChat.value = true;
+  drafting.value = false;
+}
+
+function onNewMessage(): void {
+  drafting.value = true;
+  draftError.value = undefined;
+}
+
+function onOpenDraft(): void {
+  const call = aprsConversationCall(draftCall.value);
+  draftError.value = call ? undefined : (callsignError(draftCall.value) ?? 'Enter a callsign.');
+
+  if (!call) {
+    return;
+  }
+
+  draftCall.value = '';
+  openCall(call);
+}
+
+function onBack(): void {
+  showChat.value = false;
+  selectedCall.value = undefined;
 }
 
 const kissStatus = computed(() => {
@@ -158,11 +177,11 @@ async function onSend(): Promise<void> {
 
   const message = await send(props.cardId, {
     mine: mine.value,
-    to: to.value,
+    to: selectedCall.value ?? '',
     text: text.value,
     transmitRequested: transmitRequested.value,
   });
-  selectedOther.value = message.other;
+  openCall(message.other);
 }
 
 function onCancel(key: string): void {
@@ -176,92 +195,125 @@ function onCancel(key: string): void {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-auto py-2">
-    <p class="text-xs text-muted">
-      Messages on this connection. Nothing here is saved, and the radio’s stored messages are not read. The byte log is on Raw log.
-      <template v-if="example"> The K5KTF-4 lines are sample text.</template>
-    </p>
+    <div class="@container flex min-h-0 flex-1 flex-col gap-3">
+      <p class="text-xs text-muted">
+        Messages on this connection. Nothing here is saved, and the radio’s stored messages are not read. The byte log is on Raw log.
+        <template v-if="example"> The KF5UFJ lines are sample text.</template>
+      </p>
 
-    <div class="grid min-h-0 gap-3 lg:grid-cols-[16rem_1fr]">
-      <div class="flex flex-col gap-1">
-        <p v-if="others.length === 0" class="text-sm text-muted">No messages yet.</p>
-        <button
-          v-for="name in others"
-          :key="name"
-          type="button"
-          class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left"
-          :class="name === selectedOther ? 'bg-elevated text-highlighted' : 'text-muted'"
-          @click="selectedOther = name"
-        >
-          <span class="truncate font-mono text-sm">{{ name }}</span>
-          <UBadge
-            v-if="latestFor(name)"
-            :label="statusLabel[latestFor(name)!.status]"
-            :color="statusColor[latestFor(name)!.status]"
-            variant="subtle"
-          />
-        </button>
-      </div>
-
-      <div class="flex min-h-64 flex-col gap-3 rounded-md border border-default p-3">
-        <div class="flex min-h-24 flex-1 flex-col gap-2">
-          <p v-if="thread.length === 0" class="text-sm text-muted">Choose a station, or write a message below.</p>
-          <div v-for="message in thread" :key="message.key" class="flex flex-col gap-1 border-b border-default pb-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="font-mono text-sm text-highlighted">{{ message.direction === 'out' ? 'You' : message.other }}</span>
-              <UBadge :label="statusLabel[message.status]" :color="statusColor[message.status]" variant="subtle" />
-              <UButton
-                v-if="message.status === 'waiting-ack'"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                label="Cancel"
-                @click="onCancel(message.key)"
-              />
+      <div class="grid min-h-0 gap-3 @min-[42rem]:grid-cols-[18rem_1fr]">
+        <div class="min-h-0 flex-col gap-2" :class="showChat ? 'hidden @min-[42rem]:flex max-md:hidden' : 'flex'">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-medium text-highlighted">Callsigns</p>
+            <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-square-pen" label="New message" @click="onNewMessage" />
+          </div>
+          <form v-if="drafting" class="flex flex-col gap-2 rounded-md border border-default p-2" @submit.prevent="onOpenDraft">
+            <UFormField label="Callsign" :error="draftError" description="Opening a callsign does not send.">
+              <UInput v-model="draftCall" class="w-full" placeholder="KF5UFJ-7" autocapitalize="characters" />
+            </UFormField>
+            <div class="flex justify-end gap-1.5">
+              <UButton size="xs" color="neutral" variant="ghost" label="Cancel" type="button" @click="drafting = false" />
+              <UButton size="xs" color="neutral" variant="outline" label="Open" type="submit" />
             </div>
-            <p class="text-sm">{{ message.text }}</p>
-            <p v-if="message.detail" class="text-xs text-muted">{{ message.detail }}</p>
+          </form>
+          <p v-if="conversations.length === 0" class="py-6 text-sm text-muted">No messages this session.</p>
+          <div v-else class="flex flex-col">
+            <button
+              v-for="row in conversations"
+              :key="row.callsign"
+              type="button"
+              class="flex flex-col gap-0.5 border-b border-default px-2 py-2 text-left"
+              :class="row.callsign === selectedCall ? 'bg-elevated' : ''"
+              @click="openCall(row.callsign)"
+            >
+              <span class="flex items-baseline justify-between gap-2">
+                <span class="truncate font-mono text-sm text-highlighted">{{ row.callsign }}</span>
+                <span class="shrink-0 text-xs text-muted">{{ formatAprsChatTime(row.latest.at) }}</span>
+              </span>
+              <span class="flex items-center justify-between gap-2">
+                <span class="min-w-0 flex-1 truncate text-xs text-muted">{{ row.latest.text }}</span>
+                <UBadge :label="statusLabel[row.latest.status]" :color="statusColor[row.latest.status]" variant="subtle" />
+              </span>
+            </button>
           </div>
         </div>
 
-        <div class="grid gap-2 border-t border-default pt-3">
-          <div class="grid gap-2 sm:grid-cols-2">
+        <div
+          class="min-h-72 flex-col gap-3 rounded-md border border-default p-3"
+          :class="showChat ? 'flex' : 'hidden @min-[42rem]:flex max-md:hidden'"
+        >
+          <div class="flex items-center gap-2">
+            <UButton v-if="selectedCall" size="xs" color="neutral" variant="ghost" icon="i-lucide-chevron-left" label="Back" @click="onBack" />
+            <p class="min-w-0 truncate font-mono text-sm text-highlighted">{{ selectedCall ?? 'No callsign selected' }}</p>
+          </div>
+          <div class="flex min-h-24 flex-1 flex-col gap-2 overflow-auto">
+            <p v-if="!selectedCall" class="text-sm text-muted">Choose a callsign. That does not send.</p>
+            <p v-else-if="thread.length === 0" class="text-sm text-muted">No messages with {{ selectedCall }} yet. Send is the only control that writes.</p>
+            <div
+              v-for="message in thread"
+              :key="message.key"
+              class="flex max-w-[85%] flex-col gap-1 rounded-md px-3 py-2"
+              :class="message.direction === 'out' ? 'self-end bg-elevated' : 'self-start border border-default'"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-xs text-muted">{{ message.direction === 'out' ? 'You' : message.other }}</span>
+                <UBadge
+                  v-if="message.direction === 'out'"
+                  :label="statusLabel[message.status]"
+                  :color="statusColor[message.status]"
+                  variant="subtle"
+                />
+                <span v-else class="text-xs text-muted">{{ aprsHeardAudience(message, mine) }}</span>
+                <UButton
+                  v-if="message.status === 'waiting-ack'"
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  label="Cancel"
+                  @click="onCancel(message.key)"
+                />
+              </div>
+              <p class="text-sm">{{ message.text }}</p>
+              <p v-if="message.detail" class="text-xs text-muted">{{ message.detail }}</p>
+              <p class="text-xs text-muted">{{ formatAprsChatTime(message.at) }}</p>
+            </div>
+          </div>
+
+          <div v-if="selectedCall" class="grid gap-2 border-t border-default pt-3">
             <UFormField label="My callsign">
               <UInput v-model="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" />
             </UFormField>
-            <UFormField label="To">
-              <UInput v-model="to" class="w-full" placeholder="K5KTF-4" autocapitalize="characters" />
+            <UFormField label="Message" :description="`${text.length}/${APRS_MESSAGE_TEXT_MAX}`">
+              <UTextarea v-model="text" class="w-full" :rows="2" :maxlength="APRS_MESSAGE_TEXT_MAX" placeholder="Message text" />
             </UFormField>
-          </div>
-          <UFormField label="Message" :description="`${text.length}/${APRS_MESSAGE_TEXT_MAX}`">
-            <UTextarea v-model="text" class="w-full" :rows="2" :maxlength="APRS_MESSAGE_TEXT_MAX" placeholder="Message text" />
-          </UFormField>
-          <div class="grid gap-2 sm:grid-cols-2">
-            <USwitch
-              :model-value="transmitRequested"
-              label="Allow transmit"
-              description="Off. Send writes nothing, and a message already waiting is cancelled. Turning it on does not send."
-              @update:model-value="onTransmit"
-            />
-            <USwitch
-              :model-value="ackRequested"
-              label="Reply with an ack"
-              description="Off. On answers a message to your callsign. That answer is a transmission."
-              @update:model-value="onAck"
-            />
-          </div>
-          <p v-if="ackReason" class="text-xs text-muted">{{ ackReason }}</p>
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-xs text-muted">
-              Up to {{ APRS_MESSAGE_ATTEMPTS }} tries, {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart, and only after an AX.25 UI frame.
-              Allow transmit off, Cancel, or Disconnect stops it.
-            </p>
-            <UButton
-              color="primary"
-              icon="i-lucide-send"
-              :label="transmitRequested ? 'Send' : 'Send (transmit off)'"
-              :disabled="!cardId"
-              @click="onSend"
-            />
+            <div class="grid gap-2 sm:grid-cols-2">
+              <USwitch
+                :model-value="transmitRequested"
+                label="Allow transmit"
+                description="Off. Send writes nothing, and a message already waiting is cancelled. Turning it on does not send."
+                @update:model-value="onTransmit"
+              />
+              <USwitch
+                :model-value="ackRequested"
+                label="Reply with an ack"
+                description="Off. On answers a message to your callsign. That answer is a transmission."
+                @update:model-value="onAck"
+              />
+            </div>
+            <p v-if="ackReason" class="text-xs text-muted">{{ ackReason }}</p>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-muted">
+                An ack is from that station for your message id. Up to {{ APRS_MESSAGE_ATTEMPTS }} tries,
+                {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart, after an AX.25 UI frame.
+              </p>
+              <UButton
+                color="primary"
+                icon="i-lucide-send"
+                :label="transmitRequested ? 'Send' : 'Send (transmit off)'"
+                :disabled="!cardId"
+                @click="onSend"
+              />
+            </div>
           </div>
         </div>
       </div>

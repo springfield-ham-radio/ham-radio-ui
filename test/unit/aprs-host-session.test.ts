@@ -178,7 +178,7 @@ describe('APRS host session', () => {
 
     fake.push(incoming);
     await settle();
-    expect(session.snapshot().messages.some((message) => message.text === 'Ping')).toBe(true);
+    expect(session.snapshot().messages.find((message) => message.text === 'Ping')?.addressee).toBe('N0TST');
     expect(session.snapshot().kissConfirmed).toBe(true);
     expect(fake.writes).toEqual([]);
 
@@ -213,9 +213,11 @@ describe('APRS host session', () => {
     fake.push(wrong);
     await settle();
     expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('waiting-ack');
+    const beforeAck = session.snapshot().messages.length;
     fake.push(right);
     await settle();
     expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('acked');
+    expect(session.snapshot().messages).toHaveLength(beforeAck);
     await session.advance(APRS_MESSAGE_RETRY_MS);
     expect(fake.writes).toHaveLength(before);
 

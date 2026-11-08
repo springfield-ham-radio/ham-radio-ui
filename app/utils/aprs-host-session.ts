@@ -42,6 +42,8 @@ export interface AprsHostMessage {
   other: string;
   text: string;
   messageId?: string;
+  /** APRS addressee. An incoming line can be heard without being addressed to this station. */
+  addressee?: string;
   status: AprsHostMessageStatus;
   detail?: string;
   at: number;
@@ -489,6 +491,7 @@ export function createAprsHostSession(options?: {
       other: source,
       text: body.text,
       messageId: body.id,
+      addressee: body.addressee,
       status: 'heard',
       at: clock,
     });
@@ -809,6 +812,7 @@ export function createAprsHostSession(options?: {
           direction: 'out',
           other: to ? formatAx25Call(to) : input.to.trim() || '—',
           text: input.text,
+          addressee: to ? formatAx25Call(to) : undefined,
           status: 'blocked',
           detail,
           at: clock,
@@ -862,6 +866,7 @@ export function createAprsHostSession(options?: {
         other: item.to,
         text: input.text,
         messageId: id,
+        addressee: item.to,
         status: 'waiting-ack',
         detail: 'Sending',
         at: clock,
