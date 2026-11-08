@@ -156,7 +156,18 @@ export function parseAx25Ui(frame: Uint8Array): Ax25UiFrame | undefined {
     return undefined;
   }
 
-  const infoBytes = frame.subarray(offset + 2);
+  // A TNC packet terminator is not part of the APRS data. APRS 1.0.1 message
+  // text has no trailing CR. The TH-D74 ack on the air ended in 0x0D before
+  // the closing KISS FEND. Strip only trailing CR and LF. A control byte
+  // anywhere else still rejects the frame. SSID bit 7 is command/response,
+  // and bits 5–6 are the reserved pair; the SSID itself is bits 1–4.
+  let infoEnd = frame.length;
+
+  while (infoEnd > offset + 2 && (frame[infoEnd - 1] === 0x0d || frame[infoEnd - 1] === 0x0a)) {
+    infoEnd -= 1;
+  }
+
+  const infoBytes = frame.subarray(offset + 2, infoEnd);
   let info = '';
 
   for (const byte of infoBytes) {

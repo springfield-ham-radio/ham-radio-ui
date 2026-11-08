@@ -38,6 +38,10 @@ function fakePort(): { port: AprsHostBytePort; writes: Uint8Array[]; push: (chun
   };
 }
 
+function hexBytes(text: string): Uint8Array {
+  return Uint8Array.from(text.trim().split(/\s+/u).map((byte) => Number.parseInt(byte, 16)));
+}
+
 async function settle(): Promise<void> {
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
@@ -211,6 +215,89 @@ describe('APRS host session', () => {
     fake.push(rej);
     await settle();
     expect(session.snapshot().messages.find((message) => message.key === rejected.key)?.status).toBe('rejected');
+  });
+
+  const d74Ack7Fragments = [
+    'c0 00 82 a0 96 60 60 68 60 96 8c',
+    '6a aa 8c 94 ee ae 92 88 8a 62 40 62 ae 92 88',
+    '8a 64 40 63 03 f0 3a 4b 46 35 55 46 4a 2d 31 20',
+    '3a 61 63 6b 37 0d c0',
+  ].map(hexBytes);
+  const d74Ack7 = hexBytes(d74Ack7Fragments.map((chunk) => [...chunk].map((byte) => byte.toString(16).padStart(2, '0')).join(' ')).join(' '));
+
+  it('acks message 7 from the captured TH-D74 frame and does not retry', async () => {
+    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(session.snapshot().ackOptIn).toBe(false);
+
+    for (let count = 0; count < 6; count += 1) {
+      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip', transmitRequested: false });
+    }
+
+    const sent = await session.send({
+      mine: 'KF5UFJ-1',
+      to: 'KF5UFJ-7',
+      text: 'Hello.  Testing transmit from HamBench.',
+      transmitRequested: true,
+    });
+
+    expect(sent.messageId).toBe('7');
+    expect(sent.status).toBe('waiting-ack');
+    expect(fake.writes).toHaveLength(1);
+
+    for (const chunk of d74Ack7Fragments) {
+      fake.push(chunk);
+    }
+
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().frames).toBe(1);
+    expect(session.snapshot().trace.some((line) => line.note?.includes('AX.25 UI'))).toBe(true);
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('acked');
+    await session.advance(APRS_MESSAGE_RETRY_MS);
+    expect(fake.writes).toHaveLength(1);
+
+    for (const chunk of d74Ack7Fragments) {
+      fake.push(chunk);
+    }
+
+    await settle();
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('acked');
+    expect(fake.writes).toHaveLength(1);
+  });
+
+  it('does not ack message 7 for the wrong sender, addressee, or id', async () => {
+    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+
+    for (let count = 0; count < 6; count += 1) {
+      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip', transmitRequested: false });
+    }
+
+    const sent = await session.send({
+      mine: 'KF5UFJ-1',
+      to: 'KF5UFJ-7',
+      text: 'Hello.  Testing transmit from HamBench.',
+      transmitRequested: true,
+    });
+    const wrongSender = Uint8Array.from(d74Ack7);
+    wrongSender[wrongSender.indexOf(0xee)] = 0xf0;
+    const wrongAddressee = Uint8Array.from(d74Ack7);
+    const addresseeSsid = wrongAddressee.lastIndexOf(0x31);
+    wrongAddressee[addresseeSsid] = 0x32;
+    const wrongId = Uint8Array.from(d74Ack7);
+    const idByte = wrongId.lastIndexOf(0x37);
+    wrongId[idByte] = 0x38;
+
+    fake.push(wrongSender);
+    fake.push(wrongAddressee);
+    fake.push(wrongId);
+    await settle();
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('waiting-ack');
+    await session.advance(APRS_MESSAGE_RETRY_MS);
+    expect(fake.writes).toHaveLength(2);
   });
 
   it('does not write an invalid message', async () => {

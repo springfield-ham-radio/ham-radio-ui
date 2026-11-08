@@ -120,4 +120,41 @@ describe('AX.25 APRS messages', () => {
     expect(Buffer.from(frame ?? []).toString('latin1')).not.toContain('KISS');
     expect(Buffer.from(frame ?? []).toString('latin1')).not.toContain('RESTART');
   });
+
+  const d74Ack7 = hex(
+    'c0 00 82 a0 96 60 60 68 60 96 8c 6a aa 8c 94 ee ae 92 88 8a 62 40 62 ae 92 88 8a 64 40 63 03 f0 3a 4b 46 35 55 46 4a 2d 31 20 3a 61 63 6b 37 0d c0',
+  );
+
+  it('reads the captured TH-D74 ack7, including source SSID 0xee and the trailing CR', () => {
+    const decoded = pushKissBytes(createKissDecoderState(), d74Ack7);
+    const payload = decoded.frames[0]?.data ?? new Uint8Array();
+    const ax25 = parseAx25Ui(payload);
+    const message = parseAprsMessageFrame(payload);
+
+    expect(decoded.frames).toHaveLength(1);
+    expect(payload[13]).toBe(0xee);
+    expect(ax25?.destination).toEqual({ call: 'APK004', ssid: 0 });
+    expect(ax25?.source).toEqual({ call: 'KF5UFJ', ssid: 7 });
+    expect(ax25?.path).toEqual([
+      { call: 'WIDE1', ssid: 1 },
+      { call: 'WIDE2', ssid: 1 },
+    ]);
+    expect(ax25?.info).toBe(':KF5UFJ-1 :ack7');
+    expect(message).toEqual({
+      source: 'KF5UFJ-7',
+      body: { addressee: 'KF5UFJ-1', kind: 'ack', text: '7', id: '7' },
+    });
+
+    const withLineEnd = Uint8Array.from([...d74Ack7.subarray(0, -1), 0x0a, 0xc0]);
+    expect(parseAprsMessageFrame(pushKissBytes(createKissDecoderState(), withLineEnd).frames[0]?.data ?? new Uint8Array())?.body.id).toBe('7');
+
+    const midCr = Uint8Array.from(payload);
+    midCr[midCr.indexOf(0x61)] = 0x0d;
+    expect(parseAx25Ui(midCr)).toBeUndefined();
+    expect(parseAprsMessageFrame(midCr)).toBeUndefined();
+  });
 });
+
+function hex(text: string): Uint8Array {
+  return Uint8Array.from(text.trim().split(/\s+/u).map((byte) => Number.parseInt(byte, 16)));
+}
