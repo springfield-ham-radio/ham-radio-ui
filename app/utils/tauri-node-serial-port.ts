@@ -39,10 +39,11 @@ const SERIAL_OPEN_DRAIN_MS = 20;
 
 /**
  * Host open reads before `watch`. Plugin 3.0.7 `attach_watch` clears the hub
- * idle buffer (`attach_watch_clears_idle`), so a one-shot banner that arrives
- * between `open()` and `watch()` is deleted. These bounds take that buffer,
- * then keep reading until a short quiet gap, and hand the bytes to the log
- * before `watch` is attached. The passive monitor does not use this path.
+ * idle buffer (`attach_watch_clears_idle`). `read_binary` fills until its
+ * timeout, so one call returns about one timeout of bytes and a timeout with
+ * no bytes is not the end of a sign-on. Stopping there and then calling
+ * `watch` deletes the bytes that arrive in the handoff. Read for the whole
+ * window. The passive monitor does not use this path.
  */
 export const HOST_STARTUP_READ_WINDOW_MS = 250;
 export const HOST_STARTUP_QUIET_MS = 30;
@@ -54,8 +55,10 @@ function isQuietRead(error: unknown): boolean {
 }
 
 /**
- * Read bytes the serial hub has already taken, until it stays quiet or the window ends.
- * A quiet read is the plugin timeout. Any other failure is rethrown.
+ * Read bytes the serial hub has already taken, for the whole window.
+ * A quiet read is the plugin timeout and does not end the read: the next
+ * bytes would otherwise sit in the idle buffer and be deleted when `watch`
+ * attaches. Any other failure is rethrown.
  */
 export async function collectBytesBeforeWatch(
   readBinary: (options: { timeout: number; size: number }) => Promise<Uint8Array | number[]>,
@@ -85,18 +88,10 @@ export async function collectBytesBeforeWatch(
         throw error;
       }
 
-      if (parts.length > 0) {
-        break;
-      }
-
       continue;
     }
 
     if (chunk.length === 0) {
-      if (parts.length > 0) {
-        break;
-      }
-
       continue;
     }
 

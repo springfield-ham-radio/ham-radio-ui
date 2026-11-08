@@ -296,31 +296,34 @@ function asciiBytes(text: string): Uint8Array {
 }
 
 describe('collectBytesBeforeWatch', () => {
-  it('joins arbitrary chunks through a trailing colon and stops on a quiet read', async () => {
-    const banner = asciiBytes('9600\r\nHB 1200\r\ncmd:');
-    const splits = [1, 3, 14, 1];
-    let offset = 0;
-    const queued = splits.map((length) => {
-      const piece = banner.slice(offset, offset + length);
-      offset += length;
-      return piece;
-    });
-    expect(offset).toBe(banner.length);
+  it('joins arbitrary chunks through a trailing colon and keeps bytes after a quiet gap', async () => {
+    const banner = asciiBytes('A 110101000000\r\nHB 1200\r\ncmd:');
+    const head = banner.slice(0, banner.length - 2);
+    const tail = banner.slice(banner.length - 2);
+    expect(new TextDecoder().decode(head)).toBe('A 110101000000\r\nHB 1200\r\ncm');
+    expect(new TextDecoder().decode(tail)).toBe('d:');
 
+    let clock = 0;
+    const queued: Array<Uint8Array | 'quiet'> = [head.slice(0, 1), head.slice(1), 'quiet', tail];
     const read = vi.fn(async () => {
+      clock += 30;
       const next = queued.shift();
 
-      if (!next) {
+      if (next === undefined || next === 'quiet') {
         throw new Error('no data received within 30 ms');
       }
 
       return next;
     });
 
-    const collected = await collectBytesBeforeWatch(read, { windowMs: 250, quietMs: 30 });
+    const collected = await collectBytesBeforeWatch(read, {
+      windowMs: 250,
+      quietMs: 30,
+      now: () => clock,
+    });
     expect(collected).toEqual(banner);
     expect(String.fromCharCode(collected.at(-1) ?? 0)).toBe(':');
-    expect(read).toHaveBeenCalledTimes(splits.length + 1);
+    expect(read.mock.calls.length).toBeGreaterThan(queued.length);
   });
 
   it('returns bytes already read when the caller stops, and rethrows a real read error', async () => {

@@ -407,6 +407,32 @@ describe('APRS host session', () => {
     expect(fake.writes).toHaveLength(1);
   });
 
+  it('keeps the 27-byte hardware slice intact and does not accept it as cmd:', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const slice = Uint8Array.from([
+      0x41, 0x20, 0x31, 0x31, 0x30, 0x31, 0x30, 0x31, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x0d, 0x0a, 0x48, 0x42,
+      0x20, 0x31, 0x32, 0x30, 0x30, 0x0d, 0x0a, 0x63, 0x6d,
+    ]);
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    fake.push(slice);
+
+    const before = session.snapshot();
+    const recorded = before.trace.filter((line) => line.direction === 'rx').map((line) => line.text).join('');
+    expect(recorded).toBe(escapeSerialText(slice));
+    expect(before.rxBytes).toBe(27);
+    expect(before.commandPhase).toBe('idle');
+
+    await session.requestCommandPrompt();
+    fake.push(slice);
+    expect(session.snapshot().commandPhase).toBe('waiting-prompt');
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+
+    fake.push(Uint8Array.from([0x64, 0x3a]));
+    expect(session.snapshot().commandPhase).toBe('prompt');
+    expect(fake.writes).toHaveLength(1);
+  });
+
   it('escapes binary and markup, and drops only the oldest lines', () => {
     const hostile = Uint8Array.from([0x00, 0x11, 0x13, 0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e, 0xc0]);
     const escaped = escapeSerialText(hostile);
