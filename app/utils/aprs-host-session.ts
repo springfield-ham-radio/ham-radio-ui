@@ -156,6 +156,7 @@ export function createAprsHostSession(options?: {
   let commandPhase: AprsHostSnapshot['commandPhase'] = 'idle';
   let commandDetail = 'No command requested.';
   let commandBytes = new Uint8Array();
+  let sessionBytes = new Uint8Array();
   let commandDeadline = 0;
   let commandActive = false;
   let commandTimer: ReturnType<typeof setInterval> | undefined;
@@ -250,6 +251,30 @@ export function createAprsHostSession(options?: {
         }
       }, 250);
     }
+  }
+
+  function noteConnectionPrompt(): void {
+    if (!hasCommandPrompt(sessionBytes)) {
+      return;
+    }
+
+    if (commandPhase === 'prompt' || commandPhase === 'waiting-accept' || commandPhase === 'restart-sent' || commandPhase === 'rejected' || commandPhase === 'kiss-framed') {
+      return;
+    }
+
+    const afterInterrupt = commandPhase === 'waiting-prompt';
+    commandActive = false;
+
+    if (commandTimer) {
+      clearInterval(commandTimer);
+      commandTimer = undefined;
+    }
+
+    commandPhase = 'prompt';
+    commandDetail = afterInterrupt
+      ? 'cmd: arrived after Ctrl+C. A carriage return is still not sent until Enter host KISS.'
+      : 'cmd: arrived on this connection. No command was sent.';
+    record('note', new Uint8Array(), commandDetail);
   }
 
   function considerCommandReply(kissFrames: number): void {
@@ -465,6 +490,9 @@ export function createAprsHostSession(options?: {
 
     record('rx', chunk, notes.join(', ') || 'empty');
 
+    sessionBytes = appendCommandBytes(sessionBytes, chunk);
+    noteConnectionPrompt();
+
     if (commandActive) {
       commandBytes = appendCommandBytes(commandBytes, chunk);
       considerCommandReply(decoded.frames.length);
@@ -533,6 +561,7 @@ export function createAprsHostSession(options?: {
       commandPhase = 'idle';
       commandDetail = 'No command requested on this connection.';
       commandBytes = new Uint8Array();
+      sessionBytes = new Uint8Array();
       commandActive = false;
       hostFlow = capture?.flowControl === 'none' ? 'none' : 'software';
 
@@ -577,6 +606,7 @@ export function createAprsHostSession(options?: {
       cancelWaiting('Disconnected. This message will not be sent again.');
       commandActive = false;
       commandBytes = new Uint8Array();
+      sessionBytes = new Uint8Array();
       if (commandTimer) {
         clearInterval(commandTimer);
         commandTimer = undefined;
@@ -626,6 +656,10 @@ export function createAprsHostSession(options?: {
     async requestCommandPrompt() {
       if (!port?.isOpen || !port.write) {
         return 'Listen is not open. Nothing was sent.';
+      }
+
+      if (commandPhase === 'prompt') {
+        return 'cmd: is already on this connection. Nothing was sent.';
       }
 
       if (commandActive) {

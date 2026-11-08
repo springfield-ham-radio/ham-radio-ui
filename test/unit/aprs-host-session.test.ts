@@ -225,20 +225,18 @@ describe('APRS host session', () => {
     expect(await session.enterHostKiss()).toMatch(/No cmd:/);
     expect(fake.writes).toEqual([]);
 
-    fake.push(Uint8Array.from([...'cmd:'].map((character) => character.charCodeAt(0))));
+    fake.push(Uint8Array.from([...'cm'].map((character) => character.charCodeAt(0))));
     await settle();
+    expect(session.snapshot().commandPhase).toBe('idle');
     expect(await session.enterHostKiss()).toMatch(/No cmd:/);
-    expect(fake.writes).toEqual([]);
 
     expect(await session.requestCommandPrompt()).toBeUndefined();
     expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).not.toContain('\r');
     expect(await session.requestCommandPrompt()).toMatch(/Already waiting/);
     expect(fake.writes).toHaveLength(1);
-
-    fake.push(Uint8Array.from([...'cm'].map((character) => character.charCodeAt(0))));
-    await settle();
     expect(session.snapshot().commandPhase).toBe('waiting-prompt');
+
     fake.push(Uint8Array.from([...'d:'].map((character) => character.charCodeAt(0))));
     await settle();
     expect(session.snapshot().commandPhase).toBe('prompt');
@@ -375,7 +373,7 @@ describe('APRS host session', () => {
     expect(session.snapshot().rxBytes).toBeGreaterThan(0);
   });
 
-  it('records every byte of an arbitrarily split banner, including a trailing colon, and still requires that colon after Request', async () => {
+  it('records every byte of an arbitrarily split banner, accepts cmd: on this connection, and drops it on disconnect', async () => {
     const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
     const banner = '0\r\nHB 1200\r\ncmd:';
     const fake = fakePort();
@@ -394,17 +392,24 @@ describe('APRS host session', () => {
     expect(recorded.endsWith(':')).toBe(true);
     expect(before.rxChunks).toBe(banner.length);
     expect(before.rxBytes).toBe(banner.length);
-    expect(before.commandPhase).toBe('idle');
+    expect(before.commandPhase).toBe('prompt');
+    expect(before.commandDetail).toMatch(/No command was sent/);
     expect(fake.writes).toEqual([]);
 
-    await session.requestCommandPrompt();
+    expect(await session.requestCommandPrompt()).toMatch(/Nothing was sent/);
+    expect(fake.writes).toEqual([]);
+
+    await session.disconnect();
+    await session.connect('/dev/cu.pg5g', async () => {
+      fake.port.isOpen = true;
+      return fake.port;
+    });
+    expect(session.snapshot().commandPhase).toBe('idle');
     fake.push(Uint8Array.from([...'cmd'].map((character) => character.charCodeAt(0))));
+    expect(session.snapshot().commandPhase).toBe('idle');
+    await session.requestCommandPrompt();
     expect(session.snapshot().commandPhase).toBe('waiting-prompt');
     expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
-
-    fake.push(Uint8Array.of(':'.charCodeAt(0)));
-    expect(session.snapshot().commandPhase).toBe('prompt');
-    expect(fake.writes).toHaveLength(1);
   });
 
   it('keeps the 27-byte hardware slice intact and does not accept it as cmd:', async () => {
@@ -431,6 +436,33 @@ describe('APRS host session', () => {
     fake.push(Uint8Array.from([0x64, 0x3a]));
     expect(session.snapshot().commandPhase).toBe('prompt');
     expect(fake.writes).toHaveLength(1);
+  });
+
+  it('treats the 24-byte HBAUD reply as this connection prompt and does not send Ctrl+C', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const reply = Uint8Array.from([
+      0x3a, 0x48, 0x42, 0x41, 0x55, 0x44, 0x20, 0x20, 0x20, 0x20, 0x77, 0x61, 0x73, 0x20, 0x31, 0x32, 0x30, 0x30,
+      0x0d, 0x0a, 0x63, 0x6d, 0x64, 0x3a,
+    ]);
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    fake.push(reply);
+
+    expect(new TextDecoder().decode(reply)).toBe(':HBAUD    was 1200\r\ncmd:');
+    expect(session.snapshot().rxBytes).toBe(24);
+    expect(session.snapshot().commandPhase).toBe('prompt');
+    expect(session.snapshot().commandDetail).toMatch(/No command was sent/);
+    expect(await session.requestCommandPrompt()).toMatch(/Nothing was sent/);
+    expect(fake.writes).toEqual([]);
+
+    await session.disconnect();
+    await session.connect('/dev/cu.pg5g', async () => {
+      fake.port.isOpen = true;
+      return fake.port;
+    });
+    expect(session.snapshot().commandPhase).toBe('idle');
+    expect(await session.enterHostKiss()).toMatch(/Nothing was sent/);
+    expect(fake.writes).toEqual([]);
   });
 
   it('escapes binary and markup, and drops only the oldest lines', () => {

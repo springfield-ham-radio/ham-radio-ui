@@ -364,7 +364,7 @@ function onCancel(key: string): void {
             variant="outline"
             icon="i-lucide-terminal"
             label="Request command prompt"
-            :disabled="!cardId || !isConnected"
+            :disabled="!cardId || !isConnected || snapshot?.commandPhase === 'prompt'"
             @click="onRequestPrompt"
           />
           <UButton
@@ -386,7 +386,7 @@ function onCancel(key: string): void {
           />
         </div>
         <p class="mb-2 text-xs text-muted">
-          Request command prompt writes Ctrl+C three times and no carriage return. Enter host KISS stays off until cmd: arrives after that write. It then writes KISS ON, and writes RESTART only after another cmd:. A prompt from an earlier connection does not count.
+          The command list says Ctrl+C returns from Converse, and three Ctrl+C return from Transparent. It does not say Ctrl+C prints cmd: when the TNC is already in command mode. If cmd: arrives on this Listen, Request sends nothing. Enter host KISS then writes KISS ON, and writes RESTART only after another cmd:. Disconnect drops that prompt. cmd without the colon does not count.
         </p>
         <p v-if="commandNote" class="mb-2 text-xs text-muted">{{ commandNote }}</p>
         <p v-if="enterNote || snapshot?.hostEnterRequested" class="mb-2 text-xs text-muted">
