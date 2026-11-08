@@ -5,6 +5,7 @@ import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '~/utils/aprs-kiss-restore';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
 import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX } from '~/utils/aprs-message';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 
 const props = defineProps<{
   cardId?: string;
@@ -31,7 +32,23 @@ const ackRequested = ref(false);
 const ackReason = ref<string | undefined>();
 const enterNote = ref<string | undefined>();
 const commandNote = ref<string | undefined>();
-const flowOff = ref(false);
+const hostFlow = ref<AprsHostFlowControl>('software');
+const hostFlowItems: Array<{ label: string; value: AprsHostFlowControl }> = [
+  { label: 'Software (XON/XOFF)', value: 'software' },
+  { label: 'Off', value: 'none' },
+  { label: 'Hardware (RTS/CTS)', value: 'hardware' },
+];
+const hostFlowDescription = computed(() => {
+  if (hostFlow.value === 'hardware') {
+    return 'For a TNC already at XFLOW OFF. The driver manages RTS and CTS. RTS is not forced low. This does not send XFLOW.';
+  }
+
+  if (hostFlow.value === 'none') {
+    return 'Same lines as the passive monitor. RTS and DTR stay low. This does not send XFLOW.';
+  }
+
+  return 'Factory XFLOW ON on the computer side. RTS and DTR stay low. This does not send XFLOW. Default stays here.';
+});
 const selectedOther = ref<string | undefined>();
 
 if (props.cardId) {
@@ -98,7 +115,13 @@ async function onListen(): Promise<void> {
     // The port list is unavailable outside the desktop shell. Open reports that failure.
   }
 
-  await connect(props.cardId, props.port, props.baud, flowOff.value ? 'none' : 'software');
+  await connect(props.cardId, props.port, props.baud, hostFlow.value);
+}
+
+function onHostFlow(value: unknown): void {
+  if (value === 'software' || value === 'none' || value === 'hardware') {
+    hostFlow.value = value;
+  }
 }
 
 async function onDisconnect(): Promise<void> {
@@ -248,15 +271,20 @@ function onCancel(key: string): void {
         <UButton v-else size="sm" color="neutral" variant="outline" icon="i-lucide-unplug" label="Disconnect" @click="onDisconnect" />
       </div>
     </div>
-    <p v-if="!isConnected" class="text-xs text-muted">
-      Host flow control stays software unless you choose otherwise before Listen. Off matches the passive monitor, which is the path that already received. Changing it does not write to the radio, and it applies on the next Listen.
-    </p>
-    <USwitch
+    <UFormField
       v-if="!isConnected"
-      v-model="flowOff"
-      label="Flow control off, same as the passive monitor"
-      description="Leave this off to keep software flow. It is not switched for you if the radio stays quiet."
-    />
+      label="Host flow control"
+      description="Choose this before Listen. Software and Off keep RTS low. Hardware lets the driver manage RTS. None of these sends XFLOW, and the choice applies on the next Listen."
+      :hint="hostFlowDescription"
+    >
+      <USelect
+        :model-value="hostFlow"
+        :items="hostFlowItems"
+        value-key="value"
+        class="w-full sm:max-w-xs"
+        @update:model-value="onHostFlow"
+      />
+    </UFormField>
 
     <UAlert v-if="snapshot?.error" color="error" variant="subtle" icon="i-lucide-circle-alert" title="COM port" :description="snapshot.error" />
 

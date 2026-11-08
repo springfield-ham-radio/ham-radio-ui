@@ -3,6 +3,7 @@ import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { createAprsHostSession, type AprsHostMessage, type AprsHostSession, type AprsHostSnapshot } from '~/utils/aprs-host-session';
 import { aprsHoldPaths, nextAprsPortHolds } from '~/utils/aprs-session';
 import { openAprsHostPort } from '~/utils/aprs-serial';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { isPortMissingError } from '~/utils/serial-port-reconnect';
 
 const sessions = new Map<string, AprsHostSession>();
@@ -53,7 +54,7 @@ export function useAprsHost() {
     });
   }
 
-  async function connect(cardId: string, path: string, baudRate: number, flowControl: 'software' | 'none' = 'software'): Promise<void> {
+  async function connect(cardId: string, path: string, baudRate: number, flowControl: AprsHostFlowControl = 'software'): Promise<void> {
     if (aprsConnectBlocked(lockedPorts.value, path, cardPorts.value[cardId])) {
       const session = sessionFor(cardId);
       session.unavailable('That serial port is already open for CAT, the monitor, or APRS. Disconnect it first.');

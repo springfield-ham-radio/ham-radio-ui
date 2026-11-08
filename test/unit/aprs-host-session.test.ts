@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call } from '../../app/utils/aprs-ax25.ts';
 import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
-import { createAprsHostSession, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
+import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
 import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND } from '../../app/utils/aprs-command.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
@@ -53,6 +53,17 @@ describe('APRS host session', () => {
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).flowControl).toBe('software');
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).rts).toBe(false);
     expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).dtr).toBe(false);
+    expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600).rtsManagedByDriver).toBe(false);
+    expect(aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600, 'none')).toMatchObject({
+      flowControl: 'none',
+      rts: false,
+      dtr: false,
+      rtsManagedByDriver: false,
+    });
+    const hardware = aprsHostSerialOpenOptions('/dev/cu.pg5g', 9600, 'hardware');
+    expect(hardware.flowControl).toBe('hardware');
+    expect(hardware.dtr).toBe(false);
+    expect(hardware.rtsManagedByDriver).toBe(true);
     expect(aprsOpenKeepsIncoming('monitor')).toBe(false);
     expect(aprsOpenKeepsIncoming('host')).toBe(true);
   });
@@ -462,6 +473,16 @@ describe('APRS host session', () => {
     });
     expect(session.snapshot().commandPhase).toBe('idle');
     expect(await session.enterHostKiss()).toMatch(/Nothing was sent/);
+    expect(fake.writes).toEqual([]);
+  });
+
+  it('records hardware RTS/CTS on Listen and does not write', async () => {
+    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port, { flowControl: 'hardware' });
+    expect(session.snapshot().hostFlow).toBe('hardware');
+    expect(session.snapshot().trace[0]?.note).toBe(hostListenNote('hardware'));
+    expect(session.snapshot().bytesWritten).toBe(0);
     expect(fake.writes).toEqual([]);
   });
 

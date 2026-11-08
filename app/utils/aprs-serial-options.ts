@@ -38,14 +38,24 @@ export function aprsSerialOpenOptions(path: string, baudRate: number): AprsSeria
 }
 
 /**
- * Host KISS port.
+ * Host flow on this computer.
  *
- * The TNC command list defaults `XFLOW` to ON, which is software flow
- * control. The Tauri serial plugin supports that mode. Hardware RTS/CTS is
- * present on the operation-panel COM jack, but a USB adapter may not wire
- * those pins, so it is not selected here. RTS and DTR are still deasserted:
- * on this jack they are flow-control lines, not the DATA-terminal PKS key.
+ * `software` is the factory `XFLOW ON` setting. `none` matches the passive
+ * monitor. `hardware` is RTS/CTS for a TNC whose `XFLOW` is already OFF.
+ * None of these sends `XFLOW`.
  */
+export type AprsHostFlowControl = 'software' | 'none' | 'hardware';
+
+export interface AprsHostSerialOpenOptions extends Omit<AprsSerialOpenOptions, 'flowControl'> {
+  flowControl: AprsHostFlowControl;
+  /**
+   * Hardware mode does not ioctl RTS. Plugin `FlowControl::Hardware` is
+   * serialport `CRTSCTS`, and the driver asserts RTS while it can receive.
+   * Forcing RTS low would hold the panel MPU `PCCTS` inhibit.
+   */
+  rtsManagedByDriver: boolean;
+}
+
 /**
  * The passive monitor drops the opening fraction of a second. The host
  * listener keeps it. That difference is not a claim about why a particular
@@ -58,10 +68,11 @@ export function aprsOpenKeepsIncoming(role: 'monitor' | 'host'): boolean {
 export function aprsHostSerialOpenOptions(
   path: string,
   baudRate: number,
-  flowControl: 'software' | 'none' = 'software',
-): Omit<AprsSerialOpenOptions, 'flowControl'> & { flowControl: 'software' | 'none' } {
+  flowControl: AprsHostFlowControl = 'software',
+): AprsHostSerialOpenOptions {
   return {
     ...aprsSerialOpenOptions(path, baudRate),
     flowControl,
+    rtsManagedByDriver: flowControl === 'hardware',
   };
 }

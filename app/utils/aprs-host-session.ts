@@ -18,6 +18,7 @@ import {
   parseAprsMessageFrame,
 } from '~/utils/aprs-message';
 import type { AprsBytePort } from '~/utils/aprs-session';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import {
   makeTraceLine,
   pushTraceLine,
@@ -76,7 +77,7 @@ export interface AprsHostSnapshot {
    */
   commandPhase: 'idle' | 'waiting-prompt' | 'prompt' | 'timed-out' | 'cancelled' | 'waiting-accept' | 'restart-sent' | 'rejected' | 'kiss-framed';
   commandDetail: string;
-  hostFlow: 'software' | 'none';
+  hostFlow: AprsHostFlowControl;
   trace: AprsTraceLine[];
   traceDropped: number;
   messages: AprsHostMessage[];
@@ -84,7 +85,7 @@ export interface AprsHostSnapshot {
 
 export interface AprsHostSession {
   snapshot(): AprsHostSnapshot;
-  connect(path: string, openPort: () => Promise<AprsHostBytePort>, capture?: { flowControl?: 'software' | 'none' }): Promise<void>;
+  connect(path: string, openPort: () => Promise<AprsHostBytePort>, capture?: { flowControl?: AprsHostFlowControl }): Promise<void>;
   unavailable(message: string): void;
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
@@ -161,7 +162,7 @@ export function createAprsHostSession(options?: {
   let commandDeadline = 0;
   let commandActive = false;
   let commandTimer: ReturnType<typeof setInterval> | undefined;
-  let hostFlow: 'software' | 'none' = 'software';
+  let hostFlow: AprsHostFlowControl = 'software';
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   let identity: Ax25Call | undefined;
@@ -578,7 +579,7 @@ export function createAprsHostSession(options?: {
       commandBytes = new Uint8Array();
       sessionBytes = new Uint8Array();
       commandActive = false;
-      hostFlow = capture?.flowControl === 'none' ? 'none' : 'software';
+      hostFlow = capture?.flowControl ?? 'software';
 
       try {
         const opened = await openPort();
@@ -590,13 +591,7 @@ export function createAprsHostSession(options?: {
 
         port = opened;
         path = nextPath;
-        record(
-          'note',
-          new Uint8Array(),
-          hostFlow === 'none'
-            ? 'Listen opened. Flow control is off, the same as the passive monitor. No command was sent.'
-            : 'Listen opened. Flow control is software. The passive monitor uses none. 0x11 and 0x13 may be taken by the driver before they are listed. That is a capture limit, not a conclusion. No command was sent.',
-        );
+        record('note', new Uint8Array(), hostListenNote(hostFlow));
         opened.on('data', onData);
         opened.on('error', onError);
       } catch (cause) {
@@ -854,4 +849,16 @@ export function createAprsHostSession(options?: {
       listeners.delete(listener);
     },
   };
+}
+
+export function hostListenNote(flow: AprsHostFlowControl): string {
+  if (flow === 'hardware') {
+    return 'Listen opened. Flow control is hardware RTS/CTS. The driver manages RTS. RTS was not forced low. No command was sent.';
+  }
+
+  if (flow === 'none') {
+    return 'Listen opened. Flow control is off, the same as the passive monitor. RTS and DTR stay low. No command was sent.';
+  }
+
+  return 'Listen opened. Flow control is software. RTS and DTR stay low. 0x11 and 0x13 may be taken by the driver before they are listed. That is a capture limit, not a conclusion. No command was sent.';
 }

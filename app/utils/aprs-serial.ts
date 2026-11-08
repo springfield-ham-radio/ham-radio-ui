@@ -1,6 +1,6 @@
 import { TauriNodeSerialPort } from '~/utils/tauri-node-serial-port';
 import type { AprsBytePort } from '~/utils/aprs-session';
-import { aprsHostSerialOpenOptions, aprsSerialOpenOptions } from '~/utils/aprs-serial-options';
+import { aprsHostSerialOpenOptions, aprsSerialOpenOptions, type AprsHostFlowControl } from '~/utils/aprs-serial-options';
 
 const OPEN_TIMEOUT_MS = 5000;
 
@@ -90,13 +90,13 @@ export async function openAprsReceivePort(path: string, baudRate: number): Promi
  * Open the COM port for host KISS.
  *
  * The returned object can write. Callers must not write on connect.
- * Software flow control follows the TNC `XFLOW` default. RTS and DTR stay low.
+ * Software and off keep RTS and DTR low. Hardware leaves RTS to the driver.
  */
 export async function openAprsHostPort(
   path: string,
   baudRate: number,
-  flowControl: 'software' | 'none' = 'software',
-): Promise<AprsBytePort & { write(bytes: Uint8Array): void }> {
+  flowControl: AprsHostFlowControl = 'software',
+): Promise<AprsBytePort & { write(bytes: Uint8Array): Promise<number> }> {
   const options = aprsHostSerialOpenOptions(path, baudRate, flowControl);
   const port = new TauriNodeSerialPort({
     path: options.path,
@@ -107,6 +107,7 @@ export async function openAprsHostPort(
     flowControl: options.flowControl,
     rts: false,
     dtr: false,
+    rtsManagedByDriver: options.rtsManagedByDriver,
     retainIncoming: true,
   });
   const queued: Uint8Array[] = [];

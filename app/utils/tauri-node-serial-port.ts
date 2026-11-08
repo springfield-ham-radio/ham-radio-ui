@@ -169,6 +169,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   private readonly tauriPort: TauriSerialPort;
   private readonly rts: boolean;
   private readonly dtr: boolean;
+  private readonly rtsManagedByDriver: boolean;
   private watchHandle: WatchHandle | undefined;
   private pipedDestination: PipedDestination | undefined;
   private pipedHandler: ((chunk: Buffer) => void) | undefined;
@@ -188,6 +189,11 @@ export class TauriNodeSerialPort extends EventEmitter {
     rts?: boolean;
     dtr?: boolean;
     /**
+     * Hardware RTS/CTS owns the RTS pin. Do not ioctl it low after open:
+     * on the TM-D710 panel MPU, PC CTS is the UART inhibit input.
+     */
+    rtsManagedByDriver?: boolean;
+    /**
      * Keep bytes that arrive while the port is opening.
      * The passive monitor leaves this off. That path drops the first fraction
      * of a second and clears the input buffer, which is the programming-cable
@@ -201,6 +207,7 @@ export class TauriNodeSerialPort extends EventEmitter {
     this.path = options.path;
     this.rts = options.rts ?? true;
     this.dtr = options.dtr ?? true;
+    this.rtsManagedByDriver = options.rtsManagedByDriver === true;
     this.retainIncoming = options.retainIncoming === true;
 
     const serialOptions: SerialportOptions = {
@@ -332,7 +339,16 @@ export class TauriNodeSerialPort extends EventEmitter {
     const baudRate = options.baudRate;
     await this.tauriPort.setBaudRate(baudRate);
     this.tauriPort.options.baudRate = baudRate;
+    await this.applyControlLines();
+  }
+
+  private async applyControlLines(): Promise<void> {
     await this.tauriPort.writeDataTerminalReady(this.dtr);
+
+    if (this.rtsManagedByDriver) {
+      return;
+    }
+
     await this.tauriPort.writeRequestToSend(this.rts);
   }
 
@@ -342,8 +358,7 @@ export class TauriNodeSerialPort extends EventEmitter {
     try {
       await waitForSerialPathClose(this.path);
       await this.waitForPathThenOpen(generation);
-      await this.tauriPort.writeDataTerminalReady(this.dtr);
-      await this.tauriPort.writeRequestToSend(this.rts);
+      await this.applyControlLines();
 
       if (generation !== this.openGeneration) {
         return;
@@ -471,7 +486,10 @@ export class TauriNodeSerialPort extends EventEmitter {
     }
 
     await this.tauriPort.writeDataTerminalReady(false).catch(() => undefined);
-    await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+
+    if (!this.rtsManagedByDriver) {
+      await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+    }
     await this.tauriPort.close().catch(() => undefined);
     this.isOpen = false;
   }

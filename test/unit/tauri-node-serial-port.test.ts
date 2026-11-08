@@ -398,6 +398,29 @@ describe('TauriNodeSerialPort host startup capture', () => {
     expect(portCallOrder.indexOf('read')).toBeLessThan(portCallOrder.indexOf('watch'));
     expect(tauri?.clearBuffer).not.toHaveBeenCalled();
     expect(tauri?.writeDataTerminalReady).toHaveBeenCalledWith(false);
+    expect(tauri?.writeRequestToSend).toHaveBeenCalledWith(false);
+  });
+
+  it('does not ioctl RTS when hardware flow control owns the pin', async () => {
+    tauriInstances.length = 0;
+    portCallOrder.length = 0;
+    listedPorts = ['/dev/cu.pg5g'];
+    const port = new TauriNodeSerialPort({
+      path: '/dev/cu.pg5g',
+      baudRate: 9600,
+      dtr: false,
+      rts: false,
+      flowControl: 'hardware',
+      rtsManagedByDriver: true,
+      retainIncoming: true,
+    });
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+    const tauri = tauriInstances[0];
+    expect(tauri?.writeDataTerminalReady).toHaveBeenCalledWith(false);
+    expect(tauri?.writeRequestToSend).not.toHaveBeenCalled();
+    port.close();
+    await vi.waitFor(() => expect(port.isOpen).toBe(false));
+    expect(tauri?.writeRequestToSend).not.toHaveBeenCalled();
   });
 
   it('waits for write_binary before reporting the accepted count', async () => {
