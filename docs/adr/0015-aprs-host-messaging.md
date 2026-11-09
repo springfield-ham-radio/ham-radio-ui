@@ -6,7 +6,7 @@
 
 ## Context
 
-The menu 604 monitor is confirmed on the air and must keep writing nothing. Host messages need KISS, which the IDM enters from PACKET12 with a carriage return, `KISS ON`, and `RESTART`. The A/E command list says that while KISS is ON, powering the radio off and on enters or exits KISS. The G list describes that toggle as `RESTART`. Neither English D710 text documents the TM-D700 bytes `C0 FF C0`, and the IDM says those PC commands are not compatible.
+The menu 604 monitor is confirmed on the air and must keep writing nothing. Host messages need KISS, which the IDM enters from PACKET12 with a carriage return, `KISS ON`, and `RESTART`. The A/E command list says that while KISS is ON, powering the radio off and on causes the TNC to enter (or exit) KISS. The G list uses `RESTART` for that sentence. Neither wording says the result alternates, and a power cycle is not a guaranteed exit. Neither English D710 text documents the TM-D700 bytes `C0 FF C0`, and the IDM says those PC commands are not compatible.
 
 The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm plug is the GPS jack. PG-5G is the COM-to-DE-9 cable. `XFLOW` defaults to ON in the command list. A TM-D710 display has shown `XFLOW OFF`, which is hardware flow. The Tauri serial plugin can select none, software, or hardware.
 
@@ -27,7 +27,7 @@ The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm 
 
 - The passive test stays: radio showing APRS, menu 604 ON, Stations **Connect**. Do not select PACKET for that test.
 - A listen test on Messages, with both switches off and without **Enter host KISS**, writes nothing.
-- Leaving KISS is the operator’s power-cycle toggle, then **[TNC]** until APRS is shown. One cycle is not guaranteed. The IDM’s six STA/CON blinks happen during entry and are not a steady KISS lamp. Dark STA and CON do not mean KISS is off. HamBench does not perform the power cycle and does not treat “blink until dark” as the procedure.
+- HamBench does not leave KISS and does not send Ctrl+C or a carriage return to probe an unknown mode. A power cycle can show the startup banner. That banner is not a guaranteed exit, and `cmd:` in it is not proof of PACKET mode. The IDM’s six STA/CON blinks happen during entry and are not a steady KISS lamp. Dark STA and CON do not mean KISS is off. HamBench does not perform the power cycle and does not treat “blink until dark” as the procedure.
 - The host session shows its bounded reply log on Raw log, next to the decoded-line log, and keeps bytes from the moment the port opens. Plugin 3.0.7 deletes bytes it read before `watch` (`attach_watch` clears the idle buffer). Host open reads for the startup window before `watch` starts. A timeout with no bytes does not end that read, because the following bytes would be deleted when `watch` attaches. It does not send a command to do it. The passive monitor’s opening discard is unchanged. `cmd:` still requires the colon. A command line is recorded only after `write_binary` returns that length. The plugin does not drain the UART. KISS is unconfirmed until an AX.25 UI frame parses.
 - `HBAUD    was 1200` followed by `cmd:` matches the TNC initialization reply to its own `HB 1200`. This program does not send `HB`. The COM jack has no DTR pin. A displayed `XFLOW OFF` means the TNC is using hardware flow. The host selects that on the computer; it does not write `XFLOW`.
 - A real message still requires **Send**, and the radio already in host KISS. That hardware step is not authorized by this record.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aprsReceiveProfile } from '../../app/utils/aprs-capability.ts';
+import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '../../app/utils/aprs-kiss-restore.ts';
 
 describe('APRS receive capability', () => {
   it('uses a driver monitor block when the module opts in', () => {
@@ -42,6 +43,12 @@ describe('APRS receive capability', () => {
     expect(fallback?.monitorNote).toContain('604');
     expect(new TextDecoder().decode(fallback?.host?.link.interrupt ?? new Uint8Array())).toBe('\u0003\u0003\u0003');
     expect(fallback?.host?.link.enter.map((step) => step.text)).toEqual(['KISS ON\r', 'RESTART\r']);
+    const recovery = [...(fallback?.host?.setup ?? []), ...(fallback?.host?.recovery ?? [])].join(' ');
+    expect(recovery).not.toMatch(/second cycle toggles/i);
+    expect(recovery).not.toMatch(/toggles again/i);
+    expect(recovery).not.toMatch(/toggles the operating state/i);
+    expect(recovery).toContain('not proof of PACKET mode');
+    expect([...APRS_HOST_SETUP, ...APRS_HOST_RECOVERY].join(' ')).toBe(recovery);
     expect(aprsReceiveProfile({ model: 'baofeng-uv5r' })).toBeUndefined();
   });
 
