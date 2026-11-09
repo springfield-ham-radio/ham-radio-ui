@@ -33,5 +33,5 @@ export const APRS_HOST_RECOVERY = [
   'HamBench does not power-cycle the radio.',
   'The IDM says STA and CON blink together 6 times while KISS is being entered. That blink is not a lamp that stays on. A steady STA means packets remain in the buffer. A steady CON means connected. Lights that are off do not prove the mode, and PACKET12 alone does not either.',
   'A/E command list, KISS: “When ON, switching the power OFF then ON causes the TNC to enter (or exit) KISS mode.” The parameter default is OFF. G command list, KISS: “When ON, entering a RESTART command causes the TNC to enter (or exit) KISS mode.” RESTART functions as power OFF then ON, and it is command text, so it is not available inside KISS. The stored parameter survives the switch. One power OFF then ON toggles the operating state. It does not clear KISS ON, and a second cycle toggles again. The A/E packet chapter says press [TNC] twice to enter PACKET. It does not say that key leaves KISS.',
-  'HamBench does not send KISS OFF, a message, or Ctrl+C as a recovery guess. Allow transmit off cancels a queued message. Disconnect closes the port.',
+  'HamBench does not send KISS OFF, a message, or Ctrl+C as a recovery guess. Cancel stops a message that is waiting. Disconnect closes the port.',
 ] as const;

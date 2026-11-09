@@ -31,7 +31,7 @@ function sessionFor(cardId: string): AprsHostSession {
  *
  * This is a different session from the menu 604 monitor. It uses the same
  * port hold list, so CAT, memory transfer, and the monitor cannot open the
- * adapter at the same time. Listen does not write. Message frames are written only after Allow transmit and Send.
+ * adapter at the same time. Connect does not write. Message frames are written only when Send is used, and only after an AX.25 UI frame.
  */
 export function useAprsHost() {
   const { lockedPorts, setHolderPorts } = useCatPortLock();
@@ -106,7 +106,7 @@ export function useAprsHost() {
 
   async function send(
     cardId: string,
-    input: { mine: string; to: string; text: string; transmitRequested: boolean },
+    input: { mine: string; to: string; text: string },
   ): Promise<AprsHostMessage> {
     const message = await sessionFor(cardId).send(input);
     publish(cardId);
@@ -150,11 +150,6 @@ export function useAprsHost() {
     return reason;
   }
 
-  function setTransmitOptIn(cardId: string, on: boolean): void {
-    sessionFor(cardId).setTransmitOptIn(on);
-    publish(cardId);
-  }
-
   return {
     snapshots,
     connecting,
@@ -167,7 +162,6 @@ export function useAprsHost() {
     cancel,
     setIdentity,
     setAckOptIn,
-    setTransmitOptIn,
     requestCommandPrompt,
     cancelCommand,
     enterHostKiss,

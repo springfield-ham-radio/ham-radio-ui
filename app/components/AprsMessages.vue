@@ -6,21 +6,18 @@ import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX, ca
 
 const props = defineProps<{
   cardId?: string;
+  mine: string;
 }>();
 
 const route = useRoute();
 const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
 const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const host = useAprsHost();
-const { send, cancel, setAckOptIn, setTransmitOptIn, requestCommandPrompt, cancelCommand, enterHostKiss } = host;
+const { send, cancel, requestCommandPrompt, cancelCommand, enterHostKiss } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const hostOpen = computed(() => snapshot.value?.connected === true);
 
-const mine = ref('');
 const text = ref('');
-const transmitRequested = ref(false);
-const ackRequested = ref(false);
-const ackReason = ref<string | undefined>();
 const enterNote = ref<string | undefined>();
 const commandNote = ref<string | undefined>();
 const selectedCall = ref<string | undefined>();
@@ -56,10 +53,10 @@ const exampleMessages: AprsHostMessage[] = [
     key: 'example-out',
     direction: 'out',
     other: 'KF5UFJ-7',
-    text: 'Sample reply. Allow transmit is off, so this was not sent.',
+    text: 'Sample reply. Send was not used, so this was not sent.',
     addressee: 'KF5UFJ-7',
     status: 'blocked',
-    detail: 'Transmit is off. Nothing was sent.',
+    detail: 'Sample only. Send was not used.',
     at: 1_700_000_200_000,
   },
 ];
@@ -122,7 +119,7 @@ const kissStatus = computed(() => {
   }
 
   if (snapshot.value?.kissConfirmed) {
-    return 'AX.25 UI seen. Send can write only while Allow transmit is on.';
+    return 'AX.25 UI seen. Send can write a message. Automatic acknowledgement is separate.';
   }
 
   if (snapshot.value?.hostEnterRequested || enterNote.value) {
@@ -131,11 +128,6 @@ const kissStatus = computed(() => {
 
   return 'KISS unconfirmed. Send does not write until an AX.25 UI frame is parsed.';
 });
-
-async function onAck(next: boolean): Promise<void> {
-  ackReason.value = props.cardId ? setAckOptIn(props.cardId, next) : 'Save this radio before changing ack replies.';
-  ackRequested.value = !ackReason.value && next;
-}
 
 async function onRequestPrompt(): Promise<void> {
   if (!props.cardId) {
@@ -162,24 +154,15 @@ async function onEnterHost(): Promise<void> {
   enterNote.value = (await enterHostKiss(props.cardId)) ?? 'Command written. KISS unconfirmed. No message was sent.';
 }
 
-function onTransmit(next: boolean): void {
-  transmitRequested.value = next;
-
-  if (props.cardId) {
-    setTransmitOptIn(props.cardId, next);
-  }
-}
-
 async function onSend(): Promise<void> {
   if (!props.cardId) {
     return;
   }
 
   const message = await send(props.cardId, {
-    mine: mine.value,
+    mine: props.mine,
     to: selectedCall.value ?? '',
     text: text.value,
-    transmitRequested: transmitRequested.value,
   });
   openCall(message.other);
 }
@@ -280,39 +263,15 @@ function onCancel(key: string): void {
           </div>
 
           <div v-if="selectedCall" class="grid gap-2 border-t border-default pt-3">
-            <UFormField label="My callsign">
-              <UInput v-model="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" />
-            </UFormField>
             <UFormField label="Message" :description="`${text.length}/${APRS_MESSAGE_TEXT_MAX}`">
               <UTextarea v-model="text" class="w-full" :rows="2" :maxlength="APRS_MESSAGE_TEXT_MAX" placeholder="Message text" />
             </UFormField>
-            <div class="grid gap-2 sm:grid-cols-2">
-              <USwitch
-                :model-value="transmitRequested"
-                label="Allow transmit"
-                description="Off. Send writes nothing, and a message already waiting is cancelled. Turning it on does not send."
-                @update:model-value="onTransmit"
-              />
-              <USwitch
-                :model-value="ackRequested"
-                label="Reply with an ack"
-                description="Off. On answers a message to your callsign. That answer is a transmission."
-                @update:model-value="onAck"
-              />
-            </div>
-            <p v-if="ackReason" class="text-xs text-muted">{{ ackReason }}</p>
             <div class="flex items-center justify-between gap-2">
               <p class="text-xs text-muted">
-                An ack is from that station for your message id. Up to {{ APRS_MESSAGE_ATTEMPTS }} tries,
-                {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart, after an AX.25 UI frame.
+                Send writes this message. Up to {{ APRS_MESSAGE_ATTEMPTS }} tries, {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart, after an AX.25 UI frame.
+                Cancel or Disconnect stops it. From {{ mine || 'the callsign above' }}.
               </p>
-              <UButton
-                color="primary"
-                icon="i-lucide-send"
-                :label="transmitRequested ? 'Send' : 'Send (transmit off)'"
-                :disabled="!cardId"
-                @click="onSend"
-              />
+              <UButton color="primary" icon="i-lucide-send" label="Send" :disabled="!cardId" @click="onSend" />
             </div>
           </div>
         </div>

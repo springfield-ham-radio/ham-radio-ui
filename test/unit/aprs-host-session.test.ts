@@ -96,10 +96,10 @@ describe('APRS host session', () => {
     expect(session.snapshot().hostEnterRequested).toBe(false);
     expect(fake.writes).toEqual([]);
 
-    const held = await session.send({ ...draft, transmitRequested: false });
+    const held = await session.send({ ...draft });
 
     expect(held.status).toBe('blocked');
-    expect(held.detail).toBe('Transmit is off. Nothing was sent.');
+    expect(held.detail).toMatch(/no AX.25 UI frame/);
     expect(fake.writes).toEqual([]);
     expect(session.setAckOptIn(false)).toBeUndefined();
     expect(session.snapshot().ackOptIn).toBe(false);
@@ -121,14 +121,14 @@ describe('APRS host session', () => {
     const session = createAprsHostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
-    await session.send({ ...draft, transmitRequested: false });
+    await session.send({ ...draft });
     expect(fake.writes).toEqual([]);
-    const blocked = await session.send({ ...draft, transmitRequested: true });
+    const blocked = await session.send({ ...draft });
     expect(blocked.status).toBe('blocked');
     expect(fake.writes).toEqual([]);
     await confirmKiss(session, fake);
 
-    const sent = await session.send({ ...draft, transmitRequested: true });
+    const sent = await session.send({ ...draft });
 
     expect(sent.status).toBe('waiting-ack');
     expect(sent.messageId).toBe('3');
@@ -143,7 +143,7 @@ describe('APRS host session', () => {
     expect(fake.writes).toHaveLength(2);
     expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('cancelled');
 
-    const again = await session.send({ ...draft, text: 'Second', transmitRequested: true });
+    const again = await session.send({ ...draft, text: 'Second' });
     expect(fake.writes).toHaveLength(3);
     await session.advance(APRS_MESSAGE_RETRY_MS);
     await session.advance(APRS_MESSAGE_RETRY_MS);
@@ -151,7 +151,7 @@ describe('APRS host session', () => {
     expect(fake.writes).toHaveLength(5);
     expect(session.snapshot().messages.find((message) => message.key === again.key)?.status).toBe('timed-out');
 
-    const live = await session.send({ ...draft, text: 'Third', transmitRequested: true });
+    const live = await session.send({ ...draft, text: 'Third' });
     const written = fake.writes.length;
     await session.disconnect();
     expect(session.snapshot().messages.find((message) => message.key === live.key)?.status).toBe('cancelled');
@@ -195,13 +195,13 @@ describe('APRS host session', () => {
       return;
     }
 
-    session.setTransmitOptIn(true);
+    expect(fake.writes).toEqual([]);
     fake.push(second);
     fake.push(other);
     await settle();
     expect(fake.writes).toHaveLength(1);
 
-    const sent = await session.send({ ...draft, transmitRequested: true });
+    const sent = await session.send({ ...draft });
     const before = fake.writes.length;
     const wrong = encodeAprsMessageFrame(spoof, { addressee: 'N0TST', kind: 'ack', id: sent.messageId ?? '', text: '1' });
     const right = encodeAprsMessageFrame(source, { addressee: 'N0TST', kind: 'ack', id: sent.messageId ?? '', text: '1' });
@@ -221,7 +221,7 @@ describe('APRS host session', () => {
     await session.advance(APRS_MESSAGE_RETRY_MS);
     expect(fake.writes).toHaveLength(before);
 
-    const rejected = await session.send({ ...draft, text: 'Reject me', transmitRequested: true });
+    const rejected = await session.send({ ...draft, text: 'Reject me' });
     const rej = encodeAprsMessageFrame(source, {
       addressee: 'N0TST',
       kind: 'rej',
@@ -253,7 +253,7 @@ describe('APRS host session', () => {
     expect(session.snapshot().ackOptIn).toBe(false);
 
     for (let count = 0; count < 6; count += 1) {
-      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip', transmitRequested: false });
+      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip' });
     }
 
     await confirmKiss(session, fake);
@@ -261,7 +261,6 @@ describe('APRS host session', () => {
       mine: 'KF5UFJ-1',
       to: 'KF5UFJ-7',
       text: 'Hello.  Testing transmit from HamBench.',
-      transmitRequested: true,
     });
 
     expect(sent.messageId).toBe('7');
@@ -295,7 +294,7 @@ describe('APRS host session', () => {
     await session.connect('/dev/cu.pg5g', async () => fake.port);
 
     for (let count = 0; count < 6; count += 1) {
-      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip', transmitRequested: false });
+      await session.send({ mine: 'KF5UFJ-1', to: 'KF5UFJ-7', text: 'skip' });
     }
 
     await confirmKiss(session, fake);
@@ -303,7 +302,6 @@ describe('APRS host session', () => {
       mine: 'KF5UFJ-1',
       to: 'KF5UFJ-7',
       text: 'Hello.  Testing transmit from HamBench.',
-      transmitRequested: true,
     });
     const wrongSender = Uint8Array.from(d74Ack7);
     wrongSender[wrongSender.indexOf(0xee)] = 0xf0;
@@ -339,40 +337,62 @@ describe('APRS host session', () => {
     expect(session.snapshot().kissConfirmed).toBe(false);
     expect(session.snapshot().trace.some((line) => line.note.includes('AX.25 UI'))).toBe(false);
 
-    const sent = await session.send({ ...draft, transmitRequested: true });
+    const sent = await session.send({ ...draft });
     expect(sent.status).toBe('blocked');
     expect(sent.detail).toMatch(/no AX.25 UI frame/);
     await session.advance(APRS_MESSAGE_RETRY_MS * 3);
     expect(fake.writes).toEqual([]);
   });
 
-  it('cancels a queued message when transmit is turned off and keeps the ack opt-in', async () => {
+  it('acknowledges only a later message addressed to the current callsign', async () => {
     const session = createAprsHostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
-    expect(session.setAckOptIn(true)).toBeUndefined();
+    expect(session.snapshot().ackOptIn).toBe(false);
     await confirmKiss(session, fake);
-    const sent = await session.send({ ...draft, transmitRequested: true });
+    const sent = await session.send({ ...draft });
     expect(fake.writes).toHaveLength(1);
-    session.setTransmitOptIn(false);
-    expect(session.snapshot().ackOptIn).toBe(true);
-    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('cancelled');
-    await session.advance(APRS_MESSAGE_RETRY_MS);
-    expect(fake.writes).toHaveLength(1);
+    expect(session.setAckOptIn(false)).toBeUndefined();
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('waiting-ack');
 
     const heard = canonicalAx25Call('K5KTF-4');
-    const incoming = heard
+    const early = heard
       ? encodeAprsMessageFrame(heard, { addressee: 'N0TST', kind: 'text', text: 'Ping', id: '3' })
       : undefined;
+    const later = heard
+      ? encodeAprsMessageFrame(heard, { addressee: 'N0TST', kind: 'text', text: 'Next', id: '4' })
+      : undefined;
+    const elsewhere = heard
+      ? encodeAprsMessageFrame(heard, { addressee: 'N0ELSE', kind: 'text', text: 'Other', id: '5' })
+      : undefined;
+    const theirAck = heard
+      ? encodeAprsMessageFrame(heard, { addressee: 'N0TST', kind: 'ack', id: '4', text: '4' })
+      : undefined;
 
-    if (!incoming) {
+    if (!early || !later || !elsewhere || !theirAck) {
       return;
     }
 
     session.setIdentity('N0TST');
-    fake.push(incoming);
+    fake.push(early);
     await settle();
     expect(fake.writes).toHaveLength(1);
+    expect(session.setAckOptIn(true)).toBeUndefined();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    fake.push(later);
+    fake.push(elsewhere);
+    fake.push(theirAck);
+    await settle();
+    expect(fake.writes).toHaveLength(2);
+    expect(session.setAckOptIn(false)).toBeUndefined();
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('waiting-ack');
+    await session.advance(APRS_MESSAGE_RETRY_MS);
+    expect(fake.writes).toHaveLength(3);
+    await session.disconnect();
+    expect(session.snapshot().ackOptIn).toBe(false);
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(session.snapshot().ackOptIn).toBe(false);
   });
 
   it('stops the queue when cmd: arrives after a UI frame', async () => {
@@ -380,7 +400,7 @@ describe('APRS host session', () => {
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     await confirmKiss(session, fake);
-    const sent = await session.send({ ...draft, transmitRequested: true });
+    const sent = await session.send({ ...draft });
     expect(fake.writes).toHaveLength(1);
     fake.push(Uint8Array.from([...'cmd:\r\n'].map((character) => character.charCodeAt(0))));
     await settle();
@@ -388,7 +408,7 @@ describe('APRS host session', () => {
     expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('cancelled');
     await session.advance(APRS_MESSAGE_RETRY_MS);
     expect(fake.writes).toHaveLength(1);
-    const again = await session.send({ ...draft, text: 'Next', transmitRequested: true });
+    const again = await session.send({ ...draft, text: 'Next' });
     expect(again.status).toBe('blocked');
     expect(fake.writes).toHaveLength(1);
   });
@@ -416,7 +436,7 @@ describe('APRS host session', () => {
     expect(seen).toHaveLength(1);
     expect(session.snapshot().kissConfirmed).toBe(true);
     expect(fake.writes).toEqual([]);
-    const again = await session.send({ ...draft, transmitRequested: true });
+    const again = await session.send({ ...draft });
     expect(again.status).toBe('waiting-ack');
     expect(fake.writes).toHaveLength(1);
   });
@@ -425,7 +445,7 @@ describe('APRS host session', () => {
     const session = createAprsHostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
-    const invalid = await session.send({ mine: '1BAD', to: 'K5KTF', text: '', transmitRequested: true });
+    const invalid = await session.send({ mine: '1BAD', to: 'K5KTF', text: '' });
 
     expect(invalid.status).toBe('blocked');
     expect(fake.writes).toEqual([]);

@@ -92,8 +92,6 @@ export interface AprsHostSession {
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
   setAckOptIn(on: boolean): string | undefined;
-  /** Off cancels a queued message. On does not write and does not enter KISS. */
-  setTransmitOptIn(on: boolean): void;
   /** Writes three Ctrl+C bytes and no carriage return. One shot. */
   requestCommandPrompt(): Promise<string | undefined>;
   /** Stops a wait. Does not write. */
@@ -103,7 +101,8 @@ export interface AprsHostSession {
   /** Writes KISS ON only after cmd: on this connection, then RESTART only after another cmd:. */
   enterHostKiss(): Promise<string | undefined>;
   clearTrace(): void;
-  send(input: { mine: string; to: string; text: string; transmitRequested: boolean }): Promise<AprsHostMessage>;
+  /** Send is the transmit choice. It does not enter KISS and does not acknowledge old messages. */
+  send(input: { mine: string; to: string; text: string }): Promise<AprsHostMessage>;
   cancel(key: string): void;
   /** Move the test clock. Waiting messages retry or time out. Disconnect clears them first. */
   advance(ms: number): Promise<void>;
@@ -124,12 +123,12 @@ interface Waiting {
 /**
  * Host KISS listener.
  *
- * Connect, disconnect, and an open composer do not write. A message frame is
- * written only when the session is constructed with hardware transmit allowed
- * and the caller sets the transmit opt-in. A message or retry is written only
- * after this connection has parsed an AX.25 UI frame. A KISS frame that does
- * not parse does not count. Turning transmit off cancels the queue. An ack is
- * a second opt-in and is also a transmission. Disconnect cancels waiting
+ * Connect, disconnect, and an open composer do not write. Send is the only
+ * way a message frame is written. A message or retry is written only after
+ * this connection has parsed an AX.25 UI frame. A KISS frame that does not
+ * parse does not count. Cancel, Disconnect, and a cmd: prompt stop retries.
+ * Automatic ack is separate, off until set, and applies only to a later
+ * message addressed to the current callsign. Disconnect cancels waiting
  * messages and does not send an exit command. A later connect does not send
  * them again.
  */
@@ -162,7 +161,6 @@ export function createAprsHostSession(options?: {
   let bytesWritten = 0;
   let sequence = 0;
   let ackOptIn = false;
-  let transmitOptIn = false;
   let hostEnterRequested = false;
   let kissConfirmed = false;
   let commandText = new Uint8Array();
@@ -375,15 +373,13 @@ export function createAprsHostSession(options?: {
   }
 
   async function transmitWaiting(item: Waiting): Promise<void> {
-    if (!transmitOptIn || !kissConfirmed) {
+    if (!kissConfirmed || !allowHardwareTransmit) {
       waiting.delete(item.key);
       const current = row(item.key);
 
       if (current?.status === 'waiting-ack') {
         current.status = 'cancelled';
-        current.detail = transmitOptIn
-          ? 'This Listen has no AX.25 UI frame. No further transmissions.'
-          : 'Transmit is off. No further transmissions.';
+        current.detail = 'This connection has no AX.25 UI frame. No further transmissions.';
       }
 
       return;
@@ -432,7 +428,7 @@ export function createAprsHostSession(options?: {
   }
 
   async function maybeAck(source: string, addressee: string, id: string): Promise<void> {
-    if (!ackOptIn || !transmitOptIn || !kissConfirmed || !identity || !allowHardwareTransmit || formatAx25Call(identity) !== addressee || acked.has(`${source}|${id}`)) {
+    if (!ackOptIn || !kissConfirmed || !identity || !allowHardwareTransmit || formatAx25Call(identity) !== addressee || acked.has(`${source}|${id}`)) {
       return;
     }
 
@@ -646,6 +642,7 @@ export function createAprsHostSession(options?: {
 
         port = opened;
         path = nextPath;
+        ackOptIn = false;
         record('note', new Uint8Array(), hostListenNote(hostFlow));
         opened.on('data', onData);
         opened.on('error', onError);
@@ -669,6 +666,7 @@ export function createAprsHostSession(options?: {
       }
 
       cancelWaiting('Disconnected. This message will not be sent again.');
+      ackOptIn = false;
       commandActive = false;
       commandBytes = new Uint8Array();
       sessionBytes = new Uint8Array();
@@ -702,6 +700,11 @@ export function createAprsHostSession(options?: {
       publish();
     },
     setIdentity(call) {
+      if (!call.trim()) {
+        identity = undefined;
+        return undefined;
+      }
+
       const parsed = canonicalAx25Call(call);
 
       if (!parsed) {
@@ -720,13 +723,6 @@ export function createAprsHostSession(options?: {
 
       ackOptIn = on && allowHardwareTransmit;
       return undefined;
-    },
-    setTransmitOptIn(on) {
-      transmitOptIn = on && allowHardwareTransmit;
-
-      if (!transmitOptIn) {
-        cancelWaiting('Transmit is off. No further transmissions.');
-      }
     },
     async requestCommandPrompt() {
       if (!port?.isOpen || !port.write) {
@@ -831,13 +827,9 @@ export function createAprsHostSession(options?: {
         return blocked('Too many unfinished messages');
       }
 
-      if (!input.transmitRequested || !allowHardwareTransmit) {
-        transmitOptIn = false;
-        cancelWaiting('Transmit is off. No further transmissions.');
-        return blocked('Transmit is off. Nothing was sent.');
+      if (!allowHardwareTransmit) {
+        return blocked('This session does not transmit.');
       }
-
-      transmitOptIn = true;
 
       if (!kissConfirmed) {
         return blocked('This Listen has no AX.25 UI frame. A KISS frame that is not a UI frame does not count. Nothing was sent.');

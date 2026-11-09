@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
-import { canonicalAx25Call, encodeAx25Ui } from '~/utils/aprs-ax25';
+import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
@@ -72,6 +72,8 @@ const isConnected = computed(() => snapshot.value?.connected === true);
 const kissListening = computed(() => hostSnapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
 const hostConnecting = computed(() => (props.cardId ? host.connecting.value[props.cardId] === true : false));
+const mine = ref('');
+const mineError = ref<string | undefined>();
 const requestedMode = ref<AprsConnectionMode>('passive');
 const requestedFlow = ref<AprsHostFlowControl>('software');
 const activeMode = computed<AprsConnectionMode>(() => {
@@ -160,6 +162,50 @@ watch(stations, (rows) => {
 
   selectedCall.value = rows[0]?.callsign;
 });
+
+const ackCall = computed(() => {
+  const call = canonicalAx25Call(mine.value);
+
+  return call ? formatAx25Call(call) : undefined;
+});
+const ackDetail = computed(() => {
+  if (!ackCall.value) {
+    return 'Off. Set My callsign first. Nothing is acknowledged, and this is not a read receipt.';
+  }
+
+  const live = connection.value.open === 'host' ? '' : ' Each connection starts off, and the choice is not saved.';
+
+  return hostSnapshot.value?.ackOptIn
+    ? `On for ${ackCall.value}. A later message addressed to that callsign is answered. Messages already heard are left alone. This is not a read receipt.${live}`
+    : `Off for ${ackCall.value}. Turn it on to answer a later message addressed to that callsign. This is not a read receipt.${live}`;
+});
+
+function onMine(value: string | number): void {
+  mine.value = String(value);
+
+  if (!props.cardId) {
+    return;
+  }
+
+  mineError.value = host.setIdentity(props.cardId, value);
+}
+
+function onAck(next: boolean): void {
+  if (!props.cardId) {
+    return;
+  }
+
+  host.setAckOptIn(props.cardId, Boolean(next));
+}
+
+watch(
+  () => connection.value.open,
+  (open) => {
+    if (open === 'host' && props.cardId && mine.value) {
+      mineError.value = host.setIdentity(props.cardId, mine.value);
+    }
+  },
+);
 
 function onMode(value: unknown): void {
   if (connection.value.open) {
@@ -329,6 +375,18 @@ function onClear(): void {
       </div>
     </div>
 
+    <div v-if="activeMode === 'host'" class="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+      <UFormField label="My callsign" :error="mineError" class="w-40">
+        <UInput :model-value="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" @update:model-value="onMine" />
+      </UFormField>
+      <USwitch
+        :model-value="hostSnapshot?.ackOptIn === true"
+        label="Automatically acknowledge messages addressed to my callsign"
+        :description="ackDetail"
+        @update:model-value="onAck"
+      />
+    </div>
+
     <UAlert
       v-if="examplePackets"
       color="neutral"
@@ -422,7 +480,7 @@ function onClear(): void {
       </template>
 
       <template #messages>
-        <AprsMessages :card-id="cardId" />
+        <AprsMessages :card-id="cardId" :mine="mine" />
       </template>
 
       <template #packet>
