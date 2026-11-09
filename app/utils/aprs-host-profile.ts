@@ -1,0 +1,152 @@
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
+
+/**
+ * Host-command procedure from an installed radio module.
+ *
+ * The bytes and the prompt text belong to that module. HamBench does not
+ * invent a Kenwood command for a radio that omits this block. Connect does
+ * not run it. A prompt is not proof of packet mode.
+ */
+export interface AprsHostEnterStep {
+  text: string;
+  label: string;
+}
+
+export interface AprsHostLink {
+  interrupt: Uint8Array;
+  prompt: string;
+  errorReply?: string;
+  waitMs: number;
+  enter: readonly AprsHostEnterStep[];
+}
+
+export interface AprsHostProfile {
+  link: AprsHostLink;
+  flows: readonly AprsHostFlowControl[];
+  defaultFlow: AprsHostFlowControl;
+  flowHelp: string;
+  setup: readonly string[];
+  recovery: readonly string[];
+}
+
+const FLOWS: readonly AprsHostFlowControl[] = ['software', 'none', 'hardware'];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function printable(value: string, max: number): boolean {
+  return value.length > 0 && value.length <= max && [...value].every((character) => {
+    const code = character.charCodeAt(0);
+    return code >= 0x20 && code <= 0x7e;
+  });
+}
+
+function lines(value: unknown, max: number): string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 8) {
+    return undefined;
+  }
+
+  const copy: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim().length === 0 || entry.length > 700) {
+      return undefined;
+    }
+
+    copy.push(entry.trim());
+  }
+
+  return copy.slice(0, max);
+}
+
+/**
+ * Parse `aprs.host` from a module config. An unusable block is ignored.
+ * The caller then offers the passive monitor only.
+ */
+export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value.interrupt) || value.interrupt.length < 1 || value.interrupt.length > 16) {
+    return undefined;
+  }
+
+  const interrupt = new Uint8Array(value.interrupt.length);
+
+  for (let index = 0; index < value.interrupt.length; index += 1) {
+    const byte = value.interrupt[index];
+
+    if (typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255) {
+      return undefined;
+    }
+
+    interrupt[index] = byte;
+  }
+
+  if (typeof value.prompt !== 'string' || !printable(value.prompt, 16)) {
+    return undefined;
+  }
+
+  const errorReply = typeof value.errorReply === 'string' ? value.errorReply : undefined;
+
+  if (errorReply !== undefined && !printable(errorReply, 16)) {
+    return undefined;
+  }
+
+  const waitMs = value.waitMs === undefined ? 5000 : value.waitMs;
+
+  if (typeof waitMs !== 'number' || !Number.isInteger(waitMs) || waitMs < 1000 || waitMs > 60_000) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value.enter) || value.enter.length < 1 || value.enter.length > 4) {
+    return undefined;
+  }
+
+  const enter: AprsHostEnterStep[] = [];
+
+  for (const step of value.enter) {
+    if (!isRecord(step) || typeof step.text !== 'string' || typeof step.label !== 'string') {
+      return undefined;
+    }
+
+    if (!printable(step.label, 24) || step.text.length < 1 || step.text.length > 40) {
+      return undefined;
+    }
+
+    if ([...step.text].some((character) => character.charCodeAt(0) < 0x09 || character.charCodeAt(0) > 0x7e)) {
+      return undefined;
+    }
+
+    enter.push({ text: step.text, label: step.label });
+  }
+
+  const listed = Array.isArray(value.flows)
+    ? value.flows.filter((flow): flow is AprsHostFlowControl => typeof flow === 'string' && FLOWS.includes(flow as AprsHostFlowControl))
+    : [...FLOWS];
+  const flows = listed.length > 0 ? [...new Set(listed)] : [...FLOWS];
+  const defaultFlow = typeof value.defaultFlow === 'string' && flows.includes(value.defaultFlow as AprsHostFlowControl)
+    ? value.defaultFlow as AprsHostFlowControl
+    : flows[0]!;
+  const setup = lines(value.setup, 8);
+  const recovery = lines(value.recovery, 8);
+
+  if (!setup || !recovery) {
+    return undefined;
+  }
+
+  const flowHelp = typeof value.flowHelp === 'string' && value.flowHelp.trim().length > 0
+    ? value.flowHelp.trim()
+    : 'Flow control is chosen before Connect. Connect writes nothing.';
+
+  return {
+    link: { interrupt, prompt: value.prompt, errorReply, waitMs, enter },
+    flows,
+    defaultFlow,
+    flowHelp,
+    setup,
+    recovery,
+  };
+}

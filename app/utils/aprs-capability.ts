@@ -5,6 +5,8 @@ import {
   isAprsComBaudRate,
   type AprsComBaudRate,
 } from '~/utils/aprs-d710';
+import { d710AprsHostProfile } from '~/utils/aprs-d710-host';
+import { parseAprsHostProfile, type AprsHostProfile } from '~/utils/aprs-host-profile';
 
 /**
  * Receive-only TNC feed declared by a radio module.
@@ -29,9 +31,14 @@ export interface AprsReceiveProfile {
   baudRates: AprsComBaudRate[];
   /** One line under the preferences fields. */
   help: string;
+  /** Shown with the passive monitor. Not a command. */
+  monitorNote: string;
+  /** Present only when this radio's module, or the D710 compatibility fallback, supplies one. */
+  host?: AprsHostProfile;
 }
 
 const DRIVER_HELP = 'Receive-only TNC port from this radio\'s driver. It is not the memory or CAT port. HamBench does not change radio menus.';
+const DRIVER_MONITOR = 'Passive monitor text from this radio\'s driver. HamBench does not change radio menus.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -83,6 +90,7 @@ export function aprsReceiveProfile(input: { config?: unknown; model?: string; na
       baudRate: 9600,
       baudRates: [...APRS_COM_BAUD_RATES],
       help: DRIVER_HELP,
+      monitorNote: DRIVER_MONITOR,
     };
   }
 
@@ -92,11 +100,15 @@ export function aprsReceiveProfile(input: { config?: unknown; model?: string; na
     return undefined;
   }
 
+  const menus = family === 'g' ? '929' : family === 'a-e' ? '528' : '528 or 929';
+
   return {
     source: 'fallback',
     baudRate: 9600,
     baudRates: [...APRS_COM_BAUD_RATES],
     help: d710AprsPreferenceHelp(family),
+    monitorNote: `Menu 604 OUTPUT must be ON before this port copies heard packets. COM baud is menu ${menus}. HamBench does not change those menus.`,
+    host: d710AprsHostProfile(),
   };
 }
 
@@ -124,5 +136,7 @@ function profileFromDriver(value: unknown): AprsReceiveProfile | undefined {
     baudRate: baudRate ?? rates[0]!,
     baudRates: rates,
     help,
+    monitorNote: typeof value.monitorNote === 'string' && value.monitorNote.trim().length > 0 ? value.monitorNote.trim() : DRIVER_MONITOR,
+    host: parseAprsHostProfile(value.host),
   };
 }

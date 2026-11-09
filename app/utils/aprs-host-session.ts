@@ -1,13 +1,6 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
-import {
-  APRS_COMMAND_INTERRUPT,
-  APRS_COMMAND_WAIT_MS,
-  APRS_KISS_ON_COMMAND,
-  APRS_RESTART_COMMAND,
-  appendCommandBytes,
-  hasCommandPrompt,
-  hasTncError,
-} from '~/utils/aprs-command';
+import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
+import type { AprsHostLink } from '~/utils/aprs-host-profile';
 import { createKissDecoderState, pushKissBytes } from '~/utils/aprs-kiss';
 import {
   APRS_MESSAGE_ATTEMPTS,
@@ -92,13 +85,15 @@ export interface AprsHostSession {
   disconnect(): Promise<void>;
   setIdentity(call: string): string | undefined;
   setAckOptIn(on: boolean): string | undefined;
-  /** Writes three Ctrl+C bytes and no carriage return. One shot. */
+  /** Replace the module command procedure. Does not write. */
+  setHostLink(link: AprsHostLink | undefined): void;
+  /** Writes the module's prompt request and no carriage return. One shot. */
   requestCommandPrompt(): Promise<string | undefined>;
   /** Stops a wait. Does not write. */
   cancelCommand(): void;
   /** Check the command timeout against now(). */
   poll(): void;
-  /** Writes KISS ON only after cmd: on this connection, then RESTART only after another cmd:. */
+  /** Writes the module's enter steps, each only after a fresh prompt on this connection. */
   enterHostKiss(): Promise<string | undefined>;
   clearTrace(): void;
   /** Send is the transmit choice. It does not enter KISS and does not acknowledge old messages. */
@@ -126,7 +121,7 @@ interface Waiting {
  * Connect, disconnect, and an open composer do not write. Send is the only
  * way a message frame is written. A message or retry is written only after
  * this connection has parsed an AX.25 UI frame. A KISS frame that does not
- * parse does not count. Cancel, Disconnect, and a cmd: prompt stop retries.
+ * parse does not count. Cancel, Disconnect, and the module's prompt stop retries.
  * Automatic ack is separate, off until set, and applies only to a later
  * message addressed to the current callsign. Disconnect cancels waiting
  * messages and does not send an exit command. A later connect does not send
@@ -138,6 +133,8 @@ export function createAprsHostSession(options?: {
   useRetryClock?: boolean;
   /** Parsed UI payload. The callback must not write to the port. */
   onAx25Ui?: (payload: Uint8Array) => void;
+  /** Absent means command buttons write nothing. */
+  host?: AprsHostLink;
 }): AprsHostSession {
   const now = options?.now ?? (() => Date.now());
   const allowHardwareTransmit = options?.allowHardwareTransmit !== false;
@@ -160,6 +157,8 @@ export function createAprsHostSession(options?: {
   let rxChunks = 0;
   let bytesWritten = 0;
   let sequence = 0;
+  let hostLink = options?.host;
+  let enterIndex = 0;
   let ackOptIn = false;
   let hostEnterRequested = false;
   let kissConfirmed = false;
@@ -247,17 +246,23 @@ export function createAprsHostSession(options?: {
     return (await writeBytes(frame)).ok;
   }
 
+  function promptSeen(bytes: Uint8Array): boolean {
+    return hostLink !== undefined && hasCommandPrompt(bytes, hostLink.prompt);
+  }
+
   function expireCommand(): void {
-    if (!commandActive || now() < commandDeadline) {
+    if (!commandActive || now() < commandDeadline || !hostLink) {
       return;
     }
 
     const waitingForAccept = commandPhase === 'waiting-accept';
+    const previous = hostLink.enter[enterIndex - 1]?.label;
+    const following = hostLink.enter[enterIndex]?.label;
     commandActive = false;
     commandPhase = 'timed-out';
-    commandDetail = waitingForAccept
-      ? 'No cmd: after KISS ON. RESTART was not sent.'
-      : 'No cmd: prompt. Ctrl+C was not repeated, and no carriage return was sent.';
+    commandDetail = waitingForAccept && previous && following
+      ? `No ${hostLink.prompt} after ${previous}. ${following} was not sent.`
+      : `No ${hostLink.prompt} prompt. The request was not repeated, and no carriage return was sent.`;
     record('note', new Uint8Array(), commandDetail);
     publish();
   }
@@ -265,7 +270,7 @@ export function createAprsHostSession(options?: {
   function armCommandWait(): void {
     commandBytes = new Uint8Array();
     commandActive = true;
-    commandDeadline = now() + APRS_COMMAND_WAIT_MS;
+    commandDeadline = now() + (hostLink?.waitMs ?? 5000);
 
     if (options?.useRetryClock && !commandTimer) {
       commandTimer = setInterval(() => {
@@ -280,7 +285,7 @@ export function createAprsHostSession(options?: {
   }
 
   function noteConnectionPrompt(): void {
-    if (!hasCommandPrompt(sessionBytes)) {
+    if (!hostLink || !promptSeen(sessionBytes)) {
       return;
     }
 
@@ -298,8 +303,8 @@ export function createAprsHostSession(options?: {
 
     commandPhase = 'prompt';
     commandDetail = afterInterrupt
-      ? 'cmd: arrived after Ctrl+C. A carriage return is still not sent until Enter host KISS.'
-      : 'cmd: arrived on this connection. No command was sent.';
+      ? `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`
+      : `${hostLink.prompt} arrived on this connection. No command was sent.`;
     record('note', new Uint8Array(), commandDetail);
   }
 
@@ -308,57 +313,84 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (commandPhase === 'waiting-prompt' && kissFrames > 0 && !hasCommandPrompt(commandBytes)) {
+    if (!hostLink) {
+      return;
+    }
+
+    if (commandPhase === 'waiting-prompt' && kissFrames > 0 && !promptSeen(commandBytes)) {
       commandActive = false;
       commandPhase = 'kiss-framed';
-      commandDetail = 'KISS-framed bytes arrived. That is not a cmd: prompt. No carriage return was sent.';
+      commandDetail = `KISS-framed bytes arrived. That is not a ${hostLink.prompt} prompt. No carriage return was sent.`;
       record('note', new Uint8Array(), commandDetail);
       return;
     }
 
-    if (commandPhase === 'waiting-accept' && hasTncError(commandBytes) && !hasCommandPrompt(commandBytes)) {
+    const following = hostLink.enter[enterIndex]?.label;
+    const errorReply = hostLink.errorReply;
+
+    if (commandPhase === 'waiting-accept' && errorReply && hasTncError(commandBytes, errorReply) && !promptSeen(commandBytes)) {
       commandActive = false;
       commandPhase = 'rejected';
-      commandDetail = 'The TNC answered ?EH. RESTART was not sent.';
+      commandDetail = `The TNC answered ${errorReply}. ${following ?? 'The next command'} was not sent.`;
       record('note', new Uint8Array(), commandDetail);
       return;
     }
 
-    if (!hasCommandPrompt(commandBytes)) {
+    if (!promptSeen(commandBytes)) {
       return;
     }
 
     if (commandPhase === 'waiting-prompt') {
       commandActive = false;
       commandPhase = 'prompt';
-      commandDetail = 'cmd: arrived after Ctrl+C. A carriage return is still not sent until Enter host KISS.';
+      commandDetail = `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`;
       record('note', new Uint8Array(), commandDetail);
       return;
     }
 
     if (commandPhase === 'waiting-accept') {
       commandActive = false;
-      void acceptKissOn();
+      void writeEnterStep();
     }
   }
 
-  async function acceptKissOn(): Promise<void> {
-    const bytes = new TextEncoder().encode(APRS_RESTART_COMMAND);
+  async function writeEnterStep(): Promise<string | undefined> {
+    const step = hostLink?.enter[enterIndex];
+
+    if (!hostLink || !step) {
+      return 'This radio has no host command procedure. Nothing was sent.';
+    }
+
+    const bytes = new TextEncoder().encode(step.text);
     const wrote = await writeBytes(bytes);
+    const following = hostLink.enter[enterIndex + 1];
 
     if (!wrote.ok) {
       commandPhase = 'rejected';
-      commandDetail = `RESTART was not written. ${wrote.reason}`;
+      commandDetail = following
+        ? `${step.label} was not accepted. ${wrote.reason} ${following.label} was not sent.`
+        : `${step.label} was not written. ${wrote.reason}`;
       record('note', new Uint8Array(), commandDetail);
       publish();
-      return;
+      return commandDetail;
     }
 
-    commandPhase = 'restart-sent';
-    hostEnterRequested = true;
-    commandDetail = `RESTART written once after cmd:. ${acceptanceNote(wrote)}KISS unconfirmed. This is not repeated.`;
+    if (!following) {
+      commandPhase = 'restart-sent';
+      hostEnterRequested = true;
+      commandDetail = `${step.label} written once after ${hostLink.prompt}. ${acceptanceNote(wrote)}KISS unconfirmed. This is not repeated.`;
+      record('tx-command', bytes, commandDetail);
+      publish();
+      return undefined;
+    }
+
+    enterIndex += 1;
+    armCommandWait();
+    commandPhase = 'waiting-accept';
+    commandDetail = `${step.label} written once. ${acceptanceNote(wrote)}Waiting for another ${hostLink.prompt} before ${following.label}.`;
     record('tx-command', bytes, commandDetail);
     publish();
+    return undefined;
   }
 
   function loseKissConfirmation(reason: string): void {
@@ -549,10 +581,11 @@ export function createAprsHostSession(options?: {
     record('rx', chunk, notes.join(', ') || 'empty');
 
     const pending = Uint8Array.from(kiss.pending);
-    const pendingIsCommandText = pending.length > 0 && pending[0] !== 0x00 && hasCommandPrompt(pending);
+    const pendingIsCommandText = pending.length > 0 && pending[0] !== 0x00 && promptSeen(pending);
+    const prompt = hostLink?.prompt;
 
-    if (kissConfirmed && (hasCommandPrompt(commandText.subarray(commandTextAtConfirm)) || pendingIsCommandText)) {
-      loseKissConfirmation('cmd: arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.');
+    if (prompt && kissConfirmed && (promptSeen(commandText.subarray(commandTextAtConfirm)) || pendingIsCommandText)) {
+      loseKissConfirmation(`${prompt} arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.`);
     }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
@@ -724,29 +757,36 @@ export function createAprsHostSession(options?: {
       ackOptIn = on && allowHardwareTransmit;
       return undefined;
     },
+    setHostLink(link) {
+      hostLink = link;
+    },
     async requestCommandPrompt() {
       if (!port?.isOpen || !port.write) {
         return 'Listen is not open. Nothing was sent.';
       }
 
+      if (!hostLink) {
+        return 'This radio has no host command procedure. Nothing was sent.';
+      }
+
       if (commandPhase === 'prompt') {
-        return 'cmd: is already on this connection. Nothing was sent.';
+        return `${hostLink.prompt} is already on this connection. Nothing was sent.`;
       }
 
       if (commandActive) {
         return 'Already waiting. Nothing more was sent.';
       }
 
-      const wrote = await writeBytes(APRS_COMMAND_INTERRUPT);
+      const wrote = await writeBytes(hostLink.interrupt);
 
       if (!wrote.ok) {
-        return `Ctrl+C was not accepted. ${wrote.reason} Nothing else was sent.`;
+        return `The prompt request was not accepted. ${wrote.reason} Nothing else was sent.`;
       }
 
       armCommandWait();
       commandPhase = 'waiting-prompt';
-      commandDetail = `Three Ctrl+C bytes written. ${acceptanceNote(wrote)}No carriage return. Waiting for cmd:.`;
-      record('tx-command', APRS_COMMAND_INTERRUPT, commandDetail);
+      commandDetail = `Prompt request written. ${acceptanceNote(wrote)}No carriage return. Waiting for ${hostLink.prompt}.`;
+      record('tx-command', hostLink.interrupt, commandDetail);
       publish();
       return undefined;
     },
@@ -769,27 +809,16 @@ export function createAprsHostSession(options?: {
         return 'Listen is not open. Nothing was sent.';
       }
 
+      if (!hostLink) {
+        return 'This radio has no host command procedure. Nothing was sent.';
+      }
+
       if (commandPhase !== 'prompt') {
-        return 'No cmd: prompt on this connection. Nothing was sent.';
+        return `No ${hostLink.prompt} prompt on this connection. Nothing was sent.`;
       }
 
-      const bytes = new TextEncoder().encode(APRS_KISS_ON_COMMAND);
-      const wrote = await writeBytes(bytes);
-
-      if (!wrote.ok) {
-        commandPhase = 'rejected';
-        commandDetail = `KISS ON was not accepted. ${wrote.reason} RESTART was not sent.`;
-        record('note', new Uint8Array(), commandDetail);
-        publish();
-        return commandDetail;
-      }
-
-      armCommandWait();
-      commandPhase = 'waiting-accept';
-      commandDetail = `KISS ON written once. ${acceptanceNote(wrote)}Waiting for another cmd: before RESTART.`;
-      record('tx-command', bytes, commandDetail);
-      publish();
-      return undefined;
+      enterIndex = 0;
+      return writeEnterStep();
     },
     clearTrace() {
       trace.splice(0, trace.length);

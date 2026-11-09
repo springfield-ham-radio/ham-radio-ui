@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { aprsConversationCall, aprsConversations, aprsHeardAudience, formatAprsChatTime } from '~/utils/aprs-conversations';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
-import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '~/utils/aprs-kiss-restore';
 import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX, callsignError } from '~/utils/aprs-message';
 
 const props = defineProps<{
   cardId?: string;
   mine: string;
+  hostSetup?: readonly string[];
+  hostRecovery?: readonly string[];
 }>();
 
 const route = useRoute();
@@ -278,7 +279,7 @@ function onCancel(key: string): void {
       </div>
     </div>
 
-    <UCollapsible :unmount-on-hide="false" class="shrink-0 rounded-md border border-default px-3 py-2">
+    <UCollapsible v-if="hostSetup && hostSetup.length > 0" :unmount-on-hide="false" class="shrink-0 rounded-md border border-default px-3 py-2">
       <UButton color="neutral" variant="ghost" label="Host KISS" trailing-icon="i-lucide-chevron-down" />
       <template #content>
         <p class="mb-2 text-xs text-muted">
@@ -324,10 +325,10 @@ function onCancel(key: string): void {
           <template #content>
             <div class="grid gap-3 py-2 md:grid-cols-2">
               <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
-                <li v-for="step in APRS_HOST_SETUP" :key="step">{{ step }}</li>
+                <li v-for="step in hostSetup" :key="step">{{ step }}</li>
               </ol>
               <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
-                <li v-for="step in APRS_HOST_RECOVERY" :key="step">{{ step }}</li>
+                <li v-for="step in hostRecovery" :key="step">{{ step }}</li>
               </ol>
             </div>
           </template>

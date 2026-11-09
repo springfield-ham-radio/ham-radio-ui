@@ -85,7 +85,7 @@ const activeMode = computed<AprsConnectionMode>(() => {
     return 'passive';
   }
 
-  return requestedMode.value;
+  return profile.value?.host ? requestedMode.value : 'passive';
 });
 const activeFlow = computed(() => (kissListening.value ? (hostSnapshot.value?.hostFlow ?? requestedFlow.value) : requestedFlow.value));
 const connection = computed(() =>
@@ -98,15 +98,25 @@ const connection = computed(() =>
     kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
   }),
 );
-const modeItems: Array<{ label: string; value: AprsConnectionMode }> = [
-  { label: 'Passive monitor', value: 'passive' },
-  { label: 'Host session', value: 'host' },
-];
-const flowItems: Array<{ label: string; value: AprsHostFlowControl }> = [
-  { label: 'Software (XON/XOFF)', value: 'software' },
-  { label: 'Off', value: 'none' },
-  { label: 'Hardware (RTS/CTS)', value: 'hardware' },
-];
+const modeItems = computed(() => {
+  const items: Array<{ label: string; value: AprsConnectionMode }> = [{ label: 'Passive monitor', value: 'passive' }];
+
+  if (profile.value?.host) {
+    items.push({ label: 'Host session', value: 'host' });
+  }
+
+  return items;
+});
+const flowLabels: Record<AprsHostFlowControl, string> = {
+  software: 'Software (XON/XOFF)',
+  none: 'Off',
+  hardware: 'Hardware (RTS/CTS)',
+};
+const flowItems = computed(() => {
+  const flows = profile.value?.host?.flows ?? [];
+
+  return flows.map((value) => ({ label: flowLabels[value], value }));
+});
 const stations = computed(() => snapshot.value?.stations ?? []);
 const log = computed(() => snapshot.value?.log ?? []);
 const selected = computed(() => stations.value.find((station) => station.callsign === selectedCall.value) ?? stations.value[0]);
@@ -150,10 +160,29 @@ const statusLine = computed(() => {
     return `${connection.value.detail} Choose an APRS serial port under Preferences. The memory port is not used.`;
   }
 
-  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.`;
+  const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
+
+  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
+
+watch(
+  () => [props.cardId, profile.value?.host?.link] as const,
+  () => {
+    if (!props.cardId) {
+      return;
+    }
+
+    host.setHostLink(props.cardId, profile.value?.host?.link);
+    const flows = profile.value?.host?.flows;
+
+    if (flows && !kissListening.value && !flows.includes(requestedFlow.value)) {
+      requestedFlow.value = profile.value?.host?.defaultFlow ?? 'software';
+    }
+  },
+  { immediate: true },
+);
 
 watch(stations, (rows) => {
   if (selectedCall.value && rows.some((station) => station.callsign === selectedCall.value)) {
@@ -393,7 +422,7 @@ function onClear(): void {
       variant="subtle"
       icon="i-lucide-map"
       title="Example packets"
-      description="These stations are sample monitor lines for the map layout, not a live radio. A connected TM-D710 only sends packets heard after menu 604 OUTPUT is ON."
+      :description="`These stations are sample monitor lines for the map layout, not a live radio. ${profile?.monitorNote ?? ''}`"
       class="mb-2 shrink-0"
     />
 
@@ -480,7 +509,7 @@ function onClear(): void {
       </template>
 
       <template #messages>
-        <AprsMessages :card-id="cardId" :mine="mine" />
+        <AprsMessages :card-id="cardId" :mine="mine" :host-setup="profile?.host?.setup" :host-recovery="profile?.host?.recovery" />
       </template>
 
       <template #packet>
@@ -577,7 +606,7 @@ function onClear(): void {
               Invalid {{ hostSnapshot?.invalidBytes ?? 0 }}. KISS frames {{ hostSnapshot?.frames ?? 0 }}.
               Bytes written {{ hostSnapshot?.bytesWritten ?? 0 }}.
             </template>
-            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session. Decoded lines below are the menu 604 text.</template>
+            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session. {{ profile?.monitorNote }}</template>
             <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
             <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
           </p>

@@ -1,33 +1,11 @@
 /**
- * Command-mode bytes for the TM-D710 built-in TNC.
+ * Search helpers for a host-command reply.
  *
- * The A/E and G command lists say Ctrl+C returns from Converse to Command
- * mode, and Ctrl+C three times returns from Transparent. SENDPAC defaults to
- * carriage return ($0D), which sends a packet in Converse. These bytes are
- * Ctrl+C only.
- *
- * A bare Ctrl+C is not a KISS frame. The D710 manuals do not say what an
- * already-KISS TNC does with it, and the TM-D700 sequence C0 FF C0 is not
- * sent. RESET is not sent.
+ * The prompt and error text come from the radio module. These functions do
+ * not assume `cmd:` or `?EH`.
  */
 
-export const APRS_CTRL_C = 0x03;
-
-/** One explicit request. Not repeated by a timer. */
-export const APRS_COMMAND_INTERRUPT = Uint8Array.of(APRS_CTRL_C, APRS_CTRL_C, APRS_CTRL_C);
-
-/** Sent only after a cmd: prompt that arrived on this connection. */
-export const APRS_KISS_ON_COMMAND = 'KISS ON\r';
-
-/** Sent only after a later cmd: prompt accepts KISS ON. */
-export const APRS_RESTART_COMMAND = 'RESTART\r';
-
-export const APRS_COMMAND_WAIT_MS = 5000;
-
-const PROMPT = [0x63, 0x6d, 0x64, 0x3a]; // cmd:
-const ERROR_REPLY = [0x3f, 0x45, 0x48]; // ?EH
-
-function indexOfBytes(haystack: Uint8Array, needle: number[]): number {
+function indexOfBytes(haystack: Uint8Array, needle: Uint8Array): number {
   if (needle.length === 0 || haystack.length < needle.length) {
     return -1;
   }
@@ -50,12 +28,12 @@ function indexOfBytes(haystack: Uint8Array, needle: number[]): number {
   return -1;
 }
 
-export function hasCommandPrompt(bytes: Uint8Array): boolean {
-  return indexOfBytes(bytes, PROMPT) >= 0;
+export function hasCommandPrompt(bytes: Uint8Array, prompt: string): boolean {
+  return prompt.length > 0 && indexOfBytes(bytes, new TextEncoder().encode(prompt)) >= 0;
 }
 
-export function hasTncError(bytes: Uint8Array): boolean {
-  return indexOfBytes(bytes, ERROR_REPLY) >= 0;
+export function hasTncError(bytes: Uint8Array, errorReply: string): boolean {
+  return errorReply.length > 0 && indexOfBytes(bytes, new TextEncoder().encode(errorReply)) >= 0;
 }
 
 export function appendCommandBytes(previous: Uint8Array, chunk: Uint8Array, cap = 4096): Uint8Array {

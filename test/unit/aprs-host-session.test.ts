@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call, encodeAx25Ui } from '../../app/utils/aprs-ax25.ts';
 import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
 import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
-import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND } from '../../app/utils/aprs-command.ts';
+import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND, d710AprsHostLink } from '../../app/utils/aprs-d710-host.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
 import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
@@ -50,6 +50,10 @@ async function settle(): Promise<void> {
 
 const draft = { mine: 'N0TST', to: 'K5KTF-4', text: 'Hello' };
 
+function createD710HostSession(options?: Parameters<typeof createAprsHostSession>[0]) {
+  return createAprsHostSession({ ...options, host: options?.host ?? d710AprsHostLink() });
+}
+
 async function confirmKiss(session: ReturnType<typeof createAprsHostSession>, fake: ReturnType<typeof fakePort>): Promise<void> {
   const heard = canonicalAx25Call('N0HRD');
   const ax25 = heard ? encodeAx25Ui(heard, '>Heard') : undefined;
@@ -87,7 +91,7 @@ describe('APRS host session', () => {
   });
 
   it('opens and closes without writing until transmit is requested', async () => {
-    const session = createAprsHostSession();
+    const session = createD710HostSession();
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
 
@@ -118,7 +122,7 @@ describe('APRS host session', () => {
   });
 
   it('sends only after the transmit opt-in, then stops on cancel, timeout, and disconnect', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     await session.send({ ...draft });
@@ -161,7 +165,7 @@ describe('APRS host session', () => {
   });
 
   it('accepts only a matching ack and does not ack unless that opt-in is on', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     const source = canonicalAx25Call('K5KTF-4');
@@ -247,7 +251,7 @@ describe('APRS host session', () => {
   const d74Ack7 = hexBytes(d74Ack7Fragments.map((chunk) => [...chunk].map((byte) => byte.toString(16).padStart(2, '0')).join(' ')).join(' '));
 
   it('acks message 7 from the captured TH-D74 frame and does not retry', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     expect(session.snapshot().ackOptIn).toBe(false);
@@ -289,7 +293,7 @@ describe('APRS host session', () => {
   });
 
   it('does not ack message 7 for the wrong sender, addressee, or id', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
 
@@ -326,7 +330,7 @@ describe('APRS host session', () => {
   );
 
   it('does not send or retry when the only KISS frame is not an AX.25 UI frame', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     fake.push(ownTxWithoutControl.subarray(0, 14));
@@ -345,7 +349,7 @@ describe('APRS host session', () => {
   });
 
   it('acknowledges only a later message addressed to the current callsign', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     expect(session.snapshot().ackOptIn).toBe(false);
@@ -396,7 +400,7 @@ describe('APRS host session', () => {
   });
 
   it('stops the queue when cmd: arrives after a UI frame', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     await confirmKiss(session, fake);
@@ -415,7 +419,7 @@ describe('APRS host session', () => {
 
   it('feeds a split KISS position to the station callback and does not write', async () => {
     const seen: Uint8Array[] = [];
-    const session = createAprsHostSession({
+    const session = createD710HostSession({
       allowHardwareTransmit: true,
       onAx25Ui(payload) {
         seen.push(payload);
@@ -442,7 +446,7 @@ describe('APRS host session', () => {
   });
 
   it('does not write an invalid message', async () => {
-    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     const invalid = await session.send({ mine: '1BAD', to: 'K5KTF', text: '' });
@@ -453,7 +457,7 @@ describe('APRS host session', () => {
 
   it('writes the documented KISS enter command only when asked', async () => {
     let time = 1_000;
-    const session = createAprsHostSession({ now: () => time });
+    const session = createD710HostSession({ now: () => time });
     const fake = fakePort();
 
     expect(await session.enterHostKiss()).toMatch(/not open/);
@@ -493,7 +497,7 @@ describe('APRS host session', () => {
 
   it('stamps listen notes from the wall clock and does not freeze them', async () => {
     let time = 1_000;
-    const session = createAprsHostSession({ now: () => time });
+    const session = createD710HostSession({ now: () => time });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     time = 31_000;
@@ -508,7 +512,7 @@ describe('APRS host session', () => {
 
   it('times out a quiet port without a second write, and drops a prompt on reconnect', async () => {
     let time = 10_000;
-    const session = createAprsHostSession({ now: () => time });
+    const session = createD710HostSession({ now: () => time });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     await session.requestCommandPrompt();
@@ -533,7 +537,7 @@ describe('APRS host session', () => {
   });
 
   it('does not answer a KISS frame with a carriage return, and sends RESTART only after a second prompt', async () => {
-    const session = createAprsHostSession();
+    const session = createD710HostSession();
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     await session.requestCommandPrompt();
@@ -557,7 +561,7 @@ describe('APRS host session', () => {
   });
 
   it('keeps a prompt that arrives as the listener is attached, and splits a banner, echo, and error', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const waiting: Uint8Array[] = [];
     let dataListener: ((chunk: Uint8Array) => void) | undefined;
     const writes: Uint8Array[] = [];
@@ -613,7 +617,7 @@ describe('APRS host session', () => {
   });
 
   it('records every byte of an arbitrarily split banner, accepts cmd: on this connection, and drops it on disconnect', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const banner = '0\r\nHB 1200\r\ncmd:';
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
@@ -652,7 +656,7 @@ describe('APRS host session', () => {
   });
 
   it('keeps the 27-byte hardware slice intact and does not accept it as cmd:', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const slice = Uint8Array.from([
       0x41, 0x20, 0x31, 0x31, 0x30, 0x31, 0x30, 0x31, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x0d, 0x0a, 0x48, 0x42,
       0x20, 0x31, 0x32, 0x30, 0x30, 0x0d, 0x0a, 0x63, 0x6d,
@@ -678,7 +682,7 @@ describe('APRS host session', () => {
   });
 
   it('treats the 24-byte HBAUD reply as this connection prompt and does not send Ctrl+C', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const reply = Uint8Array.from([
       0x3a, 0x48, 0x42, 0x41, 0x55, 0x44, 0x20, 0x20, 0x20, 0x20, 0x77, 0x61, 0x73, 0x20, 0x31, 0x32, 0x30, 0x30,
       0x0d, 0x0a, 0x63, 0x6d, 0x64, 0x3a,
@@ -705,7 +709,7 @@ describe('APRS host session', () => {
   });
 
   it('records hardware RTS/CTS on Listen and does not write', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port, { flowControl: 'hardware' });
     expect(session.snapshot().hostFlow).toBe('hardware');
@@ -717,7 +721,7 @@ describe('APRS host session', () => {
   it('keeps a 28-byte DA/HB tail without a colon idle, and logs KISS ON only after the plugin accepts 8 bytes', async () => {
     const tail = new TextEncoder().encode('A 110101000000\r\nHB 1200\r\ncmd');
     expect(tail).toHaveLength(28);
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const fake = fakePort();
     let release: (count: number) => void = () => undefined;
     fake.port.write = (bytes) =>
@@ -744,7 +748,7 @@ describe('APRS host session', () => {
   });
 
   it('does not wait for cmd: when the plugin rejects KISS ON', async () => {
-    const session = createAprsHostSession({ now: () => 1_700_000_000_000 });
+    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
     const fake = fakePort();
     fake.port.write = () => {
       throw new Error('serial port lock timeout after 250 ms');
@@ -773,7 +777,7 @@ describe('APRS host session', () => {
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).toContain('FIXTURE, not from the radio');
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).not.toContain('<script>');
 
-    const session = createAprsHostSession();
+    const session = createD710HostSession();
     const chunks = Array.from({ length: APRS_TRACE_CAP + 5 }, (_, index) => Uint8Array.from([index & 0xff]));
     let listener: ((chunk: Uint8Array) => void) | undefined;
     const port = {
@@ -803,5 +807,49 @@ describe('APRS host session', () => {
       expect(snap.rxChunks).toBe(APRS_TRACE_CAP + 5);
       expect(snap.rxBytes).toBe(APRS_TRACE_CAP + 5);
     });
+  });
+
+  it('does not write a Kenwood command when the radio has no host procedure', async () => {
+    const session = createAprsHostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(await session.requestCommandPrompt()).toMatch(/no host command/);
+    expect(await session.enterHostKiss()).toMatch(/no host command/);
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(session.snapshot().commandPhase).toBe('idle');
+    expect(fake.writes).toEqual([]);
+    await confirmKiss(session, fake);
+    const sent = await session.send(draft);
+    expect(sent.status).toBe('waiting-ack');
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('waiting-ack');
+  });
+
+  it('writes the module host procedure and not the TM-D710 enter sequence', async () => {
+    const session = createAprsHostSession({
+      host: {
+        interrupt: Uint8Array.of(0x15),
+        prompt: 'ok>',
+        errorReply: 'ERR',
+        waitMs: 5000,
+        enter: [{ text: 'HOST\r', label: 'HOST' }],
+      },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    expect(await session.requestCommandPrompt()).toBeUndefined();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    expect(await session.enterHostKiss()).toBeUndefined();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe('HOST\r');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).not.toContain('KISS ON');
+    expect(written).not.toContain('RESTART');
+    expect(session.snapshot().commandPhase).toBe('restart-sent');
+    expect(session.snapshot().kissConfirmed).toBe(false);
   });
 });

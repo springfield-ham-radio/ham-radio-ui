@@ -1,6 +1,7 @@
 import { ingestAprsAx25Ui } from '~/composables/useAprs';
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
+import type { AprsHostLink } from '~/utils/aprs-host-profile';
 import { createAprsHostSession, type AprsHostMessage, type AprsHostSession, type AprsHostSnapshot } from '~/utils/aprs-host-session';
 import { aprsHoldPaths, nextAprsPortHolds } from '~/utils/aprs-session';
 import { openAprsHostPort } from '~/utils/aprs-serial';
@@ -118,6 +119,11 @@ export function useAprsHost() {
     publish(cardId);
   }
 
+  function setHostLink(cardId: string, link: AprsHostLink | undefined): void {
+    sessionFor(cardId).setHostLink(link);
+    publish(cardId);
+  }
+
   function setIdentity(cardId: string, call: string): string | undefined {
     return sessionFor(cardId).setIdentity(call);
   }
@@ -161,6 +167,7 @@ export function useAprsHost() {
     send,
     cancel,
     setIdentity,
+    setHostLink,
     setAckOptIn,
     requestCommandPrompt,
     cancelCommand,
