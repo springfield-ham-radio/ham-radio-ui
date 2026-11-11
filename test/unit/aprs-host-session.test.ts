@@ -1081,7 +1081,7 @@ describe('host Connect detection', () => {
     expect(written).not.toContain('KISS OFF');
   });
 
-  it('does not nudge when monitor text stops after the interrupt', async () => {
+  it('nudges once after the interrupt when monitor text stops, and does not send kissExit', async () => {
     let time = 12_000;
     const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
     const session = createAprsHostSession({ now: () => time, host: moduleLink(exit, Uint8Array.of(0x0d)) });
@@ -1096,10 +1096,16 @@ describe('host Connect detection', () => {
     time += 1_000;
     session.poll();
     await settle();
-    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes).toEqual([Uint8Array.of(0x15), Uint8Array.of(0x0d)]);
+    expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(2);
     expect(session.snapshot().detectPhase).toBe('failed');
     expect(session.snapshot().detectDetail).toContain('Command-mode text was seen');
     expect(session.snapshot().detectDetail).not.toContain('PACKET mode');
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
   });
 
   it('enters immediately when cmd: is already in the open buffer', async () => {
@@ -1448,5 +1454,147 @@ describe('host Connect detection', () => {
     session.poll();
     await settle();
     expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+  });
+
+  it('sends the prompt nudge on silence after Ctrl+C, then enters on cmd:', async () => {
+    let time = 1_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 2_999;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+
+    time += 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03)]);
+
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13)]);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes).toHaveLength(4);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+  });
+
+  it('treats an echo of the interrupt as command mode and sends the nudge', async () => {
+    let time = 2_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03)]);
+
+    fake.push(Uint8Array.of(0x03, 0x03, 0x03));
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13)]);
+    expect(session.snapshot().trace.some((line) => line.note.includes('echo of the last write'))).toBe(true);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).not.toBe('failed');
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+  });
+
+  it('sends kissExit only after interrupt and nudge stay silent, and an echo still enters on cmd:', async () => {
+    let time = 4_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13), exit]);
+
+    fake.push(exit);
+    await settle();
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).not.toBe('failed');
+    expect(session.snapshot().trace.some((line) => line.note.includes('echo of the last write'))).toBe(true);
+    expect(fake.writes).toHaveLength(3);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(new TextDecoder().decode(fake.writes[4] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(session.snapshot().frames).toBe(0);
+  });
+
+  it('fails only after interrupt, nudge, and kissExit produce no text', async () => {
+    let time = 6_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    fake.push(exit);
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13), exit]);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toContain('not answering');
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('');
+    expect(written).not.toContain('KISS ON');
+    expect(written).not.toContain('RESTART');
   });
 });

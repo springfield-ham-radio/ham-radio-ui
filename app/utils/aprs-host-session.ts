@@ -156,10 +156,13 @@ interface Waiting {
  * decodable frame. A stray ESC or FEND in monitor text is not that. If
  * cmd: or the Kenwood banner arrives before a decoded KISS data frame,
  * the enter steps run. Monitor text
- * with no prompt writes the module interrupt once. If command text keeps
- * arriving and the module declares promptNudge, those bytes are written
- * once. The enter steps run only after a fresh prompt. An echo of the last
- * write is not a received KISS frame. FEND FF FEND does not confirm KISS.
+ * with no prompt writes the module interrupt once. If the prompt still
+ * has not arrived and the module declares promptNudge, those bytes are
+ * written once even when the port is silent. An exact echo of the last
+ * write is command mode, not a KISS frame: the nudge is written if it
+ * has not been, and the pass waits for the prompt. kissExit is written
+ * only when neither the interrupt nor the nudge produced text. The enter
+ * steps run only after a fresh prompt. FEND FF FEND does not confirm KISS.
  * Send is the only way a message
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
@@ -638,8 +641,7 @@ export function createAprsHostSession(options?: {
   async function writeDetectNudge(): Promise<void> {
     const nudge = hostLink?.promptNudge;
 
-    if (nudgeTried || !hostLink || !nudge) {
-      failDetect(detectTextWithoutPrompt(hostLink?.prompt ?? 'the prompt'));
+    if (!hostLink || !nudge || nudgeTried) {
       return;
     }
 
@@ -662,6 +664,24 @@ export function createAprsHostSession(options?: {
     detectDetail = commandDetail;
     record('tx-command', nudge, commandDetail);
     publish();
+  }
+
+  /**
+   * ECHO is on in command mode. A KISS TNC does not send our bytes back.
+   * The match is the nudge signal when the prompt itself has not arrived.
+   */
+  function noteCommandEcho(): void {
+    if (!hostLink || kissConfirmed || detectPhase === 'entering' || detectPhase === 'waiting-traffic' || !detectionOwnsWait()) {
+      return;
+    }
+
+    if (promptSeen(sessionBytes)) {
+      return;
+    }
+
+    if (hostLink.promptNudge && !nudgeTried) {
+      void writeDetectNudge();
+    }
   }
 
   async function writeDetectExit(): Promise<void> {
@@ -749,13 +769,21 @@ export function createAprsHostSession(options?: {
         return;
       }
 
-      if (detectStep === 'after-interrupt' && !sawText && !textAfterInterrupt && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
-        await writeDetectExit();
+      if (detectStep === 'after-interrupt' && hostLink.promptNudge && !nudgeTried && !promptSeen(sessionBytes)) {
+        await writeDetectNudge();
         return;
       }
 
-      if (detectStep === 'after-interrupt' && textAfterInterrupt && hostLink.promptNudge && !nudgeTried) {
-        await writeDetectNudge();
+      if (
+        (detectStep === 'after-nudge' || detectStep === 'after-interrupt')
+        && !sawText
+        && !textAfterInterrupt
+        && commandBytes.length === 0
+        && !promptSeen(sessionBytes)
+        && hostLink.kissExit
+        && !exitTried
+      ) {
+        await writeDetectExit();
         return;
       }
 
@@ -1263,6 +1291,9 @@ export function createAprsHostSession(options?: {
     }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
+    if (stripped.echoed) {
+      noteCommandEcho();
+    }
     resumeUnconfirmedCommand();
     noteConnectionPrompt();
 
