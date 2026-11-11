@@ -508,8 +508,8 @@ describe('APRS host session', () => {
 
     expect(lines[0]?.at).toBe(1_000);
     expect(lines.at(-1)?.at).toBe(31_000);
-    expect(formatTrace(lines)).toContain('00:00:01.000');
-    expect(formatTrace(lines)).toContain('00:00:31.000');
+    expect(formatTrace(lines, { timeZone: 'UTC' })).toContain('00:00:01');
+    expect(formatTrace(lines, { timeZone: 'UTC' })).toContain('00:00:31');
   });
 
   it('times out a quiet port without a second write, and drops a prompt on reconnect', async () => {

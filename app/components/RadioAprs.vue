@@ -8,7 +8,7 @@ import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, type AprsConnectionMode } from '~/utils/aprs-connection';
-import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
+import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
@@ -68,6 +68,8 @@ const snapshot = computed(() => (props.cardId ? snapshots.value[props.cardId] : 
 const hostSnapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const traceLines = computed(() => (traceFixture.value ? APRS_HOST_TRACE_FIXTURE : (hostSnapshot.value?.trace ?? [])));
 const traceText = computed(() => formatTrace(traceLines.value));
+const transcript = computed(() => serialTranscript(traceLines.value));
+const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true);
 const kissListening = computed(() => hostSnapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -161,7 +163,9 @@ const statusLine = computed(() => {
   }
 
   const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
-  const detection = kissListening.value && hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
+  const detection = kissListening.value && hostSnapshot.value?.detectDetail
+    ? ` ${serialEventHeadline(hostSnapshot.value.detectDetail)}`
+    : '';
 
   return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}${detection}`;
 });
@@ -171,6 +175,18 @@ const detectFailure = computed(() => {
   const setup = profile.value?.host?.setup ?? [];
   const recovery = profile.value?.host?.recovery ?? [];
   return [detail, ...setup, ...recovery].filter((line) => line.length > 0).join(' ');
+});
+const failureHeadline = computed(() => serialEventHeadline(hostSnapshot.value?.detectDetail ?? 'The TNC is not answering'));
+const traceCounters = computed(() => {
+  const snap = hostSnapshot.value;
+
+  if (!snap) {
+    return '';
+  }
+
+  const dropped = snap.traceDropped > 0 ? ` · dropped ${snap.traceDropped}` : '';
+
+  return `RX ${snap.rxBytes} B in ${snap.rxChunks} · text ${snap.commandTextBytes} · KISS ${snap.frames} · written ${snap.bytesWritten} · held ${snap.incompleteBytes} · invalid ${snap.invalidBytes}${dropped}`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
@@ -458,10 +474,18 @@ function onClear(): void {
       color="warning"
       variant="subtle"
       icon="i-lucide-radio"
-      title="The TNC is not answering"
-      :description="detectFailure"
+      :title="failureHeadline"
       class="mb-2 shrink-0"
-    />
+    >
+      <template #description>
+        <UCollapsible :unmount-on-hide="false">
+          <UButton color="neutral" variant="ghost" size="xs" label="Details" trailing-icon="i-lucide-chevron-down" />
+          <template #content>
+            <p class="mt-2 text-sm whitespace-pre-wrap">{{ detectFailure }}</p>
+          </template>
+        </UCollapsible>
+      </template>
+    </UAlert>
 
     <UAlert
       v-if="snapshot?.error || hostSnapshot?.error"
@@ -628,27 +652,38 @@ function onClear(): void {
 
       <template #log>
         <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden py-2">
-        <section class="flex max-h-[45%] min-h-36 shrink-0 flex-col gap-2">
+        <section class="flex min-h-48 min-w-0 flex-1 flex-col gap-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h3 class="text-sm font-medium text-highlighted">Serial reply</h3>
             <div class="flex items-center gap-1.5">
+              <UButton size="xs" color="neutral" variant="outline" :label="showTraceHex ? 'Hide hex' : 'Show hex'" @click="showTraceHex = !showTraceHex" />
               <UButton size="xs" color="neutral" variant="outline" label="Copy" :disabled="traceText.length === 0" @click="onCopyTrace" />
               <UButton size="xs" color="neutral" variant="outline" label="Clear serial reply" :disabled="!cardId || traceFixture || traceLines.length === 0" @click="onClearTrace" />
             </div>
           </div>
           <p class="text-xs text-muted">
-            <template v-if="kissListening">
-              Host session. RX {{ hostSnapshot?.rxBytes ?? 0 }} bytes in {{ hostSnapshot?.rxChunks ?? 0 }} chunks.
-              Command text {{ hostSnapshot?.commandTextBytes ?? 0 }}. Incomplete {{ hostSnapshot?.incompleteBytes ?? 0 }}.
-              Invalid {{ hostSnapshot?.invalidBytes ?? 0 }}. KISS frames {{ hostSnapshot?.frames ?? 0 }}.
-              Bytes written {{ hostSnapshot?.bytesWritten ?? 0 }}.
-            </template>
-            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session. {{ profile?.monitorNote }}</template>
-            <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
-            <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
+            <template v-if="kissListening">Host session. {{ traceCounters }}</template>
+            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session.</template>
+            <template v-else>No Listen is open. ← radio, → HamBench. Copy includes hex. Clear keeps the counters and does not write.</template>
           </p>
-          <p class="text-xs text-muted">{{ hostSnapshot?.detectDetail || hostSnapshot?.commandDetail || 'No command requested.' }} Clear serial reply removes these lines and keeps the counters. It does not disconnect or write.</p>
-          <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap font-mono text-xs text-highlighted">{{ traceText || 'No serial bytes yet.' }}</pre>
+          <div class="min-h-0 flex-1 overflow-auto font-mono text-xs leading-5">
+            <p v-if="transcript.length === 0" class="text-muted">No serial bytes yet.</p>
+            <div v-for="row in transcript" :key="row.key" class="py-0.5" :class="row.echo ? 'opacity-60' : ''">
+              <div class="flex gap-2">
+                <span class="w-16 shrink-0 text-muted">{{ row.time }}</span>
+                <span class="w-4 shrink-0 text-muted" :title="row.who === 'radio' ? 'radio' : row.who === 'HamBench' ? 'HamBench' : 'note'">{{ row.arrow }}</span>
+                <span class="min-w-0 whitespace-pre-wrap break-all" :class="row.echo ? 'text-muted' : 'text-highlighted'">{{ row.text }}</span>
+                <span v-if="row.echo" class="shrink-0 text-muted">echo</span>
+              </div>
+              <p v-if="showTraceHex && row.hex" class="ps-20 break-all text-muted">{{ row.hex }}</p>
+              <UCollapsible v-if="row.detail" :unmount-on-hide="false" class="ps-20">
+                <UButton color="neutral" variant="link" size="xs" label="Details" trailing-icon="i-lucide-chevron-down" class="px-0" />
+                <template #content>
+                  <p class="pb-1 whitespace-pre-wrap text-muted">{{ row.detail }}</p>
+                </template>
+              </UCollapsible>
+            </div>
+          </div>
         </section>
         <div class="flex shrink-0 items-center justify-between gap-2">
           <h3 class="text-sm font-medium text-highlighted">Decoded lines</h3>
@@ -663,7 +698,7 @@ function onClear(): void {
           />
         </div>
         <p class="shrink-0 text-xs text-muted">Passive text and KISS UI frames land here. Clear decoded lines also clears the station list. It does not write.</p>
-        <div ref="logScroller" class="min-h-0 flex-1 overflow-auto font-mono text-xs leading-6">
+        <div ref="logScroller" class="max-h-36 shrink-0 overflow-auto font-mono text-xs leading-6">
           <p v-if="log.length === 0" class="py-3 text-muted">Raw lines stay here even when the packet is malformed or not decoded.</p>
           <div v-else :style="{ paddingTop: `${logPadTop}px`, paddingBottom: `${logPadBottom}px` }">
             <div v-for="row in logRows" :key="log[row.index]?.id ?? row.key" class="flex h-6 gap-3 whitespace-nowrap">
