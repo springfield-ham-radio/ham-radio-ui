@@ -95,10 +95,13 @@ export function formatTraceClock(at: number, timeZone?: string): string {
   return `${value('hour')}:${value('minute')}:${value('second')}`;
 }
 
-export function formatTraceLine(line: AprsTraceLine, options?: { timeZone?: string }): string {
+export function formatTraceLine(line: AprsTraceLine, options?: { timeZone?: string; echo?: boolean }): string {
   const time = formatTraceClock(line.at, options?.timeZone);
   const arrow = line.direction === 'rx' ? '←' : line.direction === 'note' ? '·' : '→';
-  const body = line.direction === 'note' ? line.note : `${line.hex}  ${line.text}${line.truncated ? '  …' : ''}  ${line.note}`;
+  const note = options?.echo && !line.note.includes('echo of the last write')
+    ? (line.note.length > 0 ? `${line.note}, echo of the last write` : 'echo of the last write')
+    : line.note;
+  const body = line.direction === 'note' ? note : `${line.hex}  ${line.text}${line.truncated ? '  …' : ''}  ${note}`;
 
   return `${time} ${arrow} ${line.direction.toUpperCase()} ${body}`;
 }
@@ -208,6 +211,183 @@ function withoutLineBreaks(bytes: readonly number[]): number[] {
 
 function sameBytes(left: readonly number[], right: readonly number[]): boolean {
   return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+
+function isLineBreakByte(byte: number): boolean {
+  return byte === 0x0d || byte === 0x0a;
+}
+
+function isPrefix(whole: readonly number[], prefix: readonly number[]): boolean {
+  return prefix.length <= whole.length && prefix.every((byte, index) => byte === whole[index]);
+}
+
+interface PresentedTraceLine {
+  line: AprsTraceLine;
+  echo: boolean;
+}
+
+/**
+ * How many leading RX chunks are this write, including a CR/LF-only tail.
+ * Zero when the bytes are not that echo.
+ */
+function echoChunkCount(lines: readonly AprsTraceLine[], tx: readonly number[]): number {
+  const txTrim = withoutLineBreaks(tx);
+
+  if (txTrim.length === 0) {
+    return 0;
+  }
+
+  const buf: number[] = [];
+  let matched = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (!line || line.direction !== 'rx') {
+      break;
+    }
+
+    buf.push(...bytesFromHex(line.hex));
+    const extra = buf.slice(tx.length);
+    const matchedWrite = sameBytes(withoutLineBreaks(buf), txTrim) && buf.length >= tx.length && extra.every(isLineBreakByte);
+
+    if (matchedWrite) {
+      matched = index + 1;
+      continue;
+    }
+
+    if (matched > 0) {
+      break;
+    }
+
+    const trim = withoutLineBreaks(buf);
+
+    if (buf.length > tx.length + 2 || (!isPrefix(txTrim, trim) && !isPrefix(trim, txTrim))) {
+      return 0;
+    }
+  }
+
+  return matched;
+}
+
+/**
+ * Put a write ahead of the echo that the radio returned before that write
+ * was recorded, and mark the chunks that make up the echo.
+ * Stored lines are not changed. Notes and hex stay on each chunk.
+ */
+function presentTrace(lines: readonly AprsTraceLine[]): PresentedTraceLine[] {
+  const result: PresentedTraceLine[] = [];
+  const pending: AprsTraceLine[] = [];
+  const assembling: AprsTraceLine[] = [];
+  let expect: number[] | undefined;
+
+  const flushPending = (): void => {
+    for (const line of pending) {
+      result.push({ line, echo: false });
+    }
+
+    pending.length = 0;
+  };
+
+  const flushAssembly = (): void => {
+    for (const line of assembling) {
+      result.push({ line, echo: false });
+    }
+
+    assembling.length = 0;
+  };
+
+  for (const line of lines) {
+    if (line.direction === 'tx-command' || line.direction === 'tx-frame') {
+      flushAssembly();
+      const tx = [...bytesFromHex(line.hex)];
+      let start = pending.length;
+
+      while (start > 0 && pending[start - 1]?.direction === 'rx') {
+        start -= 1;
+      }
+
+      const run = pending.slice(start);
+      let foundAt = -1;
+      let foundCount = 0;
+
+      for (let index = 0; index < run.length; index += 1) {
+        const count = echoChunkCount(run.slice(index), tx);
+
+        if (count > 0) {
+          foundAt = index;
+          foundCount = count;
+          break;
+        }
+      }
+
+      if (foundAt >= 0) {
+        for (const item of pending.slice(0, start + foundAt)) {
+          result.push({ line: item, echo: false });
+        }
+
+        pending.length = 0;
+        result.push({ line, echo: false });
+
+        for (const item of run.slice(foundAt, foundAt + foundCount)) {
+          result.push({ line: item, echo: true });
+        }
+
+        for (const item of run.slice(foundAt + foundCount)) {
+          result.push({ line: item, echo: false });
+        }
+
+        expect = undefined;
+        continue;
+      }
+
+      flushPending();
+      result.push({ line, echo: false });
+      expect = tx;
+      continue;
+    }
+
+    if (expect && line.direction === 'note') {
+      result.push({ line, echo: false });
+      continue;
+    }
+
+    if (expect && line.direction === 'rx') {
+      assembling.push(line);
+      const count = echoChunkCount(assembling, expect);
+
+      if (count > 0) {
+        for (const item of assembling.slice(0, count)) {
+          result.push({ line: item, echo: true });
+        }
+
+        const rest = assembling.slice(count);
+        assembling.length = 0;
+        expect = undefined;
+
+        for (const item of rest) {
+          result.push({ line: item, echo: false });
+        }
+      } else {
+        const buf = assembling.flatMap((item) => [...bytesFromHex(item.hex)]);
+        const trim = withoutLineBreaks(buf);
+        const txTrim = withoutLineBreaks(expect);
+
+        if (buf.length > expect.length + 2 || (!isPrefix(txTrim, trim) && !isPrefix(trim, txTrim))) {
+          flushAssembly();
+        }
+      }
+
+      continue;
+    }
+
+    flushAssembly();
+    pending.push(line);
+  }
+
+  flushAssembly();
+  flushPending();
+  return result;
 }
 
 function commandLabel(line: AprsTraceLine): string {
@@ -336,7 +516,7 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
     }
   };
 
-  for (const line of lines) {
+  for (const line of presentTrace(lines).map((item) => item.line)) {
     if (line.direction === 'note') {
       const text = serialEventHeadline(line.note);
       pushRow({
@@ -411,5 +591,5 @@ export const APRS_HOST_TRACE_FIXTURE: readonly AprsTraceLine[] = [
 ] as const;
 
 export function formatTrace(lines: readonly AprsTraceLine[], options?: { timeZone?: string }): string {
-  return lines.map((line) => formatTraceLine(line, options)).join('\n');
+  return presentTrace(lines).map((item) => formatTraceLine(item.line, { ...options, echo: item.echo })).join('\n');
 }

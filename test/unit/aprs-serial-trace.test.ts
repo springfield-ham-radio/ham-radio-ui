@@ -127,4 +127,48 @@ describe('serial transcript', () => {
     ]);
     expect(rows.findIndex((row) => row.arrow === '→')).toBeLessThan(rows.findIndex((row) => row.echo));
   });
+
+  it('copies a write before the echo that was logged first, and tags that echo', () => {
+    const written = new TextEncoder().encode('KISS ON\r');
+    const lines = [
+      makeTraceLine(at, 'rx', written, '8 command-text'),
+      makeTraceLine(at, 'rx', Uint8Array.of(0x0a), '1 command-text'),
+      makeTraceLine(at, 'rx', new TextEncoder().encode('KIS'), '3 command-text'),
+      makeTraceLine(at, 'tx-command', written, 'KISS ON written once. Plugin accepted 8 bytes. That is kernel acceptance, not a radio echo.'),
+      makeTraceLine(at + 1000, 'tx-command', new TextEncoder().encode('RESTART\r'), 'RESTART written once after cmd:. KISS unconfirmed.'),
+      makeTraceLine(at + 1000, 'rx', new TextEncoder().encode('RESTART\r\n'), 'echo of the last write, not a KISS frame, 1 command-text'),
+    ];
+    const copied = formatTrace(lines, { timeZone: 'UTC' }).split('\n');
+    const tx = copied.findIndex((row) => row.includes('TX-COMMAND') && row.includes('KISS ON\\r'));
+    const echo = copied.findIndex((row) => row.includes('RX') && row.includes('KISS ON\\r'));
+    const newline = copied.findIndex((row) => row.includes('RX') && row.includes('\\n'));
+    const partial = copied.findIndex((row) => row.includes('KIS') && !row.includes('KISS'));
+    const restart = copied.findIndex((row) => row.includes('TX-COMMAND') && row.includes('RESTART\\r'));
+    const restartEcho = copied.findIndex((row) => row.includes('RX') && row.includes('RESTART\\r\\n'));
+
+    expect(tx).toBe(0);
+    expect(echo).toBeGreaterThan(tx);
+    expect(newline).toBeGreaterThan(echo);
+    expect(partial).toBeGreaterThan(newline);
+    expect(restart).toBeGreaterThan(partial);
+    expect(restartEcho).toBeGreaterThan(restart);
+    expect(copied[echo]).toContain('4b 49 53 53 20 4f 4e 0d');
+    expect(copied[echo]).toContain('8 command-text');
+    expect(copied[echo]).toContain('echo of the last write');
+    expect(copied[echo]).not.toContain('echo of the last write, echo of the last write');
+    expect(copied[newline]).toContain('0a');
+    expect(copied[newline]).toContain('1 command-text');
+    expect(copied[newline]).toContain('echo of the last write');
+    expect(copied[partial]).toContain('3 command-text');
+    expect(copied[partial]).not.toContain('echo of the last write');
+    expect(copied[restartEcho]).toContain('echo of the last write, not a KISS frame');
+    expect(copied[restartEcho]).not.toContain('echo of the last write, echo of the last write');
+
+    const view = serialTranscript(lines, { timeZone: 'UTC' });
+    const writeRow = view.findIndex((row) => row.arrow === '→' && row.text === 'KISS ON');
+    const echoRow = view.findIndex((row) => row.echo && row.text === 'KISS ON');
+
+    expect(writeRow).toBeGreaterThanOrEqual(0);
+    expect(echoRow).toBeGreaterThan(writeRow);
+  });
 });
