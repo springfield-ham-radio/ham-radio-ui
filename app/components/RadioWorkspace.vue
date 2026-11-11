@@ -136,6 +136,7 @@ const supportsAprs = computed(() => {
   return aprsReceiveProfile({ config, model: radio.model, name: radio.name }) !== undefined;
 });
 const { disconnect: disconnectAprs } = useAprs();
+const packet = usePacket();
 const anyOpenCardSupportsCat = computed(() =>
   cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model ?? card.guest?.model)),
 );
@@ -151,6 +152,7 @@ const items = computed<TabsItem[]>(() => {
 
   if (supportsAprs.value) {
     tabs.push({ label: 'APRS', icon: 'i-lucide-radio', slot: 'aprs' as const, value: 'aprs' });
+    tabs.push({ label: 'Packet', icon: 'i-lucide-waypoints', slot: 'packet' as const, value: 'packet' });
   }
 
   tabs.push(
@@ -167,7 +169,7 @@ const items = computed<TabsItem[]>(() => {
 const route = useRoute();
 const router = useRouter();
 
-const activeTab = shallowRef('channels');
+const activeTab = shallowRef(import.meta.dev && route.query.fixture === 'packet' ? 'packet' : 'channels');
 
 function catalogResolved(): boolean {
   return !isLoading.value && (catalogLoaded.value || configurations.value.length > 0);
@@ -1102,6 +1104,7 @@ onUnmounted(() => {
 
   if (id) {
     void disconnectAprs(id);
+    void packet.closeCard(id);
   }
 });
 
@@ -1428,6 +1431,14 @@ async function onSaveSerialLog(): Promise<void> {
       <template #aprs>
         <RadioAprs
           v-if="supportsAprs && activeTab === 'aprs'"
+          :card-id="cardRadio?.id"
+          :model="cardRadio?.model"
+          :radio-name="cardRadio?.name"
+        />
+      </template>
+      <template #packet>
+        <RadioPacket
+          v-if="supportsAprs && activeTab === 'packet'"
           :card-id="cardRadio?.id"
           :model="cardRadio?.model"
           :radio-name="cardRadio?.name"

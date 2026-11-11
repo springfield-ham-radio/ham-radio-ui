@@ -1,7 +1,8 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
 import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
 import type { AprsHostLink } from '~/utils/aprs-host-profile';
-import { createKissDecoderState, pushKissBytes } from '~/utils/aprs-kiss';
+import { createKissDecoderState, encodeKissData, pushKissBytes } from '~/utils/aprs-kiss';
+import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
   APRS_MESSAGE_ATTEMPTS,
   APRS_MESSAGE_RETRY_MS,
@@ -114,6 +115,17 @@ export interface AprsHostSession {
   advance(ms: number): Promise<void>;
   subscribe(listener: () => void): void;
   unsubscribe(listener: () => void): void;
+  /**
+   * Every KISS data payload, including frames that are not AX.25 UI.
+   * The listener must not write. Packet transmit goes through writeKissData.
+   */
+  addKissDataListener(listener: (payload: Uint8Array) => void): () => void;
+  /** Runs while the port is still open. Used so a packet link can send DISC. */
+  addDisconnectHook(hook: () => Promise<void>): () => void;
+  /** Why a packet link frame would be refused. Undefined means a write is allowed. */
+  packetSendBlock(): string | undefined;
+  /** One KISS data frame for the packet link. Not an APRS message and not a beacon. */
+  writeKissData(payload: Uint8Array): Promise<string | undefined>;
 }
 
 interface Waiting {
@@ -139,6 +151,8 @@ interface Waiting {
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
  * count. Cancel, Disconnect, and the module's prompt stop retries.
+ * writeKissData is a separate path for the Packet tab. It does not run on
+ * connect, and it does not confirm KISS for APRS messages.
  * Automatic ack is separate, off until set, and applies only to a later
  * message addressed to the current callsign. Disconnect cancels waiting
  * messages and does not send an exit command. A later connect does not send
@@ -157,6 +171,8 @@ export function createAprsHostSession(options?: {
   const allowHardwareTransmit = options?.allowHardwareTransmit !== false;
   const kiss = createKissDecoderState();
   const listeners = new Set<() => void>();
+  const kissListeners = new Set<(payload: Uint8Array) => void>();
+  const disconnectHooks = new Set<() => Promise<void>>();
   const messages: AprsHostMessage[] = [];
   const waiting = new Map<string, Waiting>();
   const seen = new Set<string>();
@@ -944,6 +960,14 @@ export function createAprsHostSession(options?: {
     }
 
     for (const payload of payloads) {
+      for (const listener of kissListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // A packet listener cannot stop APRS decode.
+        }
+      }
+
       if (!parseAx25Ui(payload)) {
         continue;
       }
@@ -1096,6 +1120,16 @@ export function createAprsHostSession(options?: {
     },
     async disconnect() {
       generation += 1;
+      const hooks = [...disconnectHooks];
+
+      for (const hook of hooks) {
+        try {
+          await hook();
+        } catch {
+          // The port still closes when a packet shutdown throws.
+        }
+      }
+
       if (retryTimer) {
         clearInterval(retryTimer);
         retryTimer = undefined;
@@ -1136,7 +1170,9 @@ export function createAprsHostSession(options?: {
 
       current.off('data', onData);
       current.off('error', onError);
-      record('note', new Uint8Array(), 'Disconnected. The reply log is kept until Clear. Nothing was sent.');
+      record('note', new Uint8Array(), hooks.length > 0
+        ? 'Disconnected. Packet shutdown ran before the port closed. The reply log is kept until Clear.'
+        : 'Disconnected. The reply log is kept until Clear. Nothing was sent.');
       await current.close();
       publish();
     },
@@ -1390,6 +1426,43 @@ export function createAprsHostSession(options?: {
     },
     unsubscribe(listener) {
       listeners.delete(listener);
+    },
+    addKissDataListener(listener) {
+      kissListeners.add(listener);
+      return () => {
+        kissListeners.delete(listener);
+      };
+    },
+    addDisconnectHook(hook) {
+      disconnectHooks.add(hook);
+      return () => {
+        disconnectHooks.delete(hook);
+      };
+    },
+    packetSendBlock() {
+      return packetLinkBlockReason({
+        connected: port?.isOpen === true,
+        detectPhase,
+        kissConfirmed,
+        hardwareTransmit: allowHardwareTransmit,
+      });
+    },
+    async writeKissData(payload) {
+      const reason = this.packetSendBlock();
+
+      if (reason) {
+        return reason;
+      }
+
+      const wrote = await writeBytes(encodeKissData(payload));
+
+      if (!wrote.ok) {
+        return wrote.reason;
+      }
+
+      record('tx-frame', encodeKissData(payload), 'Packet link frame. Not an APRS message or beacon.');
+      publish();
+      return undefined;
     },
   };
 }

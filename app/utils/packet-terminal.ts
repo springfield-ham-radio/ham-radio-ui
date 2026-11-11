@@ -1,0 +1,116 @@
+/**
+ * Terminal view. Line input uses CR. Buttons do not imply a transmission
+ * until the caller asks the link for frames.
+ */
+
+import { canonicalAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
+import type { PacketLinkPhase } from '~/utils/packet-link';
+import type { PacketDetectPhase } from '~/utils/packet-port';
+import { packetLinkBlockReason } from '~/utils/packet-port';
+
+export interface PacketTerminalInput {
+  portOpen: boolean;
+  detectPhase: PacketDetectPhase;
+  kissConfirmed: boolean;
+  hardwareTransmit: boolean;
+  phase: PacketLinkPhase | 'none';
+  myCall?: string;
+  peer?: string;
+}
+
+export interface PacketTerminalView {
+  linkLabel: string;
+  canConnect: boolean;
+  canSend: boolean;
+  canDisconnect: boolean;
+  connectBlocked?: string;
+}
+
+const LABELS: Record<PacketLinkPhase | 'none', string> = {
+  none: 'Disconnected',
+  disconnected: 'Disconnected',
+  connecting: 'Connecting',
+  connected: 'Connected',
+  'timer-recovery': 'Retrying',
+  disconnecting: 'Disconnecting',
+};
+
+export function packetTerminalView(input: PacketTerminalInput): PacketTerminalView {
+  const block = packetLinkBlockReason({
+    connected: input.portOpen,
+    detectPhase: input.detectPhase,
+    kissConfirmed: input.kissConfirmed,
+    hardwareTransmit: input.hardwareTransmit,
+  });
+  const phase = input.phase;
+  const open = phase === 'connecting' || phase === 'connected' || phase === 'timer-recovery' || phase === 'disconnecting';
+  const call = input.myCall ? undefined : 'Set a callsign in Preferences. Nothing will be sent.';
+
+  return {
+    linkLabel: phase === 'connected' && input.peer ? `Connected to ${input.peer}` : LABELS[phase],
+    canConnect: !open && !block && !call,
+    canSend: phase === 'connected' && !block,
+    canDisconnect: open,
+    connectBlocked: open ? undefined : call ?? block,
+  };
+}
+
+/** One terminal line, CR terminated, without a newline the field may include. */
+export function packetLinePayload(line: string): Uint8Array | undefined {
+  const stripped = line.replace(/[\r\n]+$/u, '');
+
+  if ([...stripped].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code > 0x7e;
+  })) {
+    return undefined;
+  }
+
+  return Uint8Array.from([...stripped].map((character) => character.charCodeAt(0)).concat(0x0d));
+}
+
+export function packetPeerPath(text: string): { path?: Ax25Call[]; error?: string } {
+  const hops = text.split(/[,\s]+/u).map((hop) => hop.trim()).filter((hop) => hop.length > 0);
+
+  if (hops.length > 6) {
+    return { error: 'Use at most six digipeaters.' };
+  }
+
+  const path: Ax25Call[] = [];
+
+  for (const hop of hops) {
+    const call = canonicalAx25Call(hop);
+
+    if (!call) {
+      return { error: 'Use callsigns of 3 to 6 characters, with an SSID from 0 to 15.' };
+    }
+
+    path.push(call);
+  }
+
+  return { path };
+}
+
+export function packetScrollText(current: string, notices: ReadonlyArray<{ kind: 'status' | 'rx'; text: string }>, sent?: string): string {
+  let next = current;
+
+  if (sent !== undefined && sent.length > 0) {
+    next += `${sent.replace(/[\r\n]+$/u, '')}\n`;
+  }
+
+  for (const notice of notices) {
+    if (notice.kind === 'rx') {
+      next += notice.text.replace(/\r\n/gu, '\n').replace(/\r/gu, '\n');
+    } else if (notice.text.length > 0) {
+      next += `[${notice.text}]\n`;
+    }
+  }
+
+  const cap = 32_000;
+
+  if (next.length > cap) {
+    return next.slice(next.length - cap);
+  }
+
+  return next;
+}

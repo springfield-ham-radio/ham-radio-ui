@@ -157,6 +157,24 @@ export function useAprsHost() {
     publish(cardId);
   }
 
+  function addKissDataListener(cardId: string, listener: (payload: Uint8Array) => void): () => void {
+    return sessionFor(cardId).addKissDataListener(listener);
+  }
+
+  function addDisconnectHook(cardId: string, hook: () => Promise<void>): () => void {
+    return sessionFor(cardId).addDisconnectHook(hook);
+  }
+
+  function packetSendBlock(cardId: string): string | undefined {
+    return sessionFor(cardId).packetSendBlock();
+  }
+
+  async function writeKissData(cardId: string, payload: Uint8Array): Promise<string | undefined> {
+    const reason = await sessionFor(cardId).writeKissData(payload);
+    publish(cardId);
+    return reason;
+  }
+
   function setAckOptIn(cardId: string, on: boolean): string | undefined {
     const reason = sessionFor(cardId).setAckOptIn(on);
     publish(cardId);
@@ -181,5 +199,9 @@ export function useAprsHost() {
     enterHostKiss,
     retryDetection,
     clearTrace,
+    addKissDataListener,
+    addDisconnectHook,
+    packetSendBlock,
+    writeKissData,
   };
 }
