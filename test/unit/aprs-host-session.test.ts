@@ -508,8 +508,8 @@ describe('APRS host session', () => {
 
     expect(lines[0]?.at).toBe(1_000);
     expect(lines.at(-1)?.at).toBe(31_000);
-    expect(formatTrace(lines)).toContain('00:00:01.000');
-    expect(formatTrace(lines)).toContain('00:00:31.000');
+    expect(formatTrace(lines, { timeZone: 'UTC' })).toContain('00:00:01');
+    expect(formatTrace(lines, { timeZone: 'UTC' })).toContain('00:00:31');
   });
 
   it('times out a quiet port without a second write, and drops a prompt on reconnect', async () => {
@@ -856,7 +856,7 @@ describe('APRS host session', () => {
 });
 
 describe('host Connect detection', () => {
-  function moduleLink(kissExit?: Uint8Array) {
+  function moduleLink(kissExit?: Uint8Array, promptNudge?: Uint8Array) {
     return {
       interrupt: Uint8Array.of(0x15),
       prompt: 'ok>',
@@ -864,6 +864,7 @@ describe('host Connect detection', () => {
       waitMs: 1000,
       listenMs: 3000,
       kissExit,
+      promptNudge,
       enter: [
         { text: 'HOST\r', label: 'HOST' },
         { text: 'GO\r', label: 'GO' },
@@ -1041,9 +1042,145 @@ describe('host Connect detection', () => {
     expect(fake.writes).toHaveLength(1);
     expect(fake.writes[0]).toEqual(Uint8Array.of(0x15));
     expect(session.snapshot().detectPhase).toBe('failed');
-    expect(session.snapshot().detectDetail).toContain('not answering');
-    expect(session.snapshot().detectDetail).toContain('PACKET mode');
+    expect(session.snapshot().detectDetail).toContain('Command-mode text was seen');
+    expect(session.snapshot().detectDetail).not.toContain('PACKET mode');
     expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(fake.writes.some((frame) => frame.includes(0x0d))).toBe(false);
+  });
+
+  it('writes a declared prompt nudge once when monitor text continues, then enters', async () => {
+    let time = 40_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink(undefined, Uint8Array.of(0x0d)) });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n'));
+    await settle();
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+
+    fake.push(new TextEncoder().encode('KF5END-4>APDW18:!3030.33N/09750.62W[Cedar Park, TX\r\n'));
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15), Uint8Array.of(0x0d)]);
+    expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe('HOST\r');
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe('GO\r');
+    expect(session.snapshot().detectDetail).toContain('waiting for traffic');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).not.toContain('HB');
+    expect(written).not.toContain('RESET');
+    expect(written).not.toContain('XFLOW');
+    expect(written).not.toContain('KISS OFF');
+  });
+
+  it('does not nudge when monitor text stops after the interrupt', async () => {
+    let time = 12_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({ now: () => time, host: moduleLink(exit, Uint8Array.of(0x0d)) });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n'));
+    await settle();
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toContain('Command-mode text was seen');
+    expect(session.snapshot().detectDetail).not.toContain('PACKET mode');
+  });
+
+  it('enters immediately when cmd: is already in the open buffer', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    const banner = 'DA 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(new TextEncoder().encode(banner));
+      }
+    };
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().commandTextBytes).toBe(banner.length);
+    expect(session.snapshot().trace.some((line) => line.note.includes('already on this connection'))).toBe(true);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    fake.push(kissUi());
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().detectDetail).toContain('AX.25 UI seen');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).toBe(`${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame[0] === 0xc0)).toBe(false);
+  });
+
+  it('does not treat an echoed KISS return as a received frame, then enters on cmd:', async () => {
+    let time = 70_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({ now: () => time, host: moduleLink(exit) });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes[0]).toEqual(Uint8Array.of(0x15));
+    expect(fake.writes[1]).toEqual(exit);
+
+    fake.push(exit);
+    await settle();
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).not.toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).not.toContain('KISS on');
+    expect(session.snapshot().trace.some((line) => line.note.includes('echo of the last write'))).toBe(true);
+
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe('HOST\r');
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe('GO\r');
+    expect(session.snapshot().detectDetail).toContain('waiting for traffic');
+  });
+
+  it('does not end detection on an unsolicited KISS return', async () => {
+    let time = 2_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(Uint8Array.of(0xc0, 0xff, 0xc0));
+    await settle();
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).toBe('listening');
+    expect(session.snapshot().trace.some((line) => line.note.includes('KISS return, not a data frame'))).toBe(true);
+    time += 3_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
   });
 
   it('does not write when the radio has no host procedure, even after the listen window', async () => {

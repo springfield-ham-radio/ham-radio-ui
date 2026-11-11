@@ -14,7 +14,7 @@ The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm 
 
 ## Decision
 
-- ADR 0014 stands for Stations, Map, Station details, and Raw log. The passive session still opens with flow control off and RTS and DTR low, and it has no write method.
+- ADR 0014 stands for Stations, Map, and Raw log. The selected station’s decoded fields sit on Stations, beside the list. The passive session still opens with flow control off and RTS and DTR low, and it has no write method.
 - One APRS COM control chooses the passive monitor or the host session. Connect reads and writes nothing. It does not enter KISS and does not send a frame. Disconnect closes the session that is open. CAT is a separate connection.
 - **Request command prompt** writes three Ctrl+C bytes and no carriage return, once, and only when this connection has not already shown `cmd:`. The command list uses Ctrl+C to leave Converse or Transparent. A `cmd:` that arrives on this Listen, including one that arrives before the button, is this connection's prompt. **Enter host KISS** writes `KISS ON` only after that, then `RESTART` only after another `cmd:`. No `HB`, beacon, message, or `RESET`. A prompt does not survive Disconnect. `cmd` without the colon does not count.
 - **Send** is the transmit choice. It writes a KISS data frame at most 3 times, 15 seconds apart, and only while this connection stays open and has parsed an AX.25 UI frame. Cancel stops it. Disconnect clears the queue. A new connection does not send it again.

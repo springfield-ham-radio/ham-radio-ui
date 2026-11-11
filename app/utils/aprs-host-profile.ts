@@ -25,6 +25,12 @@ export interface AprsHostLink {
    * after the prompt request. Omitted means that step is skipped.
    */
   kissExit?: Uint8Array;
+  /**
+   * Optional bytes written once after the interrupt, and only when command
+   * text is still arriving and the prompt is not in those bytes. Omitted
+   * means that step is skipped. Shared code does not invent these bytes.
+   */
+  promptNudge?: Uint8Array;
   enter: readonly AprsHostEnterStep[];
 }
 
@@ -113,6 +119,16 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     }
   }
 
+  let promptNudge: Uint8Array | undefined;
+
+  if (value.promptNudge !== undefined) {
+    promptNudge = byteList(value.promptNudge, 1, 16);
+
+    if (!promptNudge) {
+      return undefined;
+    }
+  }
+
   if (typeof value.prompt !== 'string' || !printable(value.prompt, 16)) {
     return undefined;
   }
@@ -176,7 +192,7 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     : 'Flow control is chosen before Connect.';
 
   return {
-    link: { interrupt, prompt: value.prompt, errorReply, waitMs, listenMs, kissExit, enter },
+    link: { interrupt, prompt: value.prompt, errorReply, waitMs, listenMs, kissExit, promptNudge, enter },
     flows,
     defaultFlow,
     flowHelp,

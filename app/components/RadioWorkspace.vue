@@ -206,8 +206,12 @@ watch(activeTab, (tab) => {
 });
 
 watch(
-  () => [supportsCat.value, route.query.tab] as const,
-  ([supported, tab]) => {
+  () => [supportsCat.value, supportsAprs.value, route.query.tab, route.query.fixture] as const,
+  ([supported, , tab]) => {
+    if (route.path === '/' && supportsAprs.value && (tab === 'aprs' || route.query.fixture === 'aprs-host-trace' || route.query.fixture === 'aprs-map') && activeTab.value !== 'aprs') {
+      activeTab.value = 'aprs';
+    }
+
     if (!supported) {
       if (activeTab.value === 'cat') {
         activeTab.value = 'channels';

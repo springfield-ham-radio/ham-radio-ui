@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
+import { APRS_PANEL_TABS } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
@@ -8,7 +9,7 @@ import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, type AprsConnectionMode } from '~/utils/aprs-connection';
-import { APRS_HOST_TRACE_FIXTURE, formatTrace } from '~/utils/aprs-serial-trace';
+import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
@@ -68,6 +69,8 @@ const snapshot = computed(() => (props.cardId ? snapshots.value[props.cardId] : 
 const hostSnapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
 const traceLines = computed(() => (traceFixture.value ? APRS_HOST_TRACE_FIXTURE : (hostSnapshot.value?.trace ?? [])));
 const traceText = computed(() => formatTrace(traceLines.value));
+const transcript = computed(() => serialTranscript(traceLines.value));
+const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true);
 const kissListening = computed(() => hostSnapshot.value?.connected === true);
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
@@ -130,17 +133,11 @@ const logCount = computed(() => log.value.length);
 const { virtualRows: stationRows, paddingTop: stationPadTop, paddingBottom: stationPadBottom } = useFixedVirtualRows(
   stationCount,
   stationScroller,
-  44,
+  56,
 );
 const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom } = useFixedVirtualRows(logCount, logScroller, 24);
 
-const tabs: TabsItem[] = [
-  { label: 'Stations', icon: 'i-lucide-list', slot: 'stations' as const, value: 'stations' },
-  { label: 'Map', icon: 'i-lucide-map', slot: 'map' as const, value: 'map' },
-  { label: 'Messages', icon: 'i-lucide-message-square', slot: 'messages' as const, value: 'messages' },
-  { label: 'Station details', icon: 'i-lucide-file-text', slot: 'packet' as const, value: 'packet' },
-  { label: 'Raw log', icon: 'i-lucide-scroll-text', slot: 'log' as const, value: 'log' },
-];
+const tabs: TabsItem[] = APRS_PANEL_TABS.map((tab) => ({ ...tab }));
 const plottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
 const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
 
@@ -161,7 +158,9 @@ const statusLine = computed(() => {
   }
 
   const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
-  const detection = kissListening.value && hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
+  const detection = kissListening.value && hostSnapshot.value?.detectDetail
+    ? ` ${serialEventHeadline(hostSnapshot.value.detectDetail)}`
+    : '';
 
   return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}${detection}`;
 });
@@ -171,6 +170,18 @@ const detectFailure = computed(() => {
   const setup = profile.value?.host?.setup ?? [];
   const recovery = profile.value?.host?.recovery ?? [];
   return [detail, ...setup, ...recovery].filter((line) => line.length > 0).join(' ');
+});
+const failureHeadline = computed(() => serialEventHeadline(hostSnapshot.value?.detectDetail ?? 'The TNC is not answering'));
+const traceCounters = computed(() => {
+  const snap = hostSnapshot.value;
+
+  if (!snap) {
+    return '';
+  }
+
+  const dropped = snap.traceDropped > 0 ? ` · dropped ${snap.traceDropped}` : '';
+
+  return `RX ${snap.rxBytes} B in ${snap.rxChunks} · text ${snap.commandTextBytes} · KISS ${snap.frames} · written ${snap.bytesWritten} · held ${snap.incompleteBytes} · invalid ${snap.invalidBytes}${dropped}`;
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
@@ -458,10 +469,18 @@ function onClear(): void {
       color="warning"
       variant="subtle"
       icon="i-lucide-radio"
-      title="The TNC is not answering"
-      :description="detectFailure"
+      :title="failureHeadline"
       class="mb-2 shrink-0"
-    />
+    >
+      <template #description>
+        <UCollapsible :unmount-on-hide="false">
+          <UButton color="neutral" variant="ghost" size="xs" label="Details" trailing-icon="i-lucide-chevron-down" />
+          <template #content>
+            <p class="mt-2 text-sm whitespace-pre-wrap">{{ detectFailure }}</p>
+          </template>
+        </UCollapsible>
+      </template>
+    </UAlert>
 
     <UAlert
       v-if="snapshot?.error || hostSnapshot?.error"
@@ -488,27 +507,109 @@ function onClear(): void {
       }"
     >
       <template #stations>
-        <div ref="stationScroller" class="min-h-0 flex-1 overflow-auto">
-          <p v-if="stations.length === 0" class="px-1 py-6 text-sm text-muted">
-            No stations yet. Connect opens the APRS COM port above. This list is what arrived this session.
-          </p>
-          <div v-else :style="{ paddingTop: `${stationPadTop}px`, paddingBottom: `${stationPadBottom}px` }">
-            <button
-              v-for="row in stationRows"
-              :key="stations[row.index]?.callsign ?? row.key"
-              type="button"
-              class="flex h-11 w-full items-center gap-3 border-b border-default px-2 text-left"
-              :class="selected?.callsign === stations[row.index]?.callsign ? 'bg-elevated' : ''"
-              @click="selectStation(stations[row.index]?.callsign)"
-            >
-              <template v-if="stations[row.index]">
-                <span class="w-28 shrink-0 font-mono text-sm text-highlighted">{{ stations[row.index]!.callsign }}</span>
-                <span class="min-w-0 flex-1 truncate text-sm">
-                  {{ stations[row.index]!.position?.value.label ?? 'No position in the packets decoded so far' }}
-                </span>
-                <span class="shrink-0 text-xs text-muted">{{ formatAprsHeardAt(stations[row.index]!.lastHeardAt) }}</span>
-              </template>
-            </button>
+        <div class="@container flex min-h-0 flex-1 flex-col overflow-hidden py-2">
+          <div class="flex min-h-0 flex-1 flex-col @min-[42rem]:flex-row">
+            <div ref="stationScroller" class="max-h-72 min-h-0 shrink-0 overflow-auto border-b border-default @min-[42rem]:max-h-none @min-[42rem]:w-80 @min-[42rem]:self-stretch @min-[42rem]:border-r @min-[42rem]:border-b-0">
+              <p v-if="stations.length === 0" class="px-1 py-6 text-sm text-muted">
+                No stations yet. Connect opens the APRS COM port above. This list is what arrived this session.
+              </p>
+              <div v-else :style="{ paddingTop: `${stationPadTop}px`, paddingBottom: `${stationPadBottom}px` }">
+                <button
+                  v-for="row in stationRows"
+                  :key="stations[row.index]?.callsign ?? row.key"
+                  type="button"
+                  class="flex h-14 w-full flex-col justify-center gap-0.5 border-b border-default px-2 text-left"
+                  :class="selected?.callsign === stations[row.index]?.callsign ? 'bg-elevated' : ''"
+                  :aria-current="selected?.callsign === stations[row.index]?.callsign ? 'true' : undefined"
+                  @click="selectStation(stations[row.index]?.callsign)"
+                >
+                  <template v-if="stations[row.index]">
+                    <span class="flex items-baseline justify-between gap-2">
+                      <span class="truncate font-mono text-sm text-highlighted">{{ stations[row.index]!.callsign }}</span>
+                      <span class="shrink-0 text-xs text-muted">{{ formatAprsHeardAt(stations[row.index]!.lastHeardAt) }}</span>
+                    </span>
+                    <span class="truncate text-xs text-muted">
+                      {{ stations[row.index]!.position?.value.label ?? 'No position in the packets decoded so far' }}
+                    </span>
+                  </template>
+                </button>
+              </div>
+            </div>
+            <div class="min-h-0 flex-1 overflow-auto px-1 py-3 @min-[42rem]:px-4">
+              <h3 class="mb-3 text-sm font-medium text-highlighted">Station details</h3>
+              <p v-if="!selected" class="text-sm text-muted">Select a station after a packet is decoded.</p>
+              <dl v-else class="grid max-w-3xl grid-cols-[10rem_1fr] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted">Callsign</dt>
+                <dd class="font-mono text-highlighted">{{ selected.callsign }}</dd>
+                <dt class="text-muted">Last heard</dt>
+                <dd>{{ formatAprsHeardAt(selected.lastHeardAt) }}</dd>
+                <dt class="text-muted">Packets</dt>
+                <dd>{{ selected.packetCount }}</dd>
+                <template v-if="selected.position">
+                  <dt class="text-muted">Position</dt>
+                  <dd>
+                    {{ selected.position.value.label }}
+                    <span class="text-muted">· {{ formatAprsHeardAt(selected.position.heardAt) }}</span>
+                  </dd>
+                </template>
+                <template v-if="selected.courseDegrees">
+                  <dt class="text-muted">Course</dt>
+                  <dd>{{ selected.courseDegrees.value }}° · {{ formatAprsHeardAt(selected.courseDegrees.heardAt) }}</dd>
+                </template>
+                <template v-if="selected.speedKnots">
+                  <dt class="text-muted">Speed</dt>
+                  <dd>{{ selected.speedKnots.value.toFixed(0) }} kn · {{ formatAprsHeardAt(selected.speedKnots.heardAt) }}</dd>
+                </template>
+                <template v-if="selected.altitude">
+                  <dt class="text-muted">Altitude</dt>
+                  <dd>{{ selected.altitude.value }} · {{ formatAprsHeardAt(selected.altitude.heardAt) }}</dd>
+                </template>
+                <template v-if="selected.positionComment">
+                  <dt class="text-muted">Position comment</dt>
+                  <dd>{{ selected.positionComment.value }}</dd>
+                </template>
+                <template v-if="selected.comment">
+                  <dt class="text-muted">Comment</dt>
+                  <dd class="whitespace-pre-wrap">{{ selected.comment.value }}</dd>
+                </template>
+                <template v-if="selected.message">
+                  <dt class="text-muted">Message</dt>
+                  <dd>
+                    <span class="font-mono">{{ selected.message.value.addressee }}</span>
+                    · {{ selected.message.value.kind }} · {{ selected.message.value.text }}
+                    <span class="text-muted">· {{ formatAprsHeardAt(selected.message.heardAt) }}</span>
+                  </dd>
+                </template>
+                <template v-if="selected.statusText">
+                  <dt class="text-muted">Status</dt>
+                  <dd>{{ selected.statusText.value }}</dd>
+                </template>
+                <template v-if="weather.length > 0 && selected.weather">
+                  <dt class="text-muted">Weather</dt>
+                  <dd>
+                    <p v-for="line in weather" :key="line">{{ line }}</p>
+                    <p class="text-muted">{{ formatAprsHeardAt(selected.weather.heardAt) }}</p>
+                  </dd>
+                </template>
+                <template v-if="selected.reportedName">
+                  <dt class="text-muted">Reported object</dt>
+                  <dd>
+                    {{ selected.reportedName.value }}
+                    <template v-if="selected.reportedPosition"> · {{ selected.reportedPosition.value.label }}</template>
+                  </dd>
+                </template>
+                <template v-if="selected.lastPacket.packetTime">
+                  <dt class="text-muted">Packet time</dt>
+                  <dd>{{ selected.lastPacket.packetTime }}</dd>
+                </template>
+                <template v-if="selected.lastPacket.unsupportedReason">
+                  <dt class="text-muted">Not decoded</dt>
+                  <dd>{{ selected.lastPacket.unsupportedReason }}</dd>
+                </template>
+                <dt class="text-muted">Latest raw</dt>
+                <dd class="font-mono text-xs break-all">{{ selected.lastPacket.raw }}</dd>
+              </dl>
+            </div>
           </div>
         </div>
       </template>
@@ -549,106 +650,40 @@ function onClear(): void {
         <AprsMessages :card-id="cardId" :mine="mine" />
       </template>
 
-      <template #packet>
-        <div class="min-h-0 flex-1 overflow-auto py-3">
-          <p v-if="!selected" class="text-sm text-muted">Select a station after a packet is decoded.</p>
-          <dl v-else class="grid max-w-3xl grid-cols-[10rem_1fr] gap-x-3 gap-y-2 text-sm">
-            <dt class="text-muted">Callsign</dt>
-            <dd class="font-mono text-highlighted">{{ selected.callsign }}</dd>
-            <dt class="text-muted">Last heard</dt>
-            <dd>{{ formatAprsHeardAt(selected.lastHeardAt) }}</dd>
-            <dt class="text-muted">Packets</dt>
-            <dd>{{ selected.packetCount }}</dd>
-            <template v-if="selected.position">
-              <dt class="text-muted">Position</dt>
-              <dd>
-                {{ selected.position.value.label }}
-                <span class="text-muted">· {{ formatAprsHeardAt(selected.position.heardAt) }}</span>
-              </dd>
-            </template>
-            <template v-if="selected.courseDegrees">
-              <dt class="text-muted">Course</dt>
-              <dd>{{ selected.courseDegrees.value }}° · {{ formatAprsHeardAt(selected.courseDegrees.heardAt) }}</dd>
-            </template>
-            <template v-if="selected.speedKnots">
-              <dt class="text-muted">Speed</dt>
-              <dd>{{ selected.speedKnots.value.toFixed(0) }} kn · {{ formatAprsHeardAt(selected.speedKnots.heardAt) }}</dd>
-            </template>
-            <template v-if="selected.altitude">
-              <dt class="text-muted">Altitude</dt>
-              <dd>{{ selected.altitude.value }} · {{ formatAprsHeardAt(selected.altitude.heardAt) }}</dd>
-            </template>
-            <template v-if="selected.positionComment">
-              <dt class="text-muted">Position comment</dt>
-              <dd>{{ selected.positionComment.value }}</dd>
-            </template>
-            <template v-if="selected.comment">
-              <dt class="text-muted">Comment</dt>
-              <dd class="whitespace-pre-wrap">{{ selected.comment.value }}</dd>
-            </template>
-            <template v-if="selected.message">
-              <dt class="text-muted">Message</dt>
-              <dd>
-                <span class="font-mono">{{ selected.message.value.addressee }}</span>
-                · {{ selected.message.value.kind }} · {{ selected.message.value.text }}
-                <span class="text-muted">· {{ formatAprsHeardAt(selected.message.heardAt) }}</span>
-              </dd>
-            </template>
-            <template v-if="selected.statusText">
-              <dt class="text-muted">Status</dt>
-              <dd>{{ selected.statusText.value }}</dd>
-            </template>
-            <template v-if="weather.length > 0 && selected.weather">
-              <dt class="text-muted">Weather</dt>
-              <dd>
-                <p v-for="line in weather" :key="line">{{ line }}</p>
-                <p class="text-muted">{{ formatAprsHeardAt(selected.weather.heardAt) }}</p>
-              </dd>
-            </template>
-            <template v-if="selected.reportedName">
-              <dt class="text-muted">Reported object</dt>
-              <dd>
-                {{ selected.reportedName.value }}
-                <template v-if="selected.reportedPosition"> · {{ selected.reportedPosition.value.label }}</template>
-              </dd>
-            </template>
-            <template v-if="selected.lastPacket.packetTime">
-              <dt class="text-muted">Packet time</dt>
-              <dd>{{ selected.lastPacket.packetTime }}</dd>
-            </template>
-            <template v-if="selected.lastPacket.unsupportedReason">
-              <dt class="text-muted">Not decoded</dt>
-              <dd>{{ selected.lastPacket.unsupportedReason }}</dd>
-            </template>
-            <dt class="text-muted">Latest raw</dt>
-            <dd class="font-mono text-xs break-all">{{ selected.lastPacket.raw }}</dd>
-          </dl>
-        </div>
-      </template>
-
       <template #log>
         <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden py-2">
-        <section class="flex max-h-[45%] min-h-36 shrink-0 flex-col gap-2">
+        <section class="flex min-h-48 min-w-0 flex-1 flex-col gap-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h3 class="text-sm font-medium text-highlighted">Serial reply</h3>
             <div class="flex items-center gap-1.5">
+              <UButton size="xs" color="neutral" variant="outline" :label="showTraceHex ? 'Hide hex' : 'Show hex'" @click="showTraceHex = !showTraceHex" />
               <UButton size="xs" color="neutral" variant="outline" label="Copy" :disabled="traceText.length === 0" @click="onCopyTrace" />
               <UButton size="xs" color="neutral" variant="outline" label="Clear serial reply" :disabled="!cardId || traceFixture || traceLines.length === 0" @click="onClearTrace" />
             </div>
           </div>
           <p class="text-xs text-muted">
-            <template v-if="kissListening">
-              Host session. RX {{ hostSnapshot?.rxBytes ?? 0 }} bytes in {{ hostSnapshot?.rxChunks ?? 0 }} chunks.
-              Command text {{ hostSnapshot?.commandTextBytes ?? 0 }}. Incomplete {{ hostSnapshot?.incompleteBytes ?? 0 }}.
-              Invalid {{ hostSnapshot?.invalidBytes ?? 0 }}. KISS frames {{ hostSnapshot?.frames ?? 0 }}.
-              Bytes written {{ hostSnapshot?.bytesWritten ?? 0 }}.
-            </template>
-            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session. {{ profile?.monitorNote }}</template>
-            <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
-            <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
+            <template v-if="kissListening">Host session. {{ traceCounters }}</template>
+            <template v-else-if="isConnected">Passive monitor. The byte log fills on a host session.</template>
+            <template v-else>No Listen is open. ← radio, → HamBench. Copy includes hex. Clear keeps the counters and does not write.</template>
           </p>
-          <p class="text-xs text-muted">{{ hostSnapshot?.detectDetail || hostSnapshot?.commandDetail || 'No command requested.' }} Clear serial reply removes these lines and keeps the counters. It does not disconnect or write.</p>
-          <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap font-mono text-xs text-highlighted">{{ traceText || 'No serial bytes yet.' }}</pre>
+          <div class="min-h-0 flex-1 overflow-auto font-mono text-xs leading-5">
+            <p v-if="transcript.length === 0" class="text-muted">No serial bytes yet.</p>
+            <div v-for="row in transcript" :key="row.key" class="py-0.5" :class="row.echo ? 'opacity-60' : ''">
+              <div class="flex gap-2">
+                <span class="w-16 shrink-0 text-muted">{{ row.time }}</span>
+                <span class="w-4 shrink-0 text-muted" :title="row.who === 'radio' ? 'radio' : row.who === 'HamBench' ? 'HamBench' : 'note'">{{ row.arrow }}</span>
+                <span class="min-w-0 whitespace-pre-wrap break-all" :class="row.echo ? 'text-muted' : 'text-highlighted'">{{ row.text }}</span>
+                <span v-if="row.echo" class="shrink-0 text-muted">echo</span>
+              </div>
+              <p v-if="showTraceHex && row.hex" class="ps-20 break-all text-muted">{{ row.hex }}</p>
+              <UCollapsible v-if="row.detail" :unmount-on-hide="false" class="ps-20">
+                <UButton color="neutral" variant="link" size="xs" label="Details" trailing-icon="i-lucide-chevron-down" class="px-0" />
+                <template #content>
+                  <p class="pb-1 whitespace-pre-wrap text-muted">{{ row.detail }}</p>
+                </template>
+              </UCollapsible>
+            </div>
+          </div>
         </section>
         <div class="flex shrink-0 items-center justify-between gap-2">
           <h3 class="text-sm font-medium text-highlighted">Decoded lines</h3>
@@ -663,7 +698,7 @@ function onClear(): void {
           />
         </div>
         <p class="shrink-0 text-xs text-muted">Passive text and KISS UI frames land here. Clear decoded lines also clears the station list. It does not write.</p>
-        <div ref="logScroller" class="min-h-0 flex-1 overflow-auto font-mono text-xs leading-6">
+        <div ref="logScroller" class="max-h-36 shrink-0 overflow-auto font-mono text-xs leading-6">
           <p v-if="log.length === 0" class="py-3 text-muted">Raw lines stay here even when the packet is malformed or not decoded.</p>
           <div v-else :style="{ paddingTop: `${logPadTop}px`, paddingBottom: `${logPadBottom}px` }">
             <div v-for="row in logRows" :key="log[row.index]?.id ?? row.key" class="flex h-6 gap-3 whitespace-nowrap">

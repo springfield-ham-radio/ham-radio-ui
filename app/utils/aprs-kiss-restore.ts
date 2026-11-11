@@ -23,7 +23,7 @@ export const APRS_KISS_ENTER_TEXT = '\rKISS ON\rRESTART\r';
 
 export const APRS_HOST_SETUP = [
   'Stations is the passive test. Leave the radio showing APRS for that test. This page is the host session and is not required for it.',
-  'Connect listens for a few seconds. cmd: runs the enter steps. Monitor text with no cmd:, and a silent port, each write three Ctrl+C once and then wait for cmd:. That text is not proof of PACKET mode. SENDPAC defaults to carriage return, which sends a packet in Converse, so a carriage return is not sent to ask for a prompt.',
+  'Connect listens for a few seconds. A cmd: already on the connection runs the enter steps. Monitor text with no cmd: writes three Ctrl+C once. If command text continues and the module declares a prompt nudge, that nudge is written once. This fallback does not declare one. SENDPAC defaults to carriage return, which sends a packet in Converse, so a carriage return is not sent unless the module declares it. Command text means the TNC answered. It is not, by itself, proof of PACKET mode.',
   'The enter steps write KISS ON only after cmd:, then RESTART only after another cmd:. They do not send a message, a beacon, HB, or RESET.',
   'A bare Ctrl+C is not a KISS frame. The D710 manuals do not say an already-KISS TNC answers it. This fallback does not send the TM-D700 bytes C0 FF C0.',
   'COM baud is menu 528 on A/E/S and menu 929 on G. HBAUD 1200 is the usual RF packet speed and is not that baud.',
