@@ -423,6 +423,12 @@ export function createAprsHostSession(options?: {
     clearKissHold();
     commandActive = false;
     enterIndex = 0;
+    hostEnterRequested = false;
+
+    if (commandPhase === 'restart-sent' || commandPhase === 'waiting-accept') {
+      commandPhase = 'idle';
+    }
+
     interruptTried = false;
     exitTried = false;
     nudgeTried = false;
@@ -578,7 +584,7 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (commandPhase === 'waiting-prompt') {
+    if (commandPhase === 'waiting-prompt' || commandPhase === 'restart-sent' || hostEnterRequested) {
       return;
     }
 
@@ -601,6 +607,10 @@ export function createAprsHostSession(options?: {
   }
 
   function maybeStartEnter(): void {
+    if (hostEnterRequested || commandPhase === 'restart-sent' || commandPhase === 'waiting-accept') {
+      return;
+    }
+
     if (detectPhase !== 'awaiting-prompt' || !promptSeen(sessionBytes) || enterInFlight) {
       return;
     }
@@ -964,8 +974,10 @@ export function createAprsHostSession(options?: {
     }
 
     if (!following) {
+      commandActive = false;
       commandPhase = 'restart-sent';
       hostEnterRequested = true;
+      commandBytes = new Uint8Array();
       commandDetail = `${step.label} written once after ${hostLink.prompt}. ${acceptanceNote(wrote)}KISS unconfirmed. This is not repeated.`;
       if (automatic) {
         detectPhase = 'waiting-traffic';
@@ -1404,6 +1416,7 @@ export function createAprsHostSession(options?: {
       commandBytes = new Uint8Array();
       sessionBytes = new Uint8Array();
       commandActive = false;
+      hostEnterRequested = false;
       hostFlow = capture?.flowControl ?? 'software';
 
       try {

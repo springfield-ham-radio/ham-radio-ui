@@ -1140,6 +1140,45 @@ describe('host Connect detection', () => {
     expect(fake.writes.some((frame) => frame.length === 3 && frame[0] === 0xc0)).toBe(false);
   });
 
+  it('writes KISS ON and RESTART once for the startup banner, then waits', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    const banner = 'A 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
+    expect(new TextEncoder().encode(banner)).toHaveLength(52);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(new TextEncoder().encode(banner));
+      }
+    };
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([APRS_KISS_ON_COMMAND]);
+
+    fake.push(new TextEncoder().encode(APRS_KISS_ON_COMMAND));
+    await settle();
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('RESTART\r\n'));
+    await settle();
+    fake.push(Uint8Array.of(0x0a));
+    await settle();
+
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([
+      APRS_KISS_ON_COMMAND,
+      APRS_RESTART_COMMAND,
+    ]);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('KISS on, waiting for traffic');
+    expect(session.snapshot().commandPhase).toBe('restart-sent');
+    expect(session.snapshot().commandPhase).not.toBe('waiting-accept');
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    const already = session.snapshot().trace.filter((line) => line.note.includes('was already on this connection'));
+    expect(already).toHaveLength(1);
+  });
+
   it('does not treat an echoed KISS return as a received frame, then enters on cmd:', async () => {
     let time = 70_000;
     const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
