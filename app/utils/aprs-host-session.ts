@@ -133,6 +133,8 @@ interface Waiting {
  * prompt request, the enter steps, and an optional kissExit. It does not
  * send a beacon, a message, or KISS OFF. Command text after a KISS frame is
  * not left in an open frame. A later prompt starts that detection pass again.
+ * Monitor text with no prompt writes the module interrupt once, then the
+ * enter steps only after a fresh prompt.
  * Send is the only way a message
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
@@ -491,7 +493,7 @@ export function createAprsHostSession(options?: {
     try {
       if (detectPhase === 'listening') {
         if (sawText) {
-          failDetect(`Command text arrived but ${hostLink.prompt} did not. Nothing more was written.`);
+          await writeDetectInterrupt();
           return;
         }
 
@@ -506,13 +508,13 @@ export function createAprsHostSession(options?: {
         return;
       }
 
-      if (detectStep === 'after-interrupt' && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
+      if (detectStep === 'after-interrupt' && !sawText && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
         await writeDetectExit();
         return;
       }
 
-      if (detectStep === 'after-text' || sawText) {
-        failDetect(`Command text arrived but ${hostLink.prompt} did not. Nothing more was written.`);
+      if (!interruptTried && (detectStep === 'after-text' || sawText)) {
+        await writeDetectInterrupt();
         return;
       }
 

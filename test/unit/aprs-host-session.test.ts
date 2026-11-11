@@ -969,6 +969,83 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectDetail).toContain('waiting for traffic');
   });
 
+  it('asks once for the prompt when monitor text has no cmd:, then enters', async () => {
+    let time = 50_000;
+    const session = createAprsHostSession({ now: () => time, host: d710AprsHostLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const monitor = [
+      'K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n',
+      'K5KTF-4>APRX29,KF5END-4*:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n',
+      "' (1120'msl) -- No Windoze Here!!\r\n",
+    ].join('');
+    fake.push(new TextEncoder().encode(monitor));
+    await settle();
+
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().incompleteBytes).toBe(0);
+    expect(session.snapshot().commandTextBytes).toBe(monitor.length);
+    expect(session.snapshot().detectDetail).toBe('Command text seen. Waiting for cmd:.');
+    expect(fake.writes).toEqual([]);
+
+    time += 4_999;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+
+    time += 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+    expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+
+    fake.push(kissUi());
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().frames).toBe(1);
+    expect(session.snapshot().detectDetail).toContain('AX.25 UI seen');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).toBe(`${new TextDecoder().decode(APRS_COMMAND_INTERRUPT)}\n${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
+    expect(written).not.toContain('HB');
+    expect(written).not.toContain('RESET');
+    expect(written).not.toContain('XFLOW');
+    expect(written).not.toContain('KISS OFF');
+    expect(fake.writes[0]).toEqual(Uint8Array.of(0x03, 0x03, 0x03));
+  });
+
+  it('stops after one prompt request when monitor text never prints the prompt', async () => {
+    let time = 8_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({ now: () => time, host: moduleLink(exit) });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n'));
+    await settle();
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+
+    fake.push(new TextEncoder().encode("' (1120'msl) -- No Windoze Here!!\r\n"));
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]).toEqual(Uint8Array.of(0x15));
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toContain('not answering');
+    expect(session.snapshot().detectDetail).toContain('PACKET mode');
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+  });
+
   it('does not write when the radio has no host procedure, even after the listen window', async () => {
     let time = 1_000;
     const session = createAprsHostSession({ now: () => time });
