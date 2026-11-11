@@ -25,8 +25,12 @@ const DETECT_TRAFFIC = 'KISS on, waiting for traffic.';
 const DETECT_UI = 'AX.25 UI seen.';
 const DETECT_SILENCE = 'The TNC is not answering. The radio may not be in PACKET mode. Nothing more was written.';
 
+function detectTextWithoutPrompt(prompt: string): string {
+  return `Command-mode text was seen, but ${prompt} did not arrive after the prompt request. Nothing more was written.`;
+}
+
 type DetectPhase = AprsHostSnapshot['detectPhase'];
-type DetectStep = 'listen' | 'after-text' | 'after-interrupt' | 'after-exit';
+type DetectStep = 'listen' | 'after-text' | 'after-interrupt' | 'after-nudge' | 'after-exit';
 
 export interface AprsHostBytePort extends AprsBytePort {
   /** A number is the plugin's accepted count. Void is a test double that already queued the bytes. */
@@ -133,8 +137,11 @@ interface Waiting {
  * prompt request, the enter steps, and an optional kissExit. It does not
  * send a beacon, a message, or KISS OFF. Command text after a KISS frame is
  * not left in an open frame. A later prompt starts that detection pass again.
- * Monitor text with no prompt writes the module interrupt once, then the
- * enter steps only after a fresh prompt.
+ * A prompt already in the open buffer runs the enter steps. Monitor text
+ * with no prompt writes the module interrupt once. If command text keeps
+ * arriving and the module declares promptNudge, those bytes are written
+ * once. The enter steps run only after a fresh prompt. An echo of the last
+ * write is not a received KISS frame. FEND FF FEND does not confirm KISS.
  * Send is the only way a message
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
@@ -192,6 +199,9 @@ export function createAprsHostSession(options?: {
   let sawOther = false;
   let interruptTried = false;
   let exitTried = false;
+  let nudgeTried = false;
+  let textAfterInterrupt = false;
+  let echoBytes: Uint8Array | undefined;
   let detectBusy = false;
   let enterInFlight = false;
   let detectTimer: ReturnType<typeof setInterval> | undefined;
@@ -260,7 +270,44 @@ export function createAprsHostSession(options?: {
     }
 
     bytesWritten += bytes.length;
+    echoBytes = Uint8Array.from(bytes);
     return { ok: true, accepted, plugin };
+  }
+
+  /** Drop one copy of the last write. ECHO defaults to ON, so the TNC sends those bytes back. */
+  function stripEcho(chunk: Uint8Array): { data: Uint8Array; echoed: boolean } {
+    const echo = echoBytes;
+
+    if (!echo || echo.length === 0 || chunk.length < echo.length) {
+      return { data: chunk, echoed: false };
+    }
+
+    for (let start = 0; start <= chunk.length - echo.length; start += 1) {
+      let matches = true;
+
+      for (let index = 0; index < echo.length; index += 1) {
+        if (chunk[start + index] !== echo[index]) {
+          matches = false;
+          break;
+        }
+      }
+
+      if (!matches) {
+        continue;
+      }
+
+      const data = new Uint8Array(chunk.length - echo.length);
+      data.set(chunk.subarray(0, start), 0);
+      data.set(chunk.subarray(start + echo.length), start);
+      echoBytes = undefined;
+      return { data, echoed: true };
+    }
+
+    return { data: chunk, echoed: false };
+  }
+
+  function isKissReturn(frame: { command: number; data: Uint8Array }): boolean {
+    return frame.command === 0xff && frame.data.length === 0;
   }
 
   function acceptanceNote(wrote: { accepted: number; plugin: boolean }): string {
@@ -351,10 +398,24 @@ export function createAprsHostSession(options?: {
     enterIndex = 0;
     interruptTried = false;
     exitTried = false;
+    nudgeTried = false;
+    textAfterInterrupt = false;
     sawText = false;
     sawOther = false;
     detectRx = rxBytes;
     detectStep = 'listen';
+
+    if (!kissConfirmed && frames === 0 && promptSeen(sessionBytes)) {
+      detectPhase = 'awaiting-prompt';
+      detectStep = 'after-text';
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+      detectDetail = `${hostLink.prompt} was already on this connection. Entering host KISS.`;
+      record('note', new Uint8Array(), detectDetail);
+      maybeStartEnter();
+      return;
+    }
+
     detectPhase = 'listening';
     detectDeadline = now() + hostLink.listenMs;
     detectDetail = 'Listening for a KISS frame or command text.';
@@ -372,6 +433,10 @@ export function createAprsHostSession(options?: {
 
       if (text) {
         sawText = true;
+
+        if (detectStep === 'after-interrupt') {
+          textAfterInterrupt = true;
+        }
       } else {
         sawOther = true;
       }
@@ -403,6 +468,8 @@ export function createAprsHostSession(options?: {
     }
 
     interruptTried = true;
+    textAfterInterrupt = false;
+    detectStep = 'after-interrupt';
     const wrote = await writeBytes(hostLink.interrupt);
 
     if (!wrote.ok) {
@@ -411,7 +478,6 @@ export function createAprsHostSession(options?: {
     }
 
     detectPhase = 'awaiting-prompt';
-    detectStep = 'after-interrupt';
     commandBytes = new Uint8Array();
     commandActive = true;
     commandPhase = 'waiting-prompt';
@@ -420,6 +486,35 @@ export function createAprsHostSession(options?: {
     commandDetail = `Prompt request written once. ${acceptanceNote(wrote)}Waiting for ${hostLink.prompt}.`;
     detectDetail = commandDetail;
     record('tx-command', hostLink.interrupt, commandDetail);
+    publish();
+  }
+
+  async function writeDetectNudge(): Promise<void> {
+    const nudge = hostLink?.promptNudge;
+
+    if (nudgeTried || !hostLink || !nudge) {
+      failDetect(detectTextWithoutPrompt(hostLink?.prompt ?? 'the prompt'));
+      return;
+    }
+
+    nudgeTried = true;
+    const wrote = await writeBytes(nudge);
+
+    if (!wrote.ok) {
+      failDetect(`The prompt nudge was not accepted. ${wrote.reason} Nothing else was sent.`);
+      return;
+    }
+
+    detectPhase = 'awaiting-prompt';
+    detectStep = 'after-nudge';
+    commandBytes = new Uint8Array();
+    commandActive = true;
+    commandPhase = 'waiting-prompt';
+    detectDeadline = now() + hostLink.waitMs;
+    commandDeadline = detectDeadline;
+    commandDetail = `Prompt nudge written once. ${acceptanceNote(wrote)}Waiting for ${hostLink.prompt}.`;
+    detectDetail = commandDetail;
+    record('tx-command', nudge, commandDetail);
     publish();
   }
 
@@ -508,13 +603,23 @@ export function createAprsHostSession(options?: {
         return;
       }
 
-      if (detectStep === 'after-interrupt' && !sawText && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
+      if (detectStep === 'after-interrupt' && !sawText && !textAfterInterrupt && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
         await writeDetectExit();
+        return;
+      }
+
+      if (detectStep === 'after-interrupt' && textAfterInterrupt && hostLink.promptNudge && !nudgeTried) {
+        await writeDetectNudge();
         return;
       }
 
       if (!interruptTried && (detectStep === 'after-text' || sawText)) {
         await writeDetectInterrupt();
+        return;
+      }
+
+      if (sawText || textAfterInterrupt || detectStep === 'after-nudge' || detectStep === 'after-text') {
+        failDetect(detectTextWithoutPrompt(hostLink.prompt));
         return;
       }
 
@@ -903,8 +1008,11 @@ export function createAprsHostSession(options?: {
 
   const onData = (chunk: Uint8Array): void => {
     const current = generation;
-    const decoded = readKiss(chunk);
-    const quiet = chunk.length === 0 && decoded.ignored === 0 && decoded.frames.length === 0 && decoded.overflow === 0 && decoded.invalid === 0;
+    const stripped = stripEcho(chunk);
+    const decoded = readKiss(stripped.data);
+    const dataFrames = decoded.frames.filter((frame) => !isKissReturn(frame));
+    const kissReturns = decoded.frames.length - dataFrames.length;
+    const quiet = chunk.length === 0 && decoded.ignored === 0 && dataFrames.length === 0 && kissReturns === 0 && decoded.overflow === 0 && decoded.invalid === 0;
     incompleteBytes = decoded.holding;
 
     if (quiet) {
@@ -919,16 +1027,28 @@ export function createAprsHostSession(options?: {
     invalidBytes += decoded.invalid;
     overflowDrops += decoded.overflow;
     incompleteBytes = decoded.holding;
-    const payloads = decoded.frames.filter((frame) => (frame.command & 0x0f) === 0).map((frame) => frame.data);
-    frames += decoded.frames.length;
+    const payloads = dataFrames.filter((frame) => (frame.command & 0x0f) === 0).map((frame) => frame.data);
+    frames += dataFrames.length;
     const notes: string[] = [];
+
+    if (stripped.echoed) {
+      notes.push('echo of the last write, not a KISS frame');
+    }
 
     if (decoded.ignored > 0) {
       notes.push(`${decoded.ignored} command-text`);
     }
 
-    if (decoded.frames.length > 0) {
-      notes.push(`${decoded.frames.length} KISS`);
+    if (dataFrames.length > 0) {
+      notes.push(`${dataFrames.length} KISS`);
+    }
+
+    if (kissReturns > 0) {
+      notes.push('KISS return, not a data frame');
+
+      if (dataFrames.length === 0 && decoded.ignored === 0 && decoded.invalid === 0 && detectPhase === 'listening') {
+        detectRx = rxBytes;
+      }
     }
 
     if (decoded.holding > 0) {
@@ -954,7 +1074,7 @@ export function createAprsHostSession(options?: {
       options?.onAx25Ui?.(payload);
     }
 
-    if (decoded.frames.length > 0 && detectionOwnsWait()) {
+    if (dataFrames.length > 0 && detectionOwnsWait()) {
       finishKissTraffic();
     } else if (decoded.ignoredBytes.length > 0) {
       noteDetectBytes(decoded.ignoredBytes);
@@ -976,7 +1096,7 @@ export function createAprsHostSession(options?: {
 
     if (commandActive) {
       commandBytes = appendCommandBytes(commandBytes, chunk);
-      considerCommandReply(decoded.frames.length);
+      considerCommandReply(dataFrames.length);
     }
 
     maybeStartEnter();
@@ -1127,6 +1247,7 @@ export function createAprsHostSession(options?: {
       kiss.pending = [];
       kiss.inFrame = false;
       kiss.escaped = false;
+      echoBytes = undefined;
       kiss.frameStartedAt = undefined;
 
       if (!current) {
@@ -1240,6 +1361,11 @@ export function createAprsHostSession(options?: {
       }
 
       beginDetect();
+
+      if (detectPhase === 'entering') {
+        publish();
+        return undefined;
+      }
 
       if (!kissConfirmed && promptSeen(commandText)) {
         sawText = true;
