@@ -9,6 +9,7 @@ const { removeRadioAntennas } = useStationAntennas();
 const { clearCardSession, configurations } = useRadio();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
+const { disconnect: disconnectAprs } = useAprs();
 
 const editorOpen = shallowRef(false);
 const editing = shallowRef<SavedRadio | undefined>();
@@ -65,6 +66,8 @@ async function confirmRemove(): Promise<void> {
       await disconnect(port);
     }
 
+    await disconnectAprs(radio.id);
+
     clearCardSession(radio.id);
     closeCard(radio.id);
     removeRadioAntennas(radio.id);
@@ -86,6 +89,11 @@ function radioDetail(radio: SavedRadio): string {
 
   if (radio.txPowerWatts !== undefined) {
     parts.push(`${radio.txPowerWatts} W`);
+  }
+
+  if (radio.aprsSerialPort) {
+    const aprsBaud = radio.aprsBaudRate !== undefined ? ` ${radio.aprsBaudRate}` : '';
+    parts.push(`APRS ${serialPortLabel(radio.aprsSerialPort, readSerialPortSettings().portAliases)}${aprsBaud}`);
   }
 
   return parts.join(' · ');
@@ -110,9 +118,9 @@ function radioBandsLabel(radio: SavedRadio): string | undefined {
         <div class="min-w-0">
           <p class="text-sm font-medium text-highlighted">Your radios</p>
           <p class="text-xs text-muted">
-            Name each radio, then choose its manufacturer, model, baud rate when the driver lists more than one,
-            the serial port you usually use, and its usual transmit power. Antennas mounted on a radio, such as a
-            handheld whip, are listed under that radio. The Radio page opens these as cards.
+            Name each radio, then choose its manufacturer, model, memory port, and usual transmit power.
+            A radio with APRS receive also stores a separate COM port and baud. Antennas mounted on a radio,
+            such as a handheld whip, are listed under that radio. The Radio page opens these as cards.
           </p>
         </div>
         <UButton

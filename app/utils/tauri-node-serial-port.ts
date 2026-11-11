@@ -37,6 +37,79 @@ const SERIAL_LISTENER_FLUSH_MS = 1;
 const SERIAL_OPEN_SETTLE_MS = 300;
 const SERIAL_OPEN_DRAIN_MS = 20;
 
+/**
+ * Host open reads before `watch`. Plugin 3.0.7 `attach_watch` clears the hub
+ * idle buffer (`attach_watch_clears_idle`). `read_binary` fills until its
+ * timeout, so one call returns about one timeout of bytes and a timeout with
+ * no bytes is not the end of a sign-on. Stopping there and then calling
+ * `watch` deletes the bytes that arrive in the handoff. Read for the whole
+ * window. The passive monitor does not use this path.
+ */
+export const HOST_STARTUP_READ_WINDOW_MS = 250;
+export const HOST_STARTUP_QUIET_MS = 30;
+const HOST_STARTUP_READ_SIZE = 4096;
+
+function isQuietRead(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no data|timed out|timeout/i.test(message);
+}
+
+/**
+ * Read bytes the serial hub has already taken, for the whole window.
+ * A quiet read is the plugin timeout and does not end the read: the next
+ * bytes would otherwise sit in the idle buffer and be deleted when `watch`
+ * attaches. Any other failure is rethrown.
+ */
+export async function collectBytesBeforeWatch(
+  readBinary: (options: { timeout: number; size: number }) => Promise<Uint8Array | number[]>,
+  options?: {
+    windowMs?: number;
+    quietMs?: number;
+    size?: number;
+    now?: () => number;
+    stopped?: () => boolean;
+  },
+): Promise<Uint8Array> {
+  const windowMs = options?.windowMs ?? HOST_STARTUP_READ_WINDOW_MS;
+  const quietMs = options?.quietMs ?? HOST_STARTUP_QUIET_MS;
+  const size = options?.size ?? HOST_STARTUP_READ_SIZE;
+  const now = options?.now ?? Date.now;
+  const started = now();
+  const parts: Uint8Array[] = [];
+
+  while (!options?.stopped?.() && now() - started < windowMs) {
+    let chunk: Uint8Array;
+
+    try {
+      const raw = await readBinary({ timeout: quietMs, size });
+      chunk = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
+    } catch (error) {
+      if (!isQuietRead(error)) {
+        throw error;
+      }
+
+      continue;
+    }
+
+    if (chunk.length === 0) {
+      continue;
+    }
+
+    parts.push(chunk);
+  }
+
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+
+  for (const part of parts) {
+    merged.set(part, offset);
+    offset += part.length;
+  }
+
+  return merged;
+}
+
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -96,10 +169,12 @@ export class TauriNodeSerialPort extends EventEmitter {
   private readonly tauriPort: TauriSerialPort;
   private readonly rts: boolean;
   private readonly dtr: boolean;
+  private readonly rtsManagedByDriver: boolean;
   private watchHandle: WatchHandle | undefined;
   private pipedDestination: PipedDestination | undefined;
   private pipedHandler: ((chunk: Buffer) => void) | undefined;
   private discardRx = false;
+  private readonly retainIncoming: boolean;
   private openGeneration = 0;
 
   constructor(options: {
@@ -109,14 +184,31 @@ export class TauriNodeSerialPort extends EventEmitter {
     stopBits?: number;
     parity?: string;
     rtscts?: boolean;
+    /** Overrides `rtscts` when the TNC command `XFLOW` calls for software or hardware flow control. */
+    flowControl?: 'none' | 'software' | 'hardware';
     rts?: boolean;
     dtr?: boolean;
+    /**
+     * Hardware RTS/CTS owns the RTS pin. Do not ioctl it low after open:
+     * on the TM-D710 panel MPU, PC CTS is the UART inhibit input.
+     */
+    rtsManagedByDriver?: boolean;
+    /**
+     * Keep bytes that arrive while the port is opening.
+     * The passive monitor leaves this off. That path drops the first fraction
+     * of a second and clears the input buffer, which is the programming-cable
+     * behavior already verified for menu 604. The host listener sets it so a
+     * TNC banner is read out of the hub before `watch` clears that buffer.
+     */
+    retainIncoming?: boolean;
   }) {
     super();
 
     this.path = options.path;
     this.rts = options.rts ?? true;
     this.dtr = options.dtr ?? true;
+    this.rtsManagedByDriver = options.rtsManagedByDriver === true;
+    this.retainIncoming = options.retainIncoming === true;
 
     const serialOptions: SerialportOptions = {
       path: options.path,
@@ -124,7 +216,12 @@ export class TauriNodeSerialPort extends EventEmitter {
       dataBits: toDataBits(options.dataBits),
       stopBits: toStopBits(options.stopBits),
       parity: toParity(options.parity),
-      flowControl: options.rtscts ? FlowControl.Hardware : FlowControl.None,
+      flowControl:
+        options.flowControl === 'software'
+          ? FlowControl.Software
+          : options.flowControl === 'hardware' || options.rtscts
+            ? FlowControl.Hardware
+            : FlowControl.None,
       serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
     };
 
@@ -163,8 +260,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   write(data: Uint8Array | Buffer | number[] | string, encodingOrCallback?: BufferEncoding | WriteCallback, callback?: WriteCallback): boolean {
     const done = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback;
 
-    void this.tauriPort
-      .writeBinary(toBytes(data))
+    void this.writeCommitted(data)
       .then(() => done?.(null))
       .catch((error: unknown) => {
         const writeError = error instanceof Error ? error : new Error(String(error));
@@ -173,6 +269,27 @@ export class TauriNodeSerialPort extends EventEmitter {
       });
 
     return true;
+  }
+
+  /**
+   * Wait until `write_binary` returns.
+   *
+   * `write()` above returns true before that IPC finishes, which is the
+   * node-serialport shape the radio driver uses. The host session has to wait:
+   * plugin 3.0.9 `write_all` reports the buffer length after the kernel
+   * `write()` accepts it, and it does not call `tcdrain`. A returned count is
+   * not a radio echo.
+   */
+  writeCommitted(data: Uint8Array | Buffer | number[] | string): Promise<number> {
+    const bytes = toBytes(data);
+
+    return this.tauriPort.writeBinary(bytes).then((accepted) => {
+      if (accepted !== bytes.length) {
+        throw new Error(`Serial plugin accepted ${accepted} of ${bytes.length} bytes.`);
+      }
+
+      return accepted;
+    });
   }
 
   close(callback?: WriteCallback): void {
@@ -222,7 +339,16 @@ export class TauriNodeSerialPort extends EventEmitter {
     const baudRate = options.baudRate;
     await this.tauriPort.setBaudRate(baudRate);
     this.tauriPort.options.baudRate = baudRate;
+    await this.applyControlLines();
+  }
+
+  private async applyControlLines(): Promise<void> {
     await this.tauriPort.writeDataTerminalReady(this.dtr);
+
+    if (this.rtsManagedByDriver) {
+      return;
+    }
+
     await this.tauriPort.writeRequestToSend(this.rts);
   }
 
@@ -232,9 +358,25 @@ export class TauriNodeSerialPort extends EventEmitter {
     try {
       await waitForSerialPathClose(this.path);
       await this.waitForPathThenOpen(generation);
-      await this.tauriPort.writeDataTerminalReady(this.dtr);
-      await this.tauriPort.writeRequestToSend(this.rts);
-      this.discardRx = true;
+      await this.applyControlLines();
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      let startup = new Uint8Array();
+
+      if (this.retainIncoming) {
+        startup = await collectBytesBeforeWatch((readOptions) => this.tauriPort.readBinary(readOptions), {
+          stopped: () => generation !== this.openGeneration,
+        });
+      }
+
+      if (generation !== this.openGeneration) {
+        return;
+      }
+
+      this.discardRx = !this.retainIncoming;
       this.watchHandle = await this.tauriPort.watch(
         {
           onData: (incoming) => {
@@ -257,20 +399,27 @@ export class TauriNodeSerialPort extends EventEmitter {
           serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
         },
       );
-      await delay(SERIAL_OPEN_SETTLE_MS);
+      if (!this.retainIncoming) {
+        await delay(SERIAL_OPEN_SETTLE_MS);
 
-      if (generation !== this.openGeneration) {
-        return;
-      }
+        if (generation !== this.openGeneration) {
+          return;
+        }
 
-      await this.tauriPort.clearBuffer(ClearBuffer.Input).catch(() => undefined);
-      await delay(SERIAL_OPEN_DRAIN_MS);
+        await this.tauriPort.clearBuffer(ClearBuffer.Input).catch(() => undefined);
+        await delay(SERIAL_OPEN_DRAIN_MS);
 
-      if (generation !== this.openGeneration) {
-        return;
+        if (generation !== this.openGeneration) {
+          return;
+        }
       }
 
       this.discardRx = false;
+
+      if (startup.length > 0 && generation === this.openGeneration) {
+        this.emit('data', Buffer.from(startup));
+      }
+
       this.isOpen = true;
       this.emit('open');
     } catch (error) {
@@ -337,7 +486,10 @@ export class TauriNodeSerialPort extends EventEmitter {
     }
 
     await this.tauriPort.writeDataTerminalReady(false).catch(() => undefined);
-    await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+
+    if (!this.rtsManagedByDriver) {
+      await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+    }
     await this.tauriPort.close().catch(() => undefined);
     this.isOpen = false;
   }

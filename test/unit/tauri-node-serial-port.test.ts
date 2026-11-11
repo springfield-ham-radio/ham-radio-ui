@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SendReceiveOperation } from '@springfield/ham-radio-driver/dist/utils/protocol-operations.js';
 import { createLoggingSerialPort, SerialLogger } from '@springfield/ham-radio-driver/dist/utils/serial-logger.js';
 import type { ProtocolContext } from '@springfield/ham-radio-driver/dist/protocol-context.js';
-import { TauriNodeSerialPort } from '../../app/utils/tauri-node-serial-port.ts';
+import { collectBytesBeforeWatch, TauriNodeSerialPort } from '../../app/utils/tauri-node-serial-port.ts';
 import { resetSerialPathCloseTracking } from '../../app/utils/serial-port-path-close.ts';
 import { resetSerialPortReconnectHooks } from '../../app/utils/serial-port-reconnect.ts';
 
@@ -12,6 +12,8 @@ let closeDelayMs = 0;
 let listedPorts: string[] = ['/dev/test'];
 let openFailUntilAttempt = 0;
 let openAttempt = 0;
+let startupReads: Uint8Array[] = [];
+const portCallOrder: string[] = [];
 
 class MockTauriSerialPort {
   isOpen = false;
@@ -35,7 +37,20 @@ class MockTauriSerialPort {
   });
   writeDataTerminalReady = vi.fn(async () => undefined);
   writeRequestToSend = vi.fn(async () => undefined);
-  watch = vi.fn(async () => ({ unwatch: vi.fn(async () => undefined) }));
+  watch = vi.fn(async () => {
+    portCallOrder.push('watch');
+    return { unwatch: vi.fn(async () => undefined) };
+  });
+  readBinary = vi.fn(async () => {
+    portCallOrder.push('read');
+    const next = startupReads.shift();
+
+    if (!next) {
+      throw new Error('no data received within 30 ms');
+    }
+
+    return next;
+  });
   clearBuffer = vi.fn(async () => undefined);
   writeBinary = vi.fn(async () => 0);
   close = vi.fn(async () => {
@@ -79,6 +94,7 @@ async function openAdapterPort(options?: { path?: string; dtr?: boolean; rts?: b
   listedPorts = [options?.path ?? '/dev/test'];
   openFailUntilAttempt = 0;
   openAttempt = 0;
+  startupReads = [];
   const port = new TauriNodeSerialPort({
     path: options?.path ?? '/dev/test',
     baudRate: 9600,
@@ -272,5 +288,163 @@ describe('TauriNodeSerialPort path close ordering', () => {
     await vi.advanceTimersByTimeAsync(400);
     await vi.waitFor(() => expect(openCalls).toHaveLength(2));
     await vi.waitFor(() => expect(second.isOpen).toBe(true));
+  });
+});
+
+function asciiBytes(text: string): Uint8Array {
+  return Uint8Array.from([...text].map((character) => character.charCodeAt(0)));
+}
+
+describe('collectBytesBeforeWatch', () => {
+  it('joins arbitrary chunks through a trailing colon and keeps bytes after a quiet gap', async () => {
+    const banner = asciiBytes('A 110101000000\r\nHB 1200\r\ncmd:');
+    const head = banner.slice(0, banner.length - 2);
+    const tail = banner.slice(banner.length - 2);
+    expect(new TextDecoder().decode(head)).toBe('A 110101000000\r\nHB 1200\r\ncm');
+    expect(new TextDecoder().decode(tail)).toBe('d:');
+
+    let clock = 0;
+    const queued: Array<Uint8Array | 'quiet'> = [head.slice(0, 1), head.slice(1), 'quiet', tail];
+    const read = vi.fn(async () => {
+      clock += 30;
+      const next = queued.shift();
+
+      if (next === undefined || next === 'quiet') {
+        throw new Error('no data received within 30 ms');
+      }
+
+      return next;
+    });
+
+    const collected = await collectBytesBeforeWatch(read, {
+      windowMs: 250,
+      quietMs: 30,
+      now: () => clock,
+    });
+    expect(collected).toEqual(banner);
+    expect(String.fromCharCode(collected.at(-1) ?? 0)).toBe(':');
+    expect(read.mock.calls.length).toBeGreaterThan(queued.length);
+  });
+
+  it('returns bytes already read when the caller stops, and rethrows a real read error', async () => {
+    let stopped = false;
+    const partial = await collectBytesBeforeWatch(
+      async () => {
+        stopped = true;
+        return asciiBytes('cmd');
+      },
+      {
+        windowMs: 10_000,
+        quietMs: 30,
+        now: () => 0,
+        stopped: () => stopped,
+      },
+    );
+    expect(partial).toEqual(asciiBytes('cmd'));
+
+    const halted = await collectBytesBeforeWatch(async () => asciiBytes(':'), {
+      windowMs: 10_000,
+      now: () => 0,
+      stopped: () => true,
+    });
+    expect(halted).toEqual(new Uint8Array());
+
+    await expect(
+      collectBytesBeforeWatch(async () => {
+        throw new Error('device disconnected');
+      }),
+    ).rejects.toThrow('device disconnected');
+  });
+});
+
+describe('TauriNodeSerialPort host startup capture', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    tauriInstances.length = 0;
+    openCalls.length = 0;
+    startupReads = [];
+    portCallOrder.length = 0;
+    resetSerialPathCloseTracking();
+    resetSerialPortReconnectHooks();
+  });
+
+  it('emits the pre-watch bytes, including the colon, and does not clear the host input buffer', async () => {
+    const banner = asciiBytes('9600\r\nHB 1200\r\ncmd:');
+    tauriInstances.length = 0;
+    portCallOrder.length = 0;
+    startupReads = [banner.slice(0, 15), banner.slice(15)];
+    listedPorts = ['/dev/cu.pg5g'];
+    const received: Buffer[] = [];
+    const port = new TauriNodeSerialPort({
+      path: '/dev/cu.pg5g',
+      baudRate: 9600,
+      dtr: false,
+      rts: false,
+      flowControl: 'none',
+      retainIncoming: true,
+    });
+    port.on('data', (chunk: Buffer) => {
+      received.push(chunk);
+    });
+
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+
+    const tauri = tauriInstances[0];
+    expect(tauriInstances).toHaveLength(1);
+    expect(tauri?.open).toHaveBeenCalled();
+    expect(Buffer.concat(received)).toEqual(Buffer.from(banner));
+    expect(portCallOrder.indexOf('read')).toBeGreaterThanOrEqual(0);
+    expect(portCallOrder.indexOf('read')).toBeLessThan(portCallOrder.indexOf('watch'));
+    expect(tauri?.clearBuffer).not.toHaveBeenCalled();
+    expect(tauri?.writeDataTerminalReady).toHaveBeenCalledWith(false);
+    expect(tauri?.writeRequestToSend).toHaveBeenCalledWith(false);
+  });
+
+  it('does not ioctl RTS when hardware flow control owns the pin', async () => {
+    tauriInstances.length = 0;
+    portCallOrder.length = 0;
+    listedPorts = ['/dev/cu.pg5g'];
+    const port = new TauriNodeSerialPort({
+      path: '/dev/cu.pg5g',
+      baudRate: 9600,
+      dtr: false,
+      rts: false,
+      flowControl: 'hardware',
+      rtsManagedByDriver: true,
+      retainIncoming: true,
+    });
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+    const tauri = tauriInstances[0];
+    expect(tauri?.writeDataTerminalReady).toHaveBeenCalledWith(false);
+    expect(tauri?.writeRequestToSend).not.toHaveBeenCalled();
+    port.close();
+    await vi.waitFor(() => expect(port.isOpen).toBe(false));
+    expect(tauri?.writeRequestToSend).not.toHaveBeenCalled();
+  });
+
+  it('waits for write_binary before reporting the accepted count', async () => {
+    const { port, tauri } = await openAdapterPort({ dtr: false, rts: false });
+    let release: (count: number) => void = () => undefined;
+    tauri.writeBinary.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = port.writeCommitted(Uint8Array.from([0x4b, 0x49, 0x53, 0x53, 0x20, 0x4f, 0x4e, 0x0d]));
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release(8);
+    await expect(pending).resolves.toBe(8);
+
+    tauri.writeBinary.mockResolvedValueOnce(3);
+    await expect(port.writeCommitted(Uint8Array.of(1, 2, 3, 4))).rejects.toThrow('accepted 3 of 4');
+    tauri.writeBinary.mockRejectedValueOnce(new Error('serial port lock timeout after 250 ms'));
+    await expect(port.writeCommitted(Uint8Array.of(1))).rejects.toThrow('lock timeout');
   });
 });

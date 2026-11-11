@@ -52,10 +52,12 @@ export function useRadioConnectionForm(options: {
   const selectedBaudRate = ref<number | undefined>();
   const ports = ref<Array<{ label: string; value: string }>>([]);
   const loadingPorts = ref(false);
+  const { holdersByPath } = useCatPortLock();
   const unavailablePorts = computed(() => options.unavailablePorts?.() ?? []);
   const portItems = computed(() =>
     markCatBusySerialPorts(ports.value, unavailablePorts.value, {
       omitBusy: options.omitUnavailablePorts?.() ?? false,
+      holders: holdersByPath.value,
     }),
   );
 

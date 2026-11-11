@@ -1,3 +1,4 @@
+import { adoptLegacyAprsConnection } from '~/utils/aprs-d710';
 import {
   createSavedRadio,
   draftFromSavedRadio,
@@ -23,7 +24,14 @@ export function useSavedRadios() {
   const hydrated = useState('saved-radios-hydrated', () => false);
 
   if (import.meta.client && !hydrated.value) {
-    store.value = readSavedRadioStore();
+    const read = readSavedRadioStore();
+    const adopted = adoptLegacyAprsConnection(read.radios, localStorage);
+    store.value = adopted.changed ? { radios: adopted.radios } : read;
+
+    if (adopted.changed) {
+      writeSavedRadioStore(store.value);
+    }
+
     hydrated.value = true;
   }
 
@@ -42,11 +50,15 @@ export function useSavedRadios() {
     writeSavedRadioStore(next);
   }
 
-  function issuesFor(draft: SavedRadioDraft, options: { ignoreId?: string; baudRates?: readonly number[] }): SavedRadioDraftIssues {
+  function issuesFor(
+    draft: SavedRadioDraft,
+    options: { ignoreId?: string; baudRates?: readonly number[]; aprsBaudRates?: readonly number[] },
+  ): SavedRadioDraftIssues {
     return savedRadioDraftIssues(draft, {
       radios: store.value.radios,
       ignoreId: options.ignoreId,
       baudRates: options.baudRates,
+      aprsBaudRates: options.aprsBaudRates,
     });
   }
 
