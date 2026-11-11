@@ -1,3 +1,14 @@
+## [3.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.4.0...v3.5.0) (2026-11-11)
+
+### Features
+
+* APRS tab with KISS host session for the Kenwood TM-D710A ([#200](https://github.com/springfield-ham-radio/ham-radio-ui/issues/200)) ([fab6620](https://github.com/springfield-ham-radio/ham-radio-ui/commit/fab662006ea77cccdc8192879892bafe11a023d2))
+
+### Bug Fixes
+
+* **deps:** bump the production-npm group with 3 updates ([#203](https://github.com/springfield-ham-radio/ham-radio-ui/issues/203)) ([7e00f03](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7e00f03ec2bb6b1854fc02509fbef09207866cc4))
+* **deps:** bump the rust-crates group in /src-tauri with 2 updates ([#202](https://github.com/springfield-ham-radio/ham-radio-ui/issues/202)) ([7d64ae7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7d64ae750072744bbac310399766c283963a8b6f))
+
 ## [3.4.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.3.3...v3.4.0) (2026-11-07)
 
 ### Features
