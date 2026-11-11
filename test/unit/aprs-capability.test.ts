@@ -43,6 +43,8 @@ describe('APRS receive capability', () => {
     expect(fallback?.monitorNote).toContain('604');
     expect(new TextDecoder().decode(fallback?.host?.link.interrupt ?? new Uint8Array())).toBe('\u0003\u0003\u0003');
     expect(fallback?.host?.link.enter.map((step) => step.text)).toEqual(['KISS ON\r', 'RESTART\r']);
+    expect(fallback?.host?.link.kissExit).toBeUndefined();
+    expect(fallback?.host?.link.listenMs).toBe(3000);
     const recovery = [...(fallback?.host?.setup ?? []), ...(fallback?.host?.recovery ?? [])].join(' ');
     expect(recovery).not.toMatch(/second cycle toggles/i);
     expect(recovery).not.toMatch(/toggles again/i);
@@ -78,6 +80,8 @@ describe('APRS receive capability', () => {
           host: {
             interrupt: [21],
             prompt: 'ok>',
+            listenMs: 1500,
+            kissExit: [0xc0, 0xff, 0xc0],
             enter: [{ text: 'HOST\r', label: 'HOST' }],
             flows: ['none'],
             defaultFlow: 'none',
@@ -92,5 +96,26 @@ describe('APRS receive capability', () => {
     expect(profile?.host?.link.enter[0]?.text).toBe('HOST\r');
     expect(profile?.host?.flows).toEqual(['none']);
     expect(profile?.host?.link.enter.some((step) => step.text.includes('KISS ON'))).toBe(false);
+    expect(profile?.host?.link.listenMs).toBe(1500);
+    expect(profile?.host?.link.kissExit).toEqual(Uint8Array.of(0xc0, 0xff, 0xc0));
+    expect(aprsReceiveProfile({
+      model: 'example-tnc',
+      config: {
+        capabilities: { aprsReceive: true },
+        aprs: {
+          mode: 'monitor',
+          baudRate: 9600,
+          baudRates: [9600],
+          host: {
+            interrupt: [21],
+            prompt: 'ok>',
+            kissExit: [256],
+            enter: [{ text: 'HOST\r', label: 'HOST' }],
+            setup: ['Ask for ok>.'],
+            recovery: ['Disconnect.'],
+          },
+        },
+      },
+    })?.host).toBeUndefined();
   });
 });

@@ -32,7 +32,8 @@ function sessionFor(cardId: string): AprsHostSession {
  *
  * This is a different session from the menu 604 monitor. It uses the same
  * port hold list, so CAT, memory transfer, and the monitor cannot open the
- * adapter at the same time. Connect does not write. Message frames are written only when Send is used, and only after an AX.25 UI frame.
+ * adapter at the same time. Host Connect runs the module detection sequence.
+ * Message frames are written only when Send is used, and only after an AX.25 UI frame.
  */
 export function useAprsHost() {
   const { lockedPorts, setHolderPorts } = useCatPortLock();
@@ -145,6 +146,12 @@ export function useAprsHost() {
     return reason;
   }
 
+  function retryDetection(cardId: string): string | undefined {
+    const reason = sessionFor(cardId).retryDetection();
+    publish(cardId);
+    return reason;
+  }
+
   function clearTrace(cardId: string): void {
     sessions.get(cardId)?.clearTrace();
     publish(cardId);
@@ -172,6 +179,7 @@ export function useAprsHost() {
     requestCommandPrompt,
     cancelCommand,
     enterHostKiss,
+    retryDetection,
     clearTrace,
   };
 }

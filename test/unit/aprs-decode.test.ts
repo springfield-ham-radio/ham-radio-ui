@@ -82,6 +82,10 @@ describe('APRS monitor decode', () => {
   });
 });
 
+function hexBytes(text: string): Uint8Array {
+  return Uint8Array.from(text.trim().split(/\s+/u).map((byte) => Number.parseInt(byte, 16)));
+}
+
 describe('APRS station updates', () => {
   it('keeps a decoded position when a later message has none', () => {
     const state = createAprsFoldState();
@@ -129,6 +133,66 @@ describe('APRS station updates', () => {
     expect(packet?.comment).toBe('K5KTF TX/RX-iGate');
     expect(packet?.weather).toBeUndefined();
     expect(packet?.raw).toBe('K5KTF-4>APRS,WIDE1-1*:!3031.12NI09752.74W&K5KTF TX/RX-iGate');
+  });
+
+  it('decodes the 2026-11-11 D710 captures, including Mic-E destination 3PSX2X', () => {
+    const frameA = hexBytes(
+      '82 a0 a8 66 62 62 60 9c 68 70 64 64 86 60 ae 92 88 8a 64 40 63 03 f0 2f 31 36 32 37 34 30 68 33 30 33 34 2e 30 30 4e 2f 30 39 37 33 37 2e 39 36 57 27 32 33 37 2f 31 32 34 2f 41 3d 30 30 31 37 34 35',
+    );
+    const frameB = hexBytes(
+      '66 a0 a6 b0 64 b0 60 96 92 6a 8a a6 ac e1 03 f0 60 7d 42 6a 6f 48 68 6a 2f 60 22 36 40 7d 4a 65 65 70 69 6e 67 20 64 6f 77 6e 20 74 68 65 20 72 6f 61 64 5f 25 0d',
+    );
+    const aircraft = parseAx25Ui(frameA);
+    const mice = parseAx25Ui(frameB);
+    const aircraftPacket = aircraft ? decodeAx25UiAprs(aircraft) : undefined;
+    const micePacket = mice ? decodeAx25UiAprs(mice) : undefined;
+
+    expect(aircraft?.destination.call).toBe('APT311');
+    expect(aircraft?.source.call).toBe('N4822C');
+    expect(aircraftPacket?.kind).toBe('position');
+    expect(aircraftPacket?.position?.label).toBe('30° 34.00′ N 97° 37.96′ W');
+    expect(aircraftPacket?.courseDegrees).toBe(237);
+    expect(aircraftPacket?.speedKnots).toBe(124);
+    expect(aircraftPacket?.altitude).toBe('1,745 ft');
+
+    // Destination 3PSX2X, APRS 1.0.1 ch. 10, standard message set:
+    // digits 3,0,3,8,2,8. Message bits 0,1,1 = 3 → M4 Committed.
+    // Char 4 X is north. Char 5 2 adds no 100° longitude offset. Char 6 X is west.
+    // Latitude 30° + 38.28′ = 30 + 38.28/60 = 30.638° N.
+    // Info `}BjoHhj/ : '}' 125−28 = 97°, 'B' 66−28 = 38′, 'j' 106−28 = 78 hundredths.
+    // Longitude 97° + 38.78′ = 97 + 38.78/60 = 97.6463…° W.
+    // Speed 'o','H','h' → 83 and 44 → 83×10+4 = 834 → 34 kn. Course (4×100)+76 = 476 → 76°.
+    // Symbol code 'j', table '/'. Device '`'. Altitude "6@ → 10223−10000 = 223 m.
+    // Comment after '}' is "Jeeping down the road_%"; "_%" is the radio status suffix.
+    expect(mice?.destination.call).toBe('3PSX2X');
+    expect(mice?.source.call).toBe('KI5ESV');
+    expect(mice?.path).toEqual([]);
+    expect(mice?.info.startsWith('`')).toBe(true);
+    expect(micePacket?.kind).toBe('mic-e');
+    expect(micePacket?.positionComment).toBe('M4: Committed');
+    expect(micePacket?.position?.label).toBe('30° 38.28′ N 97° 38.78′ W');
+    expect(micePacket?.position?.latitude).toBeCloseTo(30 + 38.28 / 60, 6);
+    expect(micePacket?.position?.longitude).toBeCloseTo(-(97 + 38.78 / 60), 6);
+    expect(micePacket?.position?.symbolCode).toBe('j');
+    expect(micePacket?.position?.symbolTable).toBe('/');
+    expect(micePacket?.speedKnots).toBe(34);
+    expect(micePacket?.courseDegrees).toBe(76);
+    expect(micePacket?.altitude).toBe('223 m');
+    expect(micePacket?.comment).toBe('Jeeping down the road');
+
+    const state = createAprsFoldState();
+    if (micePacket) {
+      foldAprsLine(state, micePacket.raw, micePacket, '2026-11-11T16:27:00.000Z');
+    }
+
+    expect(state.stations[0]).toMatchObject({
+      callsign: 'KI5ESV',
+      comment: { value: 'Jeeping down the road' },
+      courseDegrees: { value: 76 },
+      speedKnots: { value: 34 },
+      altitude: { value: '223 m' },
+    });
+    expect(state.stations[0]?.position?.value.label).toBe('30° 38.28′ N 97° 38.78′ W');
   });
 
   it('keeps a status frame off the map and drops a frame that is not UI', () => {

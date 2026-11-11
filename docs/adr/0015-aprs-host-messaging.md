@@ -2,7 +2,9 @@
 
 **Status:** accepted  
 **Date:** 2026-11-07  
-**Related:** [0014](./0014-aprs-receive.md), [aprs.md](../aprs.md)
+**Related:** [0014](./0014-aprs-receive.md), [0017](./0017-aprs-host-detect.md), [aprs.md](../aprs.md)
+
+Host Connect detection in [0017](./0017-aprs-host-detect.md) replaces the rule that a host Connect writes nothing. The passive monitor still writes nothing. Send is still the only message write.
 
 ## Context
 

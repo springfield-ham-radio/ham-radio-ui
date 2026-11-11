@@ -78,7 +78,19 @@ function encodeAddress(station: Ax25Station, last: boolean, command: boolean): U
   return bytes;
 }
 
-function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Station; last: boolean; repeated: boolean } | undefined {
+/**
+ * APRS 1.0.1 chapter 10 destination. Six characters from the Mic-E alphabet.
+ * Digits, A–L, and P–Z. M, N, and O are not latitude digits. SSID is not used.
+ */
+export function isMicEDestination(call: string): boolean {
+  return /^[0-9A-LP-Z]{6}$/u.test(call);
+}
+
+function decodeAddress(
+  bytes: Uint8Array,
+  offset: number,
+  micE: boolean,
+): { station: Ax25Station; last: boolean; repeated: boolean } | undefined {
   if (offset + ADDRESS_BYTES > bytes.length) {
     return undefined;
   }
@@ -100,8 +112,9 @@ function decodeAddress(bytes: Uint8Array, offset: number): { station: Ax25Statio
     call: call.trim().toUpperCase(),
     ssid: (ssidByte >> 1) & 0x0f,
   };
+  const micEDestination = micE && station.ssid === 0 && isMicEDestination(station.call);
 
-  if (!canonicalAx25Call(formatAx25Call(station))) {
+  if (!canonicalAx25Call(formatAx25Call(station)) && !micEDestination) {
     return undefined;
   }
 
@@ -144,7 +157,7 @@ export function parseAx25Ui(frame: Uint8Array): Ax25UiFrame | undefined {
       return undefined;
     }
 
-    const decoded = decodeAddress(frame, offset);
+    const decoded = decodeAddress(frame, offset, addresses.length === 0);
 
     if (!decoded) {
       return undefined;
@@ -174,22 +187,27 @@ export function parseAx25Ui(frame: Uint8Array): Ax25UiFrame | undefined {
     infoEnd -= 1;
   }
 
-  const infoBytes = frame.subarray(offset + 2, infoEnd);
-  let info = '';
-
-  for (const byte of infoBytes) {
-    if (byte < 0x20 || byte > 0x7e) {
-      return undefined;
-    }
-
-    info += String.fromCharCode(byte);
-  }
-
   const destination = addresses[0];
   const source = addresses[1];
 
   if (!destination || !source) {
     return undefined;
+  }
+
+  // Mic-E longitude and speed bytes are binary values plus 28, so they span
+  // 0x1c–0x7f (APRS 1.0.1 ch. 10). Other UI frames stay printable ASCII.
+  const micEInfo = destination.ssid === 0 && isMicEDestination(destination.call);
+  const infoBytes = frame.subarray(offset + 2, infoEnd);
+  let info = '';
+
+  for (const byte of infoBytes) {
+    const allowed = micEInfo ? byte >= 0x1c && byte <= 0x7f : byte >= 0x20 && byte <= 0x7e;
+
+    if (!allowed) {
+      return undefined;
+    }
+
+    info += String.fromCharCode(byte);
   }
 
   delete destination.repeated;

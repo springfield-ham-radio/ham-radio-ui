@@ -603,7 +603,9 @@ describe('APRS host session', () => {
     expect(snap.trace[0]?.direction).toBe('note');
     expect(snap.trace.map((line) => line.text).join(' ')).toContain('cmd:');
     expect(snap.trace.map((line) => line.text).join(' ')).toContain('?EH');
-    expect(writes).toEqual([]);
+    expect(writes).toEqual([new TextEncoder().encode(APRS_KISS_ON_COMMAND)]);
+    expect(snap.commandPhase).toBe('rejected');
+    expect(snap.commandDetail).toMatch(/RESTART was not sent/);
 
     const partial = Uint8Array.from([0xc0, 0x00, 0x01]);
     dataListener?.(partial);
@@ -635,12 +637,12 @@ describe('APRS host session', () => {
     expect(recorded.endsWith(':')).toBe(true);
     expect(before.rxChunks).toBe(banner.length);
     expect(before.rxBytes).toBe(banner.length);
-    expect(before.commandPhase).toBe('prompt');
-    expect(before.commandDetail).toMatch(/No command was sent/);
-    expect(fake.writes).toEqual([]);
+    expect(before.commandPhase).toBe('waiting-accept');
+    expect(before.commandDetail).toMatch(/Entering host KISS|KISS ON written/);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
 
-    expect(await session.requestCommandPrompt()).toMatch(/Nothing was sent/);
-    expect(fake.writes).toEqual([]);
+    expect(await session.requestCommandPrompt()).toMatch(/Already waiting|Nothing was sent/);
+    expect(fake.writes).toHaveLength(1);
 
     await session.disconnect();
     await session.connect('/dev/cu.pg5g', async () => {
@@ -652,7 +654,8 @@ describe('APRS host session', () => {
     expect(session.snapshot().commandPhase).toBe('idle');
     await session.requestCommandPrompt();
     expect(session.snapshot().commandPhase).toBe('waiting-prompt');
-    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+    expect(fake.writes[1]).toEqual(APRS_COMMAND_INTERRUPT);
+    expect(fake.writes).toHaveLength(2);
   });
 
   it('keeps the 27-byte hardware slice intact and does not accept it as cmd:', async () => {
@@ -693,10 +696,10 @@ describe('APRS host session', () => {
 
     expect(new TextDecoder().decode(reply)).toBe(':HBAUD    was 1200\r\ncmd:');
     expect(session.snapshot().rxBytes).toBe(24);
-    expect(session.snapshot().commandPhase).toBe('prompt');
-    expect(session.snapshot().commandDetail).toMatch(/No command was sent/);
-    expect(await session.requestCommandPrompt()).toMatch(/Nothing was sent/);
-    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().commandPhase).toBe('waiting-accept');
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes.some((frame) => frame.includes(0x03))).toBe(false);
+    expect(await session.requestCommandPrompt()).toMatch(/Already waiting/);
 
     await session.disconnect();
     await session.connect('/dev/cu.pg5g', async () => {
@@ -705,7 +708,7 @@ describe('APRS host session', () => {
     });
     expect(session.snapshot().commandPhase).toBe('idle');
     expect(await session.enterHostKiss()).toMatch(/Nothing was sent/);
-    expect(fake.writes).toEqual([]);
+    expect(fake.writes).toHaveLength(1);
   });
 
   it('records hardware RTS/CTS on Listen and does not write', async () => {
@@ -735,12 +738,10 @@ describe('APRS host session', () => {
     expect(session.snapshot().rxBytes).toBe(28);
 
     fake.push(new TextEncoder().encode('HBAUD    was 1200\r\ncmd:'));
-    expect(session.snapshot().commandPhase).toBe('prompt');
-    const pending = session.enterHostKiss();
-    expect(session.snapshot().commandPhase).toBe('prompt');
+    expect(session.snapshot().commandPhase).toBe('waiting-accept');
     expect(session.snapshot().trace.some((line) => line.direction === 'tx-command')).toBe(false);
     release(8);
-    expect(await pending).toBeUndefined();
+    await settle();
     expect(session.snapshot().commandPhase).toBe('waiting-accept');
     expect(session.snapshot().commandDetail).toMatch(/Plugin accepted 8 bytes/);
     expect(session.snapshot().bytesWritten).toBe(8);
@@ -755,9 +756,9 @@ describe('APRS host session', () => {
     };
     await session.connect('/dev/cu.pg5g', async () => fake.port);
     fake.push(new TextEncoder().encode('cmd:'));
-    const reason = await session.enterHostKiss();
-    expect(reason).toMatch(/lock timeout/);
-    expect(reason).toMatch(/RESTART was not sent/);
+    await settle();
+    expect(session.snapshot().commandDetail).toMatch(/lock timeout/);
+    expect(session.snapshot().commandDetail).toMatch(/RESTART was not sent/);
     expect(session.snapshot().commandPhase).toBe('rejected');
     expect(session.snapshot().bytesWritten).toBe(0);
     expect(session.snapshot().trace.some((line) => line.direction === 'tx-command')).toBe(false);
@@ -802,8 +803,8 @@ describe('APRS host session', () => {
       }
 
       const snap = session.snapshot();
-      expect(snap.trace.filter((line) => line.direction === 'rx')).toHaveLength(APRS_TRACE_CAP);
-      expect(snap.traceDropped).toBe(6);
+      expect(snap.trace.filter((line) => line.direction === 'rx')).toHaveLength(APRS_TRACE_CAP - 1);
+      expect(snap.traceDropped).toBe(8);
       expect(snap.rxChunks).toBe(APRS_TRACE_CAP + 5);
       expect(snap.rxBytes).toBe(APRS_TRACE_CAP + 5);
     });
@@ -835,21 +836,161 @@ describe('APRS host session', () => {
         prompt: 'ok>',
         errorReply: 'ERR',
         waitMs: 5000,
+        listenMs: 3000,
         enter: [{ text: 'HOST\r', label: 'HOST' }],
       },
     });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
-    expect(await session.requestCommandPrompt()).toBeUndefined();
-    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
     fake.push(new TextEncoder().encode('ok>'));
     await settle();
-    expect(await session.enterHostKiss()).toBeUndefined();
-    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe('HOST\r');
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe('HOST\r');
     const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
     expect(written).not.toContain('KISS ON');
     expect(written).not.toContain('RESTART');
     expect(session.snapshot().commandPhase).toBe('restart-sent');
     expect(session.snapshot().kissConfirmed).toBe(false);
+  });
+});
+
+describe('host Connect detection', () => {
+  function moduleLink(kissExit?: Uint8Array) {
+    return {
+      interrupt: Uint8Array.of(0x15),
+      prompt: 'ok>',
+      errorReply: 'ERR',
+      waitMs: 1000,
+      listenMs: 3000,
+      kissExit,
+      enter: [
+        { text: 'HOST\r', label: 'HOST' },
+        { text: 'GO\r', label: 'GO' },
+      ],
+    };
+  }
+
+  function kissUi(): Uint8Array {
+    const heard = canonicalAx25Call('N0HRD');
+    const ax25 = heard ? encodeAx25Ui(heard, '>Heard') : undefined;
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    return encodeKissData(ax25);
+  }
+
+  it('stops on a KISS frame and writes nothing', async () => {
+    let time = 1_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(kissUi());
+    await settle();
+    time += 20_000;
+    session.poll();
+    await settle();
+
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toBe('AX.25 UI seen.');
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().trace.some((line) => line.note.includes('AX.25 UI seen.'))).toBe(true);
+  });
+
+  it('enters from the prompt once, then waits for traffic', async () => {
+    const session = createAprsHostSession({ host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('TNC\r\nok>'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe('HOST\r');
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe('GO\r');
+    expect(fake.writes).toHaveLength(2);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('KISS on, waiting for traffic');
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().trace.some((line) => line.direction === 'tx-command' && line.note.includes('HOST'))).toBe(true);
+  });
+
+  it('writes the interrupt once on silence and stops when kissExit is absent', async () => {
+    let time = 5_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 2_999;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+    time += 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toContain('not answering');
+    expect(session.snapshot().detectDetail).toContain('PACKET mode');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).not.toContain('HOST');
+    expect(written).not.toContain('\r');
+  });
+
+  it('sends a declared kissExit once after silence, then the enter steps', async () => {
+    let time = 5_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({ now: () => time, host: moduleLink(exit) });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes[1]).toEqual(exit);
+    expect(fake.writes).toHaveLength(2);
+
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    fake.push(new TextEncoder().encode('ok>'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe('HOST\r');
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe('GO\r');
+    expect(fake.writes).toHaveLength(4);
+    expect(session.snapshot().detectDetail).toContain('waiting for traffic');
+  });
+
+  it('does not write when the radio has no host procedure, even after the listen window', async () => {
+    let time = 1_000;
+    const session = createAprsHostSession({ now: () => time });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 30_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.retryDetection()).toMatch(/no host command/);
+  });
+
+  it('classifies the captured Mic-E frame as AX.25 UI', async () => {
+    const payload = hexBytes(
+      '66 a0 a6 b0 64 b0 60 96 92 6a 8a a6 ac e1 03 f0 60 7d 42 6a 6f 48 68 6a 2f 60 22 36 40 7d 4a 65 65 70 69 6e 67 20 64 6f 77 6e 20 74 68 65 20 72 6f 61 64 5f 25 0d',
+    );
+    const session = createAprsHostSession({ host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(encodeKissData(payload));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().frames).toBe(1);
+    expect(session.snapshot().trace.some((line) => line.note.includes('AX.25 UI'))).toBe(true);
+    expect(fake.writes).toEqual([]);
   });
 });

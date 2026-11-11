@@ -20,6 +20,7 @@ export function d710AprsHostLink(): AprsHostLink {
     prompt: 'cmd:',
     errorReply: '?EH',
     waitMs: 5000,
+    listenMs: 3000,
     enter: [
       { text: APRS_KISS_ON_COMMAND, label: 'KISS ON' },
       { text: APRS_RESTART_COMMAND, label: 'RESTART' },

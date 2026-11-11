@@ -6,21 +6,15 @@ import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX, ca
 const props = defineProps<{
   cardId?: string;
   mine: string;
-  hostSetup?: readonly string[];
-  hostRecovery?: readonly string[];
 }>();
 
 const route = useRoute();
 const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
-const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
 const host = useAprsHost();
-const { send, cancel, requestCommandPrompt, cancelCommand, enterHostKiss } = host;
+const { send, cancel } = host;
 const snapshot = computed(() => (props.cardId ? host.snapshots.value[props.cardId] : undefined));
-const hostOpen = computed(() => snapshot.value?.connected === true);
 
 const text = ref('');
-const enterNote = ref<string | undefined>();
-const commandNote = ref<string | undefined>();
 const selectedCall = ref<string | undefined>();
 const showChat = ref(false);
 const drafting = ref(false);
@@ -112,47 +106,6 @@ function onOpenDraft(): void {
 function onBack(): void {
   showChat.value = false;
   selectedCall.value = undefined;
-}
-
-const kissStatus = computed(() => {
-  if (traceFixture.value) {
-    return 'Fixture. KISS unconfirmed. These lines were not read from a radio.';
-  }
-
-  if (snapshot.value?.kissConfirmed) {
-    return 'AX.25 UI seen. Send can write a message. Automatic acknowledgement is separate.';
-  }
-
-  if (snapshot.value?.hostEnterRequested || enterNote.value) {
-    return 'Command written. KISS unconfirmed. No message was sent, and the command is not repeated.';
-  }
-
-  return 'KISS unconfirmed. Send does not write until an AX.25 UI frame is parsed.';
-});
-
-async function onRequestPrompt(): Promise<void> {
-  if (!props.cardId) {
-    return;
-  }
-
-  commandNote.value = (await requestCommandPrompt(props.cardId)) ?? 'Ctrl+C written. Waiting for cmd:.';
-}
-
-function onCancelCommand(): void {
-  if (!props.cardId) {
-    return;
-  }
-
-  cancelCommand(props.cardId);
-  commandNote.value = 'Cancelled.';
-}
-
-async function onEnterHost(): Promise<void> {
-  if (!props.cardId) {
-    return;
-  }
-
-  enterNote.value = (await enterHostKiss(props.cardId)) ?? 'Command written. KISS unconfirmed. No message was sent.';
 }
 
 async function onSend(): Promise<void> {
@@ -278,62 +231,5 @@ function onCancel(key: string): void {
         </div>
       </div>
     </div>
-
-    <UCollapsible v-if="hostSetup && hostSetup.length > 0" :unmount-on-hide="false" class="shrink-0 rounded-md border border-default px-3 py-2">
-      <UButton color="neutral" variant="ghost" label="Host KISS" trailing-icon="i-lucide-chevron-down" />
-      <template #content>
-        <p class="mb-2 text-xs text-muted">
-          Connect does not enter KISS. These buttons write only after you click them, and only on an open host session.
-          {{ kissStatus }}
-          <template v-if="hostOpen"> Bytes written {{ snapshot?.bytesWritten ?? 0 }}.</template>
-        </p>
-        <div class="mb-2 flex flex-wrap gap-1.5">
-          <UButton
-            size="sm"
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-terminal"
-            label="Request command prompt"
-            :disabled="!cardId || !hostOpen || snapshot?.commandPhase === 'prompt'"
-            @click="onRequestPrompt"
-          />
-          <UButton
-            size="sm"
-            color="neutral"
-            variant="ghost"
-            label="Cancel command"
-            :disabled="!cardId || (snapshot?.commandPhase !== 'waiting-prompt' && snapshot?.commandPhase !== 'waiting-accept')"
-            @click="onCancelCommand"
-          />
-          <UButton
-            size="sm"
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-arrow-right-left"
-            label="Enter host KISS"
-            :disabled="!cardId || snapshot?.commandPhase !== 'prompt'"
-            @click="onEnterHost"
-          />
-        </div>
-        <p class="mb-2 text-xs text-muted">{{ snapshot?.commandDetail ?? 'No command requested.' }}</p>
-        <p v-if="commandNote" class="mb-2 text-xs text-muted">{{ commandNote }}</p>
-        <p v-if="enterNote || snapshot?.hostEnterRequested" class="mb-2 text-xs text-muted">
-          {{ snapshot?.kissConfirmed ? 'AX.25 UI seen.' : (enterNote ?? 'Command written. KISS unconfirmed. No message was sent.') }}
-        </p>
-        <UCollapsible :unmount-on-hide="false">
-          <UButton color="neutral" variant="ghost" size="xs" label="How KISS enter and exit work" trailing-icon="i-lucide-chevron-down" />
-          <template #content>
-            <div class="grid gap-3 py-2 md:grid-cols-2">
-              <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
-                <li v-for="step in hostSetup" :key="step">{{ step }}</li>
-              </ol>
-              <ol class="list-decimal space-y-1 pl-5 text-xs text-muted">
-                <li v-for="step in hostRecovery" :key="step">{{ step }}</li>
-              </ol>
-            </div>
-          </template>
-        </UCollapsible>
-      </template>
-    </UCollapsible>
   </div>
 </template>

@@ -161,8 +161,16 @@ const statusLine = computed(() => {
   }
 
   const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
+  const detection = kissListening.value && hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
 
-  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}`;
+  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}${detection}`;
+});
+
+const detectFailure = computed(() => {
+  const detail = hostSnapshot.value?.detectDetail ?? '';
+  const setup = profile.value?.host?.setup ?? [];
+  const recovery = profile.value?.host?.recovery ?? [];
+  return [detail, ...setup, ...recovery].filter((line) => line.length > 0).join(' ');
 });
 
 const weather = computed(() => (selected.value?.weather ? aprsWeatherLines(selected.value.weather.value) : []));
@@ -318,6 +326,14 @@ function selectStation(callsign: string | undefined): void {
   aprsMap.value?.focus(callsign);
 }
 
+function onRetryDetection(): void {
+  if (!props.cardId) {
+    return;
+  }
+
+  host.retryDetection(props.cardId);
+}
+
 async function onCopyTrace(): Promise<void> {
   const body = traceText.value;
 
@@ -392,15 +408,26 @@ function onClear(): void {
           :disabled="!cardId || !aprsPort"
           @click="onConnect"
         />
-        <UButton
-          v-else
-          color="neutral"
-          variant="outline"
-          size="sm"
-          icon="i-lucide-unplug"
-          label="Disconnect"
-          @click="onDisconnect"
-        />
+        <template v-else>
+          <UButton
+            v-if="kissListening"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            icon="i-lucide-search"
+            label="Retry detection"
+            :disabled="hostSnapshot?.detectPhase === 'listening' || hostSnapshot?.detectPhase === 'awaiting-prompt' || hostSnapshot?.detectPhase === 'entering'"
+            @click="onRetryDetection"
+          />
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="sm"
+            icon="i-lucide-unplug"
+            label="Disconnect"
+            @click="onDisconnect"
+          />
+        </template>
       </div>
     </div>
 
@@ -423,6 +450,16 @@ function onClear(): void {
       icon="i-lucide-map"
       title="Example packets"
       :description="`These stations are sample monitor lines for the map layout, not a live radio. ${profile?.monitorNote ?? ''}`"
+      class="mb-2 shrink-0"
+    />
+
+    <UAlert
+      v-if="hostSnapshot?.detectPhase === 'failed'"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-radio"
+      title="The TNC is not answering"
+      :description="detectFailure"
       class="mb-2 shrink-0"
     />
 
@@ -509,7 +546,7 @@ function onClear(): void {
       </template>
 
       <template #messages>
-        <AprsMessages :card-id="cardId" :mine="mine" :host-setup="profile?.host?.setup" :host-recovery="profile?.host?.recovery" />
+        <AprsMessages :card-id="cardId" :mine="mine" />
       </template>
 
       <template #packet>
@@ -610,7 +647,7 @@ function onClear(): void {
             <template v-else>No Listen is open. Decoded lines below are from this page. Neither log writes to the radio.</template>
             <template v-if="(hostSnapshot?.traceDropped ?? 0) > 0"> Oldest serial lines dropped: {{ hostSnapshot?.traceDropped }}. The counters still include them.</template>
           </p>
-          <p class="text-xs text-muted">{{ hostSnapshot?.commandDetail ?? 'No command requested.' }} Clear serial reply removes these lines and keeps the counters. It does not disconnect or write.</p>
+          <p class="text-xs text-muted">{{ hostSnapshot?.detectDetail || hostSnapshot?.commandDetail || 'No command requested.' }} Clear serial reply removes these lines and keeps the counters. It does not disconnect or write.</p>
           <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap font-mono text-xs text-highlighted">{{ traceText || 'No serial bytes yet.' }}</pre>
         </section>
         <div class="flex shrink-0 items-center justify-between gap-2">

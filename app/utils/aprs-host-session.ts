@@ -21,6 +21,12 @@ import {
 
 const INBOX_CAP = 200;
 const OUTBOX_CAP = 50;
+const DETECT_TRAFFIC = 'KISS on, waiting for traffic.';
+const DETECT_UI = 'AX.25 UI seen.';
+const DETECT_SILENCE = 'The TNC is not answering. The radio may not be in PACKET mode. Nothing more was written.';
+
+type DetectPhase = AprsHostSnapshot['detectPhase'];
+type DetectStep = 'listen' | 'after-text' | 'after-interrupt' | 'after-exit';
 
 export interface AprsHostBytePort extends AprsBytePort {
   /** A number is the plugin's accepted count. Void is a test double that already queued the bytes. */
@@ -72,6 +78,9 @@ export interface AprsHostSnapshot {
    */
   commandPhase: 'idle' | 'waiting-prompt' | 'prompt' | 'timed-out' | 'cancelled' | 'waiting-accept' | 'restart-sent' | 'rejected' | 'kiss-framed';
   commandDetail: string;
+  /** Connect detection. Idle until a host link is open. */
+  detectPhase: 'idle' | 'listening' | 'awaiting-prompt' | 'entering' | 'waiting-traffic' | 'failed';
+  detectDetail: string;
   hostFlow: AprsHostFlowControl;
   trace: AprsTraceLine[];
   traceDropped: number;
@@ -91,8 +100,10 @@ export interface AprsHostSession {
   requestCommandPrompt(): Promise<string | undefined>;
   /** Stops a wait. Does not write. */
   cancelCommand(): void;
-  /** Check the command timeout against now(). */
+  /** Check a detection or command timeout against now(). */
   poll(): void;
+  /** Run Connect detection again. Listens first and does not loop. */
+  retryDetection(): string | undefined;
   /** Writes the module's enter steps, each only after a fresh prompt on this connection. */
   enterHostKiss(): Promise<string | undefined>;
   clearTrace(): void;
@@ -118,10 +129,12 @@ interface Waiting {
 /**
  * Host KISS listener.
  *
- * Connect, disconnect, and an open composer do not write. Send is the only
- * way a message frame is written. A message or retry is written only after
- * this connection has parsed an AX.25 UI frame. A KISS frame that does not
- * parse does not count. Cancel, Disconnect, and the module's prompt stop retries.
+ * Connect on a host link runs detection once: listen, then at most one
+ * prompt request, the enter steps, and an optional kissExit. It does not
+ * send a beacon, a message, or KISS OFF. Send is the only way a message
+ * frame is written. A message or retry is written only after this connection
+ * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
+ * count. Cancel, Disconnect, and the module's prompt stop retries.
  * Automatic ack is separate, off until set, and applies only to a later
  * message addressed to the current callsign. Disconnect cancels waiting
  * messages and does not send an exit command. A later connect does not send
@@ -166,6 +179,18 @@ export function createAprsHostSession(options?: {
   let commandTextAtConfirm = 0;
   let commandPhase: AprsHostSnapshot['commandPhase'] = 'idle';
   let commandDetail = 'No command requested.';
+  let detectPhase: DetectPhase = 'idle';
+  let detectStep: DetectStep = 'listen';
+  let detectDetail = '';
+  let detectDeadline = Number.POSITIVE_INFINITY;
+  let detectRx = 0;
+  let sawText = false;
+  let sawOther = false;
+  let interruptTried = false;
+  let exitTried = false;
+  let detectBusy = false;
+  let enterInFlight = false;
+  let detectTimer: ReturnType<typeof setInterval> | undefined;
   let commandBytes = new Uint8Array();
   let sessionBytes = new Uint8Array();
   let commandDeadline = 0;
@@ -250,8 +275,232 @@ export function createAprsHostSession(options?: {
     return hostLink !== undefined && hasCommandPrompt(bytes, hostLink.prompt);
   }
 
+  function detectionOwnsWait(): boolean {
+    return detectPhase === 'listening' || detectPhase === 'awaiting-prompt' || detectPhase === 'entering';
+  }
+
+  function clearDetectClock(): void {
+    if (detectTimer) {
+      clearInterval(detectTimer);
+      detectTimer = undefined;
+    }
+  }
+
+  function armDetectClock(): void {
+    if (!options?.useRetryClock || detectTimer) {
+      return;
+    }
+
+    detectTimer = setInterval(() => {
+      void expireDetect();
+    }, 250);
+  }
+
+  function failDetect(detail: string): void {
+    commandActive = false;
+    detectPhase = 'failed';
+    detectDetail = detail;
+    detectDeadline = Number.POSITIVE_INFINITY;
+    clearDetectClock();
+    record('note', new Uint8Array(), detail);
+    publish();
+  }
+
+  function finishKissTraffic(): void {
+    if (!detectionOwnsWait()) {
+      return;
+    }
+
+    commandActive = false;
+    detectPhase = 'waiting-traffic';
+    detectDetail = kissConfirmed ? DETECT_UI : DETECT_TRAFFIC;
+    detectDeadline = Number.POSITIVE_INFINITY;
+    clearDetectClock();
+    record('note', new Uint8Array(), detectDetail);
+  }
+
+  function beginDetect(): void {
+    if (!hostLink || !port?.isOpen) {
+      return;
+    }
+
+    commandActive = false;
+    enterIndex = 0;
+    interruptTried = false;
+    exitTried = false;
+    sawText = false;
+    sawOther = false;
+    detectRx = rxBytes;
+    detectStep = 'listen';
+    detectPhase = 'listening';
+    detectDeadline = now() + hostLink.listenMs;
+    detectDetail = 'Listening for a KISS frame or command text.';
+    record('note', new Uint8Array(), detectDetail);
+    armDetectClock();
+  }
+
+  function noteDetectBytes(ignored: Uint8Array): void {
+    if ((detectPhase !== 'listening' && detectPhase !== 'awaiting-prompt') || !hostLink) {
+      return;
+    }
+
+    for (const byte of ignored) {
+      const text = byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e);
+
+      if (text) {
+        sawText = true;
+      } else {
+        sawOther = true;
+      }
+    }
+
+    if (detectPhase === 'listening' && sawText) {
+      detectPhase = 'awaiting-prompt';
+      detectStep = 'after-text';
+      detectDeadline = now() + hostLink.waitMs;
+      detectDetail = `Command text seen. Waiting for ${hostLink.prompt}.`;
+      record('note', new Uint8Array(), detectDetail);
+    }
+  }
+
+  function maybeStartEnter(): void {
+    if (detectPhase !== 'awaiting-prompt' || !promptSeen(sessionBytes) || enterInFlight) {
+      return;
+    }
+
+    detectPhase = 'entering';
+    enterIndex = 0;
+    detectDeadline = Number.POSITIVE_INFINITY;
+    void writeEnterStep();
+  }
+
+  async function writeDetectInterrupt(): Promise<void> {
+    if (interruptTried || !hostLink) {
+      return;
+    }
+
+    interruptTried = true;
+    const wrote = await writeBytes(hostLink.interrupt);
+
+    if (!wrote.ok) {
+      failDetect(`The prompt request was not accepted. ${wrote.reason} Nothing else was sent.`);
+      return;
+    }
+
+    detectPhase = 'awaiting-prompt';
+    detectStep = 'after-interrupt';
+    commandBytes = new Uint8Array();
+    commandActive = true;
+    commandPhase = 'waiting-prompt';
+    detectDeadline = now() + hostLink.waitMs;
+    commandDeadline = detectDeadline;
+    commandDetail = `Prompt request written once. ${acceptanceNote(wrote)}Waiting for ${hostLink.prompt}.`;
+    detectDetail = commandDetail;
+    record('tx-command', hostLink.interrupt, commandDetail);
+    publish();
+  }
+
+  async function writeDetectExit(): Promise<void> {
+    const exit = hostLink?.kissExit;
+
+    if (exitTried || !hostLink || !exit) {
+      failDetect(DETECT_SILENCE);
+      return;
+    }
+
+    exitTried = true;
+    const wrote = await writeBytes(exit);
+
+    if (!wrote.ok) {
+      failDetect(`The KISS exit was not accepted. ${wrote.reason} Nothing else was sent.`);
+      return;
+    }
+
+    detectPhase = 'awaiting-prompt';
+    detectStep = 'after-exit';
+    commandBytes = new Uint8Array();
+    commandActive = true;
+    commandPhase = 'waiting-prompt';
+    detectDeadline = now() + hostLink.waitMs;
+    commandDeadline = detectDeadline;
+    commandDetail = `KISS exit written once. ${acceptanceNote(wrote)}Waiting for ${hostLink.prompt}.`;
+    detectDetail = commandDetail;
+    record('tx-command', exit, commandDetail);
+    publish();
+  }
+
+  async function expireDetect(): Promise<void> {
+    if (detectBusy || !hostLink || !port?.isOpen || !detectionOwnsWait()) {
+      return;
+    }
+
+    if (detectPhase === 'entering') {
+      if (!commandActive || now() < commandDeadline) {
+        return;
+      }
+
+      detectBusy = true;
+      commandActive = false;
+      const waitingForAccept = commandPhase === 'waiting-accept';
+      const previous = hostLink.enter[enterIndex - 1]?.label;
+      const following = hostLink.enter[enterIndex]?.label;
+      commandPhase = 'timed-out';
+      commandDetail = waitingForAccept && previous && following
+        ? `No ${hostLink.prompt} after ${previous}. ${following} was not sent.`
+        : `No ${hostLink.prompt} prompt. The request was not repeated, and no carriage return was sent.`;
+      detectPhase = 'failed';
+      detectDetail = commandDetail;
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+      record('note', new Uint8Array(), commandDetail);
+      publish();
+      detectBusy = false;
+      return;
+    }
+
+    if (now() < detectDeadline) {
+      return;
+    }
+
+    detectBusy = true;
+    detectDeadline = Number.POSITIVE_INFINITY;
+
+    try {
+      if (detectPhase === 'listening') {
+        if (sawText) {
+          failDetect(`Command text arrived but ${hostLink.prompt} did not. Nothing more was written.`);
+          return;
+        }
+
+        if (sawOther || incompleteBytes > 0 || rxBytes !== detectRx) {
+          failDetect(incompleteBytes > 0
+            ? 'An incomplete KISS frame was still open. Nothing more was written.'
+            : 'Bytes arrived that are not a KISS frame or command text. Nothing more was written.');
+          return;
+        }
+
+        await writeDetectInterrupt();
+        return;
+      }
+
+      if (detectStep === 'after-interrupt' && commandBytes.length === 0 && hostLink.kissExit && !exitTried) {
+        await writeDetectExit();
+        return;
+      }
+
+      if (detectStep === 'after-text' || sawText) {
+        failDetect(`Command text arrived but ${hostLink.prompt} did not. Nothing more was written.`);
+        return;
+      }
+
+      failDetect(DETECT_SILENCE);
+    } finally {
+      detectBusy = false;
+    }
+  }
+
   function expireCommand(): void {
-    if (!commandActive || now() < commandDeadline || !hostLink) {
+    if (detectionOwnsWait() || !commandActive || now() < commandDeadline || !hostLink) {
       return;
     }
 
@@ -302,9 +551,12 @@ export function createAprsHostSession(options?: {
     }
 
     commandPhase = 'prompt';
-    commandDetail = afterInterrupt
-      ? `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`
-      : `${hostLink.prompt} arrived on this connection. No command was sent.`;
+    const entering = detectPhase === 'awaiting-prompt' || detectPhase === 'listening';
+    commandDetail = entering
+      ? `${hostLink.prompt} arrived. Entering host KISS.`
+      : afterInterrupt
+        ? `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`
+        : `${hostLink.prompt} arrived on this connection. No command was sent.`;
     record('note', new Uint8Array(), commandDetail);
   }
 
@@ -349,6 +601,10 @@ export function createAprsHostSession(options?: {
     }
 
     if (commandPhase === 'waiting-accept') {
+      if (enterInFlight) {
+        return;
+      }
+
       commandActive = false;
       void writeEnterStep();
     }
@@ -357,19 +613,45 @@ export function createAprsHostSession(options?: {
   async function writeEnterStep(): Promise<string | undefined> {
     const step = hostLink?.enter[enterIndex];
 
+    if (enterInFlight) {
+      return 'Already waiting. Nothing more was sent.';
+    }
+
     if (!hostLink || !step) {
       return 'This radio has no host command procedure. Nothing was sent.';
     }
 
+    const automatic = detectPhase === 'entering';
+    enterInFlight = true;
     const bytes = new TextEncoder().encode(step.text);
-    const wrote = await writeBytes(bytes);
     const following = hostLink.enter[enterIndex + 1];
 
+    if (following) {
+      enterIndex += 1;
+      commandBytes = new Uint8Array();
+      commandActive = true;
+      commandDeadline = now() + hostLink.waitMs;
+      commandPhase = 'waiting-accept';
+    }
+
+    const wrote = await writeBytes(bytes);
+    enterInFlight = false;
+
+    if (automatic && detectPhase !== 'entering') {
+      return undefined;
+    }
+
     if (!wrote.ok) {
+      commandActive = false;
       commandPhase = 'rejected';
       commandDetail = following
         ? `${step.label} was not accepted. ${wrote.reason} ${following.label} was not sent.`
         : `${step.label} was not written. ${wrote.reason}`;
+      if (automatic) {
+        detectPhase = 'failed';
+        detectDetail = commandDetail;
+        clearDetectClock();
+      }
       record('note', new Uint8Array(), commandDetail);
       publish();
       return commandDetail;
@@ -379,16 +661,36 @@ export function createAprsHostSession(options?: {
       commandPhase = 'restart-sent';
       hostEnterRequested = true;
       commandDetail = `${step.label} written once after ${hostLink.prompt}. ${acceptanceNote(wrote)}KISS unconfirmed. This is not repeated.`;
+      if (automatic) {
+        detectPhase = 'waiting-traffic';
+        detectDetail = DETECT_TRAFFIC;
+        detectDeadline = Number.POSITIVE_INFINITY;
+        clearDetectClock();
+        commandDetail = `${commandDetail} ${DETECT_TRAFFIC}`;
+      }
       record('tx-command', bytes, commandDetail);
       publish();
       return undefined;
     }
 
-    enterIndex += 1;
-    armCommandWait();
-    commandPhase = 'waiting-accept';
     commandDetail = `${step.label} written once. ${acceptanceNote(wrote)}Waiting for another ${hostLink.prompt} before ${following.label}.`;
     record('tx-command', bytes, commandDetail);
+
+    if (hostLink.errorReply && hasTncError(commandBytes, hostLink.errorReply) && !promptSeen(commandBytes)) {
+      commandActive = false;
+      commandPhase = 'rejected';
+      commandDetail = `The TNC answered ${hostLink.errorReply}. ${following.label} was not sent.`;
+      if (automatic) {
+        detectPhase = 'failed';
+        detectDetail = commandDetail;
+        clearDetectClock();
+      }
+      record('note', new Uint8Array(), commandDetail);
+    } else if (promptSeen(commandBytes)) {
+      commandActive = false;
+      void writeEnterStep();
+    }
+
     publish();
     return undefined;
   }
@@ -574,6 +876,12 @@ export function createAprsHostSession(options?: {
       options?.onAx25Ui?.(payload);
     }
 
+    if (decoded.frames.length > 0 && detectionOwnsWait()) {
+      finishKissTraffic();
+    } else if (decoded.ignoredBytes.length > 0) {
+      noteDetectBytes(decoded.ignoredBytes);
+    }
+
     if (decoded.ignoredBytes.length > 0) {
       commandText = appendCommandBytes(commandText, decoded.ignoredBytes);
     }
@@ -594,6 +902,19 @@ export function createAprsHostSession(options?: {
     if (commandActive) {
       commandBytes = appendCommandBytes(commandBytes, chunk);
       considerCommandReply(decoded.frames.length);
+    }
+
+    maybeStartEnter();
+
+    if (detectPhase === 'entering' && commandPhase === 'rejected') {
+      detectPhase = 'failed';
+      detectDetail = commandDetail;
+      clearDetectClock();
+    }
+
+    if (kissConfirmed && detectPhase === 'waiting-traffic' && detectDetail === DETECT_TRAFFIC) {
+      detectDetail = DETECT_UI;
+      record('note', new Uint8Array(), DETECT_UI);
     }
 
     void (async () => {
@@ -636,6 +957,8 @@ export function createAprsHostSession(options?: {
         kissConfirmed,
         commandPhase,
         commandDetail,
+        detectPhase,
+        detectDetail,
         hostFlow,
         trace: trace.map((line) => ({ ...line })),
         traceDropped,
@@ -679,6 +1002,7 @@ export function createAprsHostSession(options?: {
         record('note', new Uint8Array(), hostListenNote(hostFlow));
         opened.on('data', onData);
         opened.on('error', onError);
+        beginDetect();
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'The APRS port did not open';
         port = undefined;
@@ -710,6 +1034,10 @@ export function createAprsHostSession(options?: {
         clearInterval(commandTimer);
         commandTimer = undefined;
       }
+      clearDetectClock();
+      detectPhase = 'idle';
+      detectDetail = '';
+      detectDeadline = Number.POSITIVE_INFINITY;
       if (commandPhase !== 'idle') {
         commandPhase = 'idle';
         commandDetail = 'Disconnected. A cmd: prompt from this connection is not kept.';
@@ -773,8 +1101,14 @@ export function createAprsHostSession(options?: {
         return `${hostLink.prompt} is already on this connection. Nothing was sent.`;
       }
 
-      if (commandActive) {
+      if (commandActive || enterInFlight || detectPhase === 'entering') {
         return 'Already waiting. Nothing more was sent.';
+      }
+
+      if (detectPhase === 'listening' || detectPhase === 'awaiting-prompt') {
+        detectPhase = 'idle';
+        detectDeadline = Number.POSITIVE_INFINITY;
+        clearDetectClock();
       }
 
       const wrote = await writeBytes(hostLink.interrupt);
@@ -791,18 +1125,43 @@ export function createAprsHostSession(options?: {
       return undefined;
     },
     cancelCommand() {
-      if (!commandActive) {
+      if (!commandActive && !detectionOwnsWait()) {
         return;
       }
 
       commandActive = false;
       commandPhase = 'cancelled';
       commandDetail = 'Cancelled. No further command bytes will be written for this request.';
+      detectPhase = 'failed';
+      detectDetail = commandDetail;
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
       record('note', new Uint8Array(), commandDetail);
       publish();
     },
     poll() {
-      expireCommand();
+      const owned = detectionOwnsWait();
+      void expireDetect();
+      if (!owned) {
+        expireCommand();
+      }
+    },
+    retryDetection() {
+      if (!port?.isOpen) {
+        return 'Listen is not open. Nothing was sent.';
+      }
+
+      if (!hostLink) {
+        return 'This radio has no host command procedure. Nothing was sent.';
+      }
+
+      if (detectionOwnsWait() || commandActive || enterInFlight) {
+        return 'Detection is already running. Nothing more was sent.';
+      }
+
+      beginDetect();
+      publish();
+      return undefined;
     },
     async enterHostKiss() {
       if (!port?.isOpen || !port.write) {
@@ -910,6 +1269,7 @@ export function createAprsHostSession(options?: {
     },
     async advance(ms) {
       clock += ms;
+      await expireDetect();
 
       for (const item of [...waiting.values()]) {
         if (!waiting.has(item.key) || clock - item.lastAttemptAt < APRS_MESSAGE_RETRY_MS) {

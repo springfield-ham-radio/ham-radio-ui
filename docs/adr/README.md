@@ -24,6 +24,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0014](./0014-aprs-receive.md) | accepted | Receive-only APRS on the TM-D710 COM port |
 | [0015](./0015-aprs-host-messaging.md) | accepted | Opt-in host messaging, with transmit left off |
 | [0016](./0016-aprs-driver-profile.md) | accepted | APRS host commands come from the radio module |
+| [0017](./0017-aprs-host-detect.md) | accepted | Host Connect detects KISS or command mode |
 
 Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 

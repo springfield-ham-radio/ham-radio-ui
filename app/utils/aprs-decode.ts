@@ -436,11 +436,22 @@ function decodeMicETail(tail: string): { comment?: string; altitude?: string } {
     const meters = base91(comment.slice(0, 3)) - 10_000;
     return {
       altitude: formatMeters(meters),
-      comment: emptyToUndefined(comment.slice(4)),
+      comment: emptyToUndefined(stripRadioStatus(comment.slice(4))),
     };
   }
 
-  return { comment: emptyToUndefined(tail) };
+  return { comment: emptyToUndefined(stripRadioStatus(comment)) };
+}
+
+/** Kenwood-style status suffix: underscore plus one status byte after the comment. */
+function stripRadioStatus(comment: string): string {
+  const last = comment.charCodeAt(comment.length - 1);
+
+  if (comment.length >= 2 && comment.at(-2) === '_' && last >= 0x20 && last <= 0x7e) {
+    return comment.slice(0, -2);
+  }
+
+  return comment;
 }
 
 interface ParsedPositionBody {
