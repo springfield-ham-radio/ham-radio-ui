@@ -151,9 +151,11 @@ interface Waiting {
  * not left in an open frame. A later prompt starts that detection pass again.
  * Detection state is set before the data listener is attached, so bytes
  * already in the open buffer are not wiped and then counted as silence.
- * A prompt in that buffer still runs the enter steps. Unframed leftover
- * bytes (no FEND) are not command text and not silence: the pass stops at
- * waiting for traffic and nothing is written. Monitor text
+ * A prompt in that buffer still runs the enter steps. An unframed leftover
+ * is KISS only when it is a 0x00 command plus an AX.25 address field or a
+ * decodable frame. A stray ESC or FEND in monitor text is not that. If
+ * cmd: or the Kenwood banner arrives before a decoded KISS data frame,
+ * the enter steps run. Monitor text
  * with no prompt writes the module interrupt once. If command text keeps
  * arriving and the module declares promptNudge, those bytes are written
  * once. The enter steps run only after a fresh prompt. An echo of the last
@@ -449,22 +451,72 @@ export function createAprsHostSession(options?: {
     return byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e);
   }
 
+  function plausibleAx25Address(bytes: Uint8Array, offset: number): boolean {
+    if (offset + 7 > bytes.length) {
+      return false;
+    }
+
+    let call = '';
+
+    for (let index = 0; index < 6; index += 1) {
+      const shifted = bytes[offset + index] ?? 0;
+
+      if ((shifted & 0x01) !== 0) {
+        return false;
+      }
+
+      call += String.fromCharCode((shifted >> 1) & 0x7f);
+    }
+
+    const ssidByte = bytes[offset + 6] ?? 0;
+
+    if ((ssidByte & 0x60) !== 0x60) {
+      return false;
+    }
+
+    const station = { call: call.trim().toUpperCase(), ssid: (ssidByte >> 1) & 0x0f };
+    return canonicalAx25Call(formatAx25Call(station)) !== undefined;
+  }
+
+  /** 0x00 plus a UI frame, or 0x00 plus destination and source address fields. */
+  function plausibleKissPayload(payload: Uint8Array): boolean {
+    if (parseAx25Ui(payload)) {
+      return true;
+    }
+
+    return plausibleAx25Address(payload, 0) && plausibleAx25Address(payload, 7);
+  }
+
+  function bytesLookLikeKissData(bytes: Uint8Array): boolean {
+    for (let index = 0; index < bytes.length; index += 1) {
+      if (bytes[index] !== 0x00) {
+        continue;
+      }
+
+      if (plausibleKissPayload(bytes.subarray(index + 1))) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Bytes already sitting in the adapter when the listener attaches.
    *
-   * A KISS payload with no FEND is not command text. Treating it as silence
-   * writes the interrupt and kissExit and takes a TNC out of KISS.
+   * Only a KISS data command followed by an AX.25 address field counts.
+   * Monitor text with ESC or a trailing FEND does not.
    */
-  function unframedOpenBuffer(ignored: Uint8Array, holding: number, dataFrames: number): boolean {
+  function unframedOpenBuffer(ignored: Uint8Array, dataFrames: number): boolean {
     if (!openingBuffer || dataFrames > 0) {
       return false;
     }
 
-    if (holding > 0) {
+    if (bytesLookLikeKissData(ignored)) {
       return true;
     }
 
-    return ignored.some((byte) => !isDetectTextByte(byte));
+    return kiss.pending.length > 0 && kiss.pending[0] === 0x00 && bytesLookLikeKissData(Uint8Array.from(kiss.pending));
   }
 
   function noteUnframedOpen(): void {
@@ -506,6 +558,43 @@ export function createAprsHostSession(options?: {
       detectDetail = `Command text seen. Waiting for ${hostLink.prompt}.`;
       record('note', new Uint8Array(), detectDetail);
     }
+  }
+
+  /**
+   * Command mode after a KISS guess, or while KISS is still unconfirmed.
+   *
+   * A decoded KISS data frame is the only confirmation. cmd: or the Kenwood
+   * banner before that runs the same enter steps as a prompt in the open buffer.
+   */
+  function resumeUnconfirmedCommand(): void {
+    if (!hostLink || kissConfirmed || detectPhase === 'entering' || enterInFlight) {
+      return;
+    }
+
+    if (detectPhase !== 'waiting-traffic' && detectPhase !== 'failed') {
+      return;
+    }
+
+    if (commandPhase === 'waiting-prompt') {
+      return;
+    }
+
+    const prompt = promptSeen(sessionBytes);
+    const banner = new TextDecoder().decode(sessionBytes).includes('Kenwood Radio Modem');
+
+    if (!prompt && !banner) {
+      return;
+    }
+
+    detectPhase = 'awaiting-prompt';
+    detectStep = 'after-text';
+    detectDeadline = Number.POSITIVE_INFINITY;
+    clearDetectClock();
+    commandActive = false;
+    detectDetail = prompt
+      ? `${hostLink.prompt} was already on this connection. Entering host KISS.`
+      : 'Kenwood banner seen before KISS was confirmed. Waiting for the prompt. Nothing was sent.';
+    record('note', new Uint8Array(), detectDetail);
   }
 
   function maybeStartEnter(): void {
@@ -738,7 +827,9 @@ export function createAprsHostSession(options?: {
     }
 
     commandPhase = 'prompt';
-    const entering = detectPhase === 'awaiting-prompt' || detectPhase === 'listening';
+    const entering = detectPhase === 'awaiting-prompt'
+      || detectPhase === 'listening'
+      || (!kissConfirmed && (detectPhase === 'waiting-traffic' || detectPhase === 'failed'));
     commandDetail = entering
       ? `${hostLink.prompt} arrived. Entering host KISS.`
       : afterInterrupt
@@ -1139,7 +1230,7 @@ export function createAprsHostSession(options?: {
       options?.onAx25Ui?.(payload);
     }
 
-    const openLeftover = unframedOpenBuffer(decoded.ignoredBytes, decoded.holding, dataFrames.length);
+    const openLeftover = unframedOpenBuffer(decoded.ignoredBytes, dataFrames.length);
 
     if (dataFrames.length > 0 && detectionOwnsWait()) {
       finishKissTraffic();
@@ -1172,6 +1263,7 @@ export function createAprsHostSession(options?: {
     }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
+    resumeUnconfirmedCommand();
     noteConnectionPrompt();
 
     if (

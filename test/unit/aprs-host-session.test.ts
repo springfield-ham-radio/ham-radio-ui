@@ -1329,6 +1329,101 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectDetail).not.toContain('not answering');
   });
 
+  it('enters KISS when cmd: follows an unframed AX.25 leftover', async () => {
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
+    });
+    const fake = fakePort();
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(unframed);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(fake.writes).toEqual([]);
+
+    const banner = '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\ncmd:';
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+  });
+
+  it('does not treat a monitor fragment with ESC and FEND as KISS, then enters on the banner', async () => {
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
+    });
+    const fake = fakePort();
+    const text = new TextEncoder().encode('.K5KTF.com 12.4V 104F');
+    const fragment = new Uint8Array(text.length + 5);
+    fragment.set(text);
+    fragment[text.length] = 0x1b;
+    fragment[text.length + 1] = 0x5b;
+    fragment[text.length + 2] = 0x31;
+    fragment[text.length + 3] = 0x7e;
+    fragment[text.length + 4] = 0xc0;
+    expect(fragment).toHaveLength(26);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(fragment);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().detectPhase).not.toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).not.toContain('not silence');
+
+    const banner = '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\nRelease 09/Mar/11 3Chip ver 1.02\r\nChecksum $1859\r\ncmd:';
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).toBe(`${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+  });
+
   it('does not treat a later unframed chunk as the open buffer', async () => {
     let time = 8_000;
     const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
