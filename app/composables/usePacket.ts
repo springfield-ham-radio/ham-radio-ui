@@ -139,7 +139,7 @@ export function usePacket() {
   }
 
   function apply(runtime: Runtime, step: { notices: Array<{ kind: 'status' | 'rx'; text: string }> }, sent?: string): void {
-    runtime.scrollback = packetScrollText(runtime.scrollback, step.notices, sent);
+    runtime.scrollback = packetScrollText(runtime.scrollback, step.notices, sent, { at: Date.now() });
 
     if (step.notices.some((notice) => notice.kind === 'status' && notice.text.startsWith('Ignored'))) {
       runtime.error = undefined;

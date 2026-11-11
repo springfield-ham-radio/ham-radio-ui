@@ -9,6 +9,7 @@ import {
   createPacketMonitor,
   filterPacketRows,
   formatPacketCopy,
+  formatPacketTime,
   packetFixturePayloads,
   pausePacketMonitor,
   pushPacketMonitor,
@@ -79,7 +80,11 @@ describe('Packet monitor and terminal', () => {
     expect(resumed.paused).toBe(false);
     expect(resumed.rows).toHaveLength(4);
 
-    const copy = formatPacketCopy(filterPacketRows(monitor.rows, '', 'I'));
+    const copy = formatPacketCopy(filterPacketRows(monitor.rows, '', 'I'), 'America/Chicago');
+    expect(copy.startsWith('12:00:00 ')).toBe(true);
+    expect(copy).not.toContain('18:00:00');
+    expect(formatPacketTime(at, 'America/Chicago')).toBe('12:00:00');
+    expect(formatPacketTime(Date.UTC(2026, 10, 11, 23, 42, 58), 'America/Chicago')).toBe('17:42:58');
     expect(copy).toContain('W1AW-1>KF5UFJ,WIDE1-1*');
     expect(copy).toContain('N(S)=1');
     expect(copy).toContain('N(R)=0');
@@ -92,7 +97,9 @@ describe('Packet monitor and terminal', () => {
     expect(packetLinePayload('Hello')).toEqual(Uint8Array.from([...'Hello\r'].map((character) => character.charCodeAt(0))));
     expect(packetLinePayload('Hello\n')?.[5]).toBe(0x0d);
     expect(packetLinePayload('bad\u0001')).toBeUndefined();
-    expect(packetScrollText('', [{ kind: 'rx', text: 'Hi\r' }, { kind: 'status', text: 'Connected to W1AW.' }], 'Bye')).toBe('Bye\nHi\n[Connected to W1AW.]\n');
+    const at = Date.UTC(2026, 10, 11, 23, 42, 58);
+    const clock = { at, timeZone: 'America/Chicago' };
+    expect(packetScrollText('', [{ kind: 'rx', text: 'Hi\r' }, { kind: 'status', text: 'Connected to W1AW.' }], 'Bye', clock)).toBe('17:42:58 Bye\n17:42:58 Hi\n17:42:58 [Connected to W1AW.]\n');
 
     expect(PACKET_DEFAULT_SETTINGS.acceptIncoming).toBe(false);
     expect(readPacketSettings({ getItem: () => null }).acceptIncoming).toBe(false);

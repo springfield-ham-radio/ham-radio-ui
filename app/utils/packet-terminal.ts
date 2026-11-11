@@ -4,6 +4,7 @@
  */
 
 import { canonicalAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
+import { formatTraceClock } from '~/utils/aprs-serial-trace';
 import type { PacketLinkPhase } from '~/utils/packet-link';
 import type { PacketDetectPhase } from '~/utils/packet-port';
 import { packetLinkBlockReason } from '~/utils/packet-port';
@@ -91,18 +92,41 @@ export function packetPeerPath(text: string): { path?: Ax25Call[]; error?: strin
   return { path };
 }
 
-export function packetScrollText(current: string, notices: ReadonlyArray<{ kind: 'status' | 'rx'; text: string }>, sent?: string): string {
+function stampLines(body: string, stamp: string): string {
+  if (stamp.length === 0 || body.length === 0) {
+    return body;
+  }
+
+  const ends = body.endsWith('\n');
+  const lines = body.split('\n');
+
+  if (ends) {
+    lines.pop();
+  }
+
+  const stamped = lines.map((line) => `${stamp}${line}`).join('\n');
+  return ends ? `${stamped}\n` : stamped;
+}
+
+export function packetScrollText(
+  current: string,
+  notices: ReadonlyArray<{ kind: 'status' | 'rx'; text: string }>,
+  sent?: string,
+  clock?: { at: number; timeZone?: string },
+): string {
+  const stamp = clock ? `${formatTraceClock(clock.at, clock.timeZone)} ` : '';
   let next = current;
 
   if (sent !== undefined && sent.length > 0) {
-    next += `${sent.replace(/[\r\n]+$/u, '')}\n`;
+    next += stampLines(`${sent.replace(/[\r\n]+$/u, '')}\n`, stamp);
   }
 
   for (const notice of notices) {
     if (notice.kind === 'rx') {
-      next += notice.text.replace(/\r\n/gu, '\n').replace(/\r/gu, '\n');
+      const text = notice.text.replace(/\r\n/gu, '\n').replace(/\r/gu, '\n');
+      next += text.endsWith('\n') ? stampLines(text, stamp) : stampLines(`${text}\n`, stamp);
     } else if (notice.text.length > 0) {
-      next += `[${notice.text}]\n`;
+      next += stampLines(`[${notice.text}]\n`, stamp);
     }
   }
 

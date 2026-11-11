@@ -2,7 +2,7 @@
 import { canonicalAx25Call } from '~/utils/aprs-ax25';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
-import { packetFixturePayloads } from '~/utils/packet-monitor';
+import { formatPacketTime, packetFixturePayloads } from '~/utils/packet-monitor';
 import type { PacketTypeFilter } from '~/utils/packet-monitor';
 import { packetMyCallLabel } from '~/utils/packet-settings';
 import { packetTerminalView } from '~/utils/packet-terminal';
@@ -341,7 +341,7 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
           </thead>
           <tbody class="font-mono">
             <tr v-for="row in state?.visible ?? []" :key="row.id" class="border-t border-default align-top">
-              <td class="px-2 py-1 whitespace-nowrap text-muted">{{ new Date(row.at).toISOString().slice(11, 23) }}</td>
+              <td class="px-2 py-1 whitespace-nowrap text-muted">{{ formatPacketTime(row.at) }}</td>
               <td class="px-2 py-1 whitespace-nowrap">{{ row.source }}</td>
               <td class="px-2 py-1 whitespace-nowrap">{{ row.destination }}</td>
               <td class="px-2 py-1 whitespace-nowrap">{{ row.path }}</td>

@@ -4,6 +4,7 @@
  */
 
 import { formatAx25Call } from '~/utils/aprs-ax25';
+import { formatTraceClock } from '~/utils/aprs-serial-trace';
 import { encodeAx25Frame } from '~/utils/packet-ax25';
 import {
   ax25ControlLabel,
@@ -64,8 +65,9 @@ export function createPacketMonitor(): PacketMonitor {
   return { rows: [], paused: false, held: [], nextId: 1 };
 }
 
-export function formatPacketTime(at: number): string {
-  return new Date(at).toISOString().slice(11, 23);
+/** Local `HH:MM:SS`, the same clock as the APRS raw log. Pass `timeZone` in tests. */
+export function formatPacketTime(at: number, timeZone?: string): string {
+  return formatTraceClock(at, timeZone);
 }
 
 export function packetRowFromKiss(payload: Uint8Array, at: number, id: number, modulo: Ax25Modulo): PacketMonitorRow {
@@ -162,18 +164,18 @@ export function filterPacketRows(rows: readonly PacketMonitorRow[], callsign: st
   });
 }
 
-export function formatPacketRow(row: PacketMonitorRow): string {
+export function formatPacketRow(row: PacketMonitorRow, timeZone?: string): string {
   const path = row.path ? `,${row.path}` : '';
   const ns = row.ns === '' ? '' : ` N(S)=${row.ns}`;
   const nr = row.nr === '' ? '' : ` N(R)=${row.nr}`;
   const pf = row.pf ? ` ${row.pf}` : '';
   const cr = row.cr ? ` ${row.cr}` : '';
   const pid = row.pid ? ` PID ${row.pid}` : '';
-  return `${formatPacketTime(row.at)} ${row.source}>${row.destination}${path} <${row.control}${pf}${cr}>${ns}${nr}${pid} | ${row.text} | ${row.hex}`;
+  return `${formatPacketTime(row.at, timeZone)} ${row.source}>${row.destination}${path} <${row.control}${pf}${cr}>${ns}${nr}${pid} | ${row.text} | ${row.hex}`;
 }
 
-export function formatPacketCopy(rows: readonly PacketMonitorRow[]): string {
-  return rows.map((row) => formatPacketRow(row)).join('\n');
+export function formatPacketCopy(rows: readonly PacketMonitorRow[], timeZone?: string): string {
+  return rows.map((row) => formatPacketRow(row, timeZone)).join('\n');
 }
 
 /** Dev fixture frames: one I, one S, and one U, with a digipeater H bit. */
