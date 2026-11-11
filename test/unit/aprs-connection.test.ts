@@ -86,6 +86,9 @@ describe('APRS COM connection', () => {
     expect(passive.badge).toBe('Disconnected');
     expect(host.badge).toBe('Disconnected');
     expect(passive.detail).toContain('not the CAT connection');
-    expect(host.detail).toContain('Enter host KISS is a separate step');
+    expect(host.detail).toContain('listens');
+    expect(host.detail).toContain('kissExit');
+    expect(host.detail).toContain('does not transmit on the air');
+    expect(host.detail).not.toContain('Enter host KISS');
   });
 });

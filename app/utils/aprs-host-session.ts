@@ -65,7 +65,7 @@ export interface AprsHostSnapshot {
   bytesWritten: number;
   hardwareTransmit: boolean;
   ackOptIn: boolean;
-  /** True after Enter host KISS has written the documented command. Not set by Listen. */
+  /** True after the last host enter step was written. Not set by a passive listen. */
   hostEnterRequested: boolean;
   /** True only after a KISS data frame parses as an AX.25 UI frame. */
   kissConfirmed: boolean;
@@ -555,7 +555,7 @@ export function createAprsHostSession(options?: {
     commandDetail = entering
       ? `${hostLink.prompt} arrived. Entering host KISS.`
       : afterInterrupt
-        ? `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`
+        ? `${hostLink.prompt} arrived after the prompt request. The enter steps have not been written.`
         : `${hostLink.prompt} arrived on this connection. No command was sent.`;
     record('note', new Uint8Array(), commandDetail);
   }
@@ -595,7 +595,7 @@ export function createAprsHostSession(options?: {
     if (commandPhase === 'waiting-prompt') {
       commandActive = false;
       commandPhase = 'prompt';
-      commandDetail = `${hostLink.prompt} arrived after the prompt request. A carriage return is still not sent until Enter host KISS.`;
+      commandDetail = `${hostLink.prompt} arrived after the prompt request. The enter steps have not been written.`;
       record('note', new Uint8Array(), commandDetail);
       return;
     }
