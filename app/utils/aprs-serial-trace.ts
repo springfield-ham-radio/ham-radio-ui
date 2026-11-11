@@ -6,7 +6,8 @@
  * is a view of lines already recorded. It does not write to the port.
  */
 
-import { canonicalAx25Call, encodeAx25Ui, formatAx25Call, parseAx25Ui } from '~/utils/aprs-ax25';
+import { canonicalAx25Call, encodeAx25Ui, parseAx25Ui } from '~/utils/aprs-ax25';
+import { decodeAx25UiAprs } from '~/utils/aprs-decode';
 import { createKissDecoderState, encodeKissData, pushKissBytes, type KissFrame } from '~/utils/aprs-kiss';
 
 export const APRS_TRACE_CAP = 100;
@@ -192,13 +193,21 @@ function kissLine(frame: KissFrame): string {
     return 'KISS data';
   }
 
-  const path = ui.path.map((hop) => `${formatAx25Call(hop)}${hop.repeated ? '*' : ''}`).join(',');
-  const route = path.length > 0
-    ? `${formatAx25Call(ui.source)}>${formatAx25Call(ui.destination)},${path}`
-    : `${formatAx25Call(ui.source)}>${formatAx25Call(ui.destination)}`;
-  const info = ui.info.replace(/[\r\n]+/gu, ' ');
+  return decodeAx25UiAprs(ui).raw;
+}
 
-  return info.length > 0 ? `${route}: ${info}` : route;
+function withoutLineBreaks(bytes: readonly number[]): number[] {
+  let end = bytes.length;
+
+  while (end > 0 && (bytes[end - 1] === 0x0d || bytes[end - 1] === 0x0a)) {
+    end -= 1;
+  }
+
+  return bytes.slice(0, end);
+}
+
+function sameBytes(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }
 
 function commandLabel(line: AprsTraceLine): string {
@@ -224,8 +233,10 @@ function commandLabel(line: AprsTraceLine): string {
 /**
  * Terminal rows for the raw log.
  *
- * Command text is joined across chunks and split on CR/LF. An echo of the
- * last write stays one dimmed row. Each KISS frame is one AX.25 line.
+ * Command text is joined across chunks and split on CR/LF. A partial line is
+ * not drawn when a note arrives between chunks. An echo of the last write is
+ * one dimmed row even when the radio splits it. KISS bytes keep one decoder
+ * for the whole log, so a frame split across chunks is one AX.25 line.
  */
 export function serialTranscript(lines: readonly AprsTraceLine[], options?: { timeZone?: string }): SerialTranscriptRow[] {
   const rows: SerialTranscriptRow[] = [];
@@ -233,6 +244,8 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
   let pendingEcho = false;
   let pendingBytes: number[] = [];
   let sequence = 0;
+  const kissState = createKissDecoderState();
+  let expectEcho: number[] | undefined;
 
   const pushRow = (row: Omit<SerialTranscriptRow, 'key'>): void => {
     rows.push({ ...row, key: `${row.time}-${sequence}` });
@@ -242,6 +255,12 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
   const emitText = (bytes: number[]): void => {
     if (bytes.length === 0) {
       return;
+    }
+
+    const echo = pendingEcho || (expectEcho !== undefined && sameBytes(withoutLineBreaks(bytes), withoutLineBreaks(expectEcho)));
+
+    if (echo && expectEcho && sameBytes(withoutLineBreaks(bytes), withoutLineBreaks(expectEcho))) {
+      expectEcho = undefined;
     }
 
     let text = '';
@@ -255,7 +274,7 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
       arrow: '←',
       who: 'radio',
       text,
-      echo: pendingEcho,
+      echo,
       hex: formatSerialHex(Uint8Array.from(bytes)),
     });
   };
@@ -291,22 +310,34 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
       return;
     }
 
-    if (pendingBytes.length > 0 && pendingEcho !== echo) {
-      takeLines(true);
-    }
-
     if (pendingBytes.length === 0) {
       pendingAt = at;
       pendingEcho = echo;
+    } else if (!echo) {
+      pendingEcho = false;
     }
 
     pendingBytes.push(...bytes);
     takeLines(false);
   };
 
+  const emitKissFrames = (line: AprsTraceLine, frames: KissFrame[]): void => {
+    for (const frame of frames) {
+      const text = kissLine(frame);
+      pushRow({
+        time: formatTraceClock(line.at, options?.timeZone),
+        arrow: '←',
+        who: 'radio',
+        text,
+        echo: false,
+        hex: line.hex,
+        detail: line.note.includes(text) ? undefined : line.note,
+      });
+    }
+  };
+
   for (const line of lines) {
     if (line.direction === 'note') {
-      takeLines(true);
       const text = serialEventHeadline(line.note);
       pushRow({
         time: formatTraceClock(line.at, options?.timeZone),
@@ -323,6 +354,7 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
     if (line.direction === 'tx-command' || line.direction === 'tx-frame') {
       takeLines(true);
       const bytes = bytesFromHex(line.hex);
+      expectEcho = [...bytes];
       const decoded = line.direction === 'tx-frame' ? pushKissBytes(createKissDecoderState(), bytes, line.at) : undefined;
       const frame = decoded?.frames.find((item) => (item.command & 0x0f) === 0);
       const text = frame ? kissLine(frame) : commandLabel(line);
@@ -340,25 +372,15 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
 
     const echo = line.note.includes('echo of the last write');
     const bytes = bytesFromHex(line.hex);
-    const decoded = pushKissBytes(createKissDecoderState(), bytes, line.at);
+    const wasHolding = kissState.inFrame && kissState.pending.length > 0;
+    const decoded = pushKissBytes(kissState, bytes, line.at);
 
-    if (decoded.frames.length > 0) {
-      takeLines(true);
-    }
-
-    appendText(line.at, decoded.ignoredBytes, echo);
-
-    for (const frame of decoded.frames) {
-      const text = kissLine(frame);
-      pushRow({
-        time: formatTraceClock(line.at, options?.timeZone),
-        arrow: '←',
-        who: 'radio',
-        text,
-        echo,
-        hex: line.hex,
-        detail: line.note.includes(text) ? undefined : line.note,
-      });
+    if (wasHolding) {
+      emitKissFrames(line, decoded.frames);
+      appendText(line.at, decoded.ignoredBytes, echo);
+    } else {
+      appendText(line.at, decoded.ignoredBytes, echo);
+      emitKissFrames(line, decoded.frames);
     }
   }
 

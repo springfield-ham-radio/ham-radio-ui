@@ -54,7 +54,7 @@ describe('serial transcript', () => {
     expect(rows[0]).toMatchObject({ arrow: '→', text: 'KISS ON', who: 'HamBench' });
     expect(rows[0]?.detail).toContain('kernel acceptance');
     expect(rows[1]).toMatchObject({ arrow: '←', text: 'RESTART', echo: true });
-    expect(rows[2]?.text).toBe('K5KTF-4>APRS,WIDE2-1: !3031.12NI09752.74W&K5KTF');
+    expect(rows[2]?.text).toBe('K5KTF-4>APRS,WIDE2-1:!3031.12NI09752.74W&K5KTF');
     expect(rows[2]?.echo).toBe(false);
     expect(rows[3]?.text).toBe('KISS confirmed');
     expect(rows[4]?.text).toBe('The TNC is not answering');
@@ -73,5 +73,58 @@ describe('serial transcript', () => {
     expect(view.some((row) => row.text === 'KISS ON' && row.arrow === '→')).toBe(true);
     expect(view.some((row) => row.echo && row.text === 'KISS ON')).toBe(true);
     expect(view.some((row) => row.text.startsWith('K5KTF-4>APRS,WIDE2-1:'))).toBe(true);
+  });
+
+  it('reassembles a KISS frame split across chunks into the decoded line', () => {
+    const info = '!3031.12NI09752.74W&K5KTF TX/RX-iGate';
+    const address = (call: string, ssid: number, last: boolean, command: boolean): number[] => {
+      const bytes = [...call.padEnd(6, ' ')].map((character) => (character.charCodeAt(0) & 0x7f) << 1);
+      let ssidByte = 0x60 | ((ssid & 0x0f) << 1);
+
+      if (command) {
+        ssidByte |= 0x80;
+      }
+
+      if (last) {
+        ssidByte |= 0x01;
+      }
+
+      bytes.push(ssidByte);
+      return bytes;
+    };
+    const ax25 = Uint8Array.from([
+      ...address('APRX29', 0, false, true),
+      ...address('K5KTF', 4, true, false),
+      0x03,
+      0xf0,
+      ...[...info].map((character) => character.charCodeAt(0)),
+    ]);
+    const kiss = encodeKissData(ax25);
+    const split = 8;
+    const rows = serialTranscript([
+      makeTraceLine(at + 1000, 'rx', kiss.subarray(0, split), 'incomplete, 8 held'),
+      makeTraceLine(at + 1030, 'rx', kiss.subarray(split), '1 KISS, AX.25 UI'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => row.text)).toEqual(['K5KTF-4>APRX29:!3031.12NI09752.74W&K5KTF TX/RX-iGate']);
+    expect(rows[0]?.text.includes('\\x')).toBe(false);
+    expect(rows[0]?.arrow).toBe('←');
+  });
+
+  it('joins a split echo of KISS ON and shows the write first', () => {
+    const written = new TextEncoder().encode('KISS ON\r');
+    const rows = serialTranscript([
+      makeTraceLine(at, 'tx-command', written, 'KISS ON written once. Plugin accepted 8 bytes. That is kernel acceptance, not a radio echo.'),
+      makeTraceLine(at + 10, 'rx', written.subarray(0, 4), '4 command-text'),
+      makeTraceLine(at + 15, 'note', new Uint8Array(), 'Listening for a KISS frame or command text.'),
+      makeTraceLine(at + 20, 'rx', written.subarray(4), '4 command-text'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => ({ arrow: row.arrow, text: row.text, echo: row.echo }))).toEqual([
+      { arrow: '→', text: 'KISS ON', echo: false },
+      { arrow: '·', text: 'Listening', echo: false },
+      { arrow: '←', text: 'KISS ON', echo: true },
+    ]);
+    expect(rows.findIndex((row) => row.arrow === '→')).toBeLessThan(rows.findIndex((row) => row.echo));
   });
 });
