@@ -11,8 +11,7 @@
  * ASCII while the TNC is already inside KISS.
  *
  * The TM-D700 manual documents the bytes C0 FF C0. The D710 IDM says D700
- * PC commands are not compatible, so those bytes are not sent and not
- * recommended here.
+ * PC commands are not compatible, so this fallback does not declare kissExit.
  *
  * Converse mode (`CONVERSE`, Ctrl+C back to command) has a documented exit,
  * but the TNC would own `MYCALL`, `UNPROTO`, and connected-mode `RETRY`.
@@ -24,9 +23,9 @@ export const APRS_KISS_ENTER_TEXT = '\rKISS ON\rRESTART\r';
 
 export const APRS_HOST_SETUP = [
   'Stations is the passive test. Leave the radio showing APRS for that test. This page is the host session and is not required for it.',
-  'The command list says one Ctrl+C returns from Converse, and three return from Transparent. It does not say Ctrl+C prints cmd: when the TNC is already in command mode. If cmd: arrives on this Listen, Request sends nothing. That text is not proof of PACKET mode. SENDPAC defaults to carriage return, which sends a packet in Converse, so no line is sent to ask for a prompt. HamBench does not send Ctrl+C or a carriage return to probe an unknown mode.',
-  'Enter host KISS writes KISS ON only after that cmd:, then RESTART only after another cmd:. It does not send a message, a beacon, HB, or RESET.',
-  'A bare Ctrl+C is not a KISS frame. The D710 manuals do not say an already-KISS TNC answers it. The TM-D700 bytes C0 FF C0 are not sent.',
+  'Connect listens for a few seconds. Command text or cmd: runs the enter steps. That text is not proof of PACKET mode. SENDPAC defaults to carriage return, which sends a packet in Converse, so no line is sent to ask for a prompt. Silence writes three Ctrl+C once. A carriage return is not sent to probe the mode.',
+  'The enter steps write KISS ON only after cmd:, then RESTART only after another cmd:. They do not send a message, a beacon, HB, or RESET.',
+  'A bare Ctrl+C is not a KISS frame. The D710 manuals do not say an already-KISS TNC answers it. This fallback does not send the TM-D700 bytes C0 FF C0.',
   'COM baud is menu 528 on A/E/S and menu 929 on G. HBAUD 1200 is the usual RF packet speed and is not that baud.',
 ] as const;
 
