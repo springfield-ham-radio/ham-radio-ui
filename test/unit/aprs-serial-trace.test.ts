@@ -27,7 +27,8 @@ describe('serial transcript', () => {
     expect(rows.map((row) => row.text)).toEqual([
       'DA 110101000000',
       'HB 1200',
-      'cmd:HBAUD    was 1200',
+      'cmd:',
+      'HBAUD    was 1200',
       'cmd:',
     ]);
     expect(rows.every((row) => row.arrow === '←' && row.time === '13:45:02' && row.hex.length > 0)).toBe(true);
@@ -170,5 +171,80 @@ describe('serial transcript', () => {
 
     expect(writeRow).toBeGreaterThanOrEqual(0);
     expect(echoRow).toBeGreaterThan(writeRow);
+  });
+
+  it('flushes a partial monitor line before KISS ON and splits at cmd:', () => {
+    const monitor = new TextEncoder().encode('cmd:K5KTF-4>APRX29:>APRX on ... -- No Windoze');
+    const written = new TextEncoder().encode('KISS ON\r');
+    const rows = serialTranscript([
+      makeTraceLine(at, 'rx', monitor, 'startup banner, no CR'),
+      makeTraceLine(at + 10, 'tx-command', written, 'KISS ON written once. Plugin accepted 8 bytes. That is kernel acceptance, not a radio echo.'),
+      makeTraceLine(at + 20, 'rx', written, '8 command-text'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => ({ arrow: row.arrow, text: row.text, echo: row.echo, detail: row.detail }))).toEqual([
+      { arrow: '←', text: 'cmd:', echo: false, detail: undefined },
+      { arrow: '←', text: 'K5KTF-4>APRX29:>APRX on ... -- No Windoze', echo: false, detail: undefined },
+      { arrow: '→', text: 'KISS ON', echo: false, detail: 'KISS ON written once. Plugin accepted 8 bytes. That is kernel acceptance, not a radio echo.' },
+      { arrow: '←', text: 'KISS ON', echo: true, detail: undefined },
+    ]);
+  });
+
+  it('reassembles a KISS ON echo split before the write and keeps the TNC response', () => {
+    const stream = new TextEncoder().encode('KISS ON\r\nKISS     was OFF\r\n');
+    const written = new TextEncoder().encode('KISS ON\r');
+    const rows = serialTranscript([
+      makeTraceLine(at, 'rx', stream.subarray(0, 3), '3 command-text'),
+      makeTraceLine(at + 5, 'tx-command', written, 'KISS ON written once. Plugin accepted 8 bytes.'),
+      makeTraceLine(at + 10, 'rx', stream.subarray(3), 'command-text'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => ({ arrow: row.arrow, text: row.text, echo: row.echo }))).toEqual([
+      { arrow: '→', text: 'KISS ON', echo: false },
+      { arrow: '←', text: 'KISS ON', echo: true },
+      { arrow: '←', text: 'KISS     was OFF', echo: false },
+    ]);
+    expect(rows.every((row) => row.detail === undefined)).toBe(true);
+  });
+
+  it('does not glue a split KISS ON echo onto a partial monitor line', () => {
+    const monitor = new TextEncoder().encode('cmd:K5KTF-4>APRX29:>APRX on ... -- No Windoze');
+    const stream = new TextEncoder().encode('KISS ON\r\nKISS     was OFF\r\n');
+    const written = new TextEncoder().encode('KISS ON\r');
+    const rows = serialTranscript([
+      makeTraceLine(at, 'rx', monitor, 'startup banner, no CR'),
+      makeTraceLine(at + 5, 'rx', stream.subarray(0, 3), '3 command-text'),
+      makeTraceLine(at + 6, 'tx-command', written, 'KISS ON written once. Plugin accepted 8 bytes.'),
+      makeTraceLine(at + 10, 'rx', stream.subarray(3), 'command-text'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => ({ arrow: row.arrow, text: row.text, echo: row.echo }))).toEqual([
+      { arrow: '←', text: 'cmd:', echo: false },
+      { arrow: '←', text: 'K5KTF-4>APRX29:>APRX on ... -- No Windoze', echo: false },
+      { arrow: '→', text: 'KISS ON', echo: false },
+      { arrow: '←', text: 'KISS ON', echo: true },
+      { arrow: '←', text: 'KISS     was OFF', echo: false },
+    ]);
+  });
+
+  it('still splits that echo when an earlier write was not echoed', () => {
+    const monitor = new TextEncoder().encode('cmd:K5KTF-4>APRX29:>APRX on ... -- No Windoze');
+    const stream = new TextEncoder().encode('KISS ON\r\nKISS     was OFF\r\n');
+    const rows = serialTranscript([
+      makeTraceLine(at, 'tx-command', new TextEncoder().encode('RESTART\r'), 'RESTART written once after cmd:. KISS unconfirmed. This is not repeated. KISS on, waiting for traffic.'),
+      makeTraceLine(at + 1, 'rx', monitor, 'startup banner, no CR'),
+      makeTraceLine(at + 2, 'rx', stream.subarray(0, 3), '3 command-text'),
+      makeTraceLine(at + 3, 'tx-command', new TextEncoder().encode('KISS ON\r'), 'KISS ON written once. Plugin accepted 8 bytes.'),
+      makeTraceLine(at + 4, 'rx', stream.subarray(3), 'command-text'),
+    ], { timeZone: 'America/Chicago' });
+
+    expect(rows.map((row) => ({ arrow: row.arrow, text: row.text, echo: row.echo }))).toEqual([
+      { arrow: '→', text: 'RESTART', echo: false },
+      { arrow: '←', text: 'cmd:', echo: false },
+      { arrow: '←', text: 'K5KTF-4>APRX29:>APRX on ... -- No Windoze', echo: false },
+      { arrow: '→', text: 'KISS ON', echo: false },
+      { arrow: '←', text: 'KISS ON', echo: true },
+      { arrow: '←', text: 'KISS     was OFF', echo: false },
+    ]);
   });
 });

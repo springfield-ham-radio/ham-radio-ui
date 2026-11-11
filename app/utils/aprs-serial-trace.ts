@@ -341,6 +341,34 @@ function presentTrace(lines: readonly AprsTraceLine[]): PresentedTraceLine[] {
         continue;
       }
 
+      const txTrim = withoutLineBreaks(tx);
+      let prefixAt = -1;
+
+      for (let index = 0; index < run.length; index += 1) {
+        const prefix = run.slice(index).flatMap((item) => [...bytesFromHex(item.hex)]);
+
+        if (prefix.length > 0 && prefix.length < txTrim.length && isPrefix(txTrim, prefix)) {
+          prefixAt = index;
+          break;
+        }
+      }
+
+      if (prefixAt >= 0) {
+        for (const item of pending.slice(0, start + prefixAt)) {
+          result.push({ line: item, echo: false });
+        }
+
+        pending.length = 0;
+        result.push({ line, echo: false });
+
+        for (const item of run.slice(prefixAt)) {
+          result.push({ line: item, echo: true });
+        }
+
+        expect = tx;
+        continue;
+      }
+
       flushPending();
       result.push({ line, echo: false });
       expect = tx;
@@ -372,9 +400,12 @@ function presentTrace(lines: readonly AprsTraceLine[]): PresentedTraceLine[] {
         const buf = assembling.flatMap((item) => [...bytesFromHex(item.hex)]);
         const trim = withoutLineBreaks(buf);
         const txTrim = withoutLineBreaks(expect);
+        const still = buf.length <= txTrim.length + 2 && (isPrefix(txTrim, trim) || isPrefix(trim, txTrim));
 
-        if (buf.length > expect.length + 2 || (!isPrefix(txTrim, trim) && !isPrefix(trim, txTrim))) {
-          flushAssembly();
+        if (!still) {
+          pending.push(...assembling);
+          assembling.length = 0;
+          expect = undefined;
         }
       }
 
@@ -410,13 +441,30 @@ function commandLabel(line: AprsTraceLine): string {
   return visible.length > 0 ? visible : serialEventHeadline(line.note);
 }
 
+/** Notes this short stay on the row. Longer ones open from Details. */
+const LONG_NOTE = 80;
+
+function rowDetail(note: string, visible: string): string | undefined {
+  if (note.length <= LONG_NOTE || note === visible) {
+    return undefined;
+  }
+
+  return note;
+}
+
+const CMD_PROMPT = [0x63, 0x6d, 0x64, 0x3a];
+
+function startsWithCmd(bytes: readonly number[], index: number): boolean {
+  return CMD_PROMPT.every((byte, offset) => bytes[index + offset] === byte);
+}
+
 /**
  * Terminal rows for the raw log.
  *
- * Command text is joined across chunks and split on CR/LF. A partial line is
- * not drawn when a note arrives between chunks. An echo of the last write is
- * one dimmed row even when the radio splits it. KISS bytes keep one decoder
- * for the whole log, so a frame split across chunks is one AX.25 line.
+ * Command text is joined across chunks and split on CR/LF and on `cmd:`.
+ * A partial line is flushed before a write unless it is the start of that
+ * write's echo. The echo can finish in a later chunk that also holds the
+ * TNC response. KISS bytes keep one decoder for the whole log.
  */
 export function serialTranscript(lines: readonly AprsTraceLine[], options?: { timeZone?: string }): SerialTranscriptRow[] {
   const rows: SerialTranscriptRow[] = [];
@@ -466,6 +514,14 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
     while (index < pendingBytes.length) {
       const byte = pendingBytes[index];
 
+      if (startsWithCmd(pendingBytes, index)) {
+        emitText(pendingBytes.slice(start, index));
+        emitText(pendingBytes.slice(index, index + CMD_PROMPT.length));
+        index += CMD_PROMPT.length;
+        start = index;
+        continue;
+      }
+
       if (byte !== 0x0d && byte !== 0x0a) {
         index += 1;
         continue;
@@ -511,7 +567,7 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
         text,
         echo: false,
         hex: line.hex,
-        detail: line.note.includes(text) ? undefined : line.note,
+        detail: rowDetail(line.note, text),
       });
     }
   };
@@ -526,15 +582,22 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
         text,
         echo: false,
         hex: '',
-        detail: text === line.note ? undefined : line.note,
+        detail: rowDetail(line.note, text),
       });
       continue;
     }
 
     if (line.direction === 'tx-command' || line.direction === 'tx-frame') {
-      takeLines(true);
-      const bytes = bytesFromHex(line.hex);
-      expectEcho = [...bytes];
+      const bytes = [...bytesFromHex(line.hex)];
+      const echoedAlready = pendingBytes.length > 0
+        && pendingBytes.length < withoutLineBreaks(bytes).length
+        && isPrefix(withoutLineBreaks(bytes), pendingBytes);
+
+      if (!echoedAlready) {
+        takeLines(true);
+      }
+
+      expectEcho = bytes;
       const decoded = line.direction === 'tx-frame' ? pushKissBytes(createKissDecoderState(), bytes, line.at) : undefined;
       const frame = decoded?.frames.find((item) => (item.command & 0x0f) === 0);
       const text = frame ? kissLine(frame) : commandLabel(line);
@@ -545,7 +608,7 @@ export function serialTranscript(lines: readonly AprsTraceLine[], options?: { ti
         text,
         echo: false,
         hex: line.hex,
-        detail: line.note === text ? undefined : line.note,
+        detail: rowDetail(line.note, text),
       });
       continue;
     }
@@ -588,6 +651,10 @@ export const APRS_HOST_TRACE_FIXTURE: readonly AprsTraceLine[] = [
   makeTraceLine(Date.UTC(2026, 10, 11, 19, 45, 5), 'rx', fixtureKiss, '1 KISS, AX.25 UI'),
   makeTraceLine(Date.UTC(2026, 10, 11, 19, 45, 5), 'note', new Uint8Array(), 'AX.25 UI seen.'),
   makeTraceLine(Date.UTC(2026, 10, 11, 19, 45, 6), 'rx', Uint8Array.from([0x00, 0x11, 0x13, 0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e, 0xc0]), 'escaped binary and an incomplete FEND, not executed'),
+  makeTraceLine(Date.UTC(2026, 10, 11, 19, 49, 0), 'rx', new TextEncoder().encode('cmd:K5KTF-4>APRX29:>APRX on ... -- No Windoze'), 'startup banner, no CR'),
+  makeTraceLine(Date.UTC(2026, 10, 11, 19, 49, 1), 'rx', new TextEncoder().encode('KIS'), '3 command-text'),
+  makeTraceLine(Date.UTC(2026, 10, 11, 19, 49, 1), 'tx-command', new TextEncoder().encode('KISS ON\r'), 'KISS ON written once. Plugin accepted 8 bytes. That is kernel acceptance, not a radio echo.'),
+  makeTraceLine(Date.UTC(2026, 10, 11, 19, 49, 1), 'rx', new TextEncoder().encode('S ON\r\nKISS     was OFF\r\n'), 'command-text'),
 ] as const;
 
 export function formatTrace(lines: readonly AprsTraceLine[], options?: { timeZone?: string }): string {
