@@ -51,6 +51,10 @@ const modulesDialogOpen = computed({
       return false;
     }
 
+    if (route.path.startsWith('/reference')) {
+      return false;
+    }
+
     if (route.path.startsWith('/propagation')) {
       return false;
     }
