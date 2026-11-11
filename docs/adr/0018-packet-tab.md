@@ -12,7 +12,7 @@ An unsolicited SABM must not key the radio just because the tab is open.
 
 ## Decision
 
-- The Packet tab is a second view of the same host KISS session. It does not open a second port. Connect detection, flow control, and `kissExit` stay in the module profile. The tab adds no Kenwood command bytes.
+- The Packet tab is a second view of the same host KISS session. It does not open a second port. It subscribes to that session itself, so counters and detection status update while the APRS tab is unmounted. Connect KISS uses the flow control saved for this radio on the APRS host row. The module `defaultFlow` is the fallback when nothing is saved. Detection and `kissExit` stay in the module profile. The tab adds no Kenwood command bytes.
 - A KISS data listener sees every port-0 payload. APRS KISS confirmation is unchanged: only an AX.25 UI frame sets it, and only Send writes an APRS message. A connected-mode frame does not confirm KISS for APRS and does not answer an APRS message.
 - The monitor parses I, S (RR, RNR, REJ, SREJ), and U (SABM, SABME, UA, DM, DISC, FRMR, UI, XID, TEST) frames. It shows source, destination, the digipeater path with H bits, command/response, N(S), N(R), P/F, PID, and the info as text and hex. I and S frames are modulo 8 unless the operator selects modulo 128. Pause freezes the list and keeps capturing. Clear and copy do not write.
 - The link layer is AX.25 2.0 modulo 8 by default. Modulo 128 sends SABME and uses a 16-bit control field. One link is shown. The session map can hold another peer, but a second outgoing connect is refused until the first disconnects.

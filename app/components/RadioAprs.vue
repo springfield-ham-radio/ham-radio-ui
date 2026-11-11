@@ -11,6 +11,7 @@ import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, type AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
+import { browserAprsHostFlowStorage, readAprsHostFlow, writeAprsHostFlow } from '~/utils/aprs-host-flow';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
@@ -78,7 +79,8 @@ const hostConnecting = computed(() => (props.cardId ? host.connecting.value[prop
 const mine = ref('');
 const mineError = ref<string | undefined>();
 const requestedMode = ref<AprsConnectionMode>('passive');
-const requestedFlow = ref<AprsHostFlowControl>('software');
+const savedHostFlow = props.cardId ? readAprsHostFlow(browserAprsHostFlowStorage() ?? { getItem: () => null, setItem() { return undefined; } }, props.cardId) : undefined;
+const requestedFlow = ref<AprsHostFlowControl>(savedHostFlow ?? 'software');
 const activeMode = computed<AprsConnectionMode>(() => {
   if (kissListening.value) {
     return 'host';
@@ -272,6 +274,12 @@ function onFlow(value: unknown): void {
 
   if (value === 'software' || value === 'none' || value === 'hardware') {
     requestedFlow.value = value;
+
+    const storage = browserAprsHostFlowStorage();
+
+    if (props.cardId && storage) {
+      writeAprsHostFlow(storage, props.cardId, value);
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import type { PacketTypeFilter } from '~/utils/packet-monitor';
 import { packetMyCallLabel } from '~/utils/packet-settings';
 import { packetTerminalView } from '~/utils/packet-terminal';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
+import { aprsHostFlowForConnect, browserAprsHostFlowStorage, readAprsHostFlow } from '~/utils/aprs-host-flow';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
@@ -87,6 +88,10 @@ const kissLine = computed(() => {
   const detection = hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
   return `KISS is open on ${where}.${detection} Packet frames are sent only from Connect or a line in the terminal.`;
 });
+
+if (props.cardId) {
+  host.watchCard(props.cardId);
+}
 
 watch(
   () => [props.cardId, profile.value?.host?.link] as const,
@@ -188,7 +193,9 @@ async function onKissConnect(): Promise<void> {
     // Outside the desktop shell the port list is unavailable. Open reports that.
   }
 
-  const flow: AprsHostFlowControl = profile.value?.host?.defaultFlow ?? 'software';
+  const storage = browserAprsHostFlowStorage();
+  const saved = storage && cardId ? readAprsHostFlow(storage, cardId) : undefined;
+  const flow: AprsHostFlowControl = aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow);
   await host.connect(cardId, pathName, savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600, flow);
 }
 

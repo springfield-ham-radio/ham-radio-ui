@@ -149,7 +149,11 @@ interface Waiting {
  * prompt request, the enter steps, and an optional kissExit. It does not
  * send a beacon, a message, or KISS OFF. Command text after a KISS frame is
  * not left in an open frame. A later prompt starts that detection pass again.
- * A prompt already in the open buffer runs the enter steps. Monitor text
+ * Detection state is set before the data listener is attached, so bytes
+ * already in the open buffer are not wiped and then counted as silence.
+ * A prompt in that buffer still runs the enter steps. Unframed leftover
+ * bytes (no FEND) are not command text and not silence: the pass stops at
+ * waiting for traffic and nothing is written. Monitor text
  * with no prompt writes the module interrupt once. If command text keeps
  * arriving and the module declares promptNudge, those bytes are written
  * once. The enter steps run only after a fresh prompt. An echo of the last
@@ -227,6 +231,8 @@ export function createAprsHostSession(options?: {
   let commandActive = false;
   let commandTimer: ReturnType<typeof setInterval> | undefined;
   let hostFlow: AprsHostFlowControl = 'software';
+  /** True only while connect() attaches the data listener, so a sync open buffer is visible. */
+  let openingBuffer = false;
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   let identity: Ax25Call | undefined;
@@ -439,13 +445,48 @@ export function createAprsHostSession(options?: {
     armDetectClock();
   }
 
+  function isDetectTextByte(byte: number): boolean {
+    return byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e);
+  }
+
+  /**
+   * Bytes already sitting in the adapter when the listener attaches.
+   *
+   * A KISS payload with no FEND is not command text. Treating it as silence
+   * writes the interrupt and kissExit and takes a TNC out of KISS.
+   */
+  function unframedOpenBuffer(ignored: Uint8Array, holding: number, dataFrames: number): boolean {
+    if (!openingBuffer || dataFrames > 0) {
+      return false;
+    }
+
+    if (holding > 0) {
+      return true;
+    }
+
+    return ignored.some((byte) => !isDetectTextByte(byte));
+  }
+
+  function noteUnframedOpen(): void {
+    if (!hostLink || !detectionOwnsWait()) {
+      return;
+    }
+
+    commandActive = false;
+    detectPhase = 'waiting-traffic';
+    detectDeadline = Number.POSITIVE_INFINITY;
+    clearDetectClock();
+    detectDetail = 'Unframed bytes were already buffered when the port opened. Treated as KISS, not silence. KISS on, waiting for traffic. Nothing was sent.';
+    record('note', new Uint8Array(), detectDetail);
+  }
+
   function noteDetectBytes(ignored: Uint8Array): void {
     if ((detectPhase !== 'listening' && detectPhase !== 'awaiting-prompt') || !hostLink) {
       return;
     }
 
     for (const byte of ignored) {
-      const text = byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e);
+      const text = isDetectTextByte(byte);
 
       if (text) {
         sawText = true;
@@ -1098,17 +1139,32 @@ export function createAprsHostSession(options?: {
       options?.onAx25Ui?.(payload);
     }
 
+    const openLeftover = unframedOpenBuffer(decoded.ignoredBytes, decoded.holding, dataFrames.length);
+
     if (dataFrames.length > 0 && detectionOwnsWait()) {
       finishKissTraffic();
-    } else if (decoded.ignoredBytes.length > 0) {
+    } else if (!openLeftover && decoded.ignoredBytes.length > 0) {
       noteDetectBytes(decoded.ignoredBytes);
     }
 
-    if (decoded.ignoredBytes.length > 0) {
+    if (openLeftover) {
+      noteUnframedOpen();
+    }
+
+    if (decoded.ignoredBytes.length > 0 && !openLeftover) {
       commandText = appendCommandBytes(commandText, decoded.ignoredBytes);
     }
 
     record('rx', chunk, notes.join(', ') || 'empty');
+
+    if (openLeftover) {
+      if (current === generation) {
+        publish();
+      }
+
+      return;
+    }
+
     noteKissLost(decoded.ignoredBytes);
 
     if (kissConfirmed && promptSeen(commandText.subarray(commandTextAtConfirm))) {
@@ -1117,6 +1173,22 @@ export function createAprsHostSession(options?: {
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
     noteConnectionPrompt();
+
+    if (
+      openingBuffer
+      && hostLink
+      && dataFrames.length === 0
+      && !kissConfirmed
+      && frames === 0
+      && promptSeen(sessionBytes)
+    ) {
+      detectPhase = 'awaiting-prompt';
+      detectStep = 'after-text';
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+      detectDetail = `${hostLink.prompt} was already on this connection. Entering host KISS.`;
+      record('note', new Uint8Array(), detectDetail);
+    }
 
     if (commandActive) {
       commandBytes = appendCommandBytes(commandBytes, chunk);
@@ -1223,9 +1295,16 @@ export function createAprsHostSession(options?: {
         path = nextPath;
         ackOptIn = false;
         record('note', new Uint8Array(), hostListenNote(hostFlow));
-        opened.on('data', onData);
-        opened.on('error', onError);
         beginDetect();
+        openingBuffer = true;
+
+        try {
+          opened.on('data', onData);
+        } finally {
+          openingBuffer = false;
+        }
+
+        opened.on('error', onError);
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'The APRS port did not open';
         port = undefined;

@@ -1283,4 +1283,75 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectDetail).not.toMatch(/incomplete KISS frame/u);
     expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
   });
+
+  it('treats an unframed KISS leftover at open as traffic and writes nothing', async () => {
+    let time = 5_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: exit },
+    });
+    const fake = fakePort();
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(unframed);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('not silence');
+    expect(session.snapshot().detectDetail).toContain('Nothing was sent');
+
+    time += 20_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).not.toContain('not answering');
+  });
+
+  it('does not treat a later unframed chunk as the open buffer', async () => {
+    let time = 8_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    fake.push(unframed);
+    await settle();
+    expect(session.snapshot().detectPhase).not.toBe('waiting-traffic');
+    expect(fake.writes).toEqual([]);
+
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+  });
 });
