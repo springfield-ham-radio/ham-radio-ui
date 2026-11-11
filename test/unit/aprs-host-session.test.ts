@@ -410,11 +410,13 @@ describe('APRS host session', () => {
     await settle();
     expect(session.snapshot().kissConfirmed).toBe(false);
     expect(session.snapshot().messages.find((message) => message.key === sent.key)?.status).toBe('cancelled');
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     await session.advance(APRS_MESSAGE_RETRY_MS);
-    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes).toHaveLength(2);
     const again = await session.send({ ...draft, text: 'Next' });
     expect(again.status).toBe('blocked');
-    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes).toHaveLength(2);
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).not.toContain('RESTART');
   });
 
   it('feeds a split KISS position to the station callback and does not write', async () => {
@@ -992,5 +994,79 @@ describe('host Connect detection', () => {
     expect(session.snapshot().frames).toBe(1);
     expect(session.snapshot().trace.some((line) => line.note.includes('AX.25 UI'))).toBe(true);
     expect(fake.writes).toEqual([]);
+  });
+
+  it('enters KISS again when a power cycle prints cmd: after a UI frame', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const frameA = hexBytes(
+      'c0 00 82 a0 a8 66 62 62 60 9c 68 70 64 64 86 60 ae 92 88 8a 64 40 63 03 f0 2f 31 36 32 37 34 30 68 33 30 33 34 2e 30 30 4e 2f 30 39 37 33 37 2e 39 36 57 27 32 33 37 2f 31 32 34 2f 41 3d 30 30 31 37 34 35 c0',
+    );
+    fake.push(frameA);
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().frames).toBe(1);
+    expect(session.snapshot().incompleteBytes).toBe(0);
+    expect(fake.writes).toEqual([]);
+
+    const banner = '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\nRelease 09/Mar/11 3Chip ver 1.02\r\nChecksum $1859\r\ncmd:';
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+
+    const lost = session.snapshot();
+    expect(lost.kissConfirmed).toBe(false);
+    expect(lost.incompleteBytes).toBe(0);
+    expect(lost.commandTextBytes).toBe(banner.length);
+    expect(lost.detectPhase).toBe('entering');
+    expect(lost.trace.some((line) => line.note.includes('command-text'))).toBe(true);
+    expect(lost.trace.some((line) => line.note.includes('KISS is not confirmed'))).toBe(true);
+    expect(lost.trace.some((line) => /incomplete, \d+ held/u.test(line.note))).toBe(false);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    const rest = 'DA 110101000000\r\ncmd:HB 1200\r\nHBAUD    was 1200\r\ncmd:N4822C>APT311,WIDE2-1:/171242h3037.37N/09737.96W>\r\n';
+    fake.push(new TextEncoder().encode(rest));
+    await settle();
+    expect(session.snapshot().incompleteBytes).toBe(0);
+    expect(session.snapshot().commandTextBytes).toBe(banner.length + rest.length);
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+
+    fake.push(frameA);
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(session.snapshot().frames).toBe(2);
+    expect(session.snapshot().detectDetail).toContain('AX.25 UI seen');
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).toBe(`${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
+    expect(written).not.toContain('HB');
+    expect(written).not.toContain('RESET');
+    expect(written).not.toContain('XFLOW');
+    expect(written).not.toContain('KISS OFF');
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+  });
+
+  it('resets a stale KISS hold when detection is retried', async () => {
+    let time = 10_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const frameA = hexBytes(
+      'c0 00 82 a0 a8 66 62 62 60 9c 68 70 64 64 86 60 ae 92 88 8a 64 40 63 03 f0 2f 31 36 32 37 34 30 68 33 30 33 34 2e 30 30 4e 2f 30 39 37 33 37 2e 39 36 57 27 32 33 37 2f 31 32 34 2f 41 3d 30 30 31 37 34 35 c0',
+    );
+    fake.push(frameA);
+    await settle();
+    fake.push(Uint8Array.of(0xc0, 0x00, 0x11, 0x22));
+    expect(session.snapshot().incompleteBytes).toBe(3);
+    expect(session.retryDetection()).toBeUndefined();
+    expect(session.snapshot().incompleteBytes).toBe(0);
+    expect(session.snapshot().detectPhase).toBe('listening');
+    expect(fake.writes).toEqual([]);
+
+    time += 3_000;
+    session.poll();
+    await settle();
+    expect(session.snapshot().detectDetail).not.toMatch(/incomplete KISS frame/u);
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
   });
 });

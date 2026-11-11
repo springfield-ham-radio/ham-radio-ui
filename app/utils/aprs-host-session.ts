@@ -131,7 +131,9 @@ interface Waiting {
  *
  * Connect on a host link runs detection once: listen, then at most one
  * prompt request, the enter steps, and an optional kissExit. It does not
- * send a beacon, a message, or KISS OFF. Send is the only way a message
+ * send a beacon, a message, or KISS OFF. Command text after a KISS frame is
+ * not left in an open frame. A later prompt starts that detection pass again.
+ * Send is the only way a message
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
  * count. Cancel, Disconnect, and the module's prompt stop retries.
@@ -279,6 +281,24 @@ export function createAprsHostSession(options?: {
     return detectPhase === 'listening' || detectPhase === 'awaiting-prompt' || detectPhase === 'entering';
   }
 
+  function clearKissHold(): void {
+    kiss.pending = [];
+    kiss.inFrame = false;
+    kiss.escaped = false;
+    kiss.frameStartedAt = undefined;
+    incompleteBytes = 0;
+  }
+
+  function hasLineEnd(bytes: Uint8Array): boolean {
+    for (const byte of bytes) {
+      if (byte === 0x0a || byte === 0x0d) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function clearDetectClock(): void {
     if (detectTimer) {
       clearInterval(detectTimer);
@@ -324,6 +344,7 @@ export function createAprsHostSession(options?: {
       return;
     }
 
+    clearKissHold();
     commandActive = false;
     enterIndex = 0;
     interruptTried = false;
@@ -430,6 +451,8 @@ export function createAprsHostSession(options?: {
   }
 
   async function expireDetect(): Promise<void> {
+    releaseKissHold();
+
     if (detectBusy || !hostLink || !port?.isOpen || !detectionOwnsWait()) {
       return;
     }
@@ -832,11 +855,64 @@ export function createAprsHostSession(options?: {
     }
   }
 
+  function readKiss(chunk: Uint8Array): ReturnType<typeof pushKissBytes> {
+    const decoded = pushKissBytes(kiss, chunk, now());
+    const pending = Uint8Array.from(kiss.pending);
+
+    if (!hostLink || !kiss.inFrame || pending.length === 0 || pending[0] === 0x00 || !promptSeen(pending)) {
+      return decoded;
+    }
+
+    clearKissHold();
+    const ignoredBytes = new Uint8Array(decoded.ignoredBytes.length + pending.length);
+    ignoredBytes.set(decoded.ignoredBytes, 0);
+    ignoredBytes.set(pending, decoded.ignoredBytes.length);
+    return {
+      ...decoded,
+      ignored: decoded.ignored + pending.length,
+      ignoredBytes,
+      holding: 0,
+    };
+  }
+
+  function noteKissLost(ignored: Uint8Array): void {
+    if (!hostLink || !kissConfirmed || ignored.length === 0 || (kiss.inFrame && kiss.pending.length > 0)) {
+      return;
+    }
+
+    const promptHit = hasCommandPrompt(ignored, hostLink.prompt);
+
+    if (!promptHit && !hasLineEnd(ignored)) {
+      return;
+    }
+
+    loseKissConfirmation(promptHit
+      ? `${hostLink.prompt} arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.`
+      : 'Command text arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.');
+
+    if (detectPhase === 'idle' || detectPhase === 'waiting-traffic' || detectPhase === 'failed') {
+      beginDetect();
+    }
+
+    if (detectPhase === 'listening') {
+      noteDetectBytes(ignored);
+    }
+  }
+
   const onData = (chunk: Uint8Array): void => {
     const current = generation;
-    rxBytes += chunk.length;
-    rxChunks += 1;
-    const decoded = pushKissBytes(kiss, chunk);
+    const decoded = readKiss(chunk);
+    const quiet = chunk.length === 0 && decoded.ignored === 0 && decoded.frames.length === 0 && decoded.overflow === 0 && decoded.invalid === 0;
+    incompleteBytes = decoded.holding;
+
+    if (quiet) {
+      return;
+    }
+
+    if (chunk.length > 0) {
+      rxBytes += chunk.length;
+      rxChunks += 1;
+    }
     commandTextBytes += decoded.ignored;
     invalidBytes += decoded.invalid;
     overflowDrops += decoded.overflow;
@@ -887,13 +963,10 @@ export function createAprsHostSession(options?: {
     }
 
     record('rx', chunk, notes.join(', ') || 'empty');
+    noteKissLost(decoded.ignoredBytes);
 
-    const pending = Uint8Array.from(kiss.pending);
-    const pendingIsCommandText = pending.length > 0 && pending[0] !== 0x00 && promptSeen(pending);
-    const prompt = hostLink?.prompt;
-
-    if (prompt && kissConfirmed && (promptSeen(commandText.subarray(commandTextAtConfirm)) || pendingIsCommandText)) {
-      loseKissConfirmation(`${prompt} arrived on this connection. KISS is not confirmed. Queued transmissions were stopped.`);
+    if (kissConfirmed && promptSeen(commandText.subarray(commandTextAtConfirm))) {
+      noteKissLost(commandText.subarray(commandTextAtConfirm));
     }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
@@ -931,6 +1004,10 @@ export function createAprsHostSession(options?: {
       }
     })();
   };
+
+  function releaseKissHold(): void {
+    onData(new Uint8Array());
+  }
 
   const onError = (cause: Error): void => {
     error = cause.message;
@@ -1048,6 +1125,7 @@ export function createAprsHostSession(options?: {
       kiss.pending = [];
       kiss.inFrame = false;
       kiss.escaped = false;
+      kiss.frameStartedAt = undefined;
 
       if (!current) {
         publish();
@@ -1160,6 +1238,17 @@ export function createAprsHostSession(options?: {
       }
 
       beginDetect();
+
+      if (!kissConfirmed && promptSeen(commandText)) {
+        sawText = true;
+        detectPhase = 'awaiting-prompt';
+        detectStep = 'after-text';
+        detectDeadline = now() + hostLink.waitMs;
+        detectDetail = `Command text seen. Waiting for ${hostLink.prompt}.`;
+        record('note', new Uint8Array(), detectDetail);
+        maybeStartEnter();
+      }
+
       publish();
       return undefined;
     },
