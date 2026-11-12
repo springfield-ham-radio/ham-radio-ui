@@ -208,7 +208,7 @@ watch(activeTab, (tab) => {
 watch(
   () => [supportsCat.value, supportsAprs.value, route.query.tab, route.query.fixture] as const,
   ([supported, , tab]) => {
-    if (route.path === '/' && supportsAprs.value && (tab === 'aprs' || route.query.fixture === 'aprs-host-trace' || route.query.fixture === 'aprs-map') && activeTab.value !== 'aprs') {
+    if (route.path === '/' && supportsAprs.value && (tab === 'aprs' || route.query.fixture === 'aprs-host-trace' || route.query.fixture === 'aprs-map' || route.query.fixture === 'aprs-tnc-badge') && activeTab.value !== 'aprs') {
       activeTab.value = 'aprs';
     }
 
