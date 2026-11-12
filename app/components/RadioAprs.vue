@@ -6,15 +6,11 @@ import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
-import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
-import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, aprsTncModeBadge, type AprsConnectionMode, type AprsTncModeInput } from '~/utils/aprs-connection';
+import type { AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { browserAprsHostFlowStorage, readAprsHostFlow, writeAprsHostFlow } from '~/utils/aprs-host-flow';
-import { serialPortLabel } from '~/utils/serial-port-list';
-import { readSerialPortSettings } from '~/utils/serial-port-settings';
-import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
 
 const props = defineProps<{
   cardId?: string;
@@ -22,8 +18,9 @@ const props = defineProps<{
   radioName?: string;
 }>();
 
-const { snapshots, connecting, watchCard, connect, unavailable, receiveText, ingestAx25Ui, disconnect, clear } = useAprs();
+const { snapshots, watchCard, receiveText, ingestAx25Ui, clear } = useAprs();
 const host = useAprsHost();
+const { requestedModes } = useAprsTncMode();
 const { radioById } = useSavedRadios();
 const { configurations } = useRadio();
 const route = useRoute();
@@ -81,13 +78,19 @@ const transcript = computed(() => serialTranscript(traceLines.value));
 const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true || tncPreview.value === 'monitor');
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
-const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
-const hostConnecting = computed(() => (props.cardId ? host.connecting.value[props.cardId] === true : false));
 const mine = ref('');
 const mineError = ref<string | undefined>();
-const requestedMode = ref<AprsConnectionMode>('passive');
 const savedHostFlow = props.cardId ? readAprsHostFlow(browserAprsHostFlowStorage() ?? { getItem: () => null, setItem() { return undefined; } }, props.cardId) : undefined;
 const requestedFlow = ref<AprsHostFlowControl>(savedHostFlow ?? 'software');
+const selectedMode = computed<AprsConnectionMode>(() => {
+  const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
+
+  if (chosen) {
+    return chosen;
+  }
+
+  return profile.value?.host ? 'host' : 'passive';
+});
 const activeMode = computed<AprsConnectionMode>(() => {
   if (kissListening.value) {
     return 'host';
@@ -97,52 +100,10 @@ const activeMode = computed<AprsConnectionMode>(() => {
     return 'passive';
   }
 
-  return profile.value?.host ? requestedMode.value : 'passive';
+  return selectedMode.value;
 });
+const portOpen = computed(() => kissListening.value || isConnected.value);
 const activeFlow = computed(() => (kissListening.value ? (hostSnapshot.value?.hostFlow ?? requestedFlow.value) : requestedFlow.value));
-const connection = computed(() =>
-  aprsConnectionView({
-    mode: activeMode.value,
-    passiveOpen: isConnected.value,
-    hostOpen: kissListening.value,
-    passiveConnecting: isConnecting.value && !tncPreview.value,
-    hostConnecting: hostConnecting.value && !tncPreview.value,
-    kissConfirmed: tncPreview.value === 'confirmed' || hostSnapshot.value?.kissConfirmed === true,
-  }),
-);
-const tncMode = computed(() => {
-  const preview = tncPreview.value;
-  const live: AprsTncModeInput = {
-    open: connection.value.open,
-    kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
-    detectPhase: hostSnapshot.value?.detectPhase,
-    commandPhase: hostSnapshot.value?.commandPhase,
-  };
-
-  if (!preview) {
-    return aprsTncModeBadge(live);
-  }
-
-  const shown: Record<string, AprsTncModeInput> = {
-    monitor: { open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' },
-    detecting: { open: 'host', kissConfirmed: false, detectPhase: 'listening', commandPhase: 'idle' },
-    command: { open: 'host', kissConfirmed: false, detectPhase: 'entering', commandPhase: 'prompt' },
-    waiting: { open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
-    confirmed: { open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
-    failed: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
-  };
-
-  return aprsTncModeBadge(shown[preview] ?? shown.confirmed);
-});
-const modeItems = computed(() => {
-  const items: Array<{ label: string; value: AprsConnectionMode }> = [{ label: 'Passive monitor', value: 'passive' }];
-
-  if (profile.value?.host) {
-    items.push({ label: 'Host session', value: 'host' });
-  }
-
-  return items;
-});
 const flowLabels: Record<AprsHostFlowControl, string> = {
   software: 'Software (XON/XOFF)',
   none: 'Off',
@@ -156,11 +117,6 @@ const flowItems = computed(() => {
 const stations = computed(() => snapshot.value?.stations ?? []);
 const log = computed(() => snapshot.value?.log ?? []);
 const selected = computed(() => stations.value.find((station) => station.callsign === selectedCall.value) ?? stations.value[0]);
-const aprsPort = computed(() => savedRadio.value?.aprsSerialPort);
-const aprsBaud = computed(() => savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600);
-const portLabel = computed(() =>
-  aprsPort.value ? serialPortLabel(aprsPort.value, readSerialPortSettings().portAliases) : undefined,
-);
 const stationCount = computed(() => stations.value.length);
 const logCount = computed(() => log.value.length);
 const { virtualRows: stationRows, paddingTop: stationPadTop, paddingBottom: stationPadBottom } = useFixedVirtualRows(
@@ -173,30 +129,6 @@ const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom
 const tabs: TabsItem[] = APRS_PANEL_TABS.map((tab) => ({ ...tab }));
 const plottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
 const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
-
-const statusLine = computed(() => {
-  if (kissFixture.value && !kissListening.value && !isConnected.value) {
-    return 'Fixture AX.25 UI frame. Not a radio, and no port was opened. This is not the CAT connection.';
-  }
-
-  const openPath = kissListening.value ? hostSnapshot.value?.path : isConnected.value ? snapshot.value?.path : undefined;
-  const where = openPath ? serialPortLabel(openPath, readSerialPortSettings().portAliases) : portLabel.value;
-
-  if (!savedRadio.value) {
-    return `${connection.value.detail} Save this radio under Preferences to choose an APRS port. The memory port is not used.`;
-  }
-
-  if (!where) {
-    return `${connection.value.detail} Choose an APRS serial port under Preferences. The memory port is not used.`;
-  }
-
-  const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
-  const detection = kissListening.value && hostSnapshot.value?.detectDetail
-    ? ` ${serialEventHeadline(hostSnapshot.value.detectDetail)}`
-    : '';
-
-  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}${detection}`;
-});
 
 const detectFailure = computed(() => {
   const detail = hostSnapshot.value?.detectDetail ?? '';
@@ -254,7 +186,7 @@ const ackDetail = computed(() => {
     return 'Off. Set My callsign first. Nothing is acknowledged, and this is not a read receipt.';
   }
 
-  const live = connection.value.open === 'host' ? '' : ' Each connection starts off, and the choice is not saved.';
+  const live = kissListening.value ? '' : ' Each connection starts off, and the choice is not saved.';
 
   return hostSnapshot.value?.ackOptIn
     ? `On for ${ackCall.value}. A later message addressed to that callsign is answered. Messages already heard are left alone. This is not a read receipt.${live}`
@@ -279,27 +211,14 @@ function onAck(next: boolean): void {
   host.setAckOptIn(props.cardId, Boolean(next));
 }
 
-watch(
-  () => connection.value.open,
-  (open) => {
-    if (open === 'host' && props.cardId && mine.value) {
-      mineError.value = host.setIdentity(props.cardId, mine.value);
-    }
-  },
-);
-
-function onMode(value: unknown): void {
-  if (connection.value.open) {
-    return;
+watch(kissListening, (open) => {
+  if (open && props.cardId && mine.value) {
+    mineError.value = host.setIdentity(props.cardId, mine.value);
   }
-
-  if (value === 'passive' || value === 'host') {
-    requestedMode.value = value;
-  }
-}
+});
 
 function onFlow(value: unknown): void {
-  if (connection.value.open) {
+  if (portOpen.value) {
     return;
   }
 
@@ -314,63 +233,6 @@ function onFlow(value: unknown): void {
   }
 }
 
-async function onConnect(): Promise<void> {
-  if (tncPreview.value) {
-    return;
-  }
-
-  const cardId = props.cardId;
-  const path = aprsPort.value;
-  const action = aprsConnectAction({
-    mode: activeMode.value,
-    passiveOpen: isConnected.value,
-    hostOpen: kissListening.value,
-  });
-
-  if (!cardId || !path || action.kind === 'blocked') {
-    return;
-  }
-
-  try {
-    const present = await isSerialPortPathAvailable(path);
-
-    if (!present) {
-      if (action.kind === 'open-host') {
-        host.unavailable(cardId, aprsPortMissingMessage(path));
-      } else {
-        unavailable(cardId, aprsPortMissingMessage(path));
-      }
-
-      return;
-    }
-  } catch {
-    // The port list is unavailable outside the desktop shell. Open reports that failure.
-  }
-
-  if (action.kind === 'open-host') {
-    await host.connect(cardId, path, aprsBaud.value, activeFlow.value);
-    return;
-  }
-
-  await connect(cardId, path, aprsBaud.value);
-}
-
-async function onDisconnect(): Promise<void> {
-  if (!props.cardId || tncPreview.value) {
-    return;
-  }
-
-  const action = aprsDisconnectAction({ passiveOpen: isConnected.value, hostOpen: kissListening.value });
-
-  if (action.kind === 'close-passive' || action.kind === 'close-both') {
-    await disconnect(props.cardId);
-  }
-
-  if (action.kind === 'close-host' || action.kind === 'close-both') {
-    await host.disconnect(props.cardId);
-  }
-}
-
 function selectStation(callsign: string | undefined): void {
   if (!callsign) {
     return;
@@ -378,14 +240,6 @@ function selectStation(callsign: string | undefined): void {
 
   selectedCall.value = callsign;
   aprsMap.value?.focus(callsign);
-}
-
-function onRetryDetection(): void {
-  if (!props.cardId || tncPreview.value) {
-    return;
-  }
-
-  host.retryDetection(props.cardId);
 }
 
 async function onCopyTrace(): Promise<void> {
@@ -418,79 +272,18 @@ function onClear(): void {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-    <div class="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
-      <div class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
-        <UFormField label="APRS COM" class="w-44">
-          <USelect
-            :model-value="activeMode"
-            :items="modeItems"
-            value-key="value"
-            class="w-full"
-            :disabled="Boolean(connection.open)"
-            @update:model-value="onMode"
-          />
-        </UFormField>
-        <UFormField v-if="activeMode === 'host'" label="Flow control" class="w-52">
-          <USelect
-            :model-value="activeFlow"
-            :items="flowItems"
-            value-key="value"
-            class="w-full"
-            :disabled="Boolean(connection.open)"
-            @update:model-value="onFlow"
-          />
-        </UFormField>
-        <p class="min-w-0 flex-1 pb-1.5 text-xs text-muted">
-          {{ statusLine }}
-          <NuxtLink v-if="!connection.open" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-1.5">
-        <UBadge
-          :label="connection.badge"
-          :color="connection.badge === 'Connected' ? 'success' : 'neutral'"
-          variant="subtle"
-          :icon="connection.badge === 'Connected' ? 'i-lucide-plug-zap' : 'i-lucide-plug'"
+    <AprsConnectionBar :card-id="cardId" :model="model" :radio-name="radioName" />
+    <div v-if="activeMode === 'host' && profile?.host" class="mb-2 flex shrink-0 flex-wrap items-end gap-2">
+      <UFormField label="Flow control" class="w-52">
+        <USelect
+          :model-value="activeFlow"
+          :items="flowItems"
+          value-key="value"
+          class="w-full"
+          :disabled="portOpen"
+          @update:model-value="onFlow"
         />
-        <UTooltip v-if="tncMode.visible" :text="tncMode.tooltip">
-          <UBadge
-            :label="tncMode.label"
-            :color="tncMode.color"
-            variant="subtle"
-            :aria-label="`TNC mode: ${tncMode.label}. ${tncMode.tooltip}`"
-          />
-        </UTooltip>
-        <UButton
-          v-if="!connection.open"
-          color="primary"
-          size="sm"
-          icon="i-lucide-cable"
-          label="Connect"
-          :loading="isConnecting || hostConnecting"
-          :disabled="!cardId || !aprsPort"
-          @click="onConnect"
-        />
-        <template v-else>
-          <UButton
-            v-if="kissListening"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            icon="i-lucide-search"
-            label="Retry detection"
-            :disabled="hostSnapshot?.detectPhase === 'listening' || hostSnapshot?.detectPhase === 'awaiting-prompt' || hostSnapshot?.detectPhase === 'entering'"
-            @click="onRetryDetection"
-          />
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="sm"
-            icon="i-lucide-unplug"
-            label="Disconnect"
-            @click="onDisconnect"
-          />
-        </template>
-      </div>
+      </UFormField>
     </div>
 
     <div v-if="activeMode === 'host'" class="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">

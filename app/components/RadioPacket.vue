@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import { canonicalAx25Call } from '~/utils/aprs-ax25';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
-import { aprsPortMissingMessage } from '~/utils/aprs-d710';
+import { packetNeedsHostNotice } from '~/utils/aprs-connection';
 import { formatPacketTime, packetFixturePayloads } from '~/utils/packet-monitor';
 import type { PacketTypeFilter } from '~/utils/packet-monitor';
 import { packetMyCallLabel } from '~/utils/packet-settings';
 import { packetCallStationTooltip, packetTerminalView } from '~/utils/packet-terminal';
-import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
-import { aprsHostFlowForConnect, browserAprsHostFlowStorage, readAprsHostFlow } from '~/utils/aprs-host-flow';
-import { serialPortLabel } from '~/utils/serial-port-list';
-import { readSerialPortSettings } from '~/utils/serial-port-settings';
-import { isSerialPortPathAvailable } from '~/utils/serial-port-reconnect';
 
 const props = defineProps<{
   cardId?: string;
@@ -19,7 +14,9 @@ const props = defineProps<{
 }>();
 
 const host = useAprsHost();
+const monitor = useAprs();
 const packet = usePacket();
+const { requestedModes } = useAprsTncMode();
 const { radioById } = useSavedRadios();
 const { configurations } = useRadio();
 const { choiceForRadio, identityFor } = useOperatorLicense();
@@ -78,20 +75,11 @@ const moduloItems = [
   { label: '128 (AX.25 2.2)', value: 128 },
 ];
 
-const kissLine = computed(() => {
-  if (!savedRadio.value?.aprsSerialPort) {
-    return 'Choose the APRS serial port under Preferences. Packet uses that shared host session, not the memory port.';
-  }
-
-  const where = serialPortLabel(savedRadio.value.aprsSerialPort, readSerialPortSettings().portAliases);
-
-  if (!portOpen.value) {
-    return `KISS is closed on ${where}. Connect opens the shared host session and does not send a packet.`;
-  }
-
-  const detection = hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
-  return `KISS is open on ${where}.${detection} Packet frames are sent only from Call station or a line in the terminal.`;
-});
+const hostNotice = computed(() => packetNeedsHostNotice({
+  hostOpen: portOpen.value,
+  passiveOpen: props.cardId ? monitor.snapshots.value[props.cardId]?.connected === true : false,
+  selected: (props.cardId ? requestedModes.value[props.cardId] : undefined) ?? (profile.value?.host ? 'host' : 'passive'),
+}));
 
 if (props.cardId) {
   host.watchCard(props.cardId);
@@ -178,40 +166,6 @@ function onNumber(key: 'paclen' | 'maxframe' | 't1Ms' | 't3Ms' | 'n2', value: st
   packet.updateSettings(props.cardId, { [key]: Number(value) });
 }
 
-async function onKissConnect(): Promise<void> {
-  const cardId = props.cardId;
-  const pathName = savedRadio.value?.aprsSerialPort;
-
-  if (!cardId || !pathName || portOpen.value) {
-    return;
-  }
-
-  try {
-    const present = await isSerialPortPathAvailable(pathName);
-
-    if (!present) {
-      host.unavailable(cardId, aprsPortMissingMessage(pathName));
-      return;
-    }
-  } catch {
-    // Outside the desktop shell the port list is unavailable. Open reports that.
-  }
-
-  const storage = browserAprsHostFlowStorage();
-  const saved = storage && cardId ? readAprsHostFlow(storage, cardId) : undefined;
-  const flow: AprsHostFlowControl = aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow);
-  await host.connect(cardId, pathName, savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600, flow);
-}
-
-async function onKissDisconnect(): Promise<void> {
-  if (!props.cardId) {
-    return;
-  }
-
-  await packet.endLink(props.cardId);
-  await host.disconnect(props.cardId);
-}
-
 async function onLinkConnect(): Promise<void> {
   if (!props.cardId || !terminal.value.canConnect) {
     return;
@@ -264,43 +218,19 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-    <div class="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
-      <div class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
-        <p class="pb-1.5 font-mono text-sm text-highlighted">{{ myCall ?? 'No callsign' }}</p>
-        <UFormField v-if="!ssidLocked" label="SSID" class="w-20">
-          <USelect
-            :model-value="state?.settings.ssid ?? 0"
-            :items="ssidItems"
-            value-key="value"
-            class="w-full"
-            @update:model-value="onSsid"
-          />
-        </UFormField>
-        <p class="min-w-0 flex-1 pb-1.5 text-xs text-muted">
-          {{ kissLine }}
-          <NuxtLink v-if="!portOpen" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-1.5">
-        <UBadge :label="portOpen ? 'KISS open' : 'KISS closed'" :color="portOpen ? 'success' : 'neutral'" variant="subtle" />
-        <UButton
-          v-if="!portOpen"
-          size="sm"
-          label="Connect KISS"
-          icon="i-lucide-plug"
-          :loading="props.cardId ? host.connecting.value[props.cardId] === true : false"
-          @click="onKissConnect"
+    <AprsConnectionBar :card-id="cardId" :model="model" :radio-name="radioName" />
+    <p v-if="hostNotice" class="mb-2 text-xs text-muted">{{ hostNotice }}</p>
+    <div class="mb-2 flex shrink-0 flex-wrap items-end gap-2">
+      <p class="pb-1.5 font-mono text-sm text-highlighted">{{ myCall ?? 'No callsign' }}</p>
+      <UFormField v-if="!ssidLocked" label="SSID" class="w-20">
+        <USelect
+          :model-value="state?.settings.ssid ?? 0"
+          :items="ssidItems"
+          value-key="value"
+          class="w-full"
+          @update:model-value="onSsid"
         />
-        <UButton
-          v-else
-          size="sm"
-          color="neutral"
-          variant="outline"
-          label="Disconnect KISS"
-          icon="i-lucide-unplug"
-          @click="onKissDisconnect"
-        />
-      </div>
+      </UFormField>
     </div>
 
     <UTabs

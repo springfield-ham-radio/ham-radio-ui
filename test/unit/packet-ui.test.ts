@@ -186,7 +186,7 @@ describe('Packet monitor and terminal', () => {
       station: 'W1AW-1',
     };
 
-    expect(packetCallStationTooltip({ ...ready, portOpen: false, station: '' })).toBe('Connect KISS first');
+    expect(packetCallStationTooltip({ ...ready, portOpen: false, station: '' })).toBe('Connect (Host) first');
     expect(packetCallStationTooltip({ ...ready, station: '' })).toBe('Enter a station callsign');
     expect(packetCallStationTooltip({ ...ready, station: '   ' })).toBe('Enter a station callsign');
     expect(packetCallStationTooltip({ ...ready, station: 'NO' })).toBe('Use a callsign of 3 to 6 characters');

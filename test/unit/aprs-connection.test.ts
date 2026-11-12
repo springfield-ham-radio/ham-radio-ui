@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, aprsTncModeBadge, type AprsTncModeInput } from '~/utils/aprs-connection';
+import {
+  aprsConnectAction,
+  aprsConnectDisabledReason,
+  aprsConnectLabel,
+  aprsConnectionView,
+  aprsDisconnectAction,
+  aprsTncModeBadge,
+  packetNeedsHostNotice,
+  type AprsTncModeInput,
+} from '~/utils/aprs-connection';
 
 describe('APRS COM connection', () => {
   it('opens the passive monitor without a host or KISS action', () => {
@@ -90,6 +99,60 @@ describe('APRS COM connection', () => {
     expect(host.detail).toContain('kissExit');
     expect(host.detail).toContain('does not transmit on the air');
     expect(host.detail).not.toContain('Enter host KISS');
+  });
+});
+
+describe('shared TNC connection bar', () => {
+  it('names the connect face for the selected mode and does not connect from the caret', () => {
+    expect(aprsConnectLabel('host')).toBe('Connect (Host)');
+    expect(aprsConnectLabel('passive')).toBe('Connect (Monitor only)');
+    expect(aprsConnectAction({ mode: 'host', passiveOpen: false, hostOpen: false })).toEqual({ kind: 'open-host' });
+    expect(aprsConnectAction({ mode: 'passive', passiveOpen: false, hostOpen: false })).toEqual({ kind: 'open-passive' });
+  });
+
+  it('explains a disabled connect face and stays quiet when the port can open', () => {
+    expect(aprsConnectDisabledReason({
+      hasRadio: false,
+      hasPort: false,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toMatch(/Preferences/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: false,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toBe('Choose an APRS serial port in Preferences.');
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: true,
+      hostAvailable: true,
+      mode: 'passive',
+    })).toMatch(/already open/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: false,
+      hostAvailable: false,
+      mode: 'host',
+    })).toMatch(/no host session/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toBeUndefined();
+  });
+
+  it('tells the Packet tab that Monitor only does not open KISS', () => {
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: false, selected: 'host' })).toBeUndefined();
+    expect(packetNeedsHostNotice({ hostOpen: true, passiveOpen: false, selected: 'passive' })).toBeUndefined();
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: true, selected: 'host' })).toMatch(/Packet needs Host mode/);
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: false, selected: 'passive' })).toMatch(/does not open a KISS session/);
   });
 });
 

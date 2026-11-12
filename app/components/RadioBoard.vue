@@ -71,7 +71,7 @@ function maybeOpenChannelPrintFixture(): void {
 }
 
 function maybeOpenPacketFixture(): void {
-  if (!import.meta.dev || route.query.fixture !== 'packet' || packetFixtureOpened.value) {
+  if (!import.meta.dev || (route.query.fixture !== 'packet' && route.query.fixture !== 'aprs-tnc-badge') || packetFixtureOpened.value) {
     return;
   }
 

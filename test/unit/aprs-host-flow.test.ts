@@ -41,9 +41,12 @@ describe('saved APRS host flow', () => {
   it('wires Packet Connect to the saved flow and watches the host card', () => {
     const packet = readFileSync(new URL('../../app/components/RadioPacket.vue', import.meta.url), 'utf8');
     const aprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
+    const bar = readFileSync(new URL('../../app/components/AprsConnectionBar.vue', import.meta.url), 'utf8');
     expect(packet).toContain('host.watchCard(props.cardId)');
-    expect(packet).toContain('aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow)');
-    expect(packet).not.toContain("profile.value?.host?.defaultFlow ?? 'software'");
+    expect(packet).toContain('<AprsConnectionBar');
+    expect(aprs).toContain('<AprsConnectionBar');
+    expect(bar).toContain('aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow)');
+    expect(bar).not.toContain("profile.value?.host?.defaultFlow ?? 'software'");
     expect(aprs).toContain('writeAprsHostFlow(storage, props.cardId, value)');
     expect(aprs).toContain('readAprsHostFlow(');
   });

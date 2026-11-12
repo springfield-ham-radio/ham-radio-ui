@@ -50,7 +50,7 @@ export function packetCallStationTooltip(input: {
   station: string;
 }): string | undefined {
   if (!input.portOpen) {
-    return 'Connect KISS first';
+    return 'Connect (Host) first';
   }
 
   if (input.phase === 'connecting') {
