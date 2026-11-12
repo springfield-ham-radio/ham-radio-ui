@@ -49,6 +49,10 @@ const terminal = computed(() => packetTerminalView({
   myCall: myCall.value,
   peer: state.value?.peer,
 }));
+const packetPanes = [
+  { label: 'Monitor', value: 'monitor', slot: 'monitor' },
+  { label: 'Terminal', value: 'terminal', slot: 'terminal' },
+];
 const typeItems: Array<{ label: string; value: PacketTypeFilter }> = [
   { label: 'All frames', value: 'all' },
   { label: 'I', value: 'I' },
@@ -86,7 +90,7 @@ const kissLine = computed(() => {
   }
 
   const detection = hostSnapshot.value?.detectDetail ? ` ${hostSnapshot.value.detectDetail}` : '';
-  return `KISS is open on ${where}.${detection} Packet frames are sent only from Connect or a line in the terminal.`;
+  return `KISS is open on ${where}.${detection} Packet frames are sent only from Call station or a line in the terminal.`;
 });
 
 if (props.cardId) {
@@ -290,12 +294,21 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
       </div>
     </div>
 
-    <div class="mb-2 flex shrink-0 gap-1.5">
-      <UButton size="xs" :variant="pane === 'monitor' ? 'solid' : 'ghost'" label="Monitor" @click="pane = 'monitor'" />
-      <UButton size="xs" :variant="pane === 'terminal' ? 'solid' : 'ghost'" label="Terminal" @click="pane = 'terminal'" />
-    </div>
-
-    <div v-if="pane === 'monitor'" class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+    <UTabs
+      v-model="pane"
+      color="primary"
+      variant="link"
+      :items="packetPanes"
+      class="flex min-h-0 flex-1 flex-col overflow-hidden"
+      :ui="{
+        list: 'w-full shrink-0 items-center gap-0.5 border-b border-default',
+        trigger: 'grow-0 px-3 data-[state=inactive]:text-muted data-[state=active]:text-primary',
+        indicator: 'bg-primary h-0.5 rounded-full',
+        content: 'flex min-h-0 flex-1 flex-col overflow-hidden pt-2 focus-visible:outline-none',
+      }"
+    >
+      <template #monitor>
+    <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       <div class="flex shrink-0 flex-wrap items-end gap-2">
         <UFormField label="Callsign" class="w-40">
           <UInput
@@ -360,8 +373,10 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
         </table>
       </div>
     </div>
+      </template>
 
-    <div v-else class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      <template #terminal>
+    <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       <div class="flex shrink-0 flex-wrap items-end gap-2">
         <UBadge :label="terminal.linkLabel" :color="state?.phase === 'connected' ? 'success' : 'neutral'" variant="subtle" />
         <UFormField label="Station" class="w-36" :error="peer.length > 0 && !peerReady ? 'Enter a callsign' : undefined">
@@ -370,9 +385,21 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
         <UFormField label="Path" class="w-48">
           <UInput v-model="path" placeholder="Optional digipeaters" class="w-full font-mono" :disabled="terminal.canDisconnect" />
         </UFormField>
-        <UButton size="sm" label="Connect" icon="i-lucide-link" :disabled="!terminal.canConnect || !peerReady" @click="onLinkConnect" />
+        <UTooltip text="Connect KISS first" :disabled="portOpen">
+          <span class="inline-flex">
+            <UButton
+              size="sm"
+              label="Call station"
+              icon="i-lucide-link"
+              :color="portOpen && terminal.canConnect ? 'primary' : 'neutral'"
+              :variant="portOpen && terminal.canConnect ? 'solid' : 'outline'"
+              :disabled="!portOpen || !terminal.canConnect || !peerReady"
+              @click="onLinkConnect"
+            />
+          </span>
+        </UTooltip>
         <UButton size="sm" color="neutral" variant="outline" label="Disconnect" :disabled="!terminal.canDisconnect" @click="onLinkDisconnect" />
-        <p v-if="terminal.connectBlocked && !terminal.canDisconnect" class="pb-1.5 text-xs text-muted">{{ terminal.connectBlocked }}</p>
+        <p v-if="portOpen && terminal.connectBlocked && !terminal.canDisconnect" class="pb-1.5 text-xs text-muted">{{ terminal.connectBlocked }}</p>
         <p v-else-if="state?.error" class="pb-1.5 text-xs text-error">{{ state.error }}</p>
       </div>
       <div class="flex shrink-0 flex-wrap items-end gap-2">
@@ -407,5 +434,7 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
         <UButton color="neutral" variant="ghost" label="Clear" @click="props.cardId && packet.clearScrollback(props.cardId)" />
       </form>
     </div>
+      </template>
+    </UTabs>
   </div>
 </template>

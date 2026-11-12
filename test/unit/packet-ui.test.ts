@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call, encodeAx25Ui } from '~/utils/aprs-ax25';
 import { encodeKissData } from '~/utils/aprs-kiss';
@@ -159,6 +160,18 @@ describe('Packet monitor and terminal', () => {
     expect(up.canDisconnect).toBe(true);
     expect(up.linkLabel).toBe('Connected to W1AW');
     expect(packetTerminalView({ ...up, myCall: undefined, phase: 'none' }).connectBlocked).toMatch(/Preferences/);
+  });
+
+  it('names the station button Call station and uses link tabs', () => {
+    const source = readFileSync(new URL('../../app/components/RadioPacket.vue', import.meta.url), 'utf8');
+    expect(source).toContain('label="Call station"');
+    expect(source).toContain('text="Connect KISS first"');
+    expect(source).toContain(':disabled="!portOpen || !terminal.canConnect || !peerReady"');
+    expect(source).toContain(":variant=\"portOpen && terminal.canConnect ? 'solid' : 'outline'\"");
+    expect(source).toContain('label="Disconnect"');
+    expect(source).not.toContain('Hang up');
+    expect(source).toContain('variant="link"');
+    expect(source).not.toContain("pane === 'monitor'");
   });
 });
 
