@@ -1,3 +1,13 @@
+## [3.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.5.0...v3.6.0) (2026-11-12)
+
+### Features
+
+* TNC mode badge on the APRS host connection bar ([#207](https://github.com/springfield-ham-radio/ham-radio-ui/issues/207)) ([fa67770](https://github.com/springfield-ham-radio/ham-radio-ui/commit/fa67770124ba57502fe6a8cbfdd9041018225338))
+
+### Bug Fixes
+
+* **deps:** bump node-forge from 1.4.2 to 1.4.3 ([#206](https://github.com/springfield-ham-radio/ham-radio-ui/issues/206)) ([7839a1f](https://github.com/springfield-ham-radio/ham-radio-ui/commit/7839a1f08ac48a55d8c27651da8db4e030dfab02))
+
 ## [3.5.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.4.0...v3.5.0) (2026-11-11)
 
 ### Features
