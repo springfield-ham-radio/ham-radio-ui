@@ -8,7 +8,7 @@ import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
-import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, type AprsConnectionMode } from '~/utils/aprs-connection';
+import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, aprsTncModeBadge, type AprsConnectionMode, type AprsTncModeInput } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { serialPortLabel } from '~/utils/serial-port-list';
@@ -29,6 +29,13 @@ const route = useRoute();
 const examplePackets = computed(() => import.meta.dev && route.query.fixture === 'aprs-map');
 const kissFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-kiss-feed');
 const traceFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-host-trace');
+const tncPreview = computed(() => {
+  if (!import.meta.dev || route.query.fixture !== 'aprs-tnc-badge') {
+    return undefined;
+  }
+
+  return typeof route.query.tnc === 'string' ? route.query.tnc : 'confirmed';
+});
 const activeTab = ref('stations');
 const aprsMap = useTemplateRef('aprsMap');
 const selectedCall = ref<string | undefined>();
@@ -71,8 +78,8 @@ const traceLines = computed(() => (traceFixture.value ? APRS_HOST_TRACE_FIXTURE 
 const traceText = computed(() => formatTrace(traceLines.value));
 const transcript = computed(() => serialTranscript(traceLines.value));
 const showTraceHex = ref(false);
-const isConnected = computed(() => snapshot.value?.connected === true);
-const kissListening = computed(() => hostSnapshot.value?.connected === true);
+const isConnected = computed(() => snapshot.value?.connected === true || tncPreview.value === 'monitor');
+const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
 const isConnecting = computed(() => (props.cardId ? connecting.value[props.cardId] === true : false));
 const hostConnecting = computed(() => (props.cardId ? host.connecting.value[props.cardId] === true : false));
 const mine = ref('');
@@ -96,11 +103,35 @@ const connection = computed(() =>
     mode: activeMode.value,
     passiveOpen: isConnected.value,
     hostOpen: kissListening.value,
-    passiveConnecting: isConnecting.value,
-    hostConnecting: hostConnecting.value,
-    kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
+    passiveConnecting: isConnecting.value && !tncPreview.value,
+    hostConnecting: hostConnecting.value && !tncPreview.value,
+    kissConfirmed: tncPreview.value === 'confirmed' || hostSnapshot.value?.kissConfirmed === true,
   }),
 );
+const tncMode = computed(() => {
+  const preview = tncPreview.value;
+  const live: AprsTncModeInput = {
+    open: connection.value.open,
+    kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
+    detectPhase: hostSnapshot.value?.detectPhase,
+    commandPhase: hostSnapshot.value?.commandPhase,
+  };
+
+  if (!preview) {
+    return aprsTncModeBadge(live);
+  }
+
+  const shown: Record<string, AprsTncModeInput> = {
+    monitor: { open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' },
+    detecting: { open: 'host', kissConfirmed: false, detectPhase: 'listening', commandPhase: 'idle' },
+    command: { open: 'host', kissConfirmed: false, detectPhase: 'entering', commandPhase: 'prompt' },
+    waiting: { open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
+    confirmed: { open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
+    failed: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
+  };
+
+  return aprsTncModeBadge(shown[preview] ?? shown.confirmed);
+});
 const modeItems = computed(() => {
   const items: Array<{ label: string; value: AprsConnectionMode }> = [{ label: 'Passive monitor', value: 'passive' }];
 
@@ -276,6 +307,10 @@ function onFlow(value: unknown): void {
 }
 
 async function onConnect(): Promise<void> {
+  if (tncPreview.value) {
+    return;
+  }
+
   const cardId = props.cardId;
   const path = aprsPort.value;
   const action = aprsConnectAction({
@@ -313,7 +348,7 @@ async function onConnect(): Promise<void> {
 }
 
 async function onDisconnect(): Promise<void> {
-  if (!props.cardId) {
+  if (!props.cardId || tncPreview.value) {
     return;
   }
 
@@ -338,7 +373,7 @@ function selectStation(callsign: string | undefined): void {
 }
 
 function onRetryDetection(): void {
-  if (!props.cardId) {
+  if (!props.cardId || tncPreview.value) {
     return;
   }
 
@@ -409,6 +444,14 @@ function onClear(): void {
           variant="subtle"
           :icon="connection.badge === 'Connected' ? 'i-lucide-plug-zap' : 'i-lucide-plug'"
         />
+        <UTooltip v-if="tncMode.visible" :text="tncMode.tooltip">
+          <UBadge
+            :label="tncMode.label"
+            :color="tncMode.color"
+            variant="subtle"
+            :aria-label="`TNC mode: ${tncMode.label}. ${tncMode.tooltip}`"
+          />
+        </UTooltip>
         <UButton
           v-if="!connection.open"
           color="primary"
@@ -453,6 +496,16 @@ function onClear(): void {
         @update:model-value="onAck"
       />
     </div>
+
+    <UAlert
+      v-if="tncPreview"
+      color="neutral"
+      variant="subtle"
+      icon="i-lucide-tags"
+      title="Fixture TNC mode"
+      description="The mode pill is sample detection state. No port was opened and nothing was written."
+      class="mb-2 shrink-0"
+    />
 
     <UAlert
       v-if="examplePackets"

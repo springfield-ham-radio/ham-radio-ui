@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction } from '~/utils/aprs-connection';
+import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, aprsTncModeBadge, type AprsTncModeInput } from '~/utils/aprs-connection';
 
 describe('APRS COM connection', () => {
   it('opens the passive monitor without a host or KISS action', () => {
@@ -90,5 +90,74 @@ describe('APRS COM connection', () => {
     expect(host.detail).toContain('kissExit');
     expect(host.detail).toContain('does not transmit on the air');
     expect(host.detail).not.toContain('Enter host KISS');
+  });
+});
+
+describe('APRS TNC mode badge', () => {
+  const host = (patch: Partial<AprsTncModeInput>): AprsTncModeInput => ({
+    open: 'host',
+    kissConfirmed: false,
+    detectPhase: 'listening',
+    commandPhase: 'idle',
+    ...patch,
+  });
+
+  it('hides the mode when the port is closed', () => {
+    expect(aprsTncModeBadge({ open: undefined, kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' }).visible).toBe(false);
+    expect(aprsTncModeBadge({ open: undefined, kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' }).visible).toBe(false);
+  });
+
+  it('names the passive monitor instead of a TNC mode', () => {
+    const badge = aprsTncModeBadge({ open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' });
+    expect(badge).toMatchObject({ visible: true, label: 'Monitor', color: 'neutral' });
+    expect(badge.tooltip).toContain('Nothing is written');
+  });
+
+  it('shows Detecting while the host session is still listening', () => {
+    expect(aprsTncModeBadge(host({ detectPhase: 'listening' }))).toMatchObject({ label: 'Detecting…', color: 'info' });
+    expect(aprsTncModeBadge(host({ detectPhase: 'awaiting-prompt', commandPhase: 'waiting-prompt' })).label).toBe('Detecting…');
+    expect(aprsTncModeBadge(host({ detectPhase: 'idle', commandPhase: 'idle' })).label).toBe('Detecting…');
+  });
+
+  it('shows Command once a prompt is seen and before KISS is entered', () => {
+    expect(aprsTncModeBadge(host({ detectPhase: 'awaiting-prompt', commandPhase: 'prompt' }))).toMatchObject({
+      label: 'Command',
+      color: 'secondary',
+    });
+    expect(aprsTncModeBadge(host({ detectPhase: 'entering', commandPhase: 'waiting-accept' })).label).toBe('Command');
+    expect(aprsTncModeBadge(host({ detectPhase: 'entering', commandPhase: 'prompt' })).label).toBe('Command');
+  });
+
+  it('shows KISS waiting after the enter steps and before an AX.25 UI frame', () => {
+    const badge = aprsTncModeBadge(host({ detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' }));
+    expect(badge).toMatchObject({ label: 'KISS · waiting', color: 'warning' });
+    expect(badge.tooltip).toContain('No AX.25 UI');
+    expect(aprsTncModeBadge(host({ detectPhase: 'listening', commandPhase: 'kiss-framed' })).label).toBe('KISS · waiting');
+  });
+
+  it('shows KISS confirmed only after an AX.25 UI frame', () => {
+    const badge = aprsTncModeBadge(host({ kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' }));
+    expect(badge).toMatchObject({ label: 'KISS confirmed', color: 'primary' });
+    expect(badge.tooltip).toContain('AX.25 UI');
+  });
+
+  it('shows No reply when detection has stopped', () => {
+    expect(aprsTncModeBadge(host({ detectPhase: 'failed', commandPhase: 'timed-out' }))).toMatchObject({
+      label: 'No reply',
+      color: 'error',
+    });
+    expect(aprsTncModeBadge(host({ detectPhase: 'failed', commandPhase: 'cancelled' })).label).toBe('No reply');
+  });
+
+  it('uses a different color for each visible mode', () => {
+    const colors = [
+      aprsTncModeBadge({ open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' }).color,
+      aprsTncModeBadge(host({ detectPhase: 'listening' })).color,
+      aprsTncModeBadge(host({ detectPhase: 'entering', commandPhase: 'prompt' })).color,
+      aprsTncModeBadge(host({ detectPhase: 'waiting-traffic' })).color,
+      aprsTncModeBadge(host({ kissConfirmed: true, detectPhase: 'waiting-traffic' })).color,
+      aprsTncModeBadge(host({ detectPhase: 'failed' })).color,
+    ];
+    expect(new Set(colors).size).toBe(colors.length);
   });
 });
