@@ -5,7 +5,7 @@ import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { formatPacketTime, packetFixturePayloads } from '~/utils/packet-monitor';
 import type { PacketTypeFilter } from '~/utils/packet-monitor';
 import { packetMyCallLabel } from '~/utils/packet-settings';
-import { packetTerminalView } from '~/utils/packet-terminal';
+import { packetCallStationTooltip, packetTerminalView } from '~/utils/packet-terminal';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { aprsHostFlowForConnect, browserAprsHostFlowStorage, readAprsHostFlow } from '~/utils/aprs-host-flow';
 import { serialPortLabel } from '~/utils/serial-port-list';
@@ -251,6 +251,15 @@ async function onCopy(): Promise<void> {
 }
 
 const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
+const callStationTooltip = computed(() => packetCallStationTooltip({
+  portOpen: portOpen.value,
+  phase: state.value?.phase ?? 'none',
+  detectPhase: hostSnapshot.value?.detectPhase ?? 'idle',
+  kissConfirmed: hostSnapshot.value?.kissConfirmed === true,
+  hardwareTransmit: hostSnapshot.value?.hardwareTransmit !== false,
+  myCall: myCall.value,
+  station: peer.value,
+}));
 </script>
 
 <template>
@@ -385,7 +394,7 @@ const peerReady = computed(() => canonicalAx25Call(peer.value) !== undefined);
         <UFormField label="Path" class="w-48">
           <UInput v-model="path" placeholder="Optional digipeaters" class="w-full font-mono" :disabled="terminal.canDisconnect" />
         </UFormField>
-        <UTooltip text="Connect KISS first" :disabled="portOpen">
+        <UTooltip :text="callStationTooltip ?? ''" :disabled="!callStationTooltip">
           <span class="inline-flex">
             <UButton
               size="sm"

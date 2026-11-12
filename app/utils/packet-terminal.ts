@@ -36,6 +36,68 @@ const LABELS: Record<PacketLinkPhase | 'none', string> = {
   disconnecting: 'Disconnecting',
 };
 
+/**
+ * Why Call station is disabled. Undefined when the button is enabled,
+ * so the tooltip stays hidden.
+ */
+export function packetCallStationTooltip(input: {
+  portOpen: boolean;
+  phase: PacketLinkPhase | 'none';
+  detectPhase: PacketDetectPhase;
+  kissConfirmed: boolean;
+  hardwareTransmit: boolean;
+  myCall?: string;
+  station: string;
+}): string | undefined {
+  if (!input.portOpen) {
+    return 'Connect KISS first';
+  }
+
+  if (input.phase === 'connecting') {
+    return 'A call is already in progress';
+  }
+
+  if (input.phase === 'connected' || input.phase === 'timer-recovery') {
+    return 'Already linked to a station';
+  }
+
+  if (input.phase === 'disconnecting') {
+    return 'The link is closing';
+  }
+
+  if (!input.hardwareTransmit) {
+    return 'Transmit is off for this session';
+  }
+
+  if (input.detectPhase === 'listening' || input.detectPhase === 'awaiting-prompt' || input.detectPhase === 'entering') {
+    return 'Wait until KISS detection finishes';
+  }
+
+  if (input.detectPhase === 'failed') {
+    return 'KISS detection did not finish';
+  }
+
+  if (input.detectPhase !== 'waiting-traffic' && !input.kissConfirmed) {
+    return 'KISS is not ready';
+  }
+
+  if (!input.myCall) {
+    return 'Set a callsign in Preferences';
+  }
+
+  const station = input.station.trim();
+
+  if (station.length === 0) {
+    return 'Enter a station callsign';
+  }
+
+  if (!canonicalAx25Call(station)) {
+    return 'Use a callsign of 3 to 6 characters';
+  }
+
+  return undefined;
+}
+
 export function packetTerminalView(input: PacketTerminalInput): PacketTerminalView {
   const block = packetLinkBlockReason({
     connected: input.portOpen,

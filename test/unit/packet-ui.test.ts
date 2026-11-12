@@ -17,7 +17,7 @@ import {
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import { normalizePacketSettings, packetMyCall, readPacketSettings, PACKET_DEFAULT_SETTINGS } from '~/utils/packet-settings';
-import { packetLinePayload, packetScrollText, packetTerminalView } from '~/utils/packet-terminal';
+import { packetCallStationTooltip, packetLinePayload, packetScrollText, packetTerminalView } from '~/utils/packet-terminal';
 
 function fakePort(): { port: AprsHostBytePort; writes: Uint8Array[]; push: (chunk: Uint8Array) => void } {
   const writes: Uint8Array[] = [];
@@ -165,13 +165,40 @@ describe('Packet monitor and terminal', () => {
   it('names the station button Call station and uses link tabs', () => {
     const source = readFileSync(new URL('../../app/components/RadioPacket.vue', import.meta.url), 'utf8');
     expect(source).toContain('label="Call station"');
-    expect(source).toContain('text="Connect KISS first"');
+    expect(source).toContain(':text="callStationTooltip ?? \'\'"');
+    expect(source).toContain(':disabled="!callStationTooltip"');
     expect(source).toContain(':disabled="!portOpen || !terminal.canConnect || !peerReady"');
     expect(source).toContain(":variant=\"portOpen && terminal.canConnect ? 'solid' : 'outline'\"");
     expect(source).toContain('label="Disconnect"');
     expect(source).not.toContain('Hang up');
     expect(source).toContain('variant="link"');
     expect(source).not.toContain("pane === 'monitor'");
+  });
+
+  it('explains every disabled Call station state and stays quiet when enabled', () => {
+    const ready = {
+      portOpen: true,
+      phase: 'disconnected' as const,
+      detectPhase: 'waiting-traffic' as const,
+      kissConfirmed: false,
+      hardwareTransmit: true,
+      myCall: 'KF5UFJ',
+      station: 'W1AW-1',
+    };
+
+    expect(packetCallStationTooltip({ ...ready, portOpen: false, station: '' })).toBe('Connect KISS first');
+    expect(packetCallStationTooltip({ ...ready, station: '' })).toBe('Enter a station callsign');
+    expect(packetCallStationTooltip({ ...ready, station: '   ' })).toBe('Enter a station callsign');
+    expect(packetCallStationTooltip({ ...ready, station: 'NO' })).toBe('Use a callsign of 3 to 6 characters');
+    expect(packetCallStationTooltip({ ...ready, phase: 'connecting' })).toBe('A call is already in progress');
+    expect(packetCallStationTooltip({ ...ready, phase: 'connected', station: '' })).toBe('Already linked to a station');
+    expect(packetCallStationTooltip({ ...ready, phase: 'timer-recovery' })).toBe('Already linked to a station');
+    expect(packetCallStationTooltip({ ...ready, phase: 'disconnecting' })).toBe('The link is closing');
+    expect(packetCallStationTooltip({ ...ready, detectPhase: 'listening' })).toBe('Wait until KISS detection finishes');
+    expect(packetCallStationTooltip({ ...ready, detectPhase: 'failed' })).toBe('KISS detection did not finish');
+    expect(packetCallStationTooltip({ ...ready, hardwareTransmit: false })).toBe('Transmit is off for this session');
+    expect(packetCallStationTooltip({ ...ready, myCall: undefined })).toBe('Set a callsign in Preferences');
+    expect(packetCallStationTooltip(ready)).toBeUndefined();
   });
 });
 
