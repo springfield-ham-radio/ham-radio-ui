@@ -1,3 +1,13 @@
+## [3.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.6.0...v3.7.0) (2026-11-14)
+
+### Features
+
+* add Packet tab and shared TNC connection bar ([#205](https://github.com/springfield-ham-radio/ham-radio-ui/issues/205)) ([c29ff40](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c29ff40db0f2cfe196623782822d146c8558ff56))
+
+### Bug Fixes
+
+* **deps:** bump @nuxt/schema from 4.6.1 to 4.6.4 ([#208](https://github.com/springfield-ham-radio/ham-radio-ui/issues/208)) ([e17d565](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e17d56567634d570bb5f8b3de5027482d3d72115))
+
 ## [3.6.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.5.0...v3.6.0) (2026-11-12)
 
 ### Features
