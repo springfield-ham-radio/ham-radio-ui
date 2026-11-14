@@ -86,6 +86,58 @@ export function aprsConnectionView(input: AprsConnectionInput): AprsConnectionVi
   };
 }
 
+/** Face of the shared split button. The caret does not use this label. */
+export function aprsConnectLabel(mode: AprsConnectionMode): string {
+  return mode === 'host' ? 'Connect (Host)' : 'Connect (Monitor only)';
+}
+
+/**
+ * Why the shared Connect face is disabled. Undefined when the click can open
+ * the port. The caret can still change the mode.
+ */
+export function aprsConnectDisabledReason(input: {
+  hasRadio: boolean;
+  hasPort: boolean;
+  portBusy: boolean;
+  hostAvailable: boolean;
+  mode: AprsConnectionMode;
+}): string | undefined {
+  if (!input.hasRadio) {
+    return 'Save this radio under Preferences to choose an APRS port.';
+  }
+
+  if (!input.hasPort) {
+    return 'Choose an APRS serial port in Preferences.';
+  }
+
+  if (input.portBusy) {
+    return 'That serial port is already open. Disconnect it first.';
+  }
+
+  if (input.mode === 'host' && !input.hostAvailable) {
+    return 'This radio has no host session.';
+  }
+
+  return undefined;
+}
+
+/** Shown on the Packet tab while the shared session is not in Host mode. */
+export function packetNeedsHostNotice(input: {
+  hostOpen: boolean;
+  passiveOpen: boolean;
+  selected: AprsConnectionMode;
+}): string | undefined {
+  if (input.hostOpen) {
+    return undefined;
+  }
+
+  if (input.passiveOpen || input.selected === 'passive') {
+    return 'Packet needs Host mode. Monitor only reads APRS text and does not open a KISS session.';
+  }
+
+  return undefined;
+}
+
 export function aprsConnectAction(input: { mode: AprsConnectionMode; passiveOpen: boolean; hostOpen: boolean }): AprsPortAction {
   if (input.passiveOpen || input.hostOpen) {
     return { kind: 'blocked', reason: 'The APRS COM port is already open. Disconnect before opening it again.' };

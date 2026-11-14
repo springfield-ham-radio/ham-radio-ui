@@ -1081,7 +1081,7 @@ describe('host Connect detection', () => {
     expect(written).not.toContain('KISS OFF');
   });
 
-  it('does not nudge when monitor text stops after the interrupt', async () => {
+  it('nudges once after the interrupt when monitor text stops, and does not send kissExit', async () => {
     let time = 12_000;
     const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
     const session = createAprsHostSession({ now: () => time, host: moduleLink(exit, Uint8Array.of(0x0d)) });
@@ -1096,10 +1096,16 @@ describe('host Connect detection', () => {
     time += 1_000;
     session.poll();
     await settle();
-    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes).toEqual([Uint8Array.of(0x15), Uint8Array.of(0x0d)]);
+    expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(2);
     expect(session.snapshot().detectPhase).toBe('failed');
     expect(session.snapshot().detectDetail).toContain('Command-mode text was seen');
     expect(session.snapshot().detectDetail).not.toContain('PACKET mode');
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
   });
 
   it('enters immediately when cmd: is already in the open buffer', async () => {
@@ -1132,6 +1138,45 @@ describe('host Connect detection', () => {
     expect(written).toBe(`${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
     expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
     expect(fake.writes.some((frame) => frame.length === 3 && frame[0] === 0xc0)).toBe(false);
+  });
+
+  it('writes KISS ON and RESTART once for the startup banner, then waits', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    const banner = 'A 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
+    expect(new TextEncoder().encode(banner)).toHaveLength(52);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(new TextEncoder().encode(banner));
+      }
+    };
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([APRS_KISS_ON_COMMAND]);
+
+    fake.push(new TextEncoder().encode(APRS_KISS_ON_COMMAND));
+    await settle();
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('RESTART\r\n'));
+    await settle();
+    fake.push(Uint8Array.of(0x0a));
+    await settle();
+
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([
+      APRS_KISS_ON_COMMAND,
+      APRS_RESTART_COMMAND,
+    ]);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('KISS on, waiting for traffic');
+    expect(session.snapshot().commandPhase).toBe('restart-sent');
+    expect(session.snapshot().commandPhase).not.toBe('waiting-accept');
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    const already = session.snapshot().trace.filter((line) => line.note.includes('was already on this connection'));
+    expect(already).toHaveLength(1);
   });
 
   it('does not treat an echoed KISS return as a received frame, then enters on cmd:', async () => {
@@ -1282,5 +1327,313 @@ describe('host Connect detection', () => {
     await settle();
     expect(session.snapshot().detectDetail).not.toMatch(/incomplete KISS frame/u);
     expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+  });
+
+  it('treats an unframed KISS leftover at open as traffic and writes nothing', async () => {
+    let time = 5_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: exit },
+    });
+    const fake = fakePort();
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(unframed);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('not silence');
+    expect(session.snapshot().detectDetail).toContain('Nothing was sent');
+
+    time += 20_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).not.toContain('not answering');
+  });
+
+  it('enters KISS when cmd: follows an unframed AX.25 leftover', async () => {
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
+    });
+    const fake = fakePort();
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(unframed);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(fake.writes).toEqual([]);
+
+    const banner = '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\ncmd:';
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+  });
+
+  it('does not treat a monitor fragment with ESC and FEND as KISS, then enters on the banner', async () => {
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
+    });
+    const fake = fakePort();
+    const text = new TextEncoder().encode('.K5KTF.com 12.4V 104F');
+    const fragment = new Uint8Array(text.length + 5);
+    fragment.set(text);
+    fragment[text.length] = 0x1b;
+    fragment[text.length + 1] = 0x5b;
+    fragment[text.length + 2] = 0x31;
+    fragment[text.length + 3] = 0x7e;
+    fragment[text.length + 4] = 0xc0;
+    expect(fragment).toHaveLength(26);
+    const attach = fake.port.on.bind(fake.port);
+    fake.port.on = (event, handler) => {
+      attach(event, handler);
+
+      if (event === 'data') {
+        (handler as (chunk: Uint8Array) => void)(fragment);
+      }
+    };
+
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().detectPhase).not.toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).not.toContain('not silence');
+
+    const banner = '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\nRelease 09/Mar/11 3Chip ver 1.02\r\nChecksum $1859\r\ncmd:';
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(fake.writes).toHaveLength(1);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
+    expect(written).toBe(`${APRS_KISS_ON_COMMAND}\n${APRS_RESTART_COMMAND}`);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(fake.writes.some((frame) => frame.length === 3 && frame.every((byte) => byte === 0x03))).toBe(false);
+  });
+
+  it('does not treat a later unframed chunk as the open buffer', async () => {
+    let time = 8_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const source = canonicalAx25Call('K5KTF-9');
+    const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+    if (!ax25) {
+      throw new Error('frame');
+    }
+
+    const unframed = new Uint8Array(ax25.length + 1);
+    unframed[0] = 0x00;
+    unframed.set(ax25, 1);
+    fake.push(unframed);
+    await settle();
+    expect(session.snapshot().detectPhase).not.toBe('waiting-traffic');
+    expect(fake.writes).toEqual([]);
+
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+  });
+
+  it('sends the prompt nudge on silence after Ctrl+C, then enters on cmd:', async () => {
+    let time = 1_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 2_999;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([]);
+
+    time += 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03)]);
+
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13)]);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes).toHaveLength(4);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+  });
+
+  it('treats an echo of the interrupt as command mode and sends the nudge', async () => {
+    let time = 2_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03)]);
+
+    fake.push(Uint8Array.of(0x03, 0x03, 0x03));
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13)]);
+    expect(session.snapshot().trace.some((line) => line.note.includes('echo of the last write'))).toBe(true);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).not.toBe('failed');
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[2] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+  });
+
+  it('sends kissExit only after interrupt and nudge stay silent, and an echo still enters on cmd:', async () => {
+    let time = 4_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13), exit]);
+
+    fake.push(exit);
+    await settle();
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).not.toBe('failed');
+    expect(session.snapshot().trace.some((line) => line.note.includes('echo of the last write'))).toBe(true);
+    expect(fake.writes).toHaveLength(3);
+
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes[3] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    expect(new TextDecoder().decode(fake.writes[4] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    expect(session.snapshot().frames).toBe(0);
+  });
+
+  it('fails only after interrupt, nudge, and kissExit produce no text', async () => {
+    let time = 6_000;
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      now: () => time,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(13), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    fake.push(exit);
+    await settle();
+    time += 5_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x03, 0x03, 0x03), Uint8Array.of(13), exit]);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toContain('not answering');
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('');
+    expect(written).not.toContain('KISS ON');
+    expect(written).not.toContain('RESTART');
   });
 });
