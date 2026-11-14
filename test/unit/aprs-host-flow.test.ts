@@ -47,6 +47,18 @@ describe('saved APRS host flow', () => {
     expect(aprs).toContain('<AprsConnectionBar');
     expect(bar).toContain('aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow)');
     expect(bar).not.toContain("profile.value?.host?.defaultFlow ?? 'software'");
+    expect(bar).toContain('aprsStatusBadge');
+    expect(bar).toContain('aprsMonitorSilenceHint');
+    const session = readFileSync(new URL('../../app/utils/aprs-host-session.ts', import.meta.url), 'utf8');
+    expect(session).toContain('KISS exit.');
+    expect(session).toContain('aprsHostShouldExitKiss');
+    expect(bar).toContain('nextAprsMonitorQuiet');
+    expect(bar).toContain('class="group inline-flex"');
+    expect(bar).toContain('class="rounded-e-none"');
+    expect(bar).toContain('class="rounded-s-none"');
+    expect(bar).toContain("border-s border-white/25");
+    expect(bar).not.toContain('i-lucide-cable');
+    expect(bar).not.toContain('write_binary');
     expect(aprs).toContain('writeAprsHostFlow(storage, props.cardId, value)');
     expect(aprs).toContain('readAprsHostFlow(');
   });

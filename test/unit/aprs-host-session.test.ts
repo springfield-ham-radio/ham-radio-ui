@@ -1636,4 +1636,70 @@ describe('host Connect detection', () => {
     expect(written).not.toContain('KISS ON');
     expect(written).not.toContain('RESTART');
   });
+
+  it('writes the declared KISS exit on Host disconnect, then still closes', async () => {
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: exit },
+    });
+    const fake = fakePort();
+    const open = async () => {
+      fake.port.isOpen = true;
+      return fake.port;
+    };
+
+    await session.connect('/dev/cu.pg5g', open);
+    await session.disconnect();
+    expect(fake.writes).toEqual([]);
+    expect(session.snapshot().trace.some((line) => line.note.includes('KISS exit'))).toBe(false);
+
+    await session.connect('/dev/cu.pg5g', open);
+    await confirmKiss(session, fake);
+    await session.disconnect();
+    expect(fake.writes).toEqual([exit]);
+    const sent = session.snapshot().trace.find((line) => line.direction === 'tx-command' && line.note.startsWith('KISS exit'));
+    expect(sent?.hex).toBe('c0 ff c0');
+    expect(session.snapshot().trace.some((line) => line.note.includes('Disconnected after KISS exit'))).toBe(true);
+    expect(fake.port.isOpen).toBe(false);
+
+    await session.connect('/dev/cu.pg5g', open);
+    fake.push(encodeKissData(Uint8Array.of(0x01)));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    const before = fake.writes.length;
+    await session.disconnect();
+    expect(fake.writes.slice(before)).toEqual([exit]);
+  });
+
+  it('does not write KISS exit from command mode, and closes when the write fails', async () => {
+    const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+    const session = createAprsHostSession({
+      host: { ...d710AprsHostLink(), kissExit: exit },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+    fake.push(Uint8Array.from([...'cmd:'].map((character) => character.charCodeAt(0))));
+    await settle();
+    const phase = session.snapshot();
+    expect(phase.detectPhase === 'entering' || phase.commandPhase === 'prompt' || phase.commandPhase === 'waiting-accept').toBe(true);
+    await session.disconnect();
+    expect(fake.writes.some((frame) => frame.length === 3 && frame[0] === 0xc0 && frame[1] === 0xff && frame[2] === 0xc0)).toBe(false);
+
+    const failing = createAprsHostSession({
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), kissExit: exit },
+    });
+    const recording = fakePort();
+    recording.port.write = () => {
+      throw new Error('port gone');
+    };
+    await failing.connect('/dev/cu.pg5g', async () => recording.port);
+    await confirmKiss(failing, recording);
+    await failing.disconnect();
+    expect(recording.port.isOpen).toBe(false);
+    expect(failing.snapshot().connected).toBe(false);
+    expect(failing.snapshot().trace.some((line) => line.note.includes('KISS exit was not accepted'))).toBe(true);
+  });
 });

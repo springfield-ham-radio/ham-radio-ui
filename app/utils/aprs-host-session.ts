@@ -1,5 +1,6 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
 import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
+import { aprsHostShouldExitKiss } from '~/utils/aprs-connection';
 import type { AprsHostLink } from '~/utils/aprs-host-profile';
 import { createKissDecoderState, encodeKissData, pushKissBytes } from '~/utils/aprs-kiss';
 import { packetLinkBlockReason } from '~/utils/packet-port';
@@ -171,8 +172,11 @@ interface Waiting {
  * connect, and it does not confirm KISS for APRS messages.
  * Automatic ack is separate, off until set, and applies only to a later
  * message addressed to the current callsign. Disconnect cancels waiting
- * messages and does not send an exit command. A later connect does not send
- * them again.
+ * messages. When this session is in KISS and the module declares kissExit,
+ * Disconnect writes those bytes once and logs an outgoing KISS exit line.
+ * A failed write or a port that is already gone still closes. Command mode
+ * does not get that write, and KISS OFF is not sent. A later connect does
+ * not send the cancelled messages again.
  */
 export function createAprsHostSession(options?: {
   now?: () => number;
@@ -1367,6 +1371,42 @@ export function createAprsHostSession(options?: {
     publish();
   };
 
+  /**
+   * One declared KISS exit before the handle closes. Best effort: a missing
+   * port or a rejected write is logged and does not stop the close.
+   */
+  async function exitKissBeforeClose(): Promise<'sent' | 'failed' | 'skipped'> {
+    if (!aprsHostShouldExitKiss({
+      open: port?.isOpen ? 'host' : undefined,
+      kissConfirmed,
+      detectPhase,
+      commandPhase,
+    })) {
+      return 'skipped';
+    }
+
+    const exit = hostLink?.kissExit;
+
+    if (!exit) {
+      return 'skipped';
+    }
+
+    if (!port?.isOpen || !port.write) {
+      record('note', new Uint8Array(), 'KISS exit was not sent. The port was already gone. The port will still close.');
+      return 'failed';
+    }
+
+    const wrote = await writeBytes(exit);
+
+    if (!wrote.ok) {
+      record('note', new Uint8Array(), `KISS exit was not accepted. ${wrote.reason} The port will still close.`);
+      return 'failed';
+    }
+
+    record('tx-command', exit, `KISS exit. ${acceptanceNote(wrote)}Disconnect returns the TNC to command mode.`);
+    return 'sent';
+  }
+
   return {
     snapshot() {
       return {
@@ -1465,6 +1505,16 @@ export function createAprsHostSession(options?: {
         }
       }
 
+      let kissExit: 'sent' | 'failed' | 'skipped' = 'skipped';
+
+      try {
+        kissExit = await exitKissBeforeClose();
+      } catch (cause) {
+        const reason = cause instanceof Error ? cause.message : 'The KISS exit failed.';
+        record('note', new Uint8Array(), `KISS exit was not accepted. ${reason} The port will still close.`);
+        kissExit = 'failed';
+      }
+
       if (retryTimer) {
         clearInterval(retryTimer);
         retryTimer = undefined;
@@ -1506,9 +1556,14 @@ export function createAprsHostSession(options?: {
 
       current.off('data', onData);
       current.off('error', onError);
-      record('note', new Uint8Array(), hooks.length > 0
-        ? 'Disconnected. Packet shutdown ran before the port closed. The reply log is kept until Clear.'
-        : 'Disconnected. The reply log is kept until Clear. Nothing was sent.');
+      const closed = kissExit === 'sent'
+        ? 'Disconnected after KISS exit. The reply log is kept until Clear.'
+        : kissExit === 'failed'
+          ? 'Disconnected. KISS exit did not complete. The reply log is kept until Clear.'
+          : hooks.length > 0
+            ? 'Disconnected. Packet shutdown ran before the port closed. The reply log is kept until Clear.'
+            : 'Disconnected. The reply log is kept until Clear. Nothing was sent.';
+      record('note', new Uint8Array(), closed);
       await current.close();
       publish();
     },

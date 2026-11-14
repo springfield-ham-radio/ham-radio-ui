@@ -8,7 +8,10 @@ import {
   aprsConnectLabel,
   aprsConnectionView,
   aprsDisconnectAction,
-  aprsTncModeBadge,
+  aprsMonitorSilenceHint,
+  aprsStatusBadge,
+  nextAprsMonitorQuiet,
+  type AprsMonitorQuiet,
   type AprsConnectionMode,
   type AprsTncModeInput,
 } from '~/utils/aprs-connection';
@@ -82,7 +85,7 @@ const connection = computed(() => aprsConnectionView({
   hostConnecting: hostConnecting.value && !tncPreview.value,
   kissConfirmed: tncPreview.value === 'confirmed' || hostSnapshot.value?.kissConfirmed === true,
 }));
-const tncMode = computed(() => {
+const tncInput = computed<AprsTncModeInput>(() => {
   const preview = tncPreview.value;
   const live: AprsTncModeInput = {
     open: connection.value.open,
@@ -92,7 +95,7 @@ const tncMode = computed(() => {
   };
 
   if (!preview) {
-    return aprsTncModeBadge(live);
+    return live;
   }
 
   const shown: Record<string, AprsTncModeInput> = {
@@ -104,8 +107,12 @@ const tncMode = computed(() => {
     failed: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
   };
 
-  return aprsTncModeBadge(shown[preview] ?? shown.confirmed);
+  return shown[preview] ?? shown.confirmed ?? live;
 });
+const statusBadge = computed(() => aprsStatusBadge({
+  connection: connection.value.badge,
+  tnc: tncInput.value,
+}));
 
 const aprsPort = computed(() => savedRadio.value?.aprsSerialPort);
 const aprsBaud = computed(() => savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600);
@@ -176,6 +183,74 @@ if (props.cardId) {
   monitor.watchCard(props.cardId);
   host.watchCard(props.cardId);
 }
+
+const quietClocks = useState<Record<string, AprsMonitorQuiet>>('aprs-monitor-quiet', () => ({}));
+const nowMs = ref(Date.now());
+const passiveMonitorOpen = computed(() => activeMode.value === 'passive' && connection.value.open);
+
+watch(
+  () => [props.cardId, passiveMonitorOpen.value, snapshot.value?.log.at(-1)?.id] as const,
+  ([cardId, open, lastId]) => {
+    if (!cardId) {
+      return;
+    }
+
+    const current = quietClocks.value[cardId];
+    const next = nextAprsMonitorQuiet({
+      passiveOpen: open,
+      lastLogId: lastId,
+      nowMs: Date.now(),
+      current,
+    });
+
+    if (next === current) {
+      return;
+    }
+
+    const clocks = { ...quietClocks.value };
+
+    if (next) {
+      clocks[cardId] = next;
+    } else {
+      delete clocks[cardId];
+    }
+
+    quietClocks.value = clocks;
+    nowMs.value = Date.now();
+  },
+  { immediate: true },
+);
+
+const silenceHint = computed(() => aprsMonitorSilenceHint({
+  passiveOpen: passiveMonitorOpen.value,
+  nowMs: nowMs.value,
+  quietSinceMs: props.cardId ? quietClocks.value[props.cardId]?.quietSinceMs : undefined,
+}));
+
+let silenceTimer: ReturnType<typeof setInterval> | undefined;
+
+function stopSilenceTimer(): void {
+  if (silenceTimer === undefined) {
+    return;
+  }
+
+  clearInterval(silenceTimer);
+  silenceTimer = undefined;
+}
+
+watch(passiveMonitorOpen, (open) => {
+  stopSilenceTimer();
+
+  if (!open) {
+    return;
+  }
+
+  silenceTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
+}, { immediate: true });
+
+onUnmounted(stopSilenceTimer);
 
 function chooseMode(mode: AprsConnectionMode): void {
   if (!props.cardId || connection.value.open || connecting.value) {
@@ -255,33 +330,30 @@ function onRetryDetection(): void {
 </script>
 
 <template>
-  <div class="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
+  <div class="mb-2 shrink-0">
+    <div class="flex flex-wrap items-end justify-between gap-2">
     <p class="min-w-0 flex-1 pb-1.5 text-xs text-muted">
       {{ statusLine }}
       <NuxtLink v-if="!connection.open" to="/preferences?section=radios" class="text-primary underline">Edit in Preferences</NuxtLink>
     </p>
     <div class="flex flex-wrap items-center gap-1.5">
-      <UBadge
-        :label="connection.badge"
-        :color="connection.badge === 'Connected' ? 'success' : 'neutral'"
-        variant="subtle"
-        :icon="connection.badge === 'Connected' ? 'i-lucide-plug-zap' : 'i-lucide-plug'"
-      />
-      <UTooltip v-if="tncMode.visible" :text="tncMode.tooltip">
+      <UTooltip :text="statusBadge.tooltip ?? ''" :disabled="!statusBadge.tooltip">
         <UBadge
-          :label="tncMode.label"
-          :color="tncMode.color"
+          :label="statusBadge.label"
+          :color="statusBadge.color"
           variant="subtle"
-          :aria-label="`TNC mode: ${tncMode.label}. ${tncMode.tooltip}`"
+          :icon="connection.badge === 'Connected' ? 'i-lucide-plug-zap' : 'i-lucide-plug'"
+          :aria-label="statusBadge.tooltip ? `${statusBadge.label}. ${statusBadge.tooltip}` : statusBadge.label"
         />
       </UTooltip>
       <UFieldGroup v-if="!connection.open" size="sm">
         <UTooltip :text="connectTooltip ?? ''" :disabled="!connectTooltip">
-          <span class="inline-flex">
+          <span class="group inline-flex">
             <UButton
               color="primary"
-              icon="i-lucide-cable"
+              size="sm"
               :label="connectLabel"
+              class="rounded-e-none"
               :loading="connecting"
               :disabled="Boolean(connectTooltip)"
               @click="onConnect"
@@ -289,12 +361,18 @@ function onRetryDetection(): void {
           </span>
         </UTooltip>
         <UDropdownMenu :items="modeMenu" :content="{ align: 'end' }" :disabled="connecting">
-          <UButton
-            color="primary"
-            icon="i-lucide-chevron-down"
-            aria-label="Choose connection mode"
-            :disabled="connecting"
-          />
+          <span class="group inline-flex">
+            <UButton
+              color="primary"
+              size="sm"
+              square
+              icon="i-lucide-chevron-down"
+              aria-label="Choose connection mode"
+              class="rounded-s-none"
+              :disabled="connecting"
+              :ui="{ base: 'border-s border-white/25' }"
+            />
+          </span>
         </UDropdownMenu>
       </UFieldGroup>
       <template v-else>
@@ -318,5 +396,7 @@ function onRetryDetection(): void {
         />
       </template>
     </div>
+    </div>
+    <p v-if="silenceHint" class="mt-1 max-w-3xl text-xs text-muted">{{ silenceHint }}</p>
   </div>
 </template>

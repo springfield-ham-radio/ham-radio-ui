@@ -121,6 +121,58 @@ export function aprsConnectDisabledReason(input: {
   return undefined;
 }
 
+/** Quiet time on the passive monitor before the Menu 604 hint. */
+export const APRS_MONITOR_SILENCE_MS = 60_000;
+
+export const APRS_MONITOR_SILENCE_HINT =
+  'No APRS text yet. Is the radio in PACKET/KISS mode? Monitor only needs the TNC in APRS mode with Menu 604 output on.';
+
+export interface AprsMonitorQuiet {
+  lastLogId: number;
+  quietSinceMs: number;
+}
+
+/**
+ * Start the quiet clock when Monitor only opens. A newer log id restarts it.
+ * Closing the passive session drops the clock. This does not open a port or write.
+ */
+export function nextAprsMonitorQuiet(input: {
+  passiveOpen: boolean;
+  lastLogId: number | undefined;
+  nowMs: number;
+  current: AprsMonitorQuiet | undefined;
+}): AprsMonitorQuiet | undefined {
+  if (!input.passiveOpen) {
+    return undefined;
+  }
+
+  const lastLogId = input.lastLogId ?? 0;
+
+  if (!input.current || lastLogId > input.current.lastLogId) {
+    return { lastLogId, quietSinceMs: input.nowMs };
+  }
+
+  return input.current;
+}
+
+/** Inline hint while Monitor only has had no new line for the threshold. */
+export function aprsMonitorSilenceHint(input: {
+  passiveOpen: boolean;
+  nowMs: number;
+  quietSinceMs: number | undefined;
+  thresholdMs?: number;
+}): string | undefined {
+  if (!input.passiveOpen || input.quietSinceMs === undefined) {
+    return undefined;
+  }
+
+  if (input.nowMs - input.quietSinceMs < (input.thresholdMs ?? APRS_MONITOR_SILENCE_MS)) {
+    return undefined;
+  }
+
+  return APRS_MONITOR_SILENCE_HINT;
+}
+
 /** Shown on the Packet tab while the shared session is not in Host mode. */
 export function packetNeedsHostNotice(input: {
   hostOpen: boolean;
@@ -238,6 +290,56 @@ export function aprsTncModeBadge(input: AprsTncModeInput): AprsTncModeView {
     color: 'info',
     tooltip: 'Listening for a KISS frame or the command prompt.',
   };
+}
+
+/**
+ * Host Disconnect writes kissExit only when this session is already in KISS.
+ * Command mode, detection, a failed pass, and the passive monitor do not.
+ */
+export function aprsHostShouldExitKiss(input: AprsTncModeInput): boolean {
+  if (input.open !== 'host') {
+    return false;
+  }
+
+  const label = aprsTncModeBadge(input).label;
+  return label === 'KISS confirmed' || label === 'KISS · waiting';
+}
+
+export interface AprsStatusBadge {
+  label: string;
+  color: 'neutral' | 'success' | 'info' | 'secondary' | 'warning' | 'primary' | 'error';
+  tooltip?: string;
+}
+
+/** One pill for the port and the TNC mode. It does not write. */
+export function aprsStatusBadge(input: {
+  connection: AprsConnectionView['badge'];
+  tnc: AprsTncModeInput;
+}): AprsStatusBadge {
+  if (input.connection === 'Disconnected') {
+    return { label: 'Disconnected', color: 'neutral' };
+  }
+
+  if (input.connection === 'Connecting') {
+    return { label: 'Connecting', color: 'info' };
+  }
+
+  const mode = aprsTncModeBadge(input.tnc);
+  const tooltip = mode.visible && mode.tooltip ? mode.tooltip : undefined;
+
+  if (input.tnc.open === 'passive') {
+    return { label: 'Connected · Monitor', color: 'success', tooltip };
+  }
+
+  const modeLabel = mode.label === 'KISS · waiting'
+    ? 'KISS waiting'
+    : mode.label === 'Detecting…'
+      ? 'Detecting'
+      : mode.label;
+  const label = mode.visible && modeLabel ? `Connected · Host · ${modeLabel}` : 'Connected';
+  const color = mode.visible && mode.color !== 'neutral' ? mode.color : 'success';
+
+  return { label, color, tooltip };
 }
 
 export function aprsDisconnectAction(input: { passiveOpen: boolean; hostOpen: boolean }): AprsPortAction {

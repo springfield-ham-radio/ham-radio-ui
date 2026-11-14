@@ -302,6 +302,18 @@ const pendingChangeSummary = computed(() => {
 
   return summarizePendingChanges(pendingDiff.value, source);
 });
+/**
+ * The shared indicator measures the active tab once and can stay under APRS
+ * after Packet becomes active. The active trigger draws the underline instead.
+ */
+const workspaceTabUi = {
+  list: 'w-full shrink-0 items-center gap-0.5 border-b border-default',
+  trigger: "grow-0 px-3 data-[state=inactive]:text-muted data-[state=active]:text-primary data-[state=active]:after:pointer-events-none data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-primary data-[state=active]:after:content-['']",
+  leadingIcon: 'text-current',
+  indicator: 'hidden',
+  content: 'flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none',
+};
+
 const workspaceTabs = computed<TabsItem[]>(() => {
   const settingsChanges = pendingDiff.value.settingsPaths.length;
 
@@ -1132,13 +1144,7 @@ async function onSaveSerialLog(): Promise<void> {
       :items="workspaceTabs"
       class="flex min-h-0 flex-1 flex-col overflow-hidden"
       :unmount-on-hide="false"
-      :ui="{
-        list: 'w-full shrink-0 items-center gap-0.5 border-b border-default',
-        trigger: 'grow-0 px-3 data-[state=inactive]:text-muted data-[state=active]:text-primary',
-        leadingIcon: 'text-current',
-        indicator: 'bg-primary h-0.5 rounded-full',
-        content: 'flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:outline-none',
-      }"
+      :ui="workspaceTabUi"
     >
       <template #list-trailing>
         <div class="ml-auto flex shrink-0 items-center gap-1.5 ps-2">
