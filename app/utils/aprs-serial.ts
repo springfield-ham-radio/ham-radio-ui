@@ -1,27 +1,33 @@
 import { TauriNodeSerialPort } from '~/utils/tauri-node-serial-port';
 import type { AprsBytePort } from '~/utils/aprs-session';
-import { aprsHostSerialOpenOptions, aprsSerialOpenOptions, type AprsHostFlowControl } from '~/utils/aprs-serial-options';
+import { aprsHostSerialOpenOptions, type AprsHostFlowControl } from '~/utils/aprs-serial-options';
 
 const OPEN_TIMEOUT_MS = 5000;
 
 /**
  * Open the COM-port feed for receive only.
  *
- * The returned port cannot write. RTS and DTR are passed as false, which
- * `TauriNodeSerialPort` applies after open and again on a baud change.
+ * The returned port cannot write. RTS and DTR are passed as false.
+ * Hardware flow control does not ioctl RTS; the serial driver owns that pin.
+ * The default is flow control off, which is the passive open used when the
+ * module omits `flowControl`.
  */
-export async function openAprsReceivePort(path: string, baudRate: number): Promise<AprsBytePort> {
-  const options = aprsSerialOpenOptions(path, baudRate);
+export async function openAprsReceivePort(
+  path: string,
+  baudRate: number,
+  flowControl: AprsHostFlowControl = 'none',
+): Promise<AprsBytePort> {
+  const options = aprsHostSerialOpenOptions(path, baudRate, flowControl);
   const port = new TauriNodeSerialPort({
     path: options.path,
     baudRate: options.baudRate,
     dataBits: options.dataBits,
     stopBits: options.stopBits,
     parity: options.parity,
-    rtscts: false,
-    flowControl: 'none',
+    flowControl: options.flowControl,
     rts: false,
     dtr: false,
+    rtsManagedByDriver: options.rtsManagedByDriver,
   });
   const queued: Uint8Array[] = [];
   let dataListener: ((chunk: Uint8Array) => void) | undefined;

@@ -31,9 +31,13 @@ export function d710AprsHostLink(): AprsHostLink {
 export function d710AprsHostProfile(): AprsHostProfile {
   return {
     link: d710AprsHostLink(),
+    // No flowControl. This copy is for a module that has not published
+    // aprs.host. Connect treats a TM-D710 with no flowControl as hardware
+    // RTS/CTS on the host open. defaultFlow stays software so the object
+    // still matches the key older modules published for previous app builds.
     flows: ['software', 'none', 'hardware'],
     defaultFlow: 'software',
-    flowHelp: 'Software keeps RTS and DTR low, as does Off. Hardware (RTS/CTS) is for a TNC whose display already says XFLOW OFF. It does not force RTS low and it does not send XFLOW.',
+    flowHelp: 'Host open on a TM-D710 uses hardware RTS/CTS when the module omits flowControl. The driver manages RTS. Connect does not send XFLOW.',
     setup: APRS_HOST_SETUP,
     recovery: APRS_HOST_RECOVERY,
   };

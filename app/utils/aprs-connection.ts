@@ -74,7 +74,7 @@ export function aprsConnectionView(input: AprsConnectionInput): AprsConnectionVi
       badge: 'Disconnected',
       open: undefined,
       kiss: 'hidden',
-      detail: 'APRS COM is closed. Connect listens, enters KISS if the TNC is in command mode, writes the interrupt once on silence, and writes kissExit once if the module declares it. Otherwise it stops. It does not transmit on the air. Software and Off keep RTS low. Hardware lets the driver manage RTS. This is not the CAT connection.',
+      detail: 'APRS COM is closed. Connect listens, enters KISS if the TNC is in command mode, writes the interrupt once on silence, and writes kissExit once if the module declares it. Otherwise it stops. It does not transmit on the air. This is not the CAT connection.',
     };
   }
 

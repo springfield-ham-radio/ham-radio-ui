@@ -1,3 +1,4 @@
+import { isAprsHostFlow } from '~/utils/aprs-host-flow';
 import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 
 /**
@@ -36,6 +37,15 @@ export interface AprsHostLink {
 
 export interface AprsHostProfile {
   link: AprsHostLink;
+  /**
+   * Serial flow control for this COM jack.
+   *
+   * Omitted on modules published before the field (Kenwood 1.15.1).
+   * Connect then uses `aprsTncFlowControl`. `flows`, `defaultFlow`, and
+   * `flowHelp` stay so those older JSON files still parse. They do not
+   * open the port.
+   */
+  flowControl?: AprsHostFlowControl;
   flows: readonly AprsHostFlowControl[];
   defaultFlow: AprsHostFlowControl;
   flowHelp: string;
@@ -173,6 +183,16 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     enter.push({ text: step.text, label: step.label });
   }
 
+  let flowControl: AprsHostFlowControl | undefined;
+
+  if (value.flowControl !== undefined) {
+    if (!isAprsHostFlow(value.flowControl)) {
+      return undefined;
+    }
+
+    flowControl = value.flowControl;
+  }
+
   const listed = Array.isArray(value.flows)
     ? value.flows.filter((flow): flow is AprsHostFlowControl => typeof flow === 'string' && FLOWS.includes(flow as AprsHostFlowControl))
     : [...FLOWS];
@@ -189,10 +209,11 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
 
   const flowHelp = typeof value.flowHelp === 'string' && value.flowHelp.trim().length > 0
     ? value.flowHelp.trim()
-    : 'Flow control is chosen before Connect.';
+    : 'Flow control comes from the module.';
 
   return {
     link: { interrupt, prompt: value.prompt, errorReply, waitMs, listenMs, kissExit, promptNudge, enter },
+    flowControl,
     flows,
     defaultFlow,
     flowHelp,

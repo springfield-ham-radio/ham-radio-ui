@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
-import { aprsPortMissingMessage } from '~/utils/aprs-d710';
+import { aprsPortMissingMessage, d710AprsFamily } from '~/utils/aprs-d710';
 import {
   aprsConnectAction,
   aprsConnectDisabledReason,
@@ -16,7 +16,13 @@ import {
   type AprsTncModeInput,
 } from '~/utils/aprs-connection';
 import { serialEventHeadline } from '~/utils/aprs-serial-trace';
-import { aprsHostFlowForConnect, browserAprsHostFlowStorage, readAprsHostFlow } from '~/utils/aprs-host-flow';
+import {
+  aprsFlowControlNote,
+  aprsTncFlowControl,
+  browserAprsHostFlowStorage,
+  clearAprsHostFlowPreference,
+} from '~/utils/aprs-host-flow';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
@@ -155,6 +161,28 @@ const modeMenu = computed<DropdownMenuItem[][]>(() => [[
   },
 ]]);
 
+const savedFlowStorage = browserAprsHostFlowStorage();
+
+if (savedFlowStorage) {
+  clearAprsHostFlowPreference(savedFlowStorage);
+}
+
+function tncFlow(mode: AprsConnectionMode): AprsHostFlowControl {
+  return aprsTncFlowControl({
+    declared: profile.value?.host?.flowControl,
+    mode: mode === 'host' ? 'host' : 'passive',
+    d710Family: d710AprsFamily(props.model, props.radioName ?? savedRadio.value?.name) !== undefined,
+  });
+}
+
+const effectiveFlow = computed(() => {
+  if (kissListening.value && hostSnapshot.value?.connected) {
+    return hostSnapshot.value.hostFlow;
+  }
+
+  return tncFlow(activeMode.value);
+});
+
 const statusLine = computed(() => {
   if (kissFixture.value && !kissListening.value && !isConnected.value) {
     return 'Fixture AX.25 UI frame. Not a radio, and no port was opened. This is not the CAT connection.';
@@ -171,7 +199,7 @@ const statusLine = computed(() => {
     return `${connection.value.detail} Choose an APRS serial port under Preferences. The memory port is not used.`;
   }
 
-  const flow = activeMode.value === 'host' && profile.value?.host ? ` ${profile.value.host.flowHelp}` : '';
+  const flow = ` ${aprsFlowControlNote(effectiveFlow.value)}`;
   const detection = kissListening.value && hostSnapshot.value?.detectDetail
     ? ` ${serialEventHeadline(hostSnapshot.value.detectDetail)}`
     : '';
@@ -293,15 +321,14 @@ async function onConnect(): Promise<void> {
     // The port list is unavailable outside the desktop shell. Open reports that failure.
   }
 
+  const flow = tncFlow(selectedMode.value);
+
   if (action.kind === 'open-host') {
-    const storage = browserAprsHostFlowStorage();
-    const saved = storage ? readAprsHostFlow(storage, cardId) : undefined;
-    const flow = aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow);
     await host.connect(cardId, path, aprsBaud.value, flow);
     return;
   }
 
-  await monitor.connect(cardId, path, aprsBaud.value);
+  await monitor.connect(cardId, path, aprsBaud.value, flow);
 }
 
 async function onDisconnect(): Promise<void> {
