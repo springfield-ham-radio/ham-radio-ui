@@ -13,7 +13,7 @@ Kenwood copies received APRS traffic to the COM jack when menu 604 OUTPUT is ON.
 ## Decision
 
 - The APRS tab lives in HamBench. It is a read-only serial listener, not a radio-module memory map and not a CAT session.
-- Open the selected adapter at 8N1 with hardware flow control off and RTS and DTR deasserted. Never write bytes. Do not send TNC init, `MON ON`, `KISS ON`, or `RESTART`.
+- Open the selected adapter at 8N1. Never write bytes. Do not send TNC init, `MON ON`, `KISS ON`, or `RESTART`. When the module omits `aprs.host.flowControl`, flow control stays off and RTS and DTR stay deasserted. A declared `flowControl` is applied on this open as well as on the host open. Hardware mode does not ioctl RTS.
 - Claim the port in the same hold list as CAT so Read, Write, and CAT cannot open it. Releasing the card or pressing Disconnect closes the handle and drops the hold.
 - Parse TNC2 monitor lines in-process. Decode only fields the packet contains. Keep every raw line, including malformed and unsupported packets, in a bounded log. Station rows update field-by-field and keep an older position when a later packet has none.
 - The operator's APRS adapter and baud live on the saved radio (`aprsSerialPort`, `aprsBaudRate`). Saving them does not write the memory `serialPort` or `baudRate`, and the reverse is also true. Connect uses only the APRS fields.

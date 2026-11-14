@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  aprsHostFlowForConnect,
-  readAprsHostFlow,
-  writeAprsHostFlow,
+  APRS_HOST_FLOW_STORAGE_KEY,
+  aprsFlowControlNote,
+  aprsTncFlowControl,
+  clearAprsHostFlowPreference,
   type AprsHostFlowStorage,
 } from '~/utils/aprs-host-flow';
 
@@ -17,36 +18,54 @@ function memoryStorage(initial?: string): AprsHostFlowStorage & { raw: () => str
     setItem(_key, value) {
       text = value;
     },
+    removeItem() {
+      text = null;
+    },
     raw() {
       return text;
     },
   };
 }
 
-describe('saved APRS host flow', () => {
-  it('uses the per-radio choice for Packet and leaves the module default as the fallback', () => {
-    const storage = memoryStorage();
-    expect(readAprsHostFlow(storage, 'd710')).toBeUndefined();
-    expect(aprsHostFlowForConnect(undefined, 'software')).toBe('software');
+describe('TNC flow control from the radio module', () => {
+  it('uses the declared value for Host and Monitor only and ignores a saved menu choice', () => {
+    const storage = memoryStorage('{"d710":"software"}');
+    clearAprsHostFlowPreference(storage);
+    expect(storage.getItem(APRS_HOST_FLOW_STORAGE_KEY)).toBeNull();
 
-    writeAprsHostFlow(storage, 'd710', 'hardware');
-    writeAprsHostFlow(storage, 'other', 'none');
-    expect(readAprsHostFlow(storage, 'd710')).toBe('hardware');
-    expect(aprsHostFlowForConnect(readAprsHostFlow(storage, 'd710'), 'software')).toBe('hardware');
-    expect(aprsHostFlowForConnect(readAprsHostFlow(storage, 'missing'), 'software')).toBe('software');
-    expect(readAprsHostFlow(storage, 'other')).toBe('none');
-    expect(readAprsHostFlow(memoryStorage('{'), 'd710')).toBeUndefined();
+    expect(aprsTncFlowControl({ declared: 'hardware', mode: 'host', d710Family: true })).toBe('hardware');
+    expect(aprsTncFlowControl({ declared: 'hardware', mode: 'passive', d710Family: true })).toBe('hardware');
+    expect(aprsTncFlowControl({ declared: 'none', mode: 'host', d710Family: true })).toBe('none');
+    expect(aprsTncFlowControl({ declared: 'software', mode: 'passive', d710Family: false })).toBe('software');
   });
 
-  it('wires Packet Connect to the saved flow and watches the host card', () => {
+  it('opens an older TM-D710 host session with hardware and leaves other modules on the previous defaults', () => {
+    expect(aprsTncFlowControl({ declared: undefined, mode: 'host', d710Family: true })).toBe('hardware');
+    expect(aprsTncFlowControl({ declared: undefined, mode: 'passive', d710Family: true })).toBe('none');
+    expect(aprsTncFlowControl({ declared: undefined, mode: 'host', d710Family: false })).toBe('software');
+    expect(aprsTncFlowControl({ declared: undefined, mode: 'passive', d710Family: false })).toBe('none');
+    expect(aprsFlowControlNote('hardware')).toBe('Flow control is hardware (RTS/CTS).');
+    expect(aprsFlowControlNote('software')).toBe('Flow control is software (XON/XOFF).');
+    expect(aprsFlowControlNote('none')).toBe('Flow control is off.');
+  });
+
+  it('wires both tabs through the shared bar and does not keep a flow-control menu', () => {
     const packet = readFileSync(new URL('../../app/components/RadioPacket.vue', import.meta.url), 'utf8');
     const aprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
     const bar = readFileSync(new URL('../../app/components/AprsConnectionBar.vue', import.meta.url), 'utf8');
     expect(packet).toContain('host.watchCard(props.cardId)');
     expect(packet).toContain('<AprsConnectionBar');
     expect(aprs).toContain('<AprsConnectionBar');
-    expect(bar).toContain('aprsHostFlowForConnect(saved, profile.value?.host?.defaultFlow)');
-    expect(bar).not.toContain("profile.value?.host?.defaultFlow ?? 'software'");
+    expect(aprs).not.toContain('label="Flow control"');
+    expect(packet).not.toContain('label="Flow control"');
+    expect(bar).not.toContain('label="Flow control"');
+    expect(bar).toContain('clearAprsHostFlowPreference');
+    expect(bar).toContain('tncFlow(selectedMode.value)');
+    expect(bar).toContain('aprsFlowControlNote(effectiveFlow.value)');
+    expect(bar).not.toContain('defaultFlow');
+    expect(bar).not.toContain('readAprsHostFlow');
+    expect(bar).not.toContain('writeAprsHostFlow');
+    expect(aprs).not.toContain('writeAprsHostFlow');
     expect(bar).toContain('aprsStatusBadge');
     expect(bar).toContain('aprsMonitorSilenceHint');
     const session = readFileSync(new URL('../../app/utils/aprs-host-session.ts', import.meta.url), 'utf8');
@@ -59,7 +78,5 @@ describe('saved APRS host flow', () => {
     expect(bar).toContain("border-s border-white/25");
     expect(bar).not.toContain('i-lucide-cable');
     expect(bar).not.toContain('write_binary');
-    expect(aprs).toContain('writeAprsHostFlow(storage, props.cardId, value)');
-    expect(aprs).toContain('readAprsHostFlow(');
   });
 });

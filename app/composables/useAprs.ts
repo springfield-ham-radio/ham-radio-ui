@@ -1,6 +1,7 @@
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import { openAprsReceivePort } from '~/utils/aprs-serial';
+import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
 import { isPortMissingError } from '~/utils/serial-port-reconnect';
 import {
   aprsHoldPaths,
@@ -70,7 +71,12 @@ export function useAprs() {
     });
   }
 
-  async function connect(cardId: string, path: string, baudRate: number): Promise<void> {
+  async function connect(
+    cardId: string,
+    path: string,
+    baudRate: number,
+    flowControl: AprsHostFlowControl = 'none',
+  ): Promise<void> {
     if (aprsConnectBlocked(lockedPorts.value, path, cardPorts.value[cardId])) {
       const session = sessionFor(cardId);
       await session.disconnect();
@@ -93,7 +99,7 @@ export function useAprs() {
       syncHolds(nextAprsPortHolds(cardPorts.value, cardId, undefined));
       await session.connect(path, async () => {
         try {
-          return await openAprsReceivePort(path, baudRate);
+          return await openAprsReceivePort(path, baudRate, flowControl);
         } catch (cause) {
           if (isPortMissingError(cause)) {
             throw new Error(aprsPortMissingMessage(path));

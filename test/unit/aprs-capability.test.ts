@@ -85,6 +85,7 @@ describe('APRS receive capability', () => {
             kissExit: [0xc0, 0xff, 0xc0],
             promptNudge: [13],
             enter: [{ text: 'HOST\r', label: 'HOST' }],
+            flowControl: 'hardware',
             flows: ['none'],
             defaultFlow: 'none',
             setup: ['The module asks for ok>.'],
@@ -96,11 +97,51 @@ describe('APRS receive capability', () => {
 
     expect(profile?.host?.link.interrupt).toEqual(Uint8Array.of(21));
     expect(profile?.host?.link.enter[0]?.text).toBe('HOST\r');
+    expect(profile?.host?.flowControl).toBe('hardware');
+    expect(profile?.host?.defaultFlow).toBe('none');
     expect(profile?.host?.flows).toEqual(['none']);
     expect(profile?.host?.link.enter.some((step) => step.text.includes('KISS ON'))).toBe(false);
     expect(profile?.host?.link.listenMs).toBe(1500);
     expect(profile?.host?.link.kissExit).toEqual(Uint8Array.of(0xc0, 0xff, 0xc0));
     expect(profile?.host?.link.promptNudge).toEqual(Uint8Array.of(13));
+    expect(aprsReceiveProfile({
+      model: 'kenwood-tm-d710a',
+      config: {
+        capabilities: { aprsReceive: true },
+        aprs: {
+          mode: 'monitor',
+          baudRate: 9600,
+          baudRates: [9600],
+          host: {
+            interrupt: [3, 3, 3],
+            prompt: 'cmd:',
+            enter: [{ text: 'KISS ON\r', label: 'KISS ON' }],
+            defaultFlow: 'software',
+            setup: ['Older module.'],
+            recovery: ['Disconnect.'],
+          },
+        },
+      },
+    })?.host?.flowControl).toBeUndefined();
+    expect(aprsReceiveProfile({
+      model: 'example-tnc',
+      config: {
+        capabilities: { aprsReceive: true },
+        aprs: {
+          mode: 'monitor',
+          baudRate: 9600,
+          baudRates: [9600],
+          host: {
+            interrupt: [21],
+            prompt: 'ok>',
+            flowControl: 'rts',
+            enter: [{ text: 'HOST\r', label: 'HOST' }],
+            setup: ['Ask for ok>.'],
+            recovery: ['Disconnect.'],
+          },
+        },
+      },
+    })?.host).toBeUndefined();
     expect(aprsReceiveProfile({
       model: 'example-tnc',
       config: {

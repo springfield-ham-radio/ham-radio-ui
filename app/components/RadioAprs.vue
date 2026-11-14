@@ -9,8 +9,6 @@ import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import type { AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
-import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
-import { browserAprsHostFlowStorage, readAprsHostFlow, writeAprsHostFlow } from '~/utils/aprs-host-flow';
 
 const props = defineProps<{
   cardId?: string;
@@ -80,8 +78,6 @@ const isConnected = computed(() => snapshot.value?.connected === true || tncPrev
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
 const mine = ref('');
 const mineError = ref<string | undefined>();
-const savedHostFlow = props.cardId ? readAprsHostFlow(browserAprsHostFlowStorage() ?? { getItem: () => null, setItem() { return undefined; } }, props.cardId) : undefined;
-const requestedFlow = ref<AprsHostFlowControl>(savedHostFlow ?? 'software');
 const selectedMode = computed<AprsConnectionMode>(() => {
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
 
@@ -101,18 +97,6 @@ const activeMode = computed<AprsConnectionMode>(() => {
   }
 
   return selectedMode.value;
-});
-const portOpen = computed(() => kissListening.value || isConnected.value);
-const activeFlow = computed(() => (kissListening.value ? (hostSnapshot.value?.hostFlow ?? requestedFlow.value) : requestedFlow.value));
-const flowLabels: Record<AprsHostFlowControl, string> = {
-  software: 'Software (XON/XOFF)',
-  none: 'Off',
-  hardware: 'Hardware (RTS/CTS)',
-};
-const flowItems = computed(() => {
-  const flows = profile.value?.host?.flows ?? [];
-
-  return flows.map((value) => ({ label: flowLabels[value], value }));
 });
 const stations = computed(() => snapshot.value?.stations ?? []);
 const log = computed(() => snapshot.value?.log ?? []);
@@ -159,11 +143,6 @@ watch(
     }
 
     host.setHostLink(props.cardId, profile.value?.host?.link);
-    const flows = profile.value?.host?.flows;
-
-    if (flows && !kissListening.value && !flows.includes(requestedFlow.value)) {
-      requestedFlow.value = profile.value?.host?.defaultFlow ?? 'software';
-    }
   },
   { immediate: true },
 );
@@ -217,22 +196,6 @@ watch(kissListening, (open) => {
   }
 });
 
-function onFlow(value: unknown): void {
-  if (portOpen.value) {
-    return;
-  }
-
-  if (value === 'software' || value === 'none' || value === 'hardware') {
-    requestedFlow.value = value;
-
-    const storage = browserAprsHostFlowStorage();
-
-    if (props.cardId && storage) {
-      writeAprsHostFlow(storage, props.cardId, value);
-    }
-  }
-}
-
 function selectStation(callsign: string | undefined): void {
   if (!callsign) {
     return;
@@ -273,19 +236,6 @@ function onClear(): void {
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
     <AprsConnectionBar :card-id="cardId" :model="model" :radio-name="radioName" />
-    <div v-if="activeMode === 'host' && profile?.host" class="mb-2 flex shrink-0 flex-wrap items-end gap-2">
-      <UFormField label="Flow control" class="w-52">
-        <USelect
-          :model-value="activeFlow"
-          :items="flowItems"
-          value-key="value"
-          class="w-full"
-          :disabled="portOpen"
-          @update:model-value="onFlow"
-        />
-      </UFormField>
-    </div>
-
     <div v-if="activeMode === 'host'" class="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
       <UFormField label="My callsign" :error="mineError" class="w-40">
         <UInput :model-value="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" @update:model-value="onMine" />
