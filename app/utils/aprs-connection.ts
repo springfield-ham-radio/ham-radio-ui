@@ -1,3 +1,5 @@
+import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '~/utils/aprs-d710-host';
+
 /**
  * One APRS COM connection for Stations, Map, Messages, Packet, and Raw log.
  *
@@ -171,6 +173,83 @@ export function aprsMonitorSilenceHint(input: {
   }
 
   return APRS_MONITOR_SILENCE_HINT;
+}
+
+export interface AprsHostModeHintCopy {
+  hint?: string;
+  likelyHint?: string;
+}
+
+/**
+ * Sentences for the Host No-reply hint.
+ *
+ * A module that sets either string owns the copy. A TM-D710 host block that
+ * sets neither still uses the compatibility sentences, so an installed module
+ * from before those fields still explains the TNC key. Any other radio stays
+ * quiet until its module sets them. This does not write.
+ */
+export function aprsHostModeHintText(input: {
+  aprsModeHint?: string;
+  aprsModeLikelyHint?: string;
+  d710: boolean;
+  hasHost: boolean;
+}): AprsHostModeHintCopy {
+  if (input.aprsModeHint || input.aprsModeLikelyHint) {
+    return { hint: input.aprsModeHint, likelyHint: input.aprsModeLikelyHint };
+  }
+
+  if (!input.d710 || !input.hasHost) {
+    return {};
+  }
+
+  return { hint: D710_APRS_MODE_HINT, likelyHint: D710_APRS_MODE_LIKELY_HINT };
+}
+
+/**
+ * Inline hint when Host detection has stopped short of the command prompt and KISS.
+ *
+ * A TNC2 monitor line uses the claimed sentence. Silence, or other command
+ * text with no prompt, uses the weaker sentence. A pass that already saw the
+ * prompt, an incomplete KISS frame, and non-text bytes do not.
+ */
+export function aprsHostAprsModeHint(input: {
+  open: AprsConnectionMode | undefined;
+  detectPhase: AprsTncModeInput['detectPhase'];
+  commandPhase: AprsTncModeInput['commandPhase'];
+  kissConfirmed: boolean;
+  sawMonitorLine: boolean;
+  detectDetail: string | undefined;
+  hint: string | undefined;
+  likelyHint: string | undefined;
+}): string | undefined {
+  if (input.open !== 'host' || input.kissConfirmed || input.detectPhase !== 'failed') {
+    return undefined;
+  }
+
+  if (
+    input.commandPhase === 'prompt'
+    || input.commandPhase === 'waiting-accept'
+    || input.commandPhase === 'restart-sent'
+    || input.commandPhase === 'kiss-framed'
+    || input.commandPhase === 'rejected'
+    || input.commandPhase === 'timed-out'
+    || input.commandPhase === 'cancelled'
+  ) {
+    return undefined;
+  }
+
+  if (input.sawMonitorLine) {
+    return input.hint;
+  }
+
+  const detail = input.detectDetail ?? '';
+  const noPrompt = detail.includes('not answering') || detail.includes('Command-mode text was seen');
+
+  if (!noPrompt) {
+    return undefined;
+  }
+
+  return input.likelyHint;
 }
 
 /** Shown on the Packet tab while the shared session is not in Host mode. */

@@ -14,6 +14,14 @@ export const APRS_COMMAND_INTERRUPT = Uint8Array.of(0x03, 0x03, 0x03);
 export const APRS_KISS_ON_COMMAND = 'KISS ON\r';
 export const APRS_RESTART_COMMAND = 'RESTART\r';
 
+/** Shown when Host detection stops on a TNC2 line and never sees `cmd:`. Not transmitted. */
+export const D710_APRS_MODE_HINT =
+  'Radio looks like it\'s in APRS mode. Press TNC on the radio until it shows PACKET, then retry.';
+
+/** Shown on No reply when that stop has no TNC2 line. Not transmitted. */
+export const D710_APRS_MODE_LIKELY_HINT =
+  'No reply from the TNC. If the radio is in APRS mode, press TNC on the radio until it shows PACKET, then retry.';
+
 export function d710AprsHostLink(): AprsHostLink {
   return {
     interrupt: APRS_COMMAND_INTERRUPT,
@@ -40,5 +48,7 @@ export function d710AprsHostProfile(): AprsHostProfile {
     flowHelp: 'Host open on a TM-D710 uses hardware RTS/CTS when the module omits flowControl. The driver manages RTS. Connect does not send XFLOW.',
     setup: APRS_HOST_SETUP,
     recovery: APRS_HOST_RECOVERY,
+    aprsModeHint: D710_APRS_MODE_HINT,
+    aprsModeLikelyHint: D710_APRS_MODE_LIKELY_HINT,
   };
 }

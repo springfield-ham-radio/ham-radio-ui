@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aprsReceiveProfile } from '../../app/utils/aprs-capability.ts';
+import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '../../app/utils/aprs-d710-host.ts';
 import { APRS_HOST_RECOVERY, APRS_HOST_SETUP } from '../../app/utils/aprs-kiss-restore.ts';
 
 describe('APRS receive capability', () => {
@@ -45,6 +46,8 @@ describe('APRS receive capability', () => {
     expect(fallback?.host?.link.enter.map((step) => step.text)).toEqual(['KISS ON\r', 'RESTART\r']);
     expect(fallback?.host?.link.kissExit).toBeUndefined();
     expect(fallback?.host?.link.promptNudge).toBeUndefined();
+    expect(fallback?.host?.aprsModeHint).toBe(D710_APRS_MODE_HINT);
+    expect(fallback?.host?.aprsModeLikelyHint).toBe(D710_APRS_MODE_LIKELY_HINT);
     expect(fallback?.host?.link.listenMs).toBe(3000);
     const recovery = [...(fallback?.host?.setup ?? []), ...(fallback?.host?.recovery ?? [])].join(' ');
     expect(recovery).not.toMatch(/second cycle toggles/i);
@@ -90,12 +93,16 @@ describe('APRS receive capability', () => {
             defaultFlow: 'none',
             setup: ['The module asks for ok>.'],
             recovery: ['Disconnect. The module does not document an exit command.'],
+            aprsModeHint: 'This radio uses a front-panel packet key.',
+            aprsModeLikelyHint: 'If this radio is in monitor mode, switch it to packet.',
           },
         },
       },
     });
 
     expect(profile?.host?.link.interrupt).toEqual(Uint8Array.of(21));
+    expect(profile?.host?.aprsModeHint).toBe('This radio uses a front-panel packet key.');
+    expect(profile?.host?.aprsModeLikelyHint).toBe('If this radio is in monitor mode, switch it to packet.');
     expect(profile?.host?.link.enter[0]?.text).toBe('HOST\r');
     expect(profile?.host?.flowControl).toBe('hardware');
     expect(profile?.host?.defaultFlow).toBe('none');
@@ -174,6 +181,25 @@ describe('APRS receive capability', () => {
             interrupt: [21],
             prompt: 'ok>',
             promptNudge: [256],
+            enter: [{ text: 'HOST\r', label: 'HOST' }],
+            setup: ['Ask for ok>.'],
+            recovery: ['Disconnect.'],
+          },
+        },
+      },
+    })?.host).toBeUndefined();
+    expect(aprsReceiveProfile({
+      model: 'example-tnc',
+      config: {
+        capabilities: { aprsReceive: true },
+        aprs: {
+          mode: 'monitor',
+          baudRate: 9600,
+          baudRates: [9600],
+          host: {
+            interrupt: [21],
+            prompt: 'ok>',
+            aprsModeHint: 12,
             enter: [{ text: 'HOST\r', label: 'HOST' }],
             setup: ['Ask for ok>.'],
             recovery: ['Disconnect.'],

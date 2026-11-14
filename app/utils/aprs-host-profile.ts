@@ -51,6 +51,17 @@ export interface AprsHostProfile {
   flowHelp: string;
   setup: readonly string[];
   recovery: readonly string[];
+  /**
+   * Connection-bar sentence when Host detection stops after a TNC2 monitor
+   * line and no command prompt. Omitted means the bar stays quiet unless a
+   * TM-D710 compatibility copy supplies one. The sentence is not transmitted.
+   */
+  aprsModeHint?: string;
+  /**
+   * Weaker sentence when that same stop has no TNC2 line. Omitted means no
+   * weaker sentence. It is not transmitted.
+   */
+  aprsModeLikelyHint?: string;
 }
 
 const FLOWS: readonly AprsHostFlowControl[] = ['software', 'none', 'hardware'];
@@ -210,6 +221,12 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
   const flowHelp = typeof value.flowHelp === 'string' && value.flowHelp.trim().length > 0
     ? value.flowHelp.trim()
     : 'Flow control comes from the module.';
+  const aprsModeHint = optionalHint(value.aprsModeHint);
+  const aprsModeLikelyHint = optionalHint(value.aprsModeLikelyHint);
+
+  if (aprsModeHint === null || aprsModeLikelyHint === null) {
+    return undefined;
+  }
 
   return {
     link: { interrupt, prompt: value.prompt, errorReply, waitMs, listenMs, kissExit, promptNudge, enter },
@@ -219,5 +236,30 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     flowHelp,
     setup,
     recovery,
+    aprsModeHint,
+    aprsModeLikelyHint,
   };
+}
+
+/** A display sentence. Undefined when omitted, null when present but unusable. */
+function optionalHint(value: unknown): string | undefined | null {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  if (!printable(trimmed, 240)) {
+    return null;
+  }
+
+  return trimmed;
 }
