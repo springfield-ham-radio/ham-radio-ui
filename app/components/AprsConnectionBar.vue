@@ -8,6 +8,8 @@ import {
   aprsConnectLabel,
   aprsConnectionView,
   aprsDisconnectAction,
+  aprsHostAprsModeHint,
+  aprsHostModeHintText,
   aprsMonitorSilenceHint,
   aprsStatusBadge,
   nextAprsMonitorQuiet,
@@ -111,6 +113,7 @@ const tncInput = computed<AprsTncModeInput>(() => {
     waiting: { open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
     confirmed: { open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
     failed: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
+    aprs: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'waiting-prompt' },
   };
 
   return shown[preview] ?? shown.confirmed ?? live;
@@ -254,6 +257,26 @@ const silenceHint = computed(() => aprsMonitorSilenceHint({
   nowMs: nowMs.value,
   quietSinceMs: props.cardId ? quietClocks.value[props.cardId]?.quietSinceMs : undefined,
 }));
+const modeHint = computed(() => {
+  const hostProfile = profile.value?.host;
+  const copy = aprsHostModeHintText({
+    aprsModeHint: hostProfile?.aprsModeHint,
+    aprsModeLikelyHint: hostProfile?.aprsModeLikelyHint,
+    d710: d710AprsFamily(props.model, props.radioName ?? savedRadio.value?.name) !== undefined,
+    hasHost: Boolean(hostProfile),
+  });
+
+  return aprsHostAprsModeHint({
+    open: tncInput.value.open,
+    detectPhase: tncInput.value.detectPhase,
+    commandPhase: tncInput.value.commandPhase,
+    kissConfirmed: tncInput.value.kissConfirmed,
+    sawMonitorLine: tncPreview.value === 'aprs' || hostSnapshot.value?.sawMonitorLine === true,
+    detectDetail: hostSnapshot.value?.detectDetail,
+    hint: copy.hint,
+    likelyHint: copy.likelyHint,
+  });
+});
 
 let silenceTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -425,5 +448,6 @@ function onRetryDetection(): void {
     </div>
     </div>
     <p v-if="silenceHint" class="mt-1 max-w-3xl text-xs text-muted">{{ silenceHint }}</p>
+    <p v-else-if="modeHint" class="mt-1 max-w-3xl text-xs text-muted">{{ modeHint }}</p>
   </div>
 </template>

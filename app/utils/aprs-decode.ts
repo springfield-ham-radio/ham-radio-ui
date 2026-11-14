@@ -129,6 +129,30 @@ export function decodeAprsMonitorLine(line: string): AprsDecodedPacket {
 }
 
 /**
+ * True when `text` contains a TNC2 monitor line with an information field.
+ *
+ * A `cmd:` prompt, a Kenwood banner, and a header that has not reached its
+ * colon do not count. The caller does not write.
+ */
+export function containsAprsMonitorLine(text: string): boolean {
+  for (const line of text.split(/\r\n|\n|\r/)) {
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    const decoded = decodeAprsMonitorLine(trimmed);
+
+    if (decoded.kind !== 'unparsed' && decoded.source !== undefined && decoded.destination !== undefined) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Decode one parsed AX.25 UI frame with the same information-field rules as a TNC2 line.
  *
  * Source, destination, and path come from the address fields. A digipeater H bit

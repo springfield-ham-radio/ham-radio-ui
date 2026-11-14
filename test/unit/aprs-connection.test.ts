@@ -7,6 +7,8 @@ import {
   aprsConnectLabel,
   aprsConnectionView,
   aprsDisconnectAction,
+  aprsHostAprsModeHint,
+  aprsHostModeHintText,
   aprsHostShouldExitKiss,
   aprsMonitorSilenceHint,
   aprsStatusBadge,
@@ -15,6 +17,7 @@ import {
   packetNeedsHostNotice,
   type AprsTncModeInput,
 } from '~/utils/aprs-connection';
+import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '~/utils/aprs-d710-host';
 
 describe('APRS COM connection', () => {
   it('opens the passive monitor without a host or KISS action', () => {
@@ -281,6 +284,90 @@ describe('shared TNC connection bar', () => {
     expect(aprsHostShouldExitKiss({
       open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out',
     })).toBe(false);
+  });
+
+  it('hints when Host detection stops on APRS text, and hedges a plain No reply', () => {
+    const claimed = 'Radio looks like it is in APRS mode. Press TNC until PACKET, then retry.';
+    const likely = 'If the radio is in APRS mode, press TNC until PACKET, then retry.';
+    const stopped = {
+      open: 'host' as const,
+      detectPhase: 'failed' as const,
+      commandPhase: 'waiting-prompt' as const,
+      kissConfirmed: false,
+      hint: claimed,
+      likelyHint: likely,
+    };
+
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: true,
+      detectDetail: 'Command-mode text was seen, but cmd: did not arrive after the prompt request. Nothing more was written.',
+    })).toBe(claimed);
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: false,
+      detectDetail: 'The TNC is not answering. The radio may not be in PACKET mode. Nothing more was written.',
+    })).toBe(likely);
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: false,
+      detectDetail: 'Command-mode text was seen, but cmd: did not arrive after the prompt request. Nothing more was written.',
+    })).toBe(likely);
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: true,
+      detectPhase: 'listening',
+      detectDetail: 'Command text seen. Waiting for cmd:.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: true,
+      commandPhase: 'prompt',
+      detectDetail: 'cmd: arrived. Entering host KISS.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: true,
+      commandPhase: 'timed-out',
+      detectDetail: 'No cmd: after KISS ON. RESTART was not sent.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: false,
+      detectDetail: 'An incomplete KISS frame was still open. Nothing more was written.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      open: 'passive',
+      sawMonitorLine: true,
+      detectDetail: 'The TNC is not answering. The radio may not be in PACKET mode. Nothing more was written.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      kissConfirmed: true,
+      sawMonitorLine: true,
+      detectDetail: 'Command-mode text was seen, but cmd: did not arrive after the prompt request. Nothing more was written.',
+    })).toBeUndefined();
+    expect(aprsHostAprsModeHint({
+      ...stopped,
+      sawMonitorLine: true,
+      hint: undefined,
+      detectDetail: 'Command-mode text was seen, but cmd: did not arrive after the prompt request. Nothing more was written.',
+    })).toBeUndefined();
+
+    expect(aprsHostModeHintText({
+      aprsModeHint: claimed,
+      d710: true,
+      hasHost: true,
+    })).toEqual({ hint: claimed, likelyHint: undefined });
+    expect(aprsHostModeHintText({ d710: true, hasHost: true })).toEqual({
+      hint: D710_APRS_MODE_HINT,
+      likelyHint: D710_APRS_MODE_LIKELY_HINT,
+    });
+    expect(aprsHostModeHintText({ d710: false, hasHost: true })).toEqual({});
+    expect(aprsHostModeHintText({ d710: true, hasHost: false })).toEqual({});
+    expect(D710_APRS_MODE_HINT).toContain('PACKET');
+    expect(D710_APRS_MODE_LIKELY_HINT).toContain('If the radio is in APRS mode');
   });
 
   it('tells the Packet tab that Monitor only does not open KISS', () => {

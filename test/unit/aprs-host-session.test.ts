@@ -939,6 +939,9 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectPhase).toBe('failed');
     expect(session.snapshot().detectDetail).toContain('not answering');
     expect(session.snapshot().detectDetail).toContain('PACKET mode');
+    expect(session.snapshot().sawMonitorLine).toBe(false);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().commandTextBytes).toBe(0);
     const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');
     expect(written).not.toContain('HOST');
     expect(written).not.toContain('\r');
@@ -1044,8 +1047,60 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectPhase).toBe('failed');
     expect(session.snapshot().detectDetail).toContain('Command-mode text was seen');
     expect(session.snapshot().detectDetail).not.toContain('PACKET mode');
+    expect(session.snapshot().sawMonitorLine).toBe(true);
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().commandTextBytes).toBeGreaterThan(0);
+    expect(session.snapshot().incompleteBytes).toBe(0);
     expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
     expect(fake.writes.some((frame) => frame.includes(0x0d))).toBe(false);
+  });
+
+  it('records a TNC2 line split across reads and does not write past the prompt request', async () => {
+    let time = 8_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('K5KTF-4>APRX29,WIDE2-1'));
+    await settle();
+    expect(session.snapshot().sawMonitorLine).toBe(false);
+    fake.push(new TextEncoder().encode(':!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n'));
+    await settle();
+    expect(session.snapshot().sawMonitorLine).toBe(true);
+    expect(session.snapshot().frames).toBe(0);
+    expect(fake.writes).toEqual([]);
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().sawMonitorLine).toBe(true);
+    expect(session.retryDetection()).toBeUndefined();
+    expect(session.snapshot().sawMonitorLine).toBe(false);
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+  });
+
+  it('marks a TNC2 line that arrives after silence without writing again', async () => {
+    let time = 5_000;
+    const session = createAprsHostSession({ now: () => time, host: moduleLink() });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    time += 3_000;
+    session.poll();
+    await settle();
+    time += 1_000;
+    session.poll();
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().sawMonitorLine).toBe(false);
+    fake.push(new TextEncoder().encode('K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF\r\n'));
+    await settle();
+    expect(session.snapshot().sawMonitorLine).toBe(true);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(fake.writes).toEqual([Uint8Array.of(0x15)]);
+    expect(session.snapshot().frames).toBe(0);
   });
 
   it('writes a declared prompt nudge once when monitor text continues, then enters', async () => {
@@ -1124,6 +1179,7 @@ describe('host Connect detection', () => {
     expect(session.snapshot().frames).toBe(0);
     expect(session.snapshot().commandTextBytes).toBe(banner.length);
     expect(session.snapshot().trace.some((line) => line.note.includes('already on this connection'))).toBe(true);
+    expect(session.snapshot().sawMonitorLine).toBe(false);
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     expect(fake.writes).toHaveLength(1);
 

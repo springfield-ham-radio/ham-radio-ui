@@ -1,4 +1,5 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
+import { containsAprsMonitorLine } from '~/utils/aprs-decode';
 import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
 import { aprsHostShouldExitKiss } from '~/utils/aprs-connection';
 import type { AprsHostLink } from '~/utils/aprs-host-profile';
@@ -87,6 +88,11 @@ export interface AprsHostSnapshot {
   /** Connect detection. Idle until a host link is open. */
   detectPhase: 'idle' | 'listening' | 'awaiting-prompt' | 'entering' | 'waiting-traffic' | 'failed';
   detectDetail: string;
+  /**
+   * A TNC2 monitor line arrived in the command text and the prompt has not.
+   * The connection bar uses this. It does not write.
+   */
+  sawMonitorLine: boolean;
   hostFlow: AprsHostFlowControl;
   trace: AprsTraceLine[];
   traceDropped: number;
@@ -164,6 +170,9 @@ interface Waiting {
  * has not been, and the pass waits for the prompt. kissExit is written
  * only when neither the interrupt nor the nudge produced text. The enter
  * steps run only after a fresh prompt. FEND FF FEND does not confirm KISS.
+ * A TNC2 monitor line in the command text sets sawMonitorLine. A prompt
+ * clears it. The connection bar reads the flag. Detection does not write
+ * because of it.
  * Send is the only way a message
  * frame is written. A message or retry is written only after this connection
  * has parsed an AX.25 UI frame. A KISS frame that does not parse does not
@@ -226,6 +235,8 @@ export function createAprsHostSession(options?: {
   let detectRx = 0;
   let sawText = false;
   let sawOther = false;
+  let monitorPlain = '';
+  let sawMonitorLine = false;
   let interruptTried = false;
   let exitTried = false;
   let nudgeTried = false;
@@ -439,6 +450,7 @@ export function createAprsHostSession(options?: {
     textAfterInterrupt = false;
     sawText = false;
     sawOther = false;
+    clearMonitorLine();
     detectRx = rxBytes;
     detectStep = 'listen';
 
@@ -543,6 +555,33 @@ export function createAprsHostSession(options?: {
     clearDetectClock();
     detectDetail = 'Unframed bytes were already buffered when the port opened. Treated as KISS, not silence. KISS on, waiting for traffic. Nothing was sent.';
     record('note', new Uint8Array(), detectDetail);
+  }
+
+  function clearMonitorLine(): void {
+    monitorPlain = '';
+    sawMonitorLine = false;
+  }
+
+  /**
+   * Remember a TNC2 monitor line from bytes outside a KISS frame.
+   *
+   * A header that is still missing its colon does not count. The prompt
+   * clears the flag. Nothing is written.
+   */
+  function noteMonitorBytes(bytes: Uint8Array): void {
+    if (sawMonitorLine || bytes.length === 0 || kissConfirmed) {
+      return;
+    }
+
+    if (detectPhase !== 'listening' && detectPhase !== 'awaiting-prompt' && detectPhase !== 'failed') {
+      return;
+    }
+
+    monitorPlain = `${monitorPlain}${new TextDecoder().decode(bytes)}`.slice(-2048);
+
+    if (containsAprsMonitorLine(monitorPlain)) {
+      sawMonitorLine = true;
+    }
   }
 
   function noteDetectBytes(ignored: Uint8Array): void {
@@ -855,6 +894,8 @@ export function createAprsHostSession(options?: {
     if (!hostLink || !promptSeen(sessionBytes)) {
       return;
     }
+
+    clearMonitorLine();
 
     if (commandPhase === 'prompt' || commandPhase === 'waiting-accept' || commandPhase === 'restart-sent' || commandPhase === 'rejected' || commandPhase === 'kiss-framed') {
       return;
@@ -1306,6 +1347,10 @@ export function createAprsHostSession(options?: {
       noteKissLost(commandText.subarray(commandTextAtConfirm));
     }
 
+    if (!openLeftover && decoded.ignoredBytes.length > 0) {
+      noteMonitorBytes(decoded.ignoredBytes);
+    }
+
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
     if (stripped.echoed) {
       noteCommandEcho();
@@ -1429,6 +1474,7 @@ export function createAprsHostSession(options?: {
         commandDetail,
         detectPhase,
         detectDetail,
+        sawMonitorLine,
         hostFlow,
         trace: trace.map((line) => ({ ...line })),
         traceDropped,
@@ -1533,6 +1579,7 @@ export function createAprsHostSession(options?: {
         commandTimer = undefined;
       }
       clearDetectClock();
+      clearMonitorLine();
       detectPhase = 'idle';
       detectDetail = '';
       detectDeadline = Number.POSITIVE_INFINITY;

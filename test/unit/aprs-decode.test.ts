@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call, encodeAx25Ui, parseAx25Ui } from '../../app/utils/aprs-ax25.ts';
-import { decodeAprsMonitorLine, decodeAx25UiAprs } from '../../app/utils/aprs-decode.ts';
+import { containsAprsMonitorLine, decodeAprsMonitorLine, decodeAx25UiAprs } from '../../app/utils/aprs-decode.ts';
 import { aprsWeatherLines } from '../../app/utils/aprs-display.ts';
 import { createAprsFoldState, foldAprsLine } from '../../app/utils/aprs-stations.ts';
 
@@ -79,6 +79,16 @@ describe('APRS monitor decode', () => {
     expect(decodeAprsMonitorLine('N0CALL>APRS:}W1AW>APRS:!4903.50N/07201.75W-').unsupportedReason).toBe(
       'Third-party packet is not decoded',
     );
+  });
+
+  it('finds a TNC2 station line and skips a prompt, a banner, and a header fragment', () => {
+    const line = 'K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&K5KTF TX/RX-iGate\r\n';
+    expect(containsAprsMonitorLine(`cmd:\r\n${line}`)).toBe(true);
+    expect(containsAprsMonitorLine('K5KTF-4>APRX29,WIDE2-1')).toBe(false);
+    expect(containsAprsMonitorLine('K5KTF-4>APRX29,WIDE2-1:!3031.12NI09752.74W&')).toBe(true);
+    expect(containsAprsMonitorLine('cmd:')).toBe(false);
+    expect(containsAprsMonitorLine('Kenwood Radio Modem\r\ncmd:')).toBe(false);
+    expect(containsAprsMonitorLine('$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n')).toBe(false);
   });
 });
 

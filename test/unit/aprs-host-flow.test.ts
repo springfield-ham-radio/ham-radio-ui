@@ -68,6 +68,8 @@ describe('TNC flow control from the radio module', () => {
     expect(aprs).not.toContain('writeAprsHostFlow');
     expect(bar).toContain('aprsStatusBadge');
     expect(bar).toContain('aprsMonitorSilenceHint');
+    expect(bar).toContain('aprsHostAprsModeHint');
+    expect(bar).toContain('v-else-if="modeHint"');
     const session = readFileSync(new URL('../../app/utils/aprs-host-session.ts', import.meta.url), 'utf8');
     expect(session).toContain('KISS exit.');
     expect(session).toContain('aprsHostShouldExitKiss');
