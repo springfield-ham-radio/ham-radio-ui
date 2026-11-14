@@ -1,3 +1,9 @@
+## [3.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.7.0...v3.8.0) (2026-11-14)
+
+### Features
+
+* apply TNC flow control from the radio module ([#209](https://github.com/springfield-ham-radio/ham-radio-ui/issues/209)) ([f6708e4](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f6708e48716d2133bb1df035296725bd9e174a57))
+
 ## [3.7.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.6.0...v3.7.0) (2026-11-14)
 
 ### Features
