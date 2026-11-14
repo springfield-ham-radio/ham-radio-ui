@@ -337,7 +337,11 @@ export function aprsStatusBadge(input: {
       ? 'Detecting'
       : mode.label;
   const label = mode.visible && modeLabel ? `Connected · Host · ${modeLabel}` : 'Connected';
-  const color = mode.visible && mode.color !== 'neutral' ? mode.color : 'success';
+  const color = modeLabel === 'KISS confirmed' || !mode.visible
+    ? 'success'
+    : modeLabel === 'No reply'
+      ? 'error'
+      : 'warning';
 
   return { label, color, tooltip };
 }

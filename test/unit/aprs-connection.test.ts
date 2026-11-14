@@ -229,6 +229,7 @@ describe('shared TNC connection bar', () => {
       tnc: { open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' },
     });
     expect(monitor.label).toBe('Connected · Monitor');
+    expect(monitor.color).toBe('success');
     expect(monitor.tooltip).toContain('Nothing is written');
 
     const confirmed = aprsStatusBadge({
@@ -236,19 +237,32 @@ describe('shared TNC connection bar', () => {
       tnc: { open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
     });
     expect(confirmed.label).toBe('Connected · Host · KISS confirmed');
+    expect(confirmed.color).toBe('success');
     expect(confirmed.tooltip).toContain('AX.25 UI');
 
     const waiting = aprsStatusBadge({
       connection: 'Connected',
       tnc: { open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
     });
-    expect(waiting.label).toBe('Connected · Host · KISS waiting');
+    expect(waiting).toMatchObject({ label: 'Connected · Host · KISS waiting', color: 'warning' });
+
+    const detecting = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'listening', commandPhase: 'idle' },
+    });
+    expect(detecting).toMatchObject({ label: 'Connected · Host · Detecting', color: 'warning' });
 
     const command = aprsStatusBadge({
       connection: 'Connected',
       tnc: { open: 'host', kissConfirmed: false, detectPhase: 'entering', commandPhase: 'prompt' },
     });
-    expect(command.label).toBe('Connected · Host · Command');
+    expect(command).toMatchObject({ label: 'Connected · Host · Command', color: 'warning' });
+
+    const failed = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
+    });
+    expect(failed).toMatchObject({ label: 'Connected · Host · No reply', color: 'error' });
     expect(aprsHostShouldExitKiss({
       open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent',
     })).toBe(true);
