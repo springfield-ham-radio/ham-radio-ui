@@ -381,7 +381,7 @@ function onRetryDetection(): void {
           color="neutral"
           variant="ghost"
           size="sm"
-          icon="i-lucide-search"
+          icon="i-lucide-refresh-cw"
           label="Retry detection"
           :disabled="hostSnapshot?.detectPhase === 'listening' || hostSnapshot?.detectPhase === 'awaiting-prompt' || hostSnapshot?.detectPhase === 'entering'"
           @click="onRetryDetection"
