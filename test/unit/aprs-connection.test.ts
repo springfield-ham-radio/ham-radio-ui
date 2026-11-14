@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { aprsConnectAction, aprsConnectionView, aprsDisconnectAction, aprsTncModeBadge, type AprsTncModeInput } from '~/utils/aprs-connection';
+import {
+  APRS_MONITOR_SILENCE_HINT,
+  APRS_MONITOR_SILENCE_MS,
+  aprsConnectAction,
+  aprsConnectDisabledReason,
+  aprsConnectLabel,
+  aprsConnectionView,
+  aprsDisconnectAction,
+  aprsHostShouldExitKiss,
+  aprsMonitorSilenceHint,
+  aprsStatusBadge,
+  aprsTncModeBadge,
+  nextAprsMonitorQuiet,
+  packetNeedsHostNotice,
+  type AprsTncModeInput,
+} from '~/utils/aprs-connection';
 
 describe('APRS COM connection', () => {
   it('opens the passive monitor without a host or KISS action', () => {
@@ -90,6 +105,189 @@ describe('APRS COM connection', () => {
     expect(host.detail).toContain('kissExit');
     expect(host.detail).toContain('does not transmit on the air');
     expect(host.detail).not.toContain('Enter host KISS');
+  });
+});
+
+describe('shared TNC connection bar', () => {
+  it('names the connect face for the selected mode and does not connect from the caret', () => {
+    expect(aprsConnectLabel('host')).toBe('Connect (Host)');
+    expect(aprsConnectLabel('passive')).toBe('Connect (Monitor only)');
+    expect(aprsConnectAction({ mode: 'host', passiveOpen: false, hostOpen: false })).toEqual({ kind: 'open-host' });
+    expect(aprsConnectAction({ mode: 'passive', passiveOpen: false, hostOpen: false })).toEqual({ kind: 'open-passive' });
+  });
+
+  it('explains a disabled connect face and stays quiet when the port can open', () => {
+    expect(aprsConnectDisabledReason({
+      hasRadio: false,
+      hasPort: false,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toMatch(/Preferences/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: false,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toBe('Choose an APRS serial port in Preferences.');
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: true,
+      hostAvailable: true,
+      mode: 'passive',
+    })).toMatch(/already open/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: false,
+      hostAvailable: false,
+      mode: 'host',
+    })).toMatch(/no host session/);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: false,
+      hostAvailable: true,
+      mode: 'host',
+    })).toBeUndefined();
+  });
+
+  it('hints when Monitor only has been quiet, then hides on a line or disconnect', () => {
+    expect(APRS_MONITOR_SILENCE_MS).toBe(60_000);
+    const opened = nextAprsMonitorQuiet({
+      passiveOpen: true,
+      lastLogId: 4,
+      nowMs: 1_000,
+      current: undefined,
+    });
+    expect(opened).toEqual({ lastLogId: 4, quietSinceMs: 1_000 });
+    expect(aprsMonitorSilenceHint({
+      passiveOpen: true,
+      nowMs: 1_000 + APRS_MONITOR_SILENCE_MS - 1,
+      quietSinceMs: opened?.quietSinceMs,
+    })).toBeUndefined();
+    expect(aprsMonitorSilenceHint({
+      passiveOpen: true,
+      nowMs: 1_000 + APRS_MONITOR_SILENCE_MS,
+      quietSinceMs: opened?.quietSinceMs,
+    })).toBe(APRS_MONITOR_SILENCE_HINT);
+
+    const afterLine = nextAprsMonitorQuiet({
+      passiveOpen: true,
+      lastLogId: 5,
+      nowMs: 70_000,
+      current: opened,
+    });
+    expect(afterLine?.quietSinceMs).toBe(70_000);
+    expect(aprsMonitorSilenceHint({
+      passiveOpen: true,
+      nowMs: 70_000,
+      quietSinceMs: afterLine?.quietSinceMs,
+    })).toBeUndefined();
+    expect(nextAprsMonitorQuiet({
+      passiveOpen: true,
+      lastLogId: 5,
+      nowMs: 90_000,
+      current: afterLine,
+    })).toBe(afterLine);
+    expect(nextAprsMonitorQuiet({
+      passiveOpen: true,
+      lastLogId: 0,
+      nowMs: 90_000,
+      current: afterLine,
+    })).toBe(afterLine);
+
+    expect(nextAprsMonitorQuiet({
+      passiveOpen: false,
+      lastLogId: 5,
+      nowMs: 91_000,
+      current: afterLine,
+    })).toBeUndefined();
+    expect(aprsMonitorSilenceHint({
+      passiveOpen: false,
+      nowMs: 200_000,
+      quietSinceMs: 1_000,
+    })).toBeUndefined();
+    expect(aprsMonitorSilenceHint({
+      passiveOpen: true,
+      nowMs: 200_000,
+      quietSinceMs: undefined,
+    })).toBeUndefined();
+  });
+
+  it('combines the port and mode into one badge and exits KISS only from Host', () => {
+    const closed = aprsStatusBadge({
+      connection: 'Disconnected',
+      tnc: { open: undefined, kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' },
+    });
+    expect(closed).toEqual({ label: 'Disconnected', color: 'neutral' });
+
+    const monitor = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle' },
+    });
+    expect(monitor.label).toBe('Connected · Monitor');
+    expect(monitor.color).toBe('success');
+    expect(monitor.tooltip).toContain('Nothing is written');
+
+    const confirmed = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
+    });
+    expect(confirmed.label).toBe('Connected · Host · KISS confirmed');
+    expect(confirmed.color).toBe('success');
+    expect(confirmed.tooltip).toContain('AX.25 UI');
+
+    const waiting = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent' },
+    });
+    expect(waiting).toMatchObject({ label: 'Connected · Host · KISS waiting', color: 'warning' });
+
+    const detecting = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'listening', commandPhase: 'idle' },
+    });
+    expect(detecting).toMatchObject({ label: 'Connected · Host · Detecting', color: 'warning' });
+
+    const command = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'entering', commandPhase: 'prompt' },
+    });
+    expect(command).toMatchObject({ label: 'Connected · Host · Command', color: 'warning' });
+
+    const failed = aprsStatusBadge({
+      connection: 'Connected',
+      tnc: { open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out' },
+    });
+    expect(failed).toMatchObject({ label: 'Connected · Host · No reply', color: 'error' });
+    expect(aprsHostShouldExitKiss({
+      open: 'host', kissConfirmed: true, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent',
+    })).toBe(true);
+    expect(aprsHostShouldExitKiss({
+      open: 'host', kissConfirmed: false, detectPhase: 'waiting-traffic', commandPhase: 'restart-sent',
+    })).toBe(true);
+    expect(aprsHostShouldExitKiss({
+      open: 'host', kissConfirmed: false, detectPhase: 'entering', commandPhase: 'prompt',
+    })).toBe(false);
+    expect(aprsHostShouldExitKiss({
+      open: 'host', kissConfirmed: false, detectPhase: 'listening', commandPhase: 'idle',
+    })).toBe(false);
+    expect(aprsHostShouldExitKiss({
+      open: 'passive', kissConfirmed: false, detectPhase: 'idle', commandPhase: 'idle',
+    })).toBe(false);
+    expect(aprsHostShouldExitKiss({
+      open: 'host', kissConfirmed: false, detectPhase: 'failed', commandPhase: 'timed-out',
+    })).toBe(false);
+  });
+
+  it('tells the Packet tab that Monitor only does not open KISS', () => {
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: false, selected: 'host' })).toBeUndefined();
+    expect(packetNeedsHostNotice({ hostOpen: true, passiveOpen: false, selected: 'passive' })).toBeUndefined();
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: true, selected: 'host' })).toMatch(/Packet needs Host mode/);
+    expect(packetNeedsHostNotice({ hostOpen: false, passiveOpen: false, selected: 'passive' })).toMatch(/does not open a KISS session/);
   });
 });
 

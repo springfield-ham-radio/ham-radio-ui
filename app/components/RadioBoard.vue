@@ -6,7 +6,7 @@ import type { RadioBoardLayout } from '~/utils/radio-board';
 import { savedRadioModelLabel, type SavedRadio } from '~/utils/saved-radios';
 
 const { radios } = useSavedRadios();
-const { configurations, clearCardSession } = useRadio();
+const { configurations, clearCardSession, modulesInstallOpen } = useRadio();
 const { entry, run } = useImportExportRunner();
 const readFromRadio = entry(IMPORT_EXPORT_IDS.readFromRadio);
 const {
@@ -16,12 +16,15 @@ const {
   hydrate,
   focusCard,
   openCard,
+  openGuestCard,
   closeCard,
   setLayout,
   cardById,
 } = useRadioBoard();
 const { disconnect } = useCat();
 const route = useRoute();
+const { close: closeOnboarding, settled: onboardingSettled } = useOnboarding();
+const packetFixtureOpened = ref(false);
 const {
   seedWriteReviewDevFixture,
   seedUndoMemoryDevFixture,
@@ -67,6 +70,40 @@ function maybeOpenChannelPrintFixture(): void {
   }
 }
 
+function maybeOpenPacketFixture(): void {
+  if (!import.meta.dev || (route.query.fixture !== 'packet' && route.query.fixture !== 'aprs-tnc-badge') || packetFixtureOpened.value) {
+    return;
+  }
+
+  packetFixtureOpened.value = true;
+  const id = openGuestCard({
+    name: 'TM-D710A',
+    manufacturer: 'Kenwood',
+    model: 'TM-D710A',
+    serialPort: 'fixture',
+  });
+  focusCard(id);
+
+  const hideGuides = (): void => {
+    modulesInstallOpen.value = false;
+    closeOnboarding();
+  };
+
+  if (onboardingSettled.value) {
+    hideGuides();
+    return;
+  }
+
+  const stop = watch(onboardingSettled, (ready) => {
+    if (!ready) {
+      return;
+    }
+
+    hideGuides();
+    stop();
+  });
+}
+
 onMounted(() => {
   maybeOpenWriteReviewFixture();
   maybeOpenUndoMemoryFixture();
@@ -74,6 +111,7 @@ onMounted(() => {
   maybeOpenErrorReportFixture();
   maybeOpenWriteFailedFixture();
   maybeOpenChannelPrintFixture();
+  maybeOpenPacketFixture();
 });
 
 watch(() => route.query.fixture, () => {
@@ -83,6 +121,7 @@ watch(() => route.query.fixture, () => {
   maybeOpenErrorReportFixture();
   maybeOpenWriteFailedFixture();
   maybeOpenChannelPrintFixture();
+  maybeOpenPacketFixture();
 });
 
 watch(
