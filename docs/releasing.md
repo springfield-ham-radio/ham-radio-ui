@@ -31,13 +31,16 @@ Baseline tag `v0.0.0` exists so the first automated release is `0.1.0` instead o
 Unsigned builds (no Apple notarization or Windows Authenticode yet). After the platform builds upload, a follow-up job renames the installers so the platform is in the filename:
 
 - **macOS (Apple Silicon):** `HamBench-X.Y.Z-macOS-Apple-Silicon.dmg`
+- **macOS (Intel):** `HamBench-X.Y.Z-macOS-Intel.dmg`
 - **Windows:** `HamBench-X.Y.Z-Windows-x64.exe` and `HamBench-X.Y.Z-Windows-x64.msi`
 - **Linux (x64):** `HamBench-X.Y.Z-Linux-x64.deb`, `.rpm`, and `.AppImage`
 - **Linux (ARM64):** `HamBench-X.Y.Z-Linux-arm64.deb`, `.rpm`, and `.AppImage` — 64-bit Raspberry Pi OS (Pi 3, 4, 5, and Zero 2 W)
 
 The ARM64 job uses the `ubuntu-22.04-arm` runner, the same Ubuntu release as the x64 job, so the binary links glibc 2.35 and runs on Raspberry Pi OS Bookworm and later.
 
-Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
+The Intel macOS build is a separate app, not a universal binary. It runs on the same `macos-latest` Apple Silicon runner as the Apple Silicon build and cross-compiles with `--target x86_64-apple-darwin`. The macOS SDK on that runner can link x86_64. `beforeBuildCommand` builds `ham-radio-sniffer` for `TAURI_ENV_TARGET_TRIPLE`, so the Intel bundle ships an x86_64 sniffer. The Linux ARM64 sniffer used for SSH installs is still the binary built on `ubuntu-22.04-arm`.
+
+Updater payloads (`.app.tar.gz`, `.sig`, and `latest.json`) keep the names Tauri generated. Apple Silicon updater archives are named `HamBench_X.Y.Z_aarch64.app.tar.gz`. Intel archives are `HamBench_X.Y.Z_x64.app.tar.gz`. `latest.json` records them as `darwin-aarch64` and `darwin-x86_64` (and the matching `darwin-*-app` keys). A follow-up step rewrites those macOS keys from the uploaded archives if a parallel job published a `latest.json` that dropped one of them. The rename changes the installer filename on the existing asset, so the updater links in `latest.json` stay valid. Rebuilding a tag uploads another copy under Tauri's original filename; the rename job removes the previous platform-named installer and renames the new upload onto that name.
 
 CI builds installers in the same workflow run after semantic-release (via `workflow_call`). Publishing a release from the GitHub UI does not start this workflow; rebuild that tag with **Release Tauri** → Run workflow.
 
