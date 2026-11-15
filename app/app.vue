@@ -11,7 +11,6 @@
     <RadioReadDialog />
     <RadioDirectReadDialog v-model:open="directReadOpen" @confirm="readIntoGuestCard" />
     <RadioWriteDialog />
-    <RadioProgressDialog />
     <RadioModulesInstallDialog
       v-model:open="modulesDialogOpen"
       :required="modulesInstallRequired"

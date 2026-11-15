@@ -54,6 +54,8 @@ function maybeOpenDialogMessageFixture(): void {
 
 function maybeOpenErrorReportFixture(): void {
   if (import.meta.dev && route.query.fixture === 'error-report') {
+    modulesInstallOpen.value = false;
+    closeOnboarding();
     void seedErrorReportDevFixture();
   }
 }

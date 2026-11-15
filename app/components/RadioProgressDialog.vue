@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { portIsReconnectWaiting } from '~/utils/serial-port-reconnect';
+
 const {
   progressOpen,
   progressKind,
   progress,
   progressError,
   progressStartedAt,
+  progressPort,
   progressSerialLog,
   cancelTransfer,
   saveProgressSerialLog,
@@ -13,7 +16,8 @@ const {
   onProgressDialogClosed,
 } = useRadio();
 
-const waitingForRadioReconnect = useState('serial-port-reconnect-waiting', () => false);
+const waitingPorts = useState<string[]>('serial-port-reconnect-waiting-ports', () => []);
+const waitingForRadioReconnect = computed(() => portIsReconnectWaiting(waitingPorts.value, progressPort.value));
 
 const now = ref(Date.now());
 
@@ -138,16 +142,19 @@ function closeProgress(): void {
 </script>
 
 <template>
-  <UModal
-    v-model:open="progressOpen"
-    :title="title"
-    :description="description"
-    :dismissible="Boolean(progressError)"
-    :close="progressError ? { color: 'neutral', variant: 'ghost' } : false"
-    class="max-w-md"
-    :ui="{ overlay: 'z-50', content: 'z-50' }"
+  <div
+    v-if="progressOpen"
+    class="absolute inset-0 z-20 flex items-center justify-center bg-default/80 p-4 backdrop-blur-[1px]"
+    role="dialog"
+    :aria-label="title"
+    @click.self="progressError && closeProgress()"
   >
-    <template #body>
+    <div class="flex max-h-full w-full max-w-md flex-col gap-4 overflow-auto rounded-lg border border-default bg-default p-4 shadow-lg">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-base font-semibold text-highlighted">{{ title }}</h2>
+        <p class="text-sm text-muted">{{ description }}</p>
+      </div>
+      <div>
       <RadioErrorDetails v-if="progressError" :report="progressError" :alert-title="errorTitle" />
       <p v-if="progressError && progressSerialLog" class="mt-3 text-sm text-muted">
         {{ progressSerialLog.entryCount }} serial frame{{ progressSerialLog.entryCount === 1 ? '' : 's' }} captured. Save the log here, or inspect it on the Debug tab.
@@ -176,9 +183,7 @@ function closeProgress(): void {
           <span v-if="remainingText" class="min-w-0 tabular-nums">{{ remainingText }}</span>
         </p>
       </div>
-    </template>
-
-    <template #footer="{ close: dismiss }">
+      </div>
       <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton
           v-if="progressError && progressSerialLog"
@@ -201,15 +206,10 @@ function closeProgress(): void {
           color="neutral"
           variant="outline"
           label="Close"
-          @click="
-            () => {
-              closeProgress();
-              dismiss();
-            }
-          "
+          @click="closeProgress"
         />
         <UButton v-else color="neutral" variant="outline" label="Cancel" @click="cancelTransfer" />
       </div>
-    </template>
-  </UModal>
+    </div>
+  </div>
 </template>

@@ -37,7 +37,11 @@ vi.stubGlobal('useToast', () => ({
   },
 }));
 vi.stubGlobal('getCurrentInstance', () => null);
-vi.stubGlobal('useCatPortLock', () => ({ lockedPorts: ref([]) }));
+vi.stubGlobal('useCatPortLock', () => ({
+  lockedPorts: ref([]),
+  holderFor: () => undefined,
+  setHolderPorts: vi.fn(),
+}));
 vi.stubGlobal('useRadioBoard', () => ({
   transferCardId: ref<string | undefined>(undefined),
   focusedCardId,
@@ -46,6 +50,7 @@ vi.stubGlobal('useRadioBoard', () => ({
   focusCard: vi.fn(),
   beginTransfer: vi.fn(),
   clearTransfer: vi.fn(),
+  setLayout: vi.fn(),
 }));
 vi.stubGlobal('useSavedRadios', () => ({ radios: ref([]) }));
 vi.stubGlobal('navigator', { userAgent: 'vitest' });
@@ -182,7 +187,11 @@ describe('writeToRadio baseline', () => {
   it('keeps the baseline when the driver returns after the operator canceled', async () => {
     const { radio, baseline } = await openSession();
     driver.writeRadio.mockImplementation(async () => {
-      stateStore.get('radio-canceled')!.value = true;
+      const transfers = stateStore.get('radio-card-transfers')!.value as Record<string, { canceled: boolean }>;
+      stateStore.get('radio-card-transfers')!.value = {
+        ...transfers,
+        'card-1': { ...transfers['card-1'], canceled: true },
+      };
     });
 
     await radio.writeToRadio('/dev/ttyUSB9');

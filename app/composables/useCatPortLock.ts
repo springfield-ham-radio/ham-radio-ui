@@ -1,5 +1,5 @@
-/** Who currently has the serial port open. APRS and CAT must not share one. */
-export type SerialSessionKind = 'cat' | 'aprs';
+/** Who currently has the serial port open. APRS, CAT, and a memory read or write must not share one. */
+export type SerialSessionKind = 'cat' | 'aprs' | 'memory';
 
 interface SerialPortHold {
   path: string;

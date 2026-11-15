@@ -25,7 +25,7 @@ import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 const writeEntry = importExportEntry(IMPORT_EXPORT_IDS.writeToRadio);
 
-const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview, transferInFlight } = useRadio();
+const { configurations, writeOpen, writeToRadio, writeTarget, readRadioForWriteReview, transferInFlight, transferBusyPorts } = useRadio();
 const { transferCardId, clearTransfer, cardById } = useRadioBoard();
 const { radioById, rememberSavedRadioPort } = useSavedRadios();
 const { choiceForRadio, assessmentFor } = useOperatorLicense();
@@ -254,7 +254,7 @@ async function writeRadio(serialPortPath: string): Promise<void> {
     warning-title="This replaces the radio's memory"
     :warning-description="warningDescription"
     :default-port="saved?.serialPort"
-    :unavailable-ports="lockedPorts"
+    :unavailable-ports="[...lockedPorts, ...transferBusyPorts]"
     :setup-alert="setupAlert"
     panel-class="max-w-3xl"
     @confirm="writeRadio"

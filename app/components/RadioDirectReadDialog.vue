@@ -10,7 +10,7 @@ import {
   shouldSelectProgrammingBaudRate,
 } from '~/utils/radio-baud-rate';
 import { holdSerialPortInactive, releaseSerialPortHold } from '~/utils/serial-idle-hold';
-import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortMatchKey, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { radioDialogMessage } from '~/utils/radio-dialog-message';
 
@@ -23,7 +23,7 @@ const emit = defineEmits<{
   confirm: [request: DirectReadRequest];
 }>();
 
-const { configurations, manufacturers } = useRadio();
+const { configurations, manufacturers, transferBusyPorts } = useRadio();
 
 const manufacturer = shallowRef<string | undefined>();
 const model = shallowRef<string | undefined>();
@@ -109,6 +109,12 @@ watch(selectedConfig, (config) => {
 
 watch(serialPort, (path) => {
   if (!open.value || !path) {
+    return;
+  }
+
+  const key = serialPortMatchKey(path);
+
+  if (transferBusyPorts.value.some((busy) => serialPortMatchKey(busy) === key)) {
     return;
   }
 

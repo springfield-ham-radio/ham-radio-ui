@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formatSerialPortOpenError,
   isPortMissingError,
+  portIsReconnectWaiting,
   resetSerialPortReconnectHooks,
   setSerialPortReconnectHooks,
+  updateReconnectWaitingPorts,
   waitForSerialPortPathAvailable,
 } from '../../app/utils/serial-port-reconnect.ts';
 
@@ -37,7 +39,7 @@ describe('waitForSerialPortPathAvailable', () => {
     const listPorts = vi.fn(async () => listed.shift() ?? ['/dev/cu.usbmodem31101']);
     const waiting: boolean[] = [];
     setSerialPortReconnectHooks({
-      onWaiting: (active) => waiting.push(active),
+      onWaiting: (_path, active) => waiting.push(active),
     });
 
     const promise = waitForSerialPortPathAvailable('/dev/cu.usbmodem31101', {
@@ -72,5 +74,46 @@ describe('waitForSerialPortPathAvailable', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     await expect(promise).rejects.toThrow(/canceled/i);
+  });
+
+  it('cancels only the path the hook names', async () => {
+    const canceled = new Set<string>(['/dev/cu.one']);
+    setSerialPortReconnectHooks({
+      shouldAbort: (path) => canceled.has(path),
+    });
+
+    const stopped = waitForSerialPortPathAvailable('/dev/cu.one', {
+      pollIntervalMs: 10,
+      timeoutMs: 50,
+      listPorts: async () => [],
+      sleep: async () => undefined,
+    });
+    const continuing = waitForSerialPortPathAvailable('/dev/cu.two', {
+      pollIntervalMs: 10,
+      timeoutMs: 50,
+      listPorts: async () => ['/dev/cu.two'],
+      sleep: async () => undefined,
+    });
+
+    await expect(stopped).rejects.toThrow(/canceled/i);
+    await expect(continuing).resolves.toBeUndefined();
+  });
+});
+
+describe('reconnect waiting ports', () => {
+  it('tracks each path on its own', () => {
+    const waiting = updateReconnectWaitingPorts(
+      updateReconnectWaitingPorts([], '/dev/cu.one', true),
+      '/dev/cu.two',
+      true,
+    );
+
+    expect(portIsReconnectWaiting(waiting, '/dev/cu.one')).toBe(true);
+    expect(portIsReconnectWaiting(waiting, 'cu.two')).toBe(true);
+
+    const after = updateReconnectWaitingPorts(waiting, '/dev/cu.one', false);
+
+    expect(portIsReconnectWaiting(after, '/dev/cu.one')).toBe(false);
+    expect(portIsReconnectWaiting(after, '/dev/cu.two')).toBe(true);
   });
 });
