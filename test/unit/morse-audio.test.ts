@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { morseTiming } from '../../app/utils/morse-code.ts';
+import { morseTiming, scheduleMorseText } from '../../app/utils/morse-code.ts';
 import {
   createMorsePlayer,
+  MORSE_TONE_LEAD_SECONDS,
   type MorseAudioContext,
   type MorseGain,
   type MorseOscillator,
@@ -98,6 +99,37 @@ describe('Morse audio player', () => {
     expect(context.oscillators[0]?.frequency.value).toBe(600);
     expect(context.oscillators[0]?.started[0]).toBeGreaterThan(context.currentTime);
     expect(Math.max(...context.gains[0].values)).toBeCloseTo(0.2);
+  });
+
+  it('plays a pasted schedule and stop silences every tone immediately', async () => {
+    const context = new FakeContext();
+    const player = createMorsePlayer(() => context);
+    const schedule = scheduleMorseText('AB', morseTiming(5, 18));
+    let ended = false;
+    const result = await player.playEvents(schedule.events, {
+      ...options,
+      timing: morseTiming(5, 18),
+      onEnded: () => {
+        ended = true;
+      },
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(context.oscillators).toHaveLength(schedule.events.length);
+    expect(context.oscillators[0]?.started[0]).toBeCloseTo(context.currentTime + MORSE_TONE_LEAD_SECONDS);
+
+    player.stop();
+
+    expect(ended).toBe(true);
+
+    for (const oscillator of context.oscillators) {
+      expect(oscillator.stopped.at(-1)).toBe(context.currentTime);
+    }
+
+    for (const gain of context.gains) {
+      expect(gain.gain.cancelScheduledValues).toHaveBeenCalledWith(context.currentTime);
+      expect(gain.values[gain.values.length - 1]).toBe(0);
+    }
   });
 
   it('stops scheduled tones and closes the context', async () => {

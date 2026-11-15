@@ -17,7 +17,7 @@ An APRS receive feature is in progress on `cursor/aprs-receive-d710-a336`. This 
 - In `app.vue`, skip the required module-install dialog on `/reference`, the same way `/wavebench` and `/propagation` already do. Those two files are the only app-shell edits.
 - Keep the data in plain TypeScript modules under `app/utils/`: `phonetic-alphabet.ts`, `q-signals.ts`, `amateur-bands.ts`, `morse-code.ts`, `morse-audio.ts`, and `reference-sources.ts`. No new dependency. The installed app does not fetch the reference.
 - Draw the band chart as original SVG from those modules. The accessible text table is the same data. Half-open `[startHz, endHz)` ranges abut. 60 m is four center frequencies plus 5351.5–5366.5 kHz, not a solid bar. The 7.075–7.100 MHz phone exception is a row marked “Not drawn.”
-- Morse practice is listening only. Web Audio is created on Start, Replay, or a per-character Play. Leaving the page closes the context. Timing is PARIS (50 units). Farnsworth lengthens only the character and word gaps, and only when the character speed is faster.
+- Morse practice is listening only. Web Audio is created on Start, Replay, a per-character Play, or Play text. Leaving the page closes the context. Timing is PARIS (50 units). Character speed defaults to 18 WPM and is clamped so it is never slower than the overall speed. Farnsworth lengthens only the character and word gaps, and only when the character speed is faster. A blank line in pasted text waits three word gaps. A single newline is a word gap. Characters with no Morse equivalent are skipped.
 - Label ITU Q-code text separately from amateur custom. Do not list QST as a Q code.
 
 ## Consequences

@@ -3,7 +3,10 @@
  * which must be a user gesture. Nothing here starts a tone by itself.
  */
 
-import { schedulePattern, type MorseTiming } from './morse-code';
+import { schedulePattern, type MorseTiming, type ToneEvent } from './morse-code';
+
+/** Silence before the first tone, so a click does not clip the attack. */
+export const MORSE_TONE_LEAD_SECONDS = 0.05;
 
 export interface MorseOscillator {
   frequency: { value: number };
@@ -50,6 +53,9 @@ export interface MorsePlayResult {
 
 export interface MorsePlayer {
   playPattern(pattern: string, options: MorsePlayOptions): Promise<MorsePlayResult>;
+  /** Play tone events from {@link scheduleMorseText} or {@link schedulePattern}. */
+  playEvents(events: readonly ToneEvent[], options: MorsePlayOptions): Promise<MorsePlayResult>;
+  /** Cancel the current playback immediately and silence every tone. */
   stop(): void;
   close(): Promise<void>;
   readonly opened: boolean;
@@ -99,6 +105,81 @@ export function createMorsePlayer(factory: MorseAudioFactory): MorsePlayer {
     active = [];
   }
 
+  async function playEvents(events: readonly ToneEvent[], options: MorsePlayOptions): Promise<MorsePlayResult> {
+    if (events.length === 0) {
+      return { ok: false, reason: 'empty' };
+    }
+
+    const seen = generation;
+
+    if (!context || context.state === 'closed') {
+      try {
+        context = factory();
+      } catch {
+        context = null;
+      }
+    }
+
+    if (!context) {
+      return { ok: false, reason: 'unsupported' };
+    }
+
+    if (context.state === 'suspended') {
+      try {
+        await context.resume();
+      } catch {
+        return { ok: false, reason: 'suspended' };
+      }
+    }
+
+    if (seen !== generation) {
+      return { ok: false };
+    }
+
+    if (context.state !== 'running') {
+      return { ok: false, reason: 'suspended' };
+    }
+
+    generation += 1;
+    const playGeneration = generation;
+    cancelFinish(false);
+    stopTones();
+
+    const volume = Math.min(1, Math.max(0, options.volume));
+    const start = context.currentTime + MORSE_TONE_LEAD_SECONDS;
+    ended = options.onEnded;
+
+    for (const event of events) {
+      const gain = context.createGain();
+      const oscillator = context.createOscillator();
+      const toneStart = start + event.startSeconds;
+      const toneEnd = toneStart + event.durationSeconds;
+
+      gain.gain.setValueAtTime(0, toneStart);
+      gain.gain.setValueAtTime(volume, toneStart + Math.min(0.005, event.durationSeconds / 4));
+      gain.gain.setValueAtTime(0, toneEnd);
+      oscillator.frequency.value = options.frequencyHz;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(toneStart);
+      oscillator.stop(toneEnd);
+      active.push({ oscillator, gain });
+    }
+
+    const last = events[events.length - 1];
+    const finishMs = ((last?.startSeconds ?? 0) + (last?.durationSeconds ?? 0) + 0.08) * 1000;
+
+    finishTimer = setTimeout(() => {
+      if (generation === playGeneration) {
+        active = [];
+      }
+
+      cancelFinish(true);
+    }, finishMs);
+
+    return { ok: true };
+  }
+
   return {
     get opened() {
       return context !== null;
@@ -108,76 +189,9 @@ export function createMorsePlayer(factory: MorseAudioFactory): MorsePlayer {
         return { ok: false, reason: 'empty' };
       }
 
-      const seen = generation;
-
-      if (!context || context.state === 'closed') {
-        try {
-          context = factory();
-        } catch {
-          context = null;
-        }
-      }
-
-      if (!context) {
-        return { ok: false, reason: 'unsupported' };
-      }
-
-      if (context.state === 'suspended') {
-        try {
-          await context.resume();
-        } catch {
-          return { ok: false, reason: 'suspended' };
-        }
-      }
-
-      if (seen !== generation) {
-        return { ok: false };
-      }
-
-      if (context.state !== 'running') {
-        return { ok: false, reason: 'suspended' };
-      }
-
-      generation += 1;
-      const playGeneration = generation;
-      cancelFinish(false);
-      stopTones();
-
-      const events = schedulePattern(pattern, options.timing);
-      const volume = Math.min(1, Math.max(0, options.volume));
-      const start = context.currentTime + 0.05;
-      ended = options.onEnded;
-
-      for (const event of events) {
-        const gain = context.createGain();
-        const oscillator = context.createOscillator();
-        const toneStart = start + event.startSeconds;
-        const toneEnd = toneStart + event.durationSeconds;
-
-        gain.gain.setValueAtTime(0, toneStart);
-        gain.gain.setValueAtTime(volume, toneStart + Math.min(0.005, event.durationSeconds / 4));
-        gain.gain.setValueAtTime(0, toneEnd);
-        oscillator.frequency.value = options.frequencyHz;
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-        oscillator.start(toneStart);
-        oscillator.stop(toneEnd);
-        active.push({ oscillator, gain });
-      }
-
-      const last = events[events.length - 1];
-      const finishMs = ((last?.startSeconds ?? 0) + (last?.durationSeconds ?? 0) + 0.08) * 1000;
-
-      finishTimer = setTimeout(() => {
-        if (generation === playGeneration) {
-          active = [];
-        }
-
-        cancelFinish(true);
-      }, finishMs);
-
-      return { ok: true };
+      return playEvents(schedulePattern(pattern, options.timing), options);
     },
+    playEvents,
     stop() {
       generation += 1;
       cancelFinish(true);
