@@ -1,3 +1,12 @@
+## [3.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.8.0...v3.9.0) (2026-11-15)
+
+### Features
+
+* **map:** add a separate APRS layer on the main map ([#211](https://github.com/springfield-ham-radio/ham-radio-ui/issues/211)) ([8ddb48d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8ddb48d7e6e6353e8ebe48a424591ce568e899bb))
+* **radios:** scope radio read/write progress to the radio card ([#214](https://github.com/springfield-ham-radio/ham-radio-ui/issues/214)) ([ed44a17](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ed44a178fb41e5e33b305aec802f732e9edbcd66))
+* **reference:** play pasted Morse with Farnsworth timing ([#215](https://github.com/springfield-ham-radio/ham-radio-ui/issues/215)) ([3b6d71d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/3b6d71d82ada16c53fec065ea5f843189685ca00))
+* **settings:** group boolean menu switches that share a menu number ([#213](https://github.com/springfield-ham-radio/ham-radio-ui/issues/213)) ([845900a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/845900a9a80412efb0c1431475c3b22823018372))
+
 ## [3.8.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.7.0...v3.8.0) (2026-11-14)
 
 ### Features
