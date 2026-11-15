@@ -17,7 +17,7 @@
   "scripts": {
     "build": "nuxt build",
     "prepare": "yarn build",
-    "bundle:sniffer": "node scripts/bundle-sniffer-resources.mjs",
+    "bundle:sniffer": "node scripts/bundle-sniffer-resources.ts",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "lint": "oxlint",

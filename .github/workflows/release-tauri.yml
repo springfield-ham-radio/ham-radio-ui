@@ -65,8 +65,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macos-latest is Apple Silicon. The macOS SDK there can cross-compile
+          # x86_64-apple-darwin, so Intel is a second app, not a universal binary
+          # and not a macos-13 runner. `target` is per entry: both jobs would
+          # otherwise install only aarch64 because both use platform macos-latest.
           - platform: macos-latest
+            target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ''
           # 64-bit Raspberry Pi. Same Ubuntu release as x64 so glibc stays compatible with Pi OS Bookworm.
@@ -142,11 +150,21 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          # Empty on Linux and Windows, so those jobs keep the host target only.
+          targets: ${{ matrix.target || '' }}
+
+      # clang's Apple build scripts need the SDK when cross-compiling the
+      # Intel sniffer and the app. The Apple Silicon job already finds it.
+      - name: Export the macOS SDK for the Intel cross compile
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          # Keep the existing Apple Silicon cache key. The Intel cross-compile
+          # uses its own so the two macOS jobs do not overwrite one cache.
+          key: ${{ matrix.target == 'x86_64-apple-darwin' && 'x86_64-apple-darwin' || '' }}
 
       - name: Prepare updater signing
         id: updater_signing
@@ -155,6 +173,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: node scripts/prepare-updater-signing.ts
 
+      # Updater signing applies to every matrix entry, including the Intel
+      # build. Apple code signing and notarization are not configured; env
+      # added to this step later is shared by both macOS targets.
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -192,6 +213,17 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/rename-release-installers.ts
+
+      # tauri-action merges latest.json from each platform job. Parallel
+      # uploads can drop darwin-aarch64 or darwin-x86_64. Restore either key
+      # from the arch-specific updater archive when that archive is present.
+      - name: Restore macOS updater entries in latest.json
+        if: always() && steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/repair-darwin-updater-manifest.ts
 
       # tauri-action updates the release without make_latest, and the API
       # default marks that release as latest. Point releases/latest at the

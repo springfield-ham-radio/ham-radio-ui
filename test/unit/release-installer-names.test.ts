@@ -10,6 +10,29 @@ describe('release installer names', () => {
     );
   });
 
+  it('should name the Intel disk image separately from Apple Silicon', () => {
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_x64.dmg', version)).toBe('HamBench-0.36.0-macOS-Intel.dmg');
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_x86_64.dmg', version)).toBe(
+      'HamBench-0.36.0-macOS-Intel.dmg',
+    );
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_x64.app.tar.gz', version)).toBeUndefined();
+    expect(releaseInstallerDownloadName('HamBench_0.36.0_aarch64.app.tar.gz', version)).toBeUndefined();
+
+    const appleSilicon = {
+      name: 'HamBench_0.36.0_aarch64.dmg',
+      apiUrl: 'https://api.github.com/repos/example/releases/assets/1',
+    };
+    const intel = {
+      name: 'HamBench_0.36.0_x64.dmg',
+      apiUrl: 'https://api.github.com/repos/example/releases/assets/2',
+    };
+
+    expect(releaseInstallerRenames([appleSilicon, intel], version)).toEqual([
+      { asset: appleSilicon, downloadName: 'HamBench-0.36.0-macOS-Apple-Silicon.dmg', replace: undefined },
+      { asset: intel, downloadName: 'HamBench-0.36.0-macOS-Intel.dmg', replace: undefined },
+    ]);
+  });
+
   it('should name Linux packages by format', () => {
     expect(releaseInstallerDownloadName('HamBench_0.36.0_amd64.deb', version)).toBe('HamBench-0.36.0-Linux-x64.deb');
     expect(releaseInstallerDownloadName('HamBench-0.36.0-1.x86_64.rpm', version)).toBe('HamBench-0.36.0-Linux-x64.rpm');
