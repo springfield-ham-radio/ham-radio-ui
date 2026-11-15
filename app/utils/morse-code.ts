@@ -5,10 +5,38 @@
  * the gap between characters is three dots, and the gap between words is
  * seven dots. PARIS is 50 of those units, so a dot is 1.2 / WPM seconds.
  *
- * Farnsworth keeps that element timing at the faster character speed and
- * lengthens only the character gap and the word gap, still in the ratio 3:7.
- * It never shortens a gap below the standard.
+ * Farnsworth (ARRL code practice) sends elements at a character speed and
+ * stretches only the character gap and the word gap so that PARIS still
+ * lasts 60 / overallWPM seconds. PARIS is 31 units of dits, dahs, and
+ * intra-character gaps, plus 19 units of spacing (four 3-unit character
+ * gaps and one 7-unit word gap).
+ *
+ *   dit = 1.2 / characterWPM
+ *   spacingUnit = ((60 / overallWPM) - 31 * dit) / 19
+ *   characterGap = 3 * spacingUnit
+ *   wordGap = 7 * spacingUnit
+ *
+ * When the character speed is not faster than the overall speed, both gaps
+ * stay at 3 and 7 dits. A slower character speed is treated as the overall
+ * speed. Farnsworth never shortens a gap below the standard.
+ *
+ * A paragraph gap is {@link MORSE_PARAGRAPH_WORD_GAPS} word gaps (three),
+ * so it scales with the stretched word gap. At standard timing that is
+ * 21 dits. A blank line in pasted text uses that pause. A single newline
+ * is a word break, the same as a space.
  */
+
+/** Character speed used when the operator has not chosen one. */
+export const DEFAULT_MORSE_CHARACTER_WPM = 18;
+
+/**
+ * Blank-line pause, counted in word gaps.
+ *
+ * Three word gaps is long enough to hear a new paragraph and stays inside
+ * the 2–3× word-gap range. Farnsworth stretches the word gap first, and
+ * this multiple follows that stretched length.
+ */
+export const MORSE_PARAGRAPH_WORD_GAPS = 3;
 
 export type MorseGroup = 'letter' | 'digit' | 'punctuation' | 'procedural' | 'accent';
 
@@ -30,6 +58,8 @@ export interface MorseTiming {
   intraSeconds: number;
   letterSeconds: number;
   wordSeconds: number;
+  /** {@link MORSE_PARAGRAPH_WORD_GAPS} word gaps. Scales with Farnsworth. */
+  paragraphSeconds: number;
   /** True when character and word gaps are longer than 3 and 7 dots. */
   farnsworth: boolean;
 }
@@ -276,6 +306,17 @@ export const MORSE_CHARACTERS: readonly MorseCharacter[] = [
 
 const BY_ID = new Map(MORSE_CHARACTERS.map((character) => [character.id, character]));
 
+/** Single-character symbols only. Procedural names such as SK are not text. */
+const TEXT_PATTERN = new Map<string, string>();
+
+for (const character of MORSE_CHARACTERS) {
+  if ([...character.symbol].length !== 1) {
+    continue;
+  }
+
+  TEXT_PATTERN.set(character.symbol.toUpperCase(), character.pattern);
+}
+
 export function morseCharacter(id: string): MorseCharacter | undefined {
   return BY_ID.get(id);
 }
@@ -316,6 +357,7 @@ export function morseTiming(overallWpm: number, characterWpm?: number): MorseTim
     intraSeconds: dit,
     letterSeconds: letter,
     wordSeconds: word,
+    paragraphSeconds: word * MORSE_PARAGRAPH_WORD_GAPS,
     farnsworth,
   };
 }
@@ -385,6 +427,229 @@ export function scheduleMessage(
   }
 
   return { events, durationSeconds: cursor };
+}
+
+export interface MorseTextMark {
+  /** Index of the character in the original text. */
+  index: number;
+  length: number;
+  startSeconds: number;
+  /** End of this character's tones, before the following gap. */
+  endSeconds: number;
+}
+
+export interface MorseTextSchedule {
+  events: ToneEvent[];
+  durationSeconds: number;
+  marks: MorseTextMark[];
+  /** Characters that have no Morse equivalent and were left out. */
+  skipped: number;
+}
+
+function isMorseSpace(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\f' || char === '\v' || char === '\u00a0';
+}
+
+/**
+ * Turn pasted text into tone events.
+ *
+ * Letters, digits, and the single-character punctuation in
+ * {@link MORSE_CHARACTERS} are sent. Anything else is skipped and does not
+ * add a gap of its own. Runs of spaces, tabs, and single newlines collapse
+ * to one word gap. A blank line (two or more newlines, ignoring spaces on
+ * the empty line) is one paragraph gap. Leading and trailing space does
+ * not add a gap. `\r\n` counts as one newline.
+ */
+export function scheduleMorseText(text: string, timing: MorseTiming): MorseTextSchedule {
+  const events: ToneEvent[] = [];
+  const marks: MorseTextMark[] = [];
+  let cursor = 0;
+  let skipped = 0;
+  let gap: 'none' | 'letter' | 'word' | 'paragraph' = 'none';
+  let index = 0;
+  let emitted = false;
+
+  while (index < text.length) {
+    const current = text[index] ?? '';
+
+    if (current === '\r' || current === '\n' || isMorseSpace(current)) {
+      let newlines = 0;
+
+      while (index < text.length) {
+        const char = text[index] ?? '';
+
+        if (char === '\r') {
+          newlines += 1;
+          index += text[index + 1] === '\n' ? 2 : 1;
+          continue;
+        }
+
+        if (char === '\n') {
+          newlines += 1;
+          index += 1;
+          continue;
+        }
+
+        if (isMorseSpace(char)) {
+          index += 1;
+          continue;
+        }
+
+        break;
+      }
+
+      if (emitted) {
+        gap = newlines >= 2 ? 'paragraph' : 'word';
+      }
+
+      continue;
+    }
+
+    const pattern = TEXT_PATTERN.get(current.toUpperCase());
+
+    if (!pattern) {
+      skipped += 1;
+      index += 1;
+      continue;
+    }
+
+    if (gap === 'letter') {
+      cursor += timing.letterSeconds;
+    } else if (gap === 'word') {
+      cursor += timing.wordSeconds;
+    } else if (gap === 'paragraph') {
+      cursor += timing.paragraphSeconds;
+    }
+
+    const tones = schedulePattern(pattern, timing, cursor);
+
+    events.push(...tones);
+
+    const last = tones[tones.length - 1];
+    const endSeconds = last ? last.startSeconds + last.durationSeconds : cursor;
+
+    marks.push({
+      index,
+      length: 1,
+      startSeconds: cursor,
+      endSeconds,
+    });
+    cursor = endSeconds;
+    emitted = true;
+    gap = 'letter';
+    index += 1;
+  }
+
+  return {
+    events,
+    durationSeconds: cursor,
+    marks,
+    skipped,
+  };
+}
+
+/**
+ * Same schedule as {@link scheduleMorseText}, starting at the character
+ * whose source index is at least `fromIndex`. Times are shifted so that
+ * character starts at zero. Used when speed, tone, or volume changes
+ * while pasted text is already playing.
+ */
+export function scheduleMorseTextFromIndex(
+  text: string,
+  timing: MorseTiming,
+  fromIndex: number,
+): MorseTextSchedule {
+  const full = scheduleMorseText(text, timing);
+  const start = full.marks.find((mark) => mark.index >= fromIndex);
+
+  if (!start) {
+    return {
+      events: [],
+      durationSeconds: 0,
+      marks: [],
+      skipped: full.skipped,
+    };
+  }
+
+  const offset = start.startSeconds;
+  const events = full.events
+    .filter((event) => event.startSeconds >= offset - 1e-9)
+    .map((event) => ({
+      ...event,
+      startSeconds: event.startSeconds - offset,
+    }));
+  const marks = full.marks
+    .filter((mark) => mark.index >= start.index)
+    .map((mark) => ({
+      ...mark,
+      startSeconds: mark.startSeconds - offset,
+      endSeconds: mark.endSeconds - offset,
+    }));
+  const last = events[events.length - 1];
+
+  return {
+    events,
+    durationSeconds: last ? last.startSeconds + last.durationSeconds : 0,
+    marks,
+    skipped: full.skipped,
+  };
+}
+
+/**
+ * Timing that remains when playback is cancelled at `atSeconds`.
+ *
+ * Tones that have not started are dropped. A tone that is still sounding
+ * is cut off at the cancel time. Gaps after the last kept tone are not kept.
+ */
+export function cancelMorseSchedule(schedule: MorseTextSchedule, atSeconds: number): MorseTextSchedule {
+  if (!(atSeconds > 0)) {
+    return {
+      events: [],
+      durationSeconds: 0,
+      marks: [],
+      skipped: schedule.skipped,
+    };
+  }
+
+  const events: ToneEvent[] = [];
+
+  for (const event of schedule.events) {
+    if (event.startSeconds >= atSeconds) {
+      continue;
+    }
+
+    const end = event.startSeconds + event.durationSeconds;
+
+    if (end <= atSeconds) {
+      events.push(event);
+      continue;
+    }
+
+    events.push({
+      ...event,
+      durationSeconds: atSeconds - event.startSeconds,
+    });
+  }
+
+  const marks = schedule.marks
+    .filter((mark) => mark.startSeconds < atSeconds)
+    .map((mark) => ({
+      ...mark,
+      endSeconds: Math.min(mark.endSeconds, atSeconds),
+    }));
+
+  let durationSeconds = 0;
+
+  for (const event of events) {
+    durationSeconds = Math.max(durationSeconds, event.startSeconds + event.durationSeconds);
+  }
+
+  return {
+    events,
+    durationSeconds,
+    marks,
+    skipped: schedule.skipped,
+  };
 }
 
 /** PARIS plus the word gap, which is the 50-unit standard word. */

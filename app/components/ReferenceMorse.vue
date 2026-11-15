@@ -3,17 +3,21 @@ import {
   beginChallenge,
   charactersInGroups,
   checkPractice,
+  DEFAULT_MORSE_CHARACTER_WPM,
   filterMorseCharacters,
   freshPracticeState,
+  MORSE_PARAGRAPH_WORD_GAPS,
   morseCharacter,
   morseTiming,
   patternText,
   practiceAccuracy,
   revealPractice,
+  scheduleMorseTextFromIndex,
   type MorseGroup,
+  type MorseTextSchedule,
   type PracticeState,
 } from '~/utils/morse-code';
-import { browserMorseAudioFactory, createMorsePlayer } from '~/utils/morse-audio';
+import { browserMorseAudioFactory, createMorsePlayer, MORSE_TONE_LEAD_SECONDS } from '~/utils/morse-audio';
 
 const groups: Array<{ id: MorseGroup; label: string }> = [
   { id: 'letter', label: 'Letters A–Z' },
@@ -32,16 +36,23 @@ const selected = reactive<Record<MorseGroup, boolean>>({
 });
 
 const wpm = ref(12);
-const farnsworth = ref(false);
-const characterWpm = ref(20);
+const characterWpm = ref(DEFAULT_MORSE_CHARACTER_WPM);
 const toneHz = ref(600);
 const volume = ref(0.2);
 const muted = ref(false);
 const draft = ref('');
+const pasteText = ref('');
 const session = ref<PracticeState>(freshPracticeState());
 const playing = ref(false);
 const audioProblem = ref('');
 const referenceQuery = ref('');
+const activePaste = ref<{ index: number; length: number } | null>(null);
+const pastePreview = ref<HTMLElement | null>(null);
+const activeMarkElement = ref<HTMLElement | null>(null);
+const pastePlaying = ref(false);
+const pasteOriginIndex = ref(0);
+const pasteTimers: ReturnType<typeof setTimeout>[] = [];
+let pasteToken = 0;
 
 const player = createMorsePlayer(browserMorseAudioFactory);
 const referenceRows = computed(() => filterMorseCharacters(referenceQuery.value));
@@ -71,20 +82,121 @@ const liveStatus = computed(() => {
 
   return session.value.hint;
 });
-const farnsworthNote = computed(() => {
-  return farnsworth.value && characterWpm.value <= wpm.value;
-});
 const timing = computed(() => {
   const overall = Number(wpm.value);
-  const character = farnsworth.value ? Number(characterWpm.value) : undefined;
+  const character = Number(characterWpm.value);
   const safeOverall = overall > 0 ? overall : 12;
+  const safeCharacter = Math.max(safeOverall, character > 0 ? character : safeOverall);
 
-  return morseTiming(safeOverall, character);
+  return morseTiming(safeOverall, safeCharacter);
+});
+const spacingNote = computed(() => {
+  if (timing.value.farnsworth) {
+    return 'Dits and dahs use the character speed. Character and word gaps stretch so PARIS matches the overall speed.';
+  }
+
+  return 'Character speed matches the overall speed, so the gaps stay at 3 and 7 dits.';
+});
+const pasteBefore = computed(() => pasteText.value.slice(0, activePaste.value?.index ?? 0));
+const pasteActive = computed(() => {
+  const mark = activePaste.value;
+
+  if (!mark) {
+    return '';
+  }
+
+  return pasteText.value.slice(mark.index, mark.index + mark.length);
+});
+const pasteAfter = computed(() => {
+  const mark = activePaste.value;
+
+  if (!mark) {
+    return '';
+  }
+
+  return pasteText.value.slice(mark.index + mark.length);
 });
 
+watch([wpm, characterWpm, toneHz, volume], () => {
+  if (characterWpm.value < wpm.value) {
+    characterWpm.value = wpm.value;
+    return;
+  }
+
+  if (!pastePlaying.value) {
+    return;
+  }
+
+  void playPasteFrom(pasteOriginIndex.value);
+});
+
+function clearPasteHighlight(): void {
+  for (const timer of pasteTimers) {
+    clearTimeout(timer);
+  }
+
+  pasteTimers.length = 0;
+  activePaste.value = null;
+}
+
+function scrollPasteMark(): void {
+  const container = pastePreview.value;
+  const mark = activeMarkElement.value;
+
+  if (!container || !mark) {
+    return;
+  }
+
+  const markTop = mark.offsetTop;
+  const markBottom = markTop + mark.offsetHeight;
+
+  if (markTop < container.scrollTop) {
+    container.scrollTop = markTop;
+  } else if (markBottom > container.scrollTop + container.clientHeight) {
+    container.scrollTop = markBottom - container.clientHeight;
+  }
+}
+
+function armPasteHighlight(schedule: MorseTextSchedule): void {
+  clearPasteHighlight();
+  const leadMs = MORSE_TONE_LEAD_SECONDS * 1000;
+
+  for (const mark of schedule.marks) {
+    pasteTimers.push(setTimeout(() => {
+      pasteOriginIndex.value = mark.index;
+      activePaste.value = { index: mark.index, length: mark.length };
+      void nextTick(scrollPasteMark);
+    }, mark.startSeconds * 1000 + leadMs));
+  }
+}
+
+function cancelPasteSession(): void {
+  pastePlaying.value = false;
+  pasteToken += 1;
+  clearPasteHighlight();
+}
+
+function toneOptions(onEnded?: () => void) {
+  return {
+    timing: timing.value,
+    frequencyHz: Number(toneHz.value) || 600,
+    volume: Number(volume.value),
+    onEnded,
+  };
+}
+
 function stopPlayback(): void {
+  cancelPasteSession();
   player.stop();
   playing.value = false;
+}
+
+function reportAudioFailure(reason: string | undefined): void {
+  if (reason === 'unsupported') {
+    audioProblem.value = 'This browser has no Web Audio support, so practice tones are unavailable.';
+  } else if (reason === 'suspended') {
+    audioProblem.value = 'Audio stayed suspended. Use Start or Play again after a click.';
+  }
 }
 
 async function playPattern(pattern: string): Promise<void> {
@@ -93,25 +205,82 @@ async function playPattern(pattern: string): Promise<void> {
     return;
   }
 
+  cancelPasteSession();
   audioProblem.value = '';
   playing.value = true;
-  const result = await player.playPattern(pattern, {
-    timing: timing.value,
-    frequencyHz: Number(toneHz.value) || 600,
-    volume: Number(volume.value),
-    onEnded: () => {
-      playing.value = false;
-    },
-  });
+  const result = await player.playPattern(pattern, toneOptions(() => {
+    playing.value = false;
+  }));
 
   if (!result.ok) {
     playing.value = false;
+    reportAudioFailure(result.reason);
+  }
+}
 
-    if (result.reason === 'unsupported') {
-      audioProblem.value = 'This browser has no Web Audio support, so practice tones are unavailable.';
-    } else if (result.reason === 'suspended') {
-      audioProblem.value = 'Audio stayed suspended. Use Start or Play again after a click.';
+async function playPasteFrom(fromIndex: number): Promise<void> {
+  if (muted.value) {
+    audioProblem.value = 'Muted. Turn mute off to hear the tone.';
+    return;
+  }
+
+  const token = pasteToken + 1;
+  pasteToken = token;
+  pastePlaying.value = true;
+  pasteOriginIndex.value = fromIndex;
+  const schedule = scheduleMorseTextFromIndex(pasteText.value, timing.value, fromIndex);
+
+  if (schedule.events.length === 0) {
+    if (token !== pasteToken) {
+      return;
     }
+
+    stopPlayback();
+
+    if (fromIndex === 0) {
+      audioProblem.value = pasteText.value.trim()
+        ? 'No Morse characters in that text. Unsupported characters are skipped.'
+        : 'Paste text to play.';
+    }
+
+    return;
+  }
+
+  clearPasteHighlight();
+  audioProblem.value = '';
+  playing.value = true;
+  const result = await player.playEvents(schedule.events, toneOptions(() => {
+    if (token !== pasteToken) {
+      return;
+    }
+
+    pastePlaying.value = false;
+    playing.value = false;
+    clearPasteHighlight();
+  }));
+
+  if (token !== pasteToken) {
+    return;
+  }
+
+  if (!result.ok || !playing.value) {
+    pastePlaying.value = false;
+    playing.value = false;
+    clearPasteHighlight();
+    reportAudioFailure(result.reason);
+    return;
+  }
+
+  armPasteHighlight(schedule);
+}
+
+function onPlayText(): void {
+  void playPasteFrom(0);
+}
+
+function onPasteEdit(): void {
+  if (pastePlaying.value || activePaste.value || pasteTimers.length > 0) {
+    stopPlayback();
   }
 }
 
@@ -176,6 +345,7 @@ function playReference(id: string): void {
 }
 
 onUnmounted(() => {
+  cancelPasteSession();
   void player.close();
 });
 </script>
@@ -185,7 +355,8 @@ onUnmounted(() => {
     <section aria-labelledby="morse-table" class="min-w-0">
       <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
         <p id="morse-table" class="max-w-2xl text-xs text-muted">
-          ITU-R M.1677-1. A dash is three dots. Gaps inside a character, between characters, and between words are 1, 3, and 7 dots.
+          ITU-R M.1677-1. A dash is three dots. Standard gaps inside a character, between characters, and between words are 1, 3, and 7 dots.
+          Farnsworth keeps the dit at the character speed and stretches the character and word gaps.
           % is sent as 0/0, not as one character. The multiplication sign is sent as X.
         </p>
         <div class="w-full sm:w-52">
@@ -229,10 +400,11 @@ onUnmounted(() => {
       </div>
     </section>
 
+    <div class="flex flex-col gap-4">
     <section aria-labelledby="morse-practice" class="h-fit rounded-lg border border-default bg-default p-3">
       <h3 id="morse-practice" class="text-sm font-semibold text-highlighted">Listening practice</h3>
       <p class="mt-1 text-xs text-muted">
-        Starts when you press Start. One character at a time, PARIS timing (50 units). No microphone or radio.
+        Starts when you press Start. One character at a time, at the character speed above. No microphone or radio.
       </p>
 
       <fieldset class="mt-3">
@@ -249,22 +421,17 @@ onUnmounted(() => {
 
       <div class="mt-3 flex flex-col gap-3">
         <label class="block text-xs font-medium text-highlighted" for="morse-wpm">
-          Speed
+          Overall speed
           <span class="font-normal text-muted">{{ wpm }} WPM</span>
         </label>
         <input id="morse-wpm" v-model.number="wpm" type="range" min="5" max="40" step="1" class="w-full">
 
-        <UCheckbox v-model="farnsworth" label="Farnsworth spacing" />
-        <p v-if="farnsworthNote" class="text-xs text-muted">
-          Character speed is not faster than the overall speed, so the gaps stay at the standard 3 and 7 dots.
-        </p>
-        <template v-if="farnsworth">
-          <label class="block text-xs font-medium text-highlighted" for="morse-character-wpm">
-            Character speed
-            <span class="font-normal text-muted">{{ characterWpm }} WPM</span>
-          </label>
-          <input id="morse-character-wpm" v-model.number="characterWpm" type="range" min="10" max="40" step="1" class="w-full">
-        </template>
+        <label class="block text-xs font-medium text-highlighted" for="morse-character-wpm">
+          Character speed
+          <span class="font-normal text-muted">{{ characterWpm }} WPM</span>
+        </label>
+        <input id="morse-character-wpm" v-model.number="characterWpm" type="range" :min="wpm" max="40" step="1" class="w-full">
+        <p class="text-xs text-muted">{{ spacingNote }}</p>
 
         <label class="block text-xs font-medium text-highlighted" for="morse-tone">
           Tone
@@ -323,5 +490,40 @@ onUnmounted(() => {
       <p class="mt-2 text-xs text-muted">{{ accuracyLabel }}</p>
       <p v-if="playing" class="text-xs text-muted">Playing.</p>
     </section>
+
+    <section aria-labelledby="morse-paste" class="h-fit rounded-lg border border-default bg-default p-3">
+      <h3 id="morse-paste" class="text-sm font-semibold text-highlighted">Play text</h3>
+      <p class="mt-1 text-xs text-muted">
+        Paste text and play it with the speed, character speed, tone, and volume above.
+        Changing one of those while text is playing restarts at the current character.
+        A space or a single newline is a word gap. A blank line is {{ MORSE_PARAGRAPH_WORD_GAPS }} word gaps.
+        Characters with no Morse code are skipped.
+      </p>
+      <label for="morse-paste-text" class="mt-3 block text-xs font-medium text-highlighted">Text</label>
+      <UTextarea
+        id="morse-paste-text"
+        v-model="pasteText"
+        :rows="6"
+        autoresize
+        class="mt-1 w-full font-mono"
+        placeholder="CQ CQ DE W1AW"
+        spellcheck="false"
+        aria-label="Text to play as Morse"
+        @update:model-value="onPasteEdit"
+      />
+      <div class="mt-3 flex flex-wrap gap-2">
+        <UButton size="sm" icon="i-lucide-play" label="Play" @click="onPlayText" />
+        <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-square" label="Stop" @click="stopPlayback" />
+      </div>
+      <p
+        v-if="activePaste"
+        ref="pastePreview"
+        class="relative mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-sm text-highlighted"
+        aria-live="polite"
+      >
+        <span>{{ pasteBefore }}</span><mark ref="activeMarkElement" class="rounded-sm bg-primary/25 px-0.5 text-highlighted">{{ pasteActive }}</mark><span>{{ pasteAfter }}</span>
+      </p>
+    </section>
+    </div>
   </div>
 </template>

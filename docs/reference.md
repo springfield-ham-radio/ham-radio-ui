@@ -29,11 +29,19 @@ The chart stops at the allocations in § 97.301. The old 3.3–3.5 GHz amateur s
 
 ## Morse practice
 
-Practice is listening. Pick character sets, a speed in WPM, and optional Farnsworth character speed. Start plays one character. Replay plays it again. Check scores the typed answer. Reveal shows it and, if you had not checked, counts a miss. Reset clears the session.
+Practice is listening. Pick character sets, an overall speed in WPM, and a character speed. Start plays one character. Replay plays it again. Check scores the typed answer. Reveal shows it and, if you had not checked, counts a miss. Reset clears the session.
 
-Element timing follows ITU-R M.1677-1: dot : dash is 1 : 3, and the gaps inside a character, between characters, and between words are 1 : 3 : 7. PARIS is 50 of those units. Farnsworth keeps the dot length at the faster character speed and stretches only the two longer gaps, still in the ratio 3 : 7. If the character speed is not faster than the overall speed, spacing stays standard.
+Play text takes pasted text and sends it with the same speed, character speed, tone, and volume as practice. Play reads those controls at that moment and queues the tones. Moving overall speed, character speed, tone, or volume while the text is still playing drops the queued tones and starts again at the character that is sounding, using the new settings. Stop cancels playback immediately and silences the audio. The character that is sounding is marked while it plays.
 
-The tone uses Web Audio and starts only after Start, Replay, or Play. Default volume is 20%. Mute and Stop silence it. Leaving the Morse section closes the audio context. There is no microphone, key, or transmitter.
+Element timing follows ITU-R M.1677-1: dot : dash is 1 : 3, and the gaps inside a character, between characters, and between words are 1 : 3 : 7. PARIS is 50 of those units. A dot is 1.2 / character-speed seconds.
+
+Farnsworth follows the ARRL practice method. PARIS is 31 units of dits, dahs, and the gaps inside characters, plus 19 units of spacing (four character gaps and one word gap). The dit stays at the character speed. The spacing unit is `((60 / overallWPM) - 31 × dit) / 19`. The character gap is 3 of those units and the word gap is 7, so PARIS still lasts `60 / overallWPM` seconds. Character speed defaults to 18 WPM and is never slower than the overall speed. When the two speeds are equal, the gaps stay at 3 and 7 dits.
+
+At 5 WPM overall and 18 WPM character speed, the dit is 1.2/18 seconds (about 66.7 ms). The character gap is about 1.568 seconds, the word gap is about 3.660 seconds, and a paragraph gap is about 10.979 seconds. One PARIS word is 12 seconds.
+
+Pasted text uses those same gaps. A space, a tab, or a single newline is one word gap. A blank line is a paragraph gap of 3 word gaps (21 dits when the speeds are equal, otherwise three times the stretched word gap). Characters with no Morse equivalent, including `%` and emoji, are skipped and do not add a gap. Procedural signals such as SK are not inferred from letter pairs.
+
+The tone uses Web Audio and starts only after Start, Replay, Play, or Play text. Default volume is 20%. Mute and Stop silence it. Leaving the Morse section closes the audio context. There is no microphone, key, or transmitter. Speed, character speed, tone, and volume stay in the Morse section for both practice and pasted text, the same way those controls already do. They are not written to storage.
 
 ## Sources
 
@@ -44,7 +52,7 @@ Links and the verified-on date are in `app/utils/reference-sources.ts`. The page
 | `app/utils/phonetic-alphabet.ts` | Appendix 14 letters and figure code |
 | `app/utils/q-signals.ts` | ITU-R M.1172 question and statement |
 | `app/utils/amateur-bands.ts` | Part 97 segments, footnotes, chart layout |
-| `app/utils/morse-code.ts` | ITU-R M.1677-1 characters, timing, scoring |
+| `app/utils/morse-code.ts` | ITU-R M.1677-1 characters, Farnsworth timing, pasted-text scheduling, scoring |
 | `app/utils/morse-audio.ts` | Web Audio player |
 
 ## Updating the band chart
