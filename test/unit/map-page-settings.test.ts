@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAP_PAGE_SETTINGS,
   MAP_PAGE_ALL_STORED_GROUPS,
+  MAP_PAGE_LAYER_CONTROLS,
+  mapTripSelectorVisible,
+  nextMapPageGroupSelection,
   parseMapPageCamera,
   parseMapPageSettings,
   serializeMapPageSettings,
@@ -158,5 +161,65 @@ describe('parseMapPageSettings', () => {
 
     const enabled = { ...DEFAULT_MAP_PAGE_SETTINGS, aprs: true };
     expect(parseMapPageSettings(serializeMapPageSettings(enabled))).toEqual(enabled);
+  });
+});
+
+describe('map layer controls', () => {
+  it('places APRS before Stations', () => {
+    const keys = MAP_PAGE_LAYER_CONTROLS.map((control) => control.key);
+
+    expect(keys).toEqual(['repeaters', 'channels', 'log', 'aprs', 'stations', 'trips']);
+    expect(keys.indexOf('aprs')).toBeLessThan(keys.indexOf('stations'));
+    expect(MAP_PAGE_LAYER_CONTROLS.find((control) => control.key === 'aprs')?.label).toBe('APRS');
+    expect(MAP_PAGE_LAYER_CONTROLS.find((control) => control.key === 'stations')?.label).toBe('Stations');
+  });
+});
+
+describe('map trip selector', () => {
+  const storedGroupIds = ['library', 'hill-country'];
+
+  it('is visible only while Trips is enabled', () => {
+    expect(mapTripSelectorVisible(true)).toBe(true);
+    expect(mapTripSelectorVisible(false)).toBe(false);
+  });
+
+  it('keeps the selected trip when the selector is hidden', () => {
+    expect(
+      nextMapPageGroupSelection({
+        current: ['hill-country'],
+        tripsEnabled: false,
+        proposedIds: [],
+        storedGroupIds,
+      }),
+    ).toEqual(['hill-country']);
+
+    expect(
+      nextMapPageGroupSelection({
+        current: MAP_PAGE_ALL_STORED_GROUPS,
+        tripsEnabled: false,
+        proposedIds: [],
+        storedGroupIds,
+      }),
+    ).toBe(MAP_PAGE_ALL_STORED_GROUPS);
+  });
+
+  it('applies a new selection while the selector is visible', () => {
+    expect(
+      nextMapPageGroupSelection({
+        current: MAP_PAGE_ALL_STORED_GROUPS,
+        tripsEnabled: true,
+        proposedIds: ['hill-country'],
+        storedGroupIds,
+      }),
+    ).toEqual(['hill-country']);
+
+    expect(
+      nextMapPageGroupSelection({
+        current: ['hill-country'],
+        tripsEnabled: true,
+        proposedIds: storedGroupIds,
+        storedGroupIds,
+      }),
+    ).toBe(MAP_PAGE_ALL_STORED_GROUPS);
   });
 });

@@ -50,8 +50,12 @@ import { antennaTypeById } from '~/utils/antenna-types';
 import { formatStationLocation, type RadioStation } from '~/utils/antenna-station';
 import {
   MAP_PAGE_ALL_STORED_GROUPS,
+  MAP_PAGE_LAYER_CONTROLS,
+  mapTripSelectorVisible,
+  nextMapPageGroupSelection,
   readMapPageSettings,
   writeMapPageSettings,
+  type MapPageLayerControlKey,
   type MapPageSettings,
 } from '~/utils/map-page-settings';
 import {
@@ -368,12 +372,15 @@ const selectedGroupIds = computed({
   },
   set(value: string[]) {
     const storedIds = storedGroups.value.map((group) => group.id);
-    const allSelected =
-      value.length === storedIds.length && storedIds.every((groupId) => value.includes(groupId));
 
     pageSettings.value = {
       ...pageSettings.value,
-      groupSelection: allSelected ? MAP_PAGE_ALL_STORED_GROUPS : value,
+      groupSelection: nextMapPageGroupSelection({
+        current: pageSettings.value.groupSelection,
+        tripsEnabled: pageSettings.value.trips,
+        proposedIds: value,
+        storedGroupIds: storedIds,
+      }),
     };
     writeMapPageSettings(pageSettings.value);
   },
@@ -1446,50 +1453,10 @@ function onFitClick(): void {
   fitVisible(instance);
 }
 
-function onRepeatersToggle(enabled: boolean | 'indeterminate'): void {
+function onLayerToggle(key: MapPageLayerControlKey, enabled: boolean | 'indeterminate'): void {
   pageSettings.value = {
     ...pageSettings.value,
-    repeaters: enabled === true,
-  };
-  persistSettings();
-}
-
-function onChannelsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    channels: enabled === true,
-  };
-  persistSettings();
-}
-
-function onContactsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    log: enabled === true,
-  };
-  persistSettings();
-}
-
-function onStationsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    stations: enabled === true,
-  };
-  persistSettings();
-}
-
-function onTripsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    trips: enabled === true,
-  };
-  persistSettings();
-}
-
-function onAprsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    aprs: enabled === true,
+    [key]: enabled === true,
   };
   persistSettings();
 }
@@ -1583,46 +1550,25 @@ watch(usingEmptyStyle, () => {
     <section class="flex flex-col gap-3 rounded-xl bg-default p-3 shadow-sm ring-1 ring-default" aria-label="Map layers">
       <div class="flex flex-wrap items-center gap-3">
         <UCheckbox
-          :model-value="pageSettings.repeaters"
-          label="Repeaters"
-          @update:model-value="onRepeatersToggle"
+          v-for="control in MAP_PAGE_LAYER_CONTROLS"
+          :key="control.key"
+          :model-value="pageSettings[control.key]"
+          :label="control.label"
+          @update:model-value="onLayerToggle(control.key, $event)"
         />
-        <UCheckbox
-          :model-value="pageSettings.channels"
-          label="Channels"
-          @update:model-value="onChannelsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.log"
-          label="Contacts"
-          @update:model-value="onContactsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.stations"
-          label="Stations"
-          @update:model-value="onStationsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.trips"
-          label="Trips"
-          @update:model-value="onTripsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.aprs"
-          label="APRS"
-          @update:model-value="onAprsToggle"
-        />
-        <USelectMenu
-          v-model="selectedGroupIds"
-          :items="groupItems"
-          value-key="id"
-          multiple
-          placeholder="Library groups"
-          color="neutral"
-          class="min-w-48 flex-1 sm:max-w-md"
-          :disabled="groupItems.length === 0"
-          :search-input="groupItems.length > 8"
-        />
+        <div v-show="mapTripSelectorVisible(pageSettings.trips)" class="min-w-48 flex-1 sm:max-w-md">
+          <USelectMenu
+            v-model="selectedGroupIds"
+            :items="groupItems"
+            value-key="id"
+            multiple
+            placeholder="Library groups"
+            color="neutral"
+            class="w-full"
+            :disabled="groupItems.length === 0"
+            :search-input="groupItems.length > 8"
+          />
+        </div>
         <UButton label="Fit" color="neutral" variant="outline" size="sm" icon="i-lucide-scan" @click="onFitClick" />
       </div>
 
