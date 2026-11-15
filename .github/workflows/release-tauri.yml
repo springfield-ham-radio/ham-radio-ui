@@ -117,17 +117,39 @@ jobs:
           node-version-file: .nvmrc
 
       # Node 26 does not ship Corepack. Install 0.36.0, the release the
-      # Node.js 26 line last tracked, into this Node prefix. windows-latest
-      # also has Yarn 1.22 ahead of Corepack shims: PowerShell picks yarn.ps1
-      # and Git bash picks the extensionless yarn script. Wrappers at the
-      # front of PATH make every later step, including Tauri's
-      # beforeBuildCommand, call `corepack yarn` (the version in
-      # packageManager). Do not replace those wrappers with `corepack enable`
-      # on Windows.
+      # Node.js 26 line last tracked, into this Node prefix.
+      #
+      # windows-2025-vs2026 already has Yarn 1 shims in the npm global
+      # prefix (C:\npm\prefix\yarn.cmd and the yarn/yarnpkg/pnpm/pnpx
+      # siblings). corepack@0.36.0 ships those bin names, so a plain
+      # global install stops with EEXIST. On Windows, uninstall the
+      # preinstalled packages, delete any leftover shims, and pass
+      # --force. macOS and Linux still run `npm install -g corepack@0.36.0`
+      # with no extra flags. Keep this block in sync with the windows-js
+      # job in ci.yml.
+      #
+      # Those image shims also stay ahead of shims `corepack enable` would
+      # write next to node: PowerShell picks yarn.ps1 and Git bash picks
+      # the extensionless yarn script. Wrappers at the front of PATH make
+      # every later step, including Tauri's beforeBuildCommand, call
+      # `corepack yarn` (the version in packageManager). Do not replace
+      # those wrappers with `corepack enable` on Windows.
       - name: Install dependencies
         shell: bash
         run: |
-          npm install -g corepack@0.36.0
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            npm uninstall -g yarn || true
+            npm uninstall -g pnpm || true
+            prefix="$(cygpath -u "$(npm prefix -g | tr -d '\r')")"
+            rm -f \
+              "$prefix/yarn" "$prefix/yarn.cmd" "$prefix/yarn.ps1" \
+              "$prefix/yarnpkg" "$prefix/yarnpkg.cmd" "$prefix/yarnpkg.ps1" \
+              "$prefix/pnpm" "$prefix/pnpm.cmd" "$prefix/pnpm.ps1" \
+              "$prefix/pnpx" "$prefix/pnpx.cmd" "$prefix/pnpx.ps1"
+            npm install -g --force corepack@0.36.0
+          else
+            npm install -g corepack@0.36.0
+          fi
           if [ "$RUNNER_OS" = "Windows" ]; then
             shim_dir="$(cygpath -u "$RUNNER_TEMP")/corepack-bin"
             mkdir -p "$shim_dir"
