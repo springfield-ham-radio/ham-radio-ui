@@ -17,6 +17,8 @@ export interface MapPageSettings {
   log: boolean;
   stations: boolean;
   trips: boolean;
+  /** Heard APRS stations. Separate from the station-library layer. */
+  aprs: boolean;
   groupSelection: MapPageGroupSelection;
   camera?: MapPageCamera;
 }
@@ -27,8 +29,47 @@ export const DEFAULT_MAP_PAGE_SETTINGS: MapPageSettings = {
   log: true,
   stations: true,
   trips: true,
+  aprs: false,
   groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
 };
+
+/** Layer checkboxes, in the order shown on the Map page. APRS stays before Stations. */
+export const MAP_PAGE_LAYER_CONTROLS = [
+  { key: 'repeaters', label: 'Repeaters' },
+  { key: 'channels', label: 'Channels' },
+  { key: 'log', label: 'Contacts' },
+  { key: 'aprs', label: 'APRS' },
+  { key: 'stations', label: 'Stations' },
+  { key: 'trips', label: 'Trips' },
+] as const;
+
+export type MapPageLayerControlKey = (typeof MAP_PAGE_LAYER_CONTROLS)[number]['key'];
+
+/** The group menu chooses which trip is drawn. It is shown only while Trips is on. */
+export function mapTripSelectorVisible(tripsEnabled: boolean): boolean {
+  return tripsEnabled === true;
+}
+
+/**
+ * Group menu updates apply only while the trip selector is visible.
+ * Hiding the menu keeps the current selection, including a single trip id.
+ */
+export function nextMapPageGroupSelection(options: {
+  current: MapPageGroupSelection;
+  tripsEnabled: boolean;
+  proposedIds: readonly string[];
+  storedGroupIds: readonly string[];
+}): MapPageGroupSelection {
+  if (!mapTripSelectorVisible(options.tripsEnabled)) {
+    return options.current;
+  }
+
+  const allSelected =
+    options.proposedIds.length === options.storedGroupIds.length &&
+    options.storedGroupIds.every((groupId) => options.proposedIds.includes(groupId));
+
+  return allSelected ? MAP_PAGE_ALL_STORED_GROUPS : [...options.proposedIds];
+}
 
 export function parseMapPageCamera(value: unknown): MapPageCamera | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -88,6 +129,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       log?: unknown;
       stations?: unknown;
       trips?: unknown;
+      aprs?: unknown;
       groupSelection?: unknown;
       groupIds?: unknown;
       camera?: unknown;
@@ -102,6 +144,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       log: record.log !== false,
       stations: record.stations !== false,
       trips: record.trips !== false,
+      aprs: record.aprs === true,
       groupSelection,
       ...(camera ? { camera } : {}),
     };
@@ -120,6 +163,7 @@ export function serializeMapPageSettings(settings: MapPageSettings): string {
     log: settings.log === true,
     stations: settings.stations === true,
     trips: settings.trips === true,
+    aprs: settings.aprs === true,
     groupSelection,
     ...(camera ? { camera } : {}),
   });

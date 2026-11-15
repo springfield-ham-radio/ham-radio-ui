@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { decodeAprsMonitorLine } from '../../app/utils/aprs-decode.ts';
+import { formatAprsHeardAt } from '../../app/utils/aprs-display.ts';
+import { APRS_MAP_EXAMPLE_TEXT } from '../../app/utils/aprs-map-example.ts';
+import { aprsStationCirclePaint, aprsStationLabelLayout } from '../../app/utils/aprs-map.ts';
+import { createAprsFoldState, foldAprsLine, type AprsStation } from '../../app/utils/aprs-stations.ts';
 import { parseAdifLocationPair } from '../../app/utils/station-log-adif-location.ts';
 import { RadioChannelId } from '@springfield/ham-radio-api';
 import { CHANNEL_MAP_BAND_COLORS, CHANNEL_MAP_BAND_FALLBACK } from '../../app/utils/channel-map.ts';
@@ -20,6 +25,9 @@ import {
   mapRepeaterChannels,
   mapRepeaterFeatures,
   mapRepeaterUnlocatedCount,
+  mapAprsFeatures,
+  mapAprsHeardStations,
+  mapAprsPopupLines,
   mapStationAntennas,
   mapStationFeatures,
   mapStationHomeUnlocated,
@@ -572,5 +580,77 @@ describe('orderTripMapStops', () => {
       .filter((index) => index >= 0);
 
     expect(beltonIndices.every((index) => Math.abs(index - walburgIndex) <= 2)).toBe(true);
+  });
+});
+
+function heardStations(text: string, receivedAt = '2026-11-07T18:00:00.000Z'): AprsStation[] {
+  const state = createAprsFoldState();
+
+  for (const line of text.split('\n')) {
+    if (line.length === 0) {
+      continue;
+    }
+
+    foldAprsLine(state, line, decodeAprsMonitorLine(line), receivedAt);
+  }
+
+  return state.stations;
+}
+
+describe('mapAprsFeatures', () => {
+  it('plots the same positioned stations the APRS map plots, with the decoded comment', () => {
+    const stations = heardStations(`${APRS_MAP_EXAMPLE_TEXT}\n`);
+    const features = mapAprsFeatures(stations);
+
+    expect(features.features.map((feature) => feature.properties.callsign).sort()).toEqual(['K5KTF-4', 'W5XYZ']);
+    const k5ktf = features.features.find((feature) => feature.properties.callsign === 'K5KTF-4');
+
+    expect(k5ktf?.properties.comment).toBe('K5KTF TX/RX-iGate');
+    expect(k5ktf?.properties.selected).toBe(0);
+    expect(k5ktf?.properties.lastHeardAt).toBe('2026-11-07T18:00:00.000Z');
+    expect(k5ktf?.geometry.coordinates[0]).toBeCloseTo(-(97 + 52.74 / 60), 5);
+    expect(k5ktf?.geometry.coordinates[1]).toBeCloseTo(30 + 31.12 / 60, 5);
+    expect(mapAprsPopupLines(k5ktf!.properties)).toEqual([
+      'K5KTF-4',
+      `Last heard ${formatAprsHeardAt('2026-11-07T18:00:00.000Z')}`,
+      'K5KTF TX/RX-iGate',
+    ]);
+  });
+
+  it('uses the latest heard time after a later packet and omits a blank comment', () => {
+    const state = createAprsFoldState();
+    const position = 'N0CALL>APRS:!4903.50N/07201.75W-';
+    const message = 'N0CALL>APRS::W5XYZ    :Hello{1';
+    foldAprsLine(state, position, decodeAprsMonitorLine(position), '2026-11-07T18:00:00.000Z');
+    foldAprsLine(state, message, decodeAprsMonitorLine(message), '2026-11-07T18:05:00.000Z');
+
+    const feature = mapAprsFeatures(state.stations).features[0];
+
+    expect(feature?.properties.callsign).toBe('N0CALL');
+    expect(feature?.properties.lastHeardAt).toBe('2026-11-07T18:05:00.000Z');
+    expect(feature?.properties.comment).toBe('');
+    expect(mapAprsPopupLines(feature!.properties)).toEqual([
+      'N0CALL',
+      `Last heard ${formatAprsHeardAt('2026-11-07T18:05:00.000Z')}`,
+    ]);
+  });
+
+  it('keeps both feeds and the later copy of a shared callsign', () => {
+    const passive = heardStations('N0CALL>APRS:!4903.50N/07201.75W-First\n', '2026-11-07T18:00:00.000Z');
+    const kiss = heardStations('N0CALL>APRS:!4904.00N/07202.00W-Second\nW5XYZ>APRS:!3028.00N/09740.00W-Example\n', '2026-11-07T18:10:00.000Z');
+    const merged = mapAprsHeardStations([passive, kiss]);
+
+    expect(merged.map((station) => station.callsign).sort()).toEqual(['N0CALL', 'W5XYZ']);
+    expect(merged.find((station) => station.callsign === 'N0CALL')?.comment?.value).toBe('Second');
+
+    const features = mapAprsFeatures(merged);
+    expect(features.features).toHaveLength(2);
+    expect(features.features.find((feature) => feature.properties.callsign === 'N0CALL')?.properties.comment).toBe('Second');
+  });
+
+  it('reuses the APRS map callsign label and marker paint', () => {
+    expect(aprsStationLabelLayout()['text-field']).toEqual(['get', 'callsign']);
+    expect(aprsStationCirclePaint()['circle-stroke-color']).toBe('#ffffff');
+    expect(aprsStationCirclePaint()['circle-color']).toEqual(['case', ['==', ['get', 'selected'], 1], '#c2410c', '#0f766e']);
   });
 });

@@ -6,6 +6,7 @@ import {
   type LngLatLike,
   type Map as MapLibreMap,
   type MapGeoJSONFeature,
+  type MapLayerMouseEvent,
 } from 'maplibre-gl';
 import {
   channelMapBandColor,
@@ -38,14 +39,23 @@ import {
   mapTripFeatures,
   mapTripHasSelectedTripGroups,
   mapTripNeedsStartMessage,
+  mapAprsFeatures,
+  mapAprsHeardStations,
+  mapAprsPopupLines,
   storedLibraryGroups,
 } from '~/utils/map-page-layers';
+import { aprsStationCirclePaint, aprsStationLabelLayout, aprsStationLabelPaint } from '~/utils/aprs-map';
+import type { AprsStation } from '~/utils/aprs-stations';
 import { antennaTypeById } from '~/utils/antenna-types';
 import { formatStationLocation, type RadioStation } from '~/utils/antenna-station';
 import {
   MAP_PAGE_ALL_STORED_GROUPS,
+  MAP_PAGE_LAYER_CONTROLS,
+  mapTripSelectorVisible,
+  nextMapPageGroupSelection,
   readMapPageSettings,
   writeMapPageSettings,
+  type MapPageLayerControlKey,
   type MapPageSettings,
 } from '~/utils/map-page-settings';
 import {
@@ -101,12 +111,17 @@ const TRIP_LINE_LAYER_ID = 'map-trips-lines';
 const TRIP_STOP_LAYER_ID = 'map-trips-stops';
 const TRIP_LABEL_LAYER_ID = 'map-trips-labels';
 
+const APRS_SOURCE_ID = 'map-aprs';
+const APRS_CIRCLE_LAYER_ID = 'map-aprs-circle';
+const APRS_LABEL_LAYER_ID = 'map-aprs-label';
+
 const route = useRoute();
 const colorMode = useColorMode();
 const { mapStyle, customMapStyleUrl } = useAppearanceSettings();
 const { channels: libraryChannels, groups: allGroups, memberships, refresh } = useSavedChannels();
 const { qsos: libraryQsos, refresh: refreshStationLog } = useStationLog();
 const { stations: libraryStations, antennas: libraryAntennas, selectedStationId } = useStationAntennas();
+const { snapshots: aprsSnapshots, watchCard: watchAprsCard } = useAprs();
 
 const useFixture = computed(() => import.meta.dev && route.query.fixture === 'map');
 
@@ -118,6 +133,30 @@ const groupMemberships = computed(() => fixture.value?.memberships ?? membership
 const logQsos = computed(() => fixture.value?.qsos ?? libraryQsos.value);
 const mapStations = computed(() => fixture.value?.stations ?? libraryStations.value);
 const mapAntennas = computed(() => fixture.value?.antennas ?? libraryAntennas.value);
+
+const watchedAprsCards = new Set<string>();
+
+function watchHeardAprsCards(): void {
+  for (const cardId of Object.keys(aprsSnapshots.value)) {
+    if (watchedAprsCards.has(cardId)) {
+      continue;
+    }
+
+    watchedAprsCards.add(cardId);
+    watchAprsCard(cardId);
+  }
+}
+
+watchHeardAprsCards();
+watch(aprsSnapshots, watchHeardAprsCards);
+
+const heardAprsStations = computed(() => {
+  if (fixture.value) {
+    return fixture.value.aprsStations;
+  }
+
+  return mapAprsHeardStations(Object.values(aprsSnapshots.value).map((snapshot) => snapshot.stations));
+});
 
 const storedGroups = computed(() => storedLibraryGroups(groups.value));
 
@@ -227,6 +266,24 @@ const tripFeatureCollection = computed(() => {
   );
 });
 
+const aprsByCall = computed(() => {
+  const byCall = new Map<string, AprsStation>();
+
+  for (const station of heardAprsStations.value) {
+    byCall.set(station.callsign, station);
+  }
+
+  return byCall;
+});
+
+const aprsFeatureCollection = computed(() => {
+  if (!pageSettings.value.aprs) {
+    return { type: 'FeatureCollection' as const, features: [] };
+  }
+
+  return mapAprsFeatures(heardAprsStations.value);
+});
+
 const tripNeedsStartMessage = computed(() => {
   if (!pageSettings.value.trips) {
     return undefined;
@@ -315,12 +372,15 @@ const selectedGroupIds = computed({
   },
   set(value: string[]) {
     const storedIds = storedGroups.value.map((group) => group.id);
-    const allSelected =
-      value.length === storedIds.length && storedIds.every((groupId) => value.includes(groupId));
 
     pageSettings.value = {
       ...pageSettings.value,
-      groupSelection: allSelected ? MAP_PAGE_ALL_STORED_GROUPS : value,
+      groupSelection: nextMapPageGroupSelection({
+        current: pageSettings.value.groupSelection,
+        tripsEnabled: pageSettings.value.trips,
+        proposedIds: value,
+        storedGroupIds: storedIds,
+      }),
     };
     writeMapPageSettings(pageSettings.value);
   },
@@ -330,6 +390,8 @@ let popup: Popup | undefined;
 let listenersBound = false;
 let stationNicknamesShown: boolean | undefined;
 let tripLabelsShown: boolean | undefined;
+let aprsLabelsShown: boolean | undefined;
+const aprsPointerBound = new Set<string>();
 let mapReady = false;
 let suppressCameraSave = false;
 let cameraSaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -770,6 +832,84 @@ function ensureClusterLayers(
   }
 }
 
+function onAprsClick(event: MapLayerMouseEvent): void {
+  const callsign = event.features?.[0]?.properties?.callsign;
+
+  if (typeof callsign !== 'string' || callsign.length === 0) {
+    return;
+  }
+
+  openAprsPopup(callsign, event.lngLat);
+}
+
+function bindAprsLayerPointer(instance: MapLibreMap, layerId: string): void {
+  if (!instance.getLayer(layerId) || aprsPointerBound.has(layerId)) {
+    return;
+  }
+
+  aprsPointerBound.add(layerId);
+  instance.on('click', layerId, onAprsClick);
+  instance.on('mouseenter', layerId, () => {
+    instance.getCanvas().style.cursor = 'pointer';
+  });
+  instance.on('mouseleave', layerId, () => {
+    instance.getCanvas().style.cursor = '';
+  });
+}
+
+function ensureAprsLabelLayer(instance: MapLibreMap, showSymbols: boolean): void {
+  if (instance.getLayer(APRS_LABEL_LAYER_ID)) {
+    instance.removeLayer(APRS_LABEL_LAYER_ID);
+    aprsPointerBound.delete(APRS_LABEL_LAYER_ID);
+  }
+
+  if (!showSymbols) {
+    return;
+  }
+
+  instance.addLayer({
+    id: APRS_LABEL_LAYER_ID,
+    type: 'symbol',
+    source: APRS_SOURCE_ID,
+    layout: aprsStationLabelLayout(),
+    paint: aprsStationLabelPaint(),
+  });
+}
+
+function ensureAprsLayers(instance: MapLibreMap, showSymbols: boolean): void {
+  if (!instance.getSource(APRS_SOURCE_ID)) {
+    aprsLabelsShown = undefined;
+    aprsPointerBound.clear();
+    instance.addSource(APRS_SOURCE_ID, {
+      type: 'geojson',
+      data: aprsFeatureCollection.value,
+    });
+  }
+
+  if (!instance.getLayer(APRS_CIRCLE_LAYER_ID)) {
+    instance.addLayer({
+      id: APRS_CIRCLE_LAYER_ID,
+      type: 'circle',
+      source: APRS_SOURCE_ID,
+      paint: aprsStationCirclePaint(),
+    });
+  }
+
+  if (!instance.getLayer(APRS_LABEL_LAYER_ID)) {
+    aprsLabelsShown = undefined;
+  }
+
+  if (aprsLabelsShown !== showSymbols) {
+    ensureAprsLabelLayer(instance, showSymbols);
+    aprsLabelsShown = showSymbols;
+  }
+
+  if (listenersBound) {
+    bindAprsLayerPointer(instance, APRS_CIRCLE_LAYER_ID);
+    bindAprsLayerPointer(instance, APRS_LABEL_LAYER_ID);
+  }
+}
+
 function ensureLayers(instance: MapLibreMap): void {
   const showSymbols = !usingEmptyStyle.value;
 
@@ -778,6 +918,7 @@ function ensureLayers(instance: MapLibreMap): void {
   ensureContactClusterLayers(instance, contactFeatureCollection.value, showSymbols);
   ensureStationLayers(instance, showSymbols);
   ensureTripLayers(instance, showSymbols);
+  ensureAprsLayers(instance, showSymbols);
 }
 
 function syncData(instance: MapLibreMap): void {
@@ -787,6 +928,7 @@ function syncData(instance: MapLibreMap): void {
   geoJsonSource(instance, CONTACT_LAYER_IDS.sourceId)?.setData(contactFeatureCollection.value);
   geoJsonSource(instance, STATION_SOURCE_ID)?.setData(stationFeatureCollection.value);
   geoJsonSource(instance, TRIP_SOURCE_ID)?.setData(tripFeatureCollection.value);
+  geoJsonSource(instance, APRS_SOURCE_ID)?.setData(aprsFeatureCollection.value);
 }
 
 function fitVisible(instance: MapLibreMap): void {
@@ -795,6 +937,7 @@ function fitVisible(instance: MapLibreMap): void {
     ...channelFeatureCollection.value.features,
     ...contactFeatureCollection.value.features,
     ...stationFeatureCollection.value.features,
+    ...aprsFeatureCollection.value.features,
   ];
 
   const bounds = channelMapBounds(pointFeatures);
@@ -936,6 +1079,39 @@ function openStationPopup(stationId: string, lngLat: LngLatLike): void {
     }
 
     root.append(list);
+  }
+
+  setPopup(
+    new Popup({ closeButton: true, maxWidth: '280px' }).setLngLat(lngLat).setDOMContent(root).addTo(instance),
+  );
+}
+
+function openAprsPopup(callsign: string, lngLat: LngLatLike): void {
+  const instance = mapInstance();
+  const station = aprsByCall.value.get(callsign);
+
+  if (!instance || !station) {
+    return;
+  }
+
+  const root = document.createElement('div');
+  root.style.color = '#0f172a';
+
+  const lines = mapAprsPopupLines({
+    callsign: station.callsign,
+    lastHeardAt: station.lastHeardAt,
+    comment: station.comment?.value,
+  });
+
+  for (const [index, line] of lines.entries()) {
+    const row = document.createElement('div');
+
+    if (index === 0) {
+      row.style.fontWeight = '600';
+    }
+
+    row.textContent = line;
+    root.append(row);
   }
 
   setPopup(
@@ -1223,6 +1399,9 @@ function bindPointer(instance: MapLibreMap): void {
   instance.on('mouseleave', TRIP_STOP_LAYER_ID, () => {
     instance.getCanvas().style.cursor = '';
   });
+
+  bindAprsLayerPointer(instance, APRS_CIRCLE_LAYER_ID);
+  bindAprsLayerPointer(instance, APRS_LABEL_LAYER_ID);
 }
 
 function onMapReady(instance: MapLibreMap): void {
@@ -1274,42 +1453,10 @@ function onFitClick(): void {
   fitVisible(instance);
 }
 
-function onRepeatersToggle(enabled: boolean | 'indeterminate'): void {
+function onLayerToggle(key: MapPageLayerControlKey, enabled: boolean | 'indeterminate'): void {
   pageSettings.value = {
     ...pageSettings.value,
-    repeaters: enabled === true,
-  };
-  persistSettings();
-}
-
-function onChannelsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    channels: enabled === true,
-  };
-  persistSettings();
-}
-
-function onContactsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    log: enabled === true,
-  };
-  persistSettings();
-}
-
-function onStationsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    stations: enabled === true,
-  };
-  persistSettings();
-}
-
-function onTripsToggle(enabled: boolean | 'indeterminate'): void {
-  pageSettings.value = {
-    ...pageSettings.value,
-    trips: enabled === true,
+    [key]: enabled === true,
   };
   persistSettings();
 }
@@ -1375,7 +1522,7 @@ watch(styleUrl, (url) => {
 });
 
 watch(
-  [repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection, stationFeatureCollection, tripFeatureCollection],
+  [repeaterFeatureCollection, channelFeatureCollection, contactFeatureCollection, stationFeatureCollection, tripFeatureCollection, aprsFeatureCollection],
   () => {
   const instance = mapInstance();
 
@@ -1403,41 +1550,25 @@ watch(usingEmptyStyle, () => {
     <section class="flex flex-col gap-3 rounded-xl bg-default p-3 shadow-sm ring-1 ring-default" aria-label="Map layers">
       <div class="flex flex-wrap items-center gap-3">
         <UCheckbox
-          :model-value="pageSettings.repeaters"
-          label="Repeaters"
-          @update:model-value="onRepeatersToggle"
+          v-for="control in MAP_PAGE_LAYER_CONTROLS"
+          :key="control.key"
+          :model-value="pageSettings[control.key]"
+          :label="control.label"
+          @update:model-value="onLayerToggle(control.key, $event)"
         />
-        <UCheckbox
-          :model-value="pageSettings.channels"
-          label="Channels"
-          @update:model-value="onChannelsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.log"
-          label="Contacts"
-          @update:model-value="onContactsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.stations"
-          label="Stations"
-          @update:model-value="onStationsToggle"
-        />
-        <UCheckbox
-          :model-value="pageSettings.trips"
-          label="Trips"
-          @update:model-value="onTripsToggle"
-        />
-        <USelectMenu
-          v-model="selectedGroupIds"
-          :items="groupItems"
-          value-key="id"
-          multiple
-          placeholder="Library groups"
-          color="neutral"
-          class="min-w-48 flex-1 sm:max-w-md"
-          :disabled="groupItems.length === 0"
-          :search-input="groupItems.length > 8"
-        />
+        <div v-show="mapTripSelectorVisible(pageSettings.trips)" class="min-w-48 flex-1 sm:max-w-md">
+          <USelectMenu
+            v-model="selectedGroupIds"
+            :items="groupItems"
+            value-key="id"
+            multiple
+            placeholder="Library groups"
+            color="neutral"
+            class="w-full"
+            :disabled="groupItems.length === 0"
+            :search-input="groupItems.length > 8"
+          />
+        </div>
         <UButton label="Fit" color="neutral" variant="outline" size="sm" icon="i-lucide-scan" @click="onFitClick" />
       </div>
 

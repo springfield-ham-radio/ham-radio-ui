@@ -14,6 +14,9 @@ import {
   type RadioStation,
   type StationAntenna,
 } from '~/utils/antenna-station';
+import { aprsMapFeatures, type AprsMapFeatureProperties } from '~/utils/aprs-map';
+import { formatAprsHeardAt } from '~/utils/aprs-display';
+import type { AprsStation } from '~/utils/aprs-stations';
 import { MAP_PAGE_ALL_STORED_GROUPS, type MapPageGroupSelection } from '~/utils/map-page-settings';
 import { coordinatesFromPair, type SavedChannel } from '~/utils/saved-channels-db';
 import { distanceKm } from '~/utils/location-format';
@@ -715,4 +718,87 @@ export function mapTripFeatures(
     type: 'FeatureCollection',
     features,
   };
+}
+
+export interface MapPageAprsFeatureProperties extends AprsMapFeatureProperties {
+  /** Decoded packet comment. Empty when that field was not present. */
+  comment: string;
+}
+
+export interface MapPageAprsFeatureCollection {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number];
+    };
+    properties: MapPageAprsFeatureProperties;
+  }>;
+}
+
+/**
+ * Heard stations from every card snapshot.
+ *
+ * Passive TNC2 lines and KISS UI frames already share one station list per card.
+ * A callsign heard on more than one card keeps the later `lastHeardAt`.
+ */
+export function mapAprsHeardStations(groups: readonly (readonly AprsStation[])[]): AprsStation[] {
+  const byCall = new Map<string, AprsStation>();
+
+  for (const stations of groups) {
+    for (const station of stations) {
+      const existing = byCall.get(station.callsign);
+
+      if (!existing || station.lastHeardAt > existing.lastHeardAt) {
+        byCall.set(station.callsign, station);
+      }
+    }
+  }
+
+  return [...byCall.values()];
+}
+
+/**
+ * One point per heard station that has its own decoded position.
+ *
+ * Object reports and stations without a plottable position are omitted.
+ * `lastHeardAt` is the station's latest packet, and `comment` is the decoded comment.
+ */
+export function mapAprsFeatures(stations: readonly AprsStation[]): MapPageAprsFeatureCollection {
+  const byCall = new Map(stations.map((station) => [station.callsign, station]));
+  const plotted = aprsMapFeatures(stations);
+
+  return {
+    type: 'FeatureCollection',
+    features: plotted.features.map((feature) => {
+      const station = byCall.get(feature.properties.callsign);
+
+      return {
+        type: 'Feature',
+        geometry: feature.geometry,
+        properties: {
+          callsign: feature.properties.callsign,
+          label: feature.properties.label,
+          lastHeardAt: station?.lastHeardAt ?? feature.properties.lastHeardAt,
+          selected: 0,
+          comment: station?.comment?.value ?? '',
+        },
+      };
+    }),
+  };
+}
+
+/**
+ * Popup text for a heard APRS station: callsign, local last-heard time, and comment.
+ */
+export function mapAprsPopupLines(input: { callsign: string; lastHeardAt: string; comment?: string }): string[] {
+  const lines = [input.callsign, `Last heard ${formatAprsHeardAt(input.lastHeardAt)}`];
+  const comment = input.comment?.trim();
+
+  if (comment) {
+    lines.push(comment);
+  }
+
+  return lines;
 }

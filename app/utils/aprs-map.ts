@@ -1,5 +1,46 @@
+import type { CircleLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import type { AprsStation } from '~/utils/aprs-stations';
 import { formatAprsHeardAt } from '~/utils/aprs-display';
+
+/** Marker color used for a heard station that is not the selected call. */
+export const APRS_STATION_MARKER_COLOR = '#0f766e';
+
+/** Marker color used when the APRS map has that callsign selected. */
+export const APRS_STATION_SELECTED_COLOR = '#c2410c';
+
+/**
+ * Circle paint shared by the APRS tab map and the main Map APRS layer.
+ *
+ * Selected stations are larger and use the selected color. A feature with
+ * `selected` 0 keeps the default marker.
+ */
+export function aprsStationCirclePaint(): NonNullable<CircleLayerSpecification['paint']> {
+  return {
+    'circle-radius': ['case', ['==', ['get', 'selected'], 1], 8, 6],
+    'circle-color': ['case', ['==', ['get', 'selected'], 1], APRS_STATION_SELECTED_COLOR, APRS_STATION_MARKER_COLOR],
+    'circle-stroke-width': 2,
+    'circle-stroke-color': '#ffffff',
+  };
+}
+
+/** Callsign label under the station marker. */
+export function aprsStationLabelLayout(): NonNullable<SymbolLayerSpecification['layout']> {
+  return {
+    'text-field': ['get', 'callsign'],
+    'text-font': ['Noto Sans Regular'],
+    'text-size': 11,
+    'text-offset': [0, 1.15],
+    'text-anchor': 'top',
+  };
+}
+
+export function aprsStationLabelPaint(): NonNullable<SymbolLayerSpecification['paint']> {
+  return {
+    'text-color': '#0f172a',
+    'text-halo-color': '#ffffff',
+    'text-halo-width': 1.2,
+  };
+}
 
 export interface AprsMapFeatureProperties {
   callsign: string;
