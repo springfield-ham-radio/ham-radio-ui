@@ -6,6 +6,11 @@ import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups
 import { fieldHasStringChoices, settingsStringChoices, stringChoiceSelectItems } from '~/utils/settings-field-choices';
 import { settingsFieldHelp, settingsFieldLabel, settingsFieldMenuNumber } from '~/utils/settings-field-help';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
+import {
+  layoutSettingsFields,
+  settingsSwitchCheckboxHelp,
+  type SettingsSwitchGroup,
+} from '~/utils/settings-switch-groups';
 
 const props = withDefaults(
   defineProps<{
@@ -264,6 +269,22 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
     ...(hasHelp ? { labelWrapper: 'justify-start' } : {}),
   };
 }
+
+function switchGroupFormUi(group: SettingsSwitchGroup) {
+  if (!group.help) {
+    return undefined;
+  }
+
+  return { labelWrapper: 'justify-start' };
+}
+
+function groupChanged(group: SettingsSwitchGroup): boolean {
+  return group.fields.some((field) => fieldChanged(field.path));
+}
+
+function checkboxHelp(field: RadioMemoryMapUiField, group: SettingsSwitchGroup) {
+  return settingsSwitchCheckboxHelp(field, group);
+}
 </script>
 
 <template>
@@ -339,76 +360,142 @@ function fieldFormUi(field: RadioMemoryMapUiField) {
             </header>
 
             <div class="settings-fields-grid" :style="settingsFieldsGridStyle">
-              <UFormField
-                v-for="field in section.fields"
-                :key="field.path"
-                :label="fieldLabel(field)"
-                :ui="fieldFormUi(field)"
-              >
-                <template v-if="fieldChanged(field.path) || visibleMenuNumber(field) !== undefined" #label>
-                  <span class="inline-flex min-w-0 items-center gap-1.5">
-                    <span
-                      v-if="visibleMenuNumber(field) !== undefined"
-                      class="shrink-0 font-mono text-xs tabular-nums text-muted"
-                    >{{ visibleMenuNumber(field) }}</span>
-                    <span>{{ field.ui.label }}</span>
-                    <UTooltip v-if="fieldChanged(field.path)" text="Changed">
-                      <UBadge
-                        color="warning"
-                        variant="subtle"
-                        size="xs"
-                        class="size-1.5 rounded-full p-0"
-                        aria-label="Changed"
-                      />
-                    </UTooltip>
-                  </span>
-                </template>
-                <template v-if="helpByPath.get(field.path)" #hint>
-                  <HelpTooltip
-                    :menu="helpByPath.get(field.path)?.menuLabel"
-                    :text="helpByPath.get(field.path)?.description"
-                    :constraint="helpByPath.get(field.path)?.constraint"
+              <template v-for="cell in layoutSettingsFields(section.fields)" :key="cell.key">
+                <UFormField
+                  v-if="cell.kind === 'field'"
+                  :label="fieldLabel(cell.field)"
+                  :ui="fieldFormUi(cell.field)"
+                >
+                  <template v-if="fieldChanged(cell.field.path) || visibleMenuNumber(cell.field) !== undefined" #label>
+                    <span class="inline-flex min-w-0 items-center gap-1.5">
+                      <span
+                        v-if="visibleMenuNumber(cell.field) !== undefined"
+                        class="shrink-0 font-mono text-xs tabular-nums text-muted"
+                      >{{ visibleMenuNumber(cell.field) }}</span>
+                      <span>{{ cell.field.ui.label }}</span>
+                      <UTooltip v-if="fieldChanged(cell.field.path)" text="Changed">
+                        <UBadge
+                          color="warning"
+                          variant="subtle"
+                          size="xs"
+                          class="size-1.5 rounded-full p-0"
+                          aria-label="Changed"
+                        />
+                      </UTooltip>
+                    </span>
+                  </template>
+                  <template v-if="helpByPath.get(cell.field.path)" #hint>
+                    <HelpTooltip
+                      :menu="helpByPath.get(cell.field.path)?.menuLabel"
+                      :text="helpByPath.get(cell.field.path)?.description"
+                      :constraint="helpByPath.get(cell.field.path)?.constraint"
+                    />
+                  </template>
+
+                  <UInputNumber
+                    v-if="cell.field.ui.widget === 'integer' || cell.field.ui.widget === 'number'"
+                    v-bind="changedControlBindings(cell.field.path)"
+                    :model-value="numberValue(cell.field)"
+                    :min="cell.field.value?.kind === 'integer' ? cell.field.value.min : undefined"
+                    :max="cell.field.value?.kind === 'integer' ? cell.field.value.max : undefined"
+                    :disabled="!isWritable(cell.field)"
+                    class="w-full"
+                    @update:model-value="updateNumber(cell.field, $event)"
                   />
-                </template>
 
-                <UInputNumber
-                  v-if="field.ui.widget === 'integer' || field.ui.widget === 'number'"
-                  v-bind="changedControlBindings(field.path)"
-                  :model-value="numberValue(field)"
-                  :min="field.value?.kind === 'integer' ? field.value.min : undefined"
-                  :max="field.value?.kind === 'integer' ? field.value.max : undefined"
-                  :disabled="!isWritable(field)"
-                  class="w-full"
-                  @update:model-value="updateNumber(field, $event)"
-                />
+                  <USelect
+                    v-else-if="showsSelect(cell.field)"
+                    v-bind="changedControlBindings(cell.field.path)"
+                    :model-value="selectValue(cell.field)"
+                    :items="selectItems(cell.field)"
+                    :disabled="!isWritable(cell.field)"
+                    class="w-full"
+                    @update:model-value="updateSelect(cell.field, $event)"
+                  />
 
-                <USelect
-                  v-else-if="showsSelect(field)"
-                  v-bind="changedControlBindings(field.path)"
-                  :model-value="selectValue(field)"
-                  :items="selectItems(field)"
-                  :disabled="!isWritable(field)"
-                  class="w-full"
-                  @update:model-value="updateSelect(field, $event)"
-                />
+                  <USwitch
+                    v-else-if="cell.field.ui.widget === 'switch'"
+                    v-bind="changedControlBindings(cell.field.path)"
+                    :model-value="Boolean(fieldValue(cell.field))"
+                    :disabled="!isWritable(cell.field)"
+                    @update:model-value="updateField(cell.field, Boolean($event))"
+                  />
 
-                <USwitch
-                  v-else-if="field.ui.widget === 'switch'"
-                  v-bind="changedControlBindings(field.path)"
-                  :model-value="Boolean(fieldValue(field))"
-                  :disabled="!isWritable(field)"
-                  @update:model-value="updateField(field, Boolean($event))"
-                />
+                  <UInput
+                    v-else
+                    v-bind="changedControlBindings(cell.field.path)"
+                    :model-value="textValue(cell.field)"
+                    :disabled="!isWritable(cell.field)"
+                    class="w-full"
+                    @update:model-value="updateField(cell.field, String($event ?? ''))"
+                  />
+                </UFormField>
 
-                <UInput
+                <UFormField
                   v-else
-                  v-bind="changedControlBindings(field.path)"
-                  :model-value="textValue(field)"
-                  :disabled="!isWritable(field)"
-                  class="w-full"
-                  @update:model-value="updateField(field, String($event ?? ''))"
-                />
-              </UFormField>
+                  class="min-w-0"
+                  :label="cell.group.label"
+                  :ui="switchGroupFormUi(cell.group)"
+                >
+                  <template #label>
+                    <span class="inline-flex min-w-0 items-center gap-1.5">
+                      <span class="shrink-0 font-mono text-xs tabular-nums text-muted">{{ cell.group.menuNumber }}</span>
+                      <span v-if="cell.group.code">{{ cell.group.code }}</span>
+                      <UTooltip v-if="groupChanged(cell.group)" text="Changed">
+                        <UBadge
+                          color="warning"
+                          variant="subtle"
+                          size="xs"
+                          class="size-1.5 rounded-full p-0"
+                          aria-label="Changed"
+                        />
+                      </UTooltip>
+                    </span>
+                  </template>
+                  <template v-if="cell.group.help" #hint>
+                    <HelpTooltip
+                      :menu="cell.group.help.menuLabel"
+                      :text="cell.group.help.description"
+                      :constraint="cell.group.help.constraint"
+                    />
+                  </template>
+
+                  <div class="flex flex-col gap-2">
+                    <div
+                      v-for="field in cell.group.fields"
+                      :key="field.path"
+                      class="flex items-center justify-between gap-3"
+                    >
+                      <span class="inline-flex min-w-0 items-center gap-1.5 text-sm text-default">
+                        <span>{{ field.ui.label }}</span>
+                        <HelpTooltip
+                          v-if="checkboxHelp(field, cell.group)"
+                          :menu="checkboxHelp(field, cell.group)?.menuLabel"
+                          :text="checkboxHelp(field, cell.group)?.description"
+                          :constraint="checkboxHelp(field, cell.group)?.constraint"
+                        />
+                        <UTooltip v-if="fieldChanged(field.path)" text="Changed">
+                          <UBadge
+                            color="warning"
+                            variant="subtle"
+                            size="xs"
+                            class="size-1.5 rounded-full p-0"
+                            aria-label="Changed"
+                          />
+                        </UTooltip>
+                      </span>
+                      <USwitch
+                        v-bind="changedControlBindings(field.path)"
+                        :model-value="Boolean(fieldValue(field))"
+                        :disabled="!isWritable(field)"
+                        :aria-label="field.ui.label"
+                        class="shrink-0"
+                        @update:model-value="updateField(field, Boolean($event))"
+                      />
+                    </div>
+                  </div>
+                </UFormField>
+              </template>
             </div>
           </section>
         </div>
