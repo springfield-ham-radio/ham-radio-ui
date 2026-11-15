@@ -11,19 +11,24 @@ describe('changed settings fields', () => {
     expect(source).toContain('highlight: true');
     expect(source).toContain('showMenuNumbers');
     expect(source).toContain('settingsFieldLabel');
-    expect(source).toContain('visibleMenuNumber(field)');
+    expect(source).toContain('visibleMenuNumber(cell.field)');
 
     const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
     expect(preferences).toContain('aria-label="Show radio menu numbers"');
     expect(preferences).toContain('setShowMenuNumbers');
 
-    const fields = source.slice(source.indexOf('v-for="field in section.fields"'));
+    expect(source).toContain('layoutSettingsFields(section.fields)');
+
+    const fields = source.slice(source.indexOf('class="settings-fields-grid"'));
 
     for (const tag of ['UInputNumber', 'USelect', 'USwitch', 'UInput']) {
-      const match = fields.match(new RegExp(`<${tag}(?![A-Za-z])[\\s\\S]*?/>`));
+      const matches = [...fields.matchAll(new RegExp(`<${tag}(?![A-Za-z])[\\s\\S]*?/>`, 'g'))];
 
-      expect(match, tag).not.toBeNull();
-      expect(match?.[0]).toContain('changedControlBindings(field.path)');
+      expect(matches.length, tag).toBeGreaterThan(0);
+
+      for (const match of matches) {
+        expect(match[0]).toMatch(/changedControlBindings\((?:cell\.)?field\.path\)/);
+      }
     }
   });
 });
