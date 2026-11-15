@@ -17,6 +17,8 @@ export interface MapPageSettings {
   log: boolean;
   stations: boolean;
   trips: boolean;
+  /** Heard APRS stations. Separate from the station-library layer. */
+  aprs: boolean;
   groupSelection: MapPageGroupSelection;
   camera?: MapPageCamera;
 }
@@ -27,6 +29,7 @@ export const DEFAULT_MAP_PAGE_SETTINGS: MapPageSettings = {
   log: true,
   stations: true,
   trips: true,
+  aprs: false,
   groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
 };
 
@@ -88,6 +91,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       log?: unknown;
       stations?: unknown;
       trips?: unknown;
+      aprs?: unknown;
       groupSelection?: unknown;
       groupIds?: unknown;
       camera?: unknown;
@@ -102,6 +106,7 @@ export function parseMapPageSettings(raw: string | null): MapPageSettings {
       log: record.log !== false,
       stations: record.stations !== false,
       trips: record.trips !== false,
+      aprs: record.aprs === true,
       groupSelection,
       ...(camera ? { camera } : {}),
     };
@@ -120,6 +125,7 @@ export function serializeMapPageSettings(settings: MapPageSettings): string {
     log: settings.log === true,
     stations: settings.stations === true,
     trips: settings.trips === true,
+    aprs: settings.aprs === true,
     groupSelection,
     ...(camera ? { camera } : {}),
   });

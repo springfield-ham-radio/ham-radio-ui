@@ -3,6 +3,9 @@ import type { ChannelGroup, ChannelGroupMembership } from '~/utils/channel-group
 import type { SavedChannel } from '~/utils/saved-channels-db';
 import { createStationAntenna, HOME_STATION_ID } from '~/utils/antenna-station';
 import type { RadioStation, StationAntenna } from '~/utils/antenna-station';
+import { decodeAprsMonitorLine } from '~/utils/aprs-decode';
+import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
+import { createAprsFoldState, foldAprsLine, type AprsStation } from '~/utils/aprs-stations';
 import { createStationLogQso, type StationLogQso } from '~/utils/station-log-db';
 
 const now = 1_700_000_000_000;
@@ -108,6 +111,19 @@ export interface MapDevFixture {
   stations: RadioStation[];
   antennas: StationAntenna[];
   qsos: StationLogQso[];
+  /** Sample heard stations for the APRS layer. Not written to the live APRS session. */
+  aprsStations: AprsStation[];
+}
+
+function fixtureAprsStations(): AprsStation[] {
+  const state = createAprsFoldState();
+  const receivedAt = '2026-11-07T18:00:00.000Z';
+
+  for (const line of APRS_MAP_EXAMPLE_TEXT.split('\n')) {
+    foldAprsLine(state, line, decodeAprsMonitorLine(line), receivedAt);
+  }
+
+  return state.stations;
 }
 
 /**
@@ -216,5 +232,6 @@ export function mapDevFixture(): MapDevFixture {
     stations,
     antennas,
     qsos,
+    aprsStations: fixtureAprsStations(),
   };
 }

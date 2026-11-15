@@ -25,7 +25,7 @@ describe('parseMapPageCamera', () => {
 });
 
 describe('parseMapPageSettings', () => {
-  it('defaults repeaters, channels, contacts, stations, and trips on, all stored groups, and no camera', () => {
+  it('defaults repeaters, channels, contacts, stations, and trips on, APRS off, all stored groups, and no camera', () => {
     expect(parseMapPageSettings(null)).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
     expect(parseMapPageSettings('{')).toEqual(DEFAULT_MAP_PAGE_SETTINGS);
@@ -38,6 +38,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: false,
       trips: false,
+      aprs: false,
       groupSelection: ['group-a', 'group-b'],
       camera: { longitude: 10, latitude: 20, zoom: 4 },
     };
@@ -59,6 +60,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -70,6 +72,7 @@ describe('parseMapPageSettings', () => {
       log: false,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: [] as string[],
     };
 
@@ -83,6 +86,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -94,6 +98,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -105,6 +110,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -116,6 +122,7 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
   });
@@ -137,7 +144,19 @@ describe('parseMapPageSettings', () => {
       log: true,
       stations: true,
       trips: true,
+      aprs: false,
       groupSelection: MAP_PAGE_ALL_STORED_GROUPS,
     });
+  });
+
+  it('defaults APRS off and round-trips an explicit on value', () => {
+    expect(DEFAULT_MAP_PAGE_SETTINGS.aprs).toBe(false);
+    expect(parseMapPageSettings(JSON.stringify({ repeaters: true })).aprs).toBe(false);
+    expect(parseMapPageSettings(JSON.stringify({ aprs: true })).aprs).toBe(true);
+    expect(parseMapPageSettings(JSON.stringify({ aprs: false })).aprs).toBe(false);
+    expect(parseMapPageSettings(JSON.stringify({ aprs: 'yes' })).aprs).toBe(false);
+
+    const enabled = { ...DEFAULT_MAP_PAGE_SETTINGS, aprs: true };
+    expect(parseMapPageSettings(serializeMapPageSettings(enabled))).toEqual(enabled);
   });
 });

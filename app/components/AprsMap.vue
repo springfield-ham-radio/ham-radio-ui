@@ -7,7 +7,14 @@ import {
   type MapLayerMouseEvent,
   type MapLibreEvent,
 } from 'maplibre-gl';
-import { aprsMapBounds, aprsMapFeatures, aprsMapPopupLines } from '~/utils/aprs-map';
+import {
+  aprsMapBounds,
+  aprsMapFeatures,
+  aprsMapPopupLines,
+  aprsStationCirclePaint,
+  aprsStationLabelLayout,
+  aprsStationLabelPaint,
+} from '~/utils/aprs-map';
 import type { AprsStation } from '~/utils/aprs-stations';
 
 const SOURCE_ID = 'aprs-stations';
@@ -74,12 +81,7 @@ function ensureLayers(instance: MapLibreMap): void {
       id: CIRCLE_ID,
       type: 'circle',
       source: SOURCE_ID,
-      paint: {
-        'circle-radius': ['case', ['==', ['get', 'selected'], 1], 8, 6],
-        'circle-color': ['case', ['==', ['get', 'selected'], 1], '#c2410c', '#0f766e'],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff',
-      },
+      paint: aprsStationCirclePaint(),
     });
   }
 
@@ -88,18 +90,8 @@ function ensureLayers(instance: MapLibreMap): void {
       id: LABEL_ID,
       type: 'symbol',
       source: SOURCE_ID,
-      layout: {
-        'text-field': ['get', 'callsign'],
-        'text-font': ['Noto Sans Regular'],
-        'text-size': 11,
-        'text-offset': [0, 1.15],
-        'text-anchor': 'top',
-      },
-      paint: {
-        'text-color': '#0f172a',
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 1.2,
-      },
+      layout: aprsStationLabelLayout(),
+      paint: aprsStationLabelPaint(),
     });
   }
 }
