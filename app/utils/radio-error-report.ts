@@ -268,7 +268,7 @@ export function radioErrorToastActions(report: RadioErrorReport): Array<{ label:
   ];
 }
 
-/** Sample nested report for `?fixture=error-report`. */
+/** Sample nested report used by error-detail previews and tests. */
 export async function sampleRadioErrorReport(): Promise<RadioErrorReport> {
   const inner = new DOMException('The object can not be cloned.', 'DataCloneError');
   const outer = new Error('Undo snapshot failed after read', { cause: inner });

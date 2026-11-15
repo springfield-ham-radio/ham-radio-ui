@@ -1,13 +1,14 @@
-import { setSerialPortReconnectHooks } from '~/utils/serial-port-reconnect';
+import { transferCanceledForPort, RADIO_CARD_TRANSFERS_KEY, type RadioTransferMap } from '~/utils/radio-transfer-progress';
+import { setSerialPortReconnectHooks, updateReconnectWaitingPorts } from '~/utils/serial-port-reconnect';
 
 export default defineNuxtPlugin(() => {
-  const waiting = useState('serial-port-reconnect-waiting', () => false);
-  const canceled = useState('radio-canceled', () => false);
+  const transfers = useState<RadioTransferMap>(RADIO_CARD_TRANSFERS_KEY, () => ({}));
+  const waitingPorts = useState<string[]>('serial-port-reconnect-waiting-ports', () => []);
 
   setSerialPortReconnectHooks({
-    shouldAbort: () => canceled.value,
-    onWaiting: (active) => {
-      waiting.value = active;
+    shouldAbort: (path) => transferCanceledForPort(transfers.value, path),
+    onWaiting: (path, active) => {
+      waitingPorts.value = updateReconnectWaitingPorts(waitingPorts.value, path, active);
     },
   });
 });

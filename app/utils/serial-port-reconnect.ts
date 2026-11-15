@@ -8,8 +8,9 @@ export const SERIAL_PORT_RECONNECT_POLL_MS = 250;
 export const SERIAL_PORT_RECONNECT_TIMEOUT_MS = 15_000;
 
 export interface SerialPortReconnectHooks {
-  shouldAbort?: () => boolean;
-  onWaiting?: (waiting: boolean) => void;
+  /** Cancel only the wait for this path. Another port's transfer keeps polling. */
+  shouldAbort?: (path: string) => boolean;
+  onWaiting?: (path: string, waiting: boolean) => void;
 }
 
 let hooks: SerialPortReconnectHooks = {};
@@ -89,11 +90,11 @@ export async function waitForSerialPortPathAvailable(
   const key = serialPortMatchKey(path);
   const deadline = Date.now() + timeoutMs;
 
-  hooks.onWaiting?.(true);
+  hooks.onWaiting?.(path, true);
 
   try {
     while (Date.now() < deadline) {
-      if (hooks.shouldAbort?.()) {
+      if (hooks.shouldAbort?.(path)) {
         throw new Error('Serial port reconnect canceled');
       }
 
@@ -110,8 +111,24 @@ export async function waitForSerialPortPathAvailable(
       new Error('The port did not reappear before the reconnect wait timed out'),
     );
   } finally {
-    hooks.onWaiting?.(false);
+    hooks.onWaiting?.(path, false);
   }
+}
+
+/** Drop or add one path. Other ports that are still waiting stay in the list. */
+export function updateReconnectWaitingPorts(ports: readonly string[], path: string, waiting: boolean): string[] {
+  const key = serialPortMatchKey(path);
+  const rest = ports.filter((candidate) => serialPortMatchKey(candidate) !== key);
+  return waiting ? [...rest, path] : rest;
+}
+
+export function portIsReconnectWaiting(ports: readonly string[], path: string | undefined): boolean {
+  if (!path) {
+    return false;
+  }
+
+  const key = serialPortMatchKey(path);
+  return ports.some((candidate) => serialPortMatchKey(candidate) === key);
 }
 
 export { isPortMissingError };

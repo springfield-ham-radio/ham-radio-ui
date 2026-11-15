@@ -23,6 +23,23 @@ import {
 } from '~/utils/channel-edit';
 import { useCatPortLock } from '~/composables/useCatPortLock';
 import {
+  applyRadioTransferProgress,
+  beginRadioTransfer,
+  cancelRadioTransfer,
+  inFlightTransferPorts,
+  openRadioTransferProgress,
+  presentRadioTransfer,
+  RADIO_CARD_TRANSFERS_KEY,
+  removeRadioTransfer,
+  setRadioTransferCanceled,
+  setRadioTransferError,
+  setRadioTransferKind,
+  setRadioTransferOpen,
+  transferBlockedMessage,
+  type RadioTransferKind,
+  type RadioTransferMap,
+} from '~/utils/radio-transfer-progress';
+import {
   isCatMemoryTransferBlocked,
   memoryTransferBlockedMessage,
 } from '~/utils/cat-memory-transfer';
@@ -100,7 +117,6 @@ import { radioErrorContextFromRadio } from '~/utils/radio-error-context';
 import {
   createRadioErrorReport,
   logRadioErrorReport,
-  sampleRadioErrorReport,
   type RadioErrorReport,
 } from '~/utils/radio-error-report';
 import {
@@ -226,21 +242,16 @@ export function useRadio() {
   const readBackupSaved = useState<{ fileName: string } | undefined>('radio-read-backup-saved', () => undefined);
   const directReadOpen = useState('radio-direct-read-open', () => false);
   const writeOpen = useState('radio-write-open', () => false);
-  const progressOpen = useState('radio-progress-open', () => false);
-  const progressKind = useState<'import' | 'write' | 'backup'>('radio-progress-kind', () => 'import');
-  const progress = useState('radio-progress', () => 0);
-  const progressError = useState<RadioErrorReport | null>('radio-progress-error', () => null);
-  const progressStartedAt = useState<number | null>('radio-progress-started-at', () => null);
-  const canceled = useState('radio-canceled', () => false);
-  const transferInFlight = useState('radio-transfer-in-flight', () => false);
-  const progressTransferCardId = useState<string | undefined>('radio-progress-transfer-card', () => undefined);
+  /** In-progress and failed reads and writes, one record per radio card. */
+  const transfers = useState<RadioTransferMap>(RADIO_CARD_TRANSFERS_KEY, () => ({}));
   const sessions = useState<Record<string, RadioCardSession>>('radio-card-sessions', () => ({}));
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
   const catalogLoaded = useState('radio-catalog-loaded', () => false);
-  const { lockedPorts: catLockedPorts, holderFor } = useCatPortLock();
+  const { lockedPorts: catLockedPorts, holderFor, setHolderPorts } = useCatPortLock();
   const { radios } = useSavedRadios();
-  const { transferCardId, focusedCardId, cards, openGuestCard, focusCard, beginTransfer, clearTransfer } = useRadioBoard();
+  const { transferCardId, focusedCardId, cards, openGuestCard, focusCard, beginTransfer, clearTransfer, setLayout } =
+    useRadioBoard();
   const addToRadioFixtureCardId = useState<string | undefined>('add-to-radio-fixture-card', () => undefined);
   const injectedCardId = getCurrentInstance() ? inject(radioCardIdKey, undefined) : undefined;
   /** Card this component belongs to. Read and Write dialogs use `transferCardId` instead. */
@@ -393,11 +404,37 @@ export function useRadio() {
   /** Serial log for the card receiving a read/write transfer (may differ from the focused card). */
   const transferSerialLog = computed(() => readSession(actingCardId())?.serialLog);
 
+  /** Card whose overlay this component draws. Dialogs outside a card follow the focused card. */
+  const progressCardId = computed(() => injectedCardId?.value ?? cardId.value);
+  const cardTransfer = computed(() => transfers.value[progressCardId.value ?? '']);
+  const progressOpen = computed({
+    get: () => Boolean(cardTransfer.value?.open),
+    set: (open: boolean) => {
+      const id = progressCardId.value;
+
+      if (!id) {
+        return;
+      }
+
+      transfers.value = setRadioTransferOpen(transfers.value, id, open);
+    },
+  });
+  const progressKind = computed(() => cardTransfer.value?.kind ?? 'import');
+  const progress = computed(() => cardTransfer.value?.progress ?? 0);
+  const progressError = computed(() => cardTransfer.value?.error ?? null);
+  const progressStartedAt = computed(() => cardTransfer.value?.startedAt ?? null);
+  const progressPort = computed(() => cardTransfer.value?.port);
+  const transferInFlight = computed(() => {
+    const id = transferCardId.value ?? cardId.value;
+    return Boolean(id && transfers.value[id]?.inFlight);
+  });
+  const transferBusyPorts = computed(() => inFlightTransferPorts(transfers.value));
+
   const progressSerialLog = computed(() =>
     readProgressSerialLog(
       sessions.value,
-      progressTransferCardId.value,
-      actingCardId(),
+      progressCardId.value,
+      progressCardId.value,
       progressError.value,
       progressKind.value,
     ),
@@ -420,59 +457,103 @@ export function useRadio() {
   }
 
   function continueWriteWithoutBackupFromDialog(): void {
-    progressError.value = null;
-    resolveBackupFailureDecision('skip');
+    const id = progressCardId.value;
+
+    if (!id) {
+      return;
+    }
+
+    transfers.value = setRadioTransferError(transfers.value, id, null);
+    resolveBackupFailureDecision(id, 'skip');
   }
 
   function dismissBackupFailureProgress(): void {
-    if (hasPendingBackupFailureDecision()) {
-      resolveBackupFailureDecision('abort');
+    const id = progressCardId.value;
+
+    if (!id) {
+      return;
+    }
+
+    if (hasPendingBackupFailureDecision(id)) {
+      resolveBackupFailureDecision(id, 'abort');
       notifyWriteCanceledForBackupFailure();
     }
 
-    progressOpen.value = false;
+    transfers.value = setRadioTransferOpen(transfers.value, id, false);
   }
 
   function onProgressDialogClosed(): void {
-    settleBackupFailureOnProgressClose(hasPendingBackupFailureDecision(), () => {
-      resolveBackupFailureDecision('abort');
+    const id = progressCardId.value;
+
+    if (!id) {
+      return;
+    }
+
+    settleBackupFailureOnProgressClose(hasPendingBackupFailureDecision(id), () => {
+      resolveBackupFailureDecision(id, 'abort');
       notifyWriteCanceledForBackupFailure();
     });
 
-    if (!transferInFlight.value) {
-      progressTransferCardId.value = undefined;
+    const current = transfers.value[id];
+
+    if (!current || current.open || current.inFlight || hasPendingBackupFailureDecision(id)) {
+      return;
     }
 
-    resetTransferInFlightIfIdle();
+    transfers.value = removeRadioTransfer(transfers.value, id);
+    syncMemoryPortHolds();
   }
 
-  function resetTransferInFlightIfIdle(): void {
-    if (!hasPendingBackupFailureDecision() && !progressOpen.value) {
-      transferInFlight.value = false;
-    }
+  function syncMemoryPortHolds(): void {
+    setHolderPorts('memory', inFlightTransferPorts(transfers.value));
   }
 
-  function beginTransferOperation(): boolean {
-    if (transferInFlight.value) {
+  function beginTransferOperation(cardId: string, port: string): boolean {
+    const claimed = beginRadioTransfer(transfers.value, { cardId, port, now: Date.now() });
+
+    if (!claimed.ok) {
+      const blocked = transferBlockedMessage(claimed.reason);
       toast.add({
-        title: 'Transfer already in progress',
-        description: 'Wait for the current read or write to finish before starting another.',
+        title: blocked.title,
+        description: blocked.description,
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
       return false;
     }
 
-    transferInFlight.value = true;
+    transfers.value = claimed.transfers;
+    syncMemoryPortHolds();
     return true;
   }
 
-  function endTransferOperation(): void {
-    transferInFlight.value = false;
+  function finishTransferOperation(cardId: string): void {
+    const current = transfers.value[cardId];
 
-    if (!progressOpen.value) {
-      progressTransferCardId.value = undefined;
+    if (!current) {
+      syncMemoryPortHolds();
+      return;
     }
+
+    if (hasPendingBackupFailureDecision(cardId) || current.open) {
+      transfers.value = {
+        ...transfers.value,
+        [cardId]: { ...current, inFlight: false },
+      };
+      syncMemoryPortHolds();
+      return;
+    }
+
+    transfers.value = removeRadioTransfer(transfers.value, cardId);
+    syncMemoryPortHolds();
+  }
+
+  function closeProgress(cardId: string): void {
+    transfers.value = setRadioTransferOpen(transfers.value, cardId, false);
+  }
+
+  function isTransferCanceled(cardId: string): boolean {
+    return Boolean(transfers.value[cardId]?.canceled);
   }
 
   function clearCardSession(id: string): void {
@@ -591,6 +672,7 @@ export function useRadio() {
     backupSavedBeforeWriteFailure: boolean,
   ): Promise<void> {
     await assignProgressError(
+      sessionId,
       {
         ...radioErrorContextFromRadio('write', 'write radio', {
           radioId,
@@ -606,6 +688,7 @@ export function useRadio() {
   }
 
   async function assignProgressError(
+    cardId: string,
     context: ReturnType<typeof radioErrorContextFromRadio>,
     cause: unknown,
     logMessage: string,
@@ -614,7 +697,7 @@ export function useRadio() {
       context,
       cause instanceof Error ? cause : new Error(String(cause)),
     );
-    progressError.value = report;
+    transfers.value = setRadioTransferError(transfers.value, cardId, report);
     logger.withError(cause).error(logMessage);
     logRadioErrorReport(logger, report, logMessage);
   }
@@ -635,38 +718,43 @@ export function useRadio() {
     });
   }
 
-  function startProgress(kind: 'import' | 'write' | 'backup'): RadioProgressIndicator {
-    canceled.value = false;
-    progress.value = 0;
-    progressError.value = null;
-    progressStartedAt.value = Date.now();
-    progressKind.value = kind;
-    progressTransferCardId.value = actingCardId();
-    progressOpen.value = true;
+  function startProgress(kind: RadioTransferKind, cardId: string, port: string): RadioProgressIndicator {
+    transfers.value = openRadioTransferProgress(transfers.value, {
+      cardId,
+      port,
+      kind,
+      now: Date.now(),
+    });
 
     return {
       get isCanceled() {
-        return canceled.value;
+        return isTransferCanceled(cardId);
       },
       set isCanceled(value: boolean) {
-        canceled.value = value;
+        transfers.value = setRadioTransferCanceled(transfers.value, cardId, value);
       },
       setValue(value: number) {
-        progress.value = value;
+        transfers.value = applyRadioTransferProgress(transfers.value, cardId, port, value);
       },
     };
   }
 
-  function isCancelledTransfer(cause: unknown): boolean {
-    return canceled.value || (cause instanceof Error && cause.name === 'CancelledException');
+  function isCancelledTransfer(cardId: string, cause: unknown): boolean {
+    return isTransferCanceled(cardId) || (cause instanceof Error && cause.name === 'CancelledException');
   }
 
   function warnIfCatBlocksMemoryTransfer(serialPortPath: string): boolean {
+    const holder = holderFor(serialPortPath);
+
+    if (holder !== 'cat' && holder !== 'aprs') {
+      return false;
+    }
+
     if (!isCatMemoryTransferBlocked(catLockedPorts.value, serialPortPath)) {
       return false;
     }
 
-    const blocked = memoryTransferBlockedMessage(holderFor(serialPortPath) ?? 'cat');
+    const blocked = memoryTransferBlockedMessage(holder);
     toast.add({
       title: blocked.title,
       description: blocked.description,
@@ -726,23 +814,23 @@ export function useRadio() {
   }
 
   async function readFromRadio(serialPortPath: string, radioId: RadioId, baudRate?: number): Promise<void> {
-    if (!beginTransferOperation()) {
+    const sessionId = actingCardId();
+
+    if (!sessionId) {
+      toast.add({
+        title: 'No radio open',
+        description: 'Add a radio on the Radio page, then read into that card.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
       return;
     }
 
     try {
-      const sessionId = actingCardId();
-
-      if (!sessionId) {
-        toast.add({
-          title: 'No radio open',
-          description: 'Add a radio on the Radio page, then read into that card.',
-          color: 'warning',
-          icon: 'i-lucide-triangle-alert',
-        });
-        return;
-      }
-
       if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
         return;
       }
@@ -767,7 +855,7 @@ export function useRadio() {
 
       await readFromRadioOnSession(sessionId, serialPortPath, radioId, config, baudRate);
     } finally {
-      endTransferOperation();
+      finishTransferOperation(sessionId);
     }
   }
 
@@ -778,7 +866,7 @@ export function useRadio() {
     config: LoadedRadioConfig,
     baudRate?: number,
   ): Promise<void> {
-    const progressIndicator = startProgress('import');
+    const progressIndicator = startProgress('import', sessionId, serialPortPath);
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
     let outcome: 'success' | 'canceled' | 'error' = 'success';
@@ -814,12 +902,13 @@ export function useRadio() {
         }
       }
     } catch (cause) {
-      if (isCancelledTransfer(cause)) {
+      if (isCancelledTransfer(sessionId, cause)) {
         outcome = 'canceled';
       } else {
         outcome = 'error';
         console.error('Failed to read radio', cause);
         await assignProgressError(
+          sessionId,
           radioErrorContextFromRadio('read', 'read radio', {
             radioId,
             cardName: boundRadio(sessionId)?.name,
@@ -839,7 +928,7 @@ export function useRadio() {
         await saveRadioImageBackup(radioId, importedImage, 'read');
       }
 
-      progressOpen.value = false;
+      closeProgress(sessionId);
       toast.add({
         title: 'Read from radio',
         description: `${radioId.name} (${importedBytes} bytes)`,
@@ -851,7 +940,7 @@ export function useRadio() {
     }
 
     if (outcome === 'canceled') {
-      progressOpen.value = false;
+      closeProgress(sessionId);
       toast.add({
         title: 'Read canceled',
         color: 'neutral',
@@ -906,24 +995,24 @@ export function useRadio() {
       return;
     }
 
-    if (!beginTransferOperation()) {
+    const sessionId = actingCardId();
+    const session = readSession(sessionId);
+
+    if (!sessionId || !session?.memory || !session.activeRadioId) {
+      toast.add({
+        title: 'Nothing to write',
+        description: 'Open a memory file or read from a radio first.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
       return;
     }
 
     try {
-      const sessionId = actingCardId();
-      const session = readSession(sessionId);
-
-      if (!sessionId || !session?.memory || !session.activeRadioId) {
-        toast.add({
-          title: 'Nothing to write',
-          description: 'Open a memory file or read from a radio first.',
-          color: 'warning',
-          icon: 'i-lucide-triangle-alert',
-        });
-        return;
-      }
-
       const radioId = session.activeRadioId;
       const config = getConfiguration(radioId);
 
@@ -985,7 +1074,7 @@ export function useRadio() {
       });
 
       if (useChainedBackupWrite) {
-        const progressIndicator = indicateWriteProgress(startProgress('backup'));
+        const progressIndicator = indicateWriteProgress(startProgress('backup', sessionId, serialPortPath));
 
         try {
           const serialLogger = await chainedPrewriteBackupAndWrite({
@@ -1014,7 +1103,7 @@ export function useRadio() {
             },
             onWritePhaseStart: () => {
               countWriteProgress = true;
-              progressKind.value = 'write';
+              transfers.value = setRadioTransferKind(transfers.value, sessionId, 'write');
             },
             onWritePhaseEnd: (bytesSent) => {
               if (bytesSent) {
@@ -1029,9 +1118,9 @@ export function useRadio() {
             };
           }
 
-          outcome = canceled.value ? 'canceled' : 'success';
+          outcome = isTransferCanceled(sessionId) ? 'canceled' : 'success';
         } catch (cause) {
-          if (isCancelledTransfer(cause)) {
+          if (isCancelledTransfer(sessionId, cause)) {
             outcome = 'canceled';
           } else {
             outcome = 'failed';
@@ -1059,16 +1148,16 @@ export function useRadio() {
 
         freshPrewriteBackupSaved = backup.freshBackupSaved;
         countWriteProgress = true;
-        const progressIndicator = indicateWriteProgress(startProgress('write'));
+        const progressIndicator = indicateWriteProgress(startProgress('write', sessionId, serialPortPath));
         const { RadioDriver } = await import('@springfield/ham-radio-driver');
         const driver = new RadioDriver(radio, logger, undefined, true);
         serialLoggedDriver = driver;
 
         try {
           await driver.writeRadio(serialPortPath, imageToWrite, progressIndicator);
-          outcome = canceled.value ? 'canceled' : 'success';
+          outcome = isTransferCanceled(sessionId) ? 'canceled' : 'success';
         } catch (cause) {
-          if (isCancelledTransfer(cause)) {
+          if (isCancelledTransfer(sessionId, cause)) {
             outcome = 'canceled';
           } else {
             outcome = 'failed';
@@ -1101,7 +1190,7 @@ export function useRadio() {
         terminal: outcome,
         writtenImage: written,
         writtenProgram: writtenSession?.program,
-        canceled: canceled.value,
+        canceled: isTransferCanceled(sessionId),
       });
 
       const backupBaselineStale = backupBaselineStaleAfterWrite({
@@ -1116,7 +1205,7 @@ export function useRadio() {
           radioBaselineProgram: baseline.program,
           backupBaselineStale: false,
         });
-        progressOpen.value = false;
+        closeProgress(sessionId);
         toast.add({
           title: 'Wrote to radio',
           description: `${radioId.name} (${writtenBytes} bytes)`,
@@ -1130,8 +1219,8 @@ export function useRadio() {
         patchSession(sessionId, { backupBaselineStale: true });
       }
 
-      if (outcome === 'canceled' || canceled.value) {
-        progressOpen.value = false;
+      if (outcome === 'canceled' || isTransferCanceled(sessionId)) {
+        closeProgress(sessionId);
         toast.add({
           title: 'Write canceled',
           color: 'neutral',
@@ -1139,7 +1228,7 @@ export function useRadio() {
         });
       }
     } finally {
-      endTransferOperation();
+      finishTransferOperation(sessionId);
     }
   }
 
@@ -1165,6 +1254,11 @@ export function useRadio() {
       return;
     }
 
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
+      return;
+    }
+
+    try {
     if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
       return;
     }
@@ -1184,13 +1278,13 @@ export function useRadio() {
 
     await sessionQueue(sessionId);
 
-    const progressIndicator = startProgress('import');
+    const progressIndicator = startProgress('import', sessionId, serialPortPath);
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
-      progressOpen.value = false;
+      closeProgress(sessionId);
 
       if (memoryData == undefined) {
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
@@ -1232,9 +1326,9 @@ export function useRadio() {
         icon: 'i-hambench-radio-read',
       });
     } catch (cause) {
-      progressOpen.value = false;
+      closeProgress(sessionId);
 
-      if (isCancelledTransfer(cause)) {
+      if (isCancelledTransfer(sessionId, cause)) {
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         toast.add({
           title: 'Read canceled',
@@ -1260,6 +1354,9 @@ export function useRadio() {
         report,
         logMessage: 'Failed to read radio for write review',
       });
+    }
+    } finally {
+      finishTransferOperation(sessionId);
     }
   }
 
@@ -1309,8 +1406,9 @@ export function useRadio() {
     }
 
     logger.error(`Failed to back up radio image before write: ${captured.message}`);
-    startProgress('backup');
+    startProgress('backup', sessionId, serialPortPath);
     await assignProgressError(
+      sessionId,
       radioErrorContextFromRadio('backup', 'save backup file', {
         radioId,
         cardName: boundRadio(sessionId)?.name,
@@ -1320,11 +1418,11 @@ export function useRadio() {
       new Error(captured.message),
       'Failed to back up radio image before write',
     );
-    const choice = await waitForBackupFailureDecision();
-    progressError.value = null;
+    const choice = await waitForBackupFailureDecision(sessionId);
+    transfers.value = setRadioTransferError(transfers.value, sessionId, null);
 
     if (choice === 'abort') {
-      progressOpen.value = false;
+      closeProgress(sessionId);
       notifyWriteCanceledForBackupFailure();
       return { ready: false, freshBackupSaved: false };
     }
@@ -1364,7 +1462,7 @@ export function useRadio() {
     config: LoadedRadioConfig,
     baudRate?: number,
   ): Promise<Uint8Array | 'skip' | 'abort'> {
-    const progressIndicator = startProgress('backup');
+    const progressIndicator = startProgress('backup', sessionId, serialPortPath);
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
 
@@ -1372,7 +1470,7 @@ export function useRadio() {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
 
       if (memoryData == undefined) {
-        progressOpen.value = false;
+        closeProgress(sessionId);
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         toast.add({
           title: 'Backup canceled',
@@ -1385,6 +1483,7 @@ export function useRadio() {
 
       if (memoryData.length === 0) {
         await assignProgressError(
+          sessionId,
           radioErrorContextFromRadio('backup', 'read radio for backup', {
             radioId,
             cardName: boundRadio(sessionId)?.name,
@@ -1395,22 +1494,22 @@ export function useRadio() {
           'Backup read returned empty image',
         );
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
-        const choice = await waitForBackupFailureDecision();
-        progressError.value = null;
+        const choice = await waitForBackupFailureDecision(sessionId);
+        transfers.value = setRadioTransferError(transfers.value, sessionId, null);
 
         if (choice === 'abort') {
-          progressOpen.value = false;
+          closeProgress(sessionId);
         }
 
         return choice === 'skip' ? 'skip' : 'abort';
       }
 
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
-      progressOpen.value = false;
+      closeProgress(sessionId);
       return memoryData.slice();
     } catch (cause) {
-      if (isCancelledTransfer(cause)) {
-        progressOpen.value = false;
+      if (isCancelledTransfer(sessionId, cause)) {
+        closeProgress(sessionId);
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
         toast.add({
           title: 'Backup canceled',
@@ -1423,6 +1522,7 @@ export function useRadio() {
 
       captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
       await assignProgressError(
+        sessionId,
         radioErrorContextFromRadio('backup', 'read radio for backup', {
           radioId,
           cardName: boundRadio(sessionId)?.name,
@@ -1432,11 +1532,11 @@ export function useRadio() {
         cause,
         'Failed to read radio for backup',
       );
-      const choice = await waitForBackupFailureDecision();
-      progressError.value = null;
+      const choice = await waitForBackupFailureDecision(sessionId);
+      transfers.value = setRadioTransferError(transfers.value, sessionId, null);
 
       if (choice === 'abort') {
-        progressOpen.value = false;
+        closeProgress(sessionId);
       }
 
       return choice === 'skip' ? 'skip' : 'abort';
@@ -1803,8 +1903,13 @@ export function useRadio() {
   }
 
   function cancelTransfer(): void {
-    canceled.value = true;
-    progressOpen.value = false;
+    const id = progressCardId.value;
+
+    if (!id) {
+      return;
+    }
+
+    transfers.value = cancelRadioTransfer(transfers.value, id);
   }
 
   function captureSerialLog(
@@ -2252,18 +2357,35 @@ export function useRadio() {
   }
 
   /**
-   * Dev-only: inject a config with readMessage and writeMessage and open Read from Radio.
+   * Dev-only: two guest cards. Handheld shows a read in progress; Mobile stays usable.
    */
   async function seedErrorReportDevFixture(): Promise<void> {
     if (!import.meta.dev) {
       return;
     }
 
-    progressError.value = await sampleRadioErrorReport();
-    progressKind.value = 'import';
-    progress.value = 0;
-    progressStartedAt.value = Date.now();
-    progressOpen.value = true;
+    const cardId = openGuestCard({
+      name: 'Handheld',
+      manufacturer: 'Baofeng',
+      model: 'baofeng-uv5r',
+      serialPort: DEV_FIXTURE_SERIAL_PORT,
+    });
+    openGuestCard({
+      name: 'Mobile',
+      manufacturer: 'Baofeng',
+      model: 'baofeng-uv5r',
+      serialPort: '/dev/cu.usbmodem-other',
+    });
+    setLayout('tile');
+    focusCard(cardId);
+    transfers.value = presentRadioTransfer(transfers.value, {
+      cardId,
+      port: DEV_FIXTURE_SERIAL_PORT,
+      kind: 'import',
+      progress: 0.64,
+      startedAt: Date.now() - 12_000,
+      error: null,
+    });
   }
 
   /**
@@ -2309,20 +2431,23 @@ export function useRadio() {
       serialPort: DEV_FIXTURE_SERIAL_PORT,
     });
     focusCard(decoyCardId);
+    setLayout('tile');
 
-    progressTransferCardId.value = transferCardId;
-    progressKind.value = 'write';
-    progress.value = 0.18;
-    progressStartedAt.value = Date.now() - 8000;
-    progressError.value = await createRadioErrorReport(
-      radioErrorContextFromRadio('write', 'write radio', {
-        radioId,
-        cardName: 'Fixture UV-5R',
-        port: DEV_FIXTURE_SERIAL_PORT,
-      }),
-      new Error("Port '/dev/cu.usbserial-A703DBTL' not found"),
-    );
-    progressOpen.value = true;
+    transfers.value = presentRadioTransfer(transfers.value, {
+      cardId: transferCardId,
+      port: DEV_FIXTURE_SERIAL_PORT,
+      kind: 'write',
+      progress: 0.18,
+      startedAt: Date.now() - 8000,
+      error: await createRadioErrorReport(
+        radioErrorContextFromRadio('write', 'write radio', {
+          radioId,
+          cardName: 'Fixture UV-5R',
+          port: DEV_FIXTURE_SERIAL_PORT,
+        }),
+        new Error("Port '/dev/cu.usbserial-A703DBTL' not found"),
+      ),
+    });
   }
 
   async function seedDialogMessageDevFixture(): Promise<void> {
@@ -2550,6 +2675,8 @@ export function useRadio() {
     progress,
     progressError,
     progressStartedAt,
+    progressPort,
+    transferBusyPorts,
     memory,
     channels,
     program,

@@ -839,8 +839,11 @@ describe('onboarding step transitions', () => {
     expect(stepper).not.toContain('refreshReadBackups');
     expect(stepper).not.toContain('z-50');
     expect(portDialog).not.toContain('z-50');
-    expect(progressDialog).toContain("overlay: 'z-50'");
+    expect(progressDialog).toContain('role="dialog"');
+    expect(progressDialog).not.toContain('<UModal');
     expect(progressDialog).toContain('RadioErrorDetails');
+    expect(readFileSync('app/components/RadioCard.vue', 'utf8')).toContain('<RadioProgressDialog');
+    expect(readFileSync('app/app.vue', 'utf8')).not.toContain('RadioProgressDialog');
     expect(readStep).toContain('label="Read my radio when I finish"');
     expect(readStep).toContain('description="The read saves a backup before any edits."');
     expect(readStep).toContain('<USelect');

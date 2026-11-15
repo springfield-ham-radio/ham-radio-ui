@@ -45,7 +45,7 @@ const cardClass = computed(() => ({
 
 <template>
   <section
-    class="flex min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border-2 bg-default shadow-sm"
+    class="relative flex min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border-2 bg-default shadow-sm"
     :class="cardClass"
     @pointerdown="emit('focus')"
   >
@@ -81,5 +81,6 @@ const cardClass = computed(() => ({
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <RadioWorkspace />
     </div>
+    <RadioProgressDialog />
   </section>
 </template>

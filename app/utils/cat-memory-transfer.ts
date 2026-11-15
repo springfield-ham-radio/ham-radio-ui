@@ -17,6 +17,13 @@ export function memoryTransferBlockedMessage(kind: SerialSessionKind = 'cat'): {
     };
   }
 
+  if (kind === 'memory') {
+    return {
+      title: 'Serial port in use',
+      description: 'Another radio is already reading or writing on this port.',
+    };
+  }
+
   return {
     title: CAT_MEMORY_TRANSFER_BLOCKED_TITLE,
     description: CAT_MEMORY_TRANSFER_BLOCKED_DESCRIPTION,
@@ -87,7 +94,8 @@ export function markCatBusySerialPorts(
       return port;
     }
 
-    const name = options?.holders?.[port.value] === 'aprs' ? 'APRS' : 'CAT';
+    const holder = options?.holders?.[port.value];
+    const name = holder === 'aprs' ? 'APRS' : holder === 'memory' ? 'Read/Write' : 'CAT';
 
     return {
       ...port,
