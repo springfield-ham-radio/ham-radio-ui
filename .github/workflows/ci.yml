@@ -59,6 +59,59 @@ jobs:
         working-directory: src-tauri
         run: cargo check --locked
 
+  # Release Tauri does not run on pull requests. This job runs the same
+  # Windows Corepack install as publish-tauri so the hosted image's Yarn
+  # shims cannot regress unnoticed. Lifecycle scripts stay off; the Ubuntu
+  # build job already runs prepare.
+  windows-js:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Install dependencies
+        shell: bash
+        env:
+          YARN_ENABLE_SCRIPTS: "false"
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            npm uninstall -g yarn || true
+            npm uninstall -g pnpm || true
+            prefix="$(cygpath -u "$(npm prefix -g | tr -d '\r')")"
+            rm -f \
+              "$prefix/yarn" "$prefix/yarn.cmd" "$prefix/yarn.ps1" \
+              "$prefix/yarnpkg" "$prefix/yarnpkg.cmd" "$prefix/yarnpkg.ps1" \
+              "$prefix/pnpm" "$prefix/pnpm.cmd" "$prefix/pnpm.ps1" \
+              "$prefix/pnpx" "$prefix/pnpx.cmd" "$prefix/pnpx.ps1"
+            npm install -g --force corepack@0.36.0
+          else
+            npm install -g corepack@0.36.0
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            shim_dir="$(cygpath -u "$RUNNER_TEMP")/corepack-bin"
+            mkdir -p "$shim_dir"
+            printf '%s\n' '#!/bin/sh' 'exec corepack yarn "$@"' > "$shim_dir/yarn"
+            printf '%s\n' '#!/bin/sh' 'exec corepack yarnpkg "$@"' > "$shim_dir/yarnpkg"
+            printf '%s\r\n' '@echo off' 'corepack yarn %*' > "$shim_dir/yarn.cmd"
+            printf '%s\r\n' '@echo off' 'corepack yarnpkg %*' > "$shim_dir/yarnpkg.cmd"
+            printf '%s\n' 'corepack yarn @args' > "$shim_dir/yarn.ps1"
+            printf '%s\n' 'corepack yarnpkg @args' > "$shim_dir/yarnpkg.ps1"
+            chmod +x "$shim_dir/yarn" "$shim_dir/yarnpkg"
+            export PATH="$shim_dir:$PATH"
+            cygpath -w "$shim_dir" >> "$GITHUB_PATH"
+          else
+            corepack enable
+          fi
+          hash -r
+          corepack_version="$(corepack --version | tr -d '\r' | tail -n 1)"
+          yarn_version="$(yarn --version | tr -d '\r' | tail -n 1)"
+          echo "corepack ${corepack_version} ($(command -v corepack))"
+          echo "yarn ${yarn_version} ($(command -v yarn))"
+          test "$corepack_version" = "0.36.0"
+          test "$yarn_version" = "4.18.0"
+          yarn install --immutable
+
   release:
     needs: [build, rust-host]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
