@@ -145,6 +145,8 @@ export function createMorsePlayer(factory: MorseAudioFactory): MorsePlayer {
     cancelFinish(false);
     stopTones();
 
+    // Durations are already in the events. A speed change has to build a
+    // new schedule; this function does not read options.timing again.
     const volume = Math.min(1, Math.max(0, options.volume));
     const start = context.currentTime + MORSE_TONE_LEAD_SECONDS;
     ended = options.onEnded;

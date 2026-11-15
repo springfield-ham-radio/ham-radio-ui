@@ -549,6 +549,53 @@ export function scheduleMorseText(text: string, timing: MorseTiming): MorseTextS
 }
 
 /**
+ * Same schedule as {@link scheduleMorseText}, starting at the character
+ * whose source index is at least `fromIndex`. Times are shifted so that
+ * character starts at zero. Used when speed, tone, or volume changes
+ * while pasted text is already playing.
+ */
+export function scheduleMorseTextFromIndex(
+  text: string,
+  timing: MorseTiming,
+  fromIndex: number,
+): MorseTextSchedule {
+  const full = scheduleMorseText(text, timing);
+  const start = full.marks.find((mark) => mark.index >= fromIndex);
+
+  if (!start) {
+    return {
+      events: [],
+      durationSeconds: 0,
+      marks: [],
+      skipped: full.skipped,
+    };
+  }
+
+  const offset = start.startSeconds;
+  const events = full.events
+    .filter((event) => event.startSeconds >= offset - 1e-9)
+    .map((event) => ({
+      ...event,
+      startSeconds: event.startSeconds - offset,
+    }));
+  const marks = full.marks
+    .filter((mark) => mark.index >= start.index)
+    .map((mark) => ({
+      ...mark,
+      startSeconds: mark.startSeconds - offset,
+      endSeconds: mark.endSeconds - offset,
+    }));
+  const last = events[events.length - 1];
+
+  return {
+    events,
+    durationSeconds: last ? last.startSeconds + last.durationSeconds : 0,
+    marks,
+    skipped: full.skipped,
+  };
+}
+
+/**
  * Timing that remains when playback is cancelled at `atSeconds`.
  *
  * Tones that have not started are dropped. A tone that is still sounding

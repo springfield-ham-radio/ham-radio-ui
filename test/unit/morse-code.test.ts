@@ -14,6 +14,7 @@ import {
   practiceAccuracy,
   revealPractice,
   scheduleMorseText,
+  scheduleMorseTextFromIndex,
   schedulePattern,
 } from '../../app/utils/morse-code.ts';
 
@@ -222,6 +223,42 @@ describe('Morse text timing', () => {
     expect(kept.marks).toHaveLength(1);
     expect(kept.events).toHaveLength(paragraph.events.length - 4);
     expect(kept.durationSeconds).toBeLessThan(duringGap);
+  });
+
+  it('changes pasted-text timing when the overall and character speeds change', () => {
+    const text = 'AB CD';
+    const slow = scheduleMorseText(text, morseTiming(5, 18));
+    const quickCharacters = scheduleMorseText(text, morseTiming(5, 30));
+    const quickerOverall = scheduleMorseText(text, morseTiming(15, 30));
+
+    function wordGap(schedule: ReturnType<typeof scheduleMorseText>): number {
+      const before = schedule.marks[1];
+      const after = schedule.marks[2];
+
+      if (!before || !after) {
+        throw new Error('expected a word gap');
+      }
+
+      return after.startSeconds - before.endSeconds;
+    }
+
+    expect(slow.events[0]?.durationSeconds).toBeCloseTo(1.2 / 18, 10);
+    expect(quickCharacters.events[0]?.durationSeconds).toBeCloseTo(1.2 / 30, 10);
+    expect(quickCharacters.durationSeconds).toBeLessThan(slow.durationSeconds);
+    expect(wordGap(slow)).toBeCloseTo(morseTiming(5, 18).wordSeconds, 8);
+    expect(wordGap(quickCharacters)).toBeCloseTo(morseTiming(5, 30).wordSeconds, 8);
+    expect(wordGap(quickerOverall)).toBeCloseTo(morseTiming(15, 30).wordSeconds, 8);
+    expect(wordGap(quickerOverall)).toBeLessThan(wordGap(quickCharacters));
+    expect(quickerOverall.events[0]?.durationSeconds).toBeCloseTo(1.2 / 30, 10);
+
+    const resumed = scheduleMorseTextFromIndex(text, morseTiming(15, 30), quickerOverall.marks[2]?.index ?? 0);
+    const resumedAtSlow = scheduleMorseTextFromIndex(text, morseTiming(5, 18), slow.marks[2]?.index ?? 0);
+
+    expect(resumed.marks[0]?.index).toBe(quickerOverall.marks[2]?.index);
+    expect(resumed.events[0]?.durationSeconds).toBeCloseTo(3 * (1.2 / 30), 10);
+    expect(resumedAtSlow.events[0]?.durationSeconds).toBeCloseTo(3 * (1.2 / 18), 10);
+    expect(resumed.durationSeconds).toBeLessThan(quickerOverall.durationSeconds);
+    expect(resumed.durationSeconds).toBeLessThan(scheduleMorseTextFromIndex(text, morseTiming(5, 18), slow.marks[2]?.index ?? 0).durationSeconds);
   });
 });
 

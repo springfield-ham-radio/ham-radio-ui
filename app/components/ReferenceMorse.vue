@@ -12,7 +12,7 @@ import {
   patternText,
   practiceAccuracy,
   revealPractice,
-  scheduleMorseText,
+  scheduleMorseTextFromIndex,
   type MorseGroup,
   type MorseTextSchedule,
   type PracticeState,
@@ -49,7 +49,10 @@ const referenceQuery = ref('');
 const activePaste = ref<{ index: number; length: number } | null>(null);
 const pastePreview = ref<HTMLElement | null>(null);
 const activeMarkElement = ref<HTMLElement | null>(null);
+const pastePlaying = ref(false);
+const pasteOriginIndex = ref(0);
 const pasteTimers: ReturnType<typeof setTimeout>[] = [];
+let pasteToken = 0;
 
 const player = createMorsePlayer(browserMorseAudioFactory);
 const referenceRows = computed(() => filterMorseCharacters(referenceQuery.value));
@@ -114,10 +117,17 @@ const pasteAfter = computed(() => {
   return pasteText.value.slice(mark.index + mark.length);
 });
 
-watch(wpm, (overall) => {
-  if (characterWpm.value < overall) {
-    characterWpm.value = overall;
+watch([wpm, characterWpm, toneHz, volume], () => {
+  if (characterWpm.value < wpm.value) {
+    characterWpm.value = wpm.value;
+    return;
   }
+
+  if (!pastePlaying.value) {
+    return;
+  }
+
+  void playPasteFrom(pasteOriginIndex.value);
 });
 
 function clearPasteHighlight(): void {
@@ -153,14 +163,30 @@ function armPasteHighlight(schedule: MorseTextSchedule): void {
 
   for (const mark of schedule.marks) {
     pasteTimers.push(setTimeout(() => {
+      pasteOriginIndex.value = mark.index;
       activePaste.value = { index: mark.index, length: mark.length };
       void nextTick(scrollPasteMark);
     }, mark.startSeconds * 1000 + leadMs));
   }
 }
 
-function stopPlayback(): void {
+function cancelPasteSession(): void {
+  pastePlaying.value = false;
+  pasteToken += 1;
   clearPasteHighlight();
+}
+
+function toneOptions(onEnded?: () => void) {
+  return {
+    timing: timing.value,
+    frequencyHz: Number(toneHz.value) || 600,
+    volume: Number(volume.value),
+    onEnded,
+  };
+}
+
+function stopPlayback(): void {
+  cancelPasteSession();
   player.stop();
   playing.value = false;
 }
@@ -179,17 +205,12 @@ async function playPattern(pattern: string): Promise<void> {
     return;
   }
 
-  clearPasteHighlight();
+  cancelPasteSession();
   audioProblem.value = '';
   playing.value = true;
-  const result = await player.playPattern(pattern, {
-    timing: timing.value,
-    frequencyHz: Number(toneHz.value) || 600,
-    volume: Number(volume.value),
-    onEnded: () => {
-      playing.value = false;
-    },
-  });
+  const result = await player.playPattern(pattern, toneOptions(() => {
+    playing.value = false;
+  }));
 
   if (!result.ok) {
     playing.value = false;
@@ -197,36 +218,53 @@ async function playPattern(pattern: string): Promise<void> {
   }
 }
 
-async function onPlayText(): Promise<void> {
+async function playPasteFrom(fromIndex: number): Promise<void> {
   if (muted.value) {
     audioProblem.value = 'Muted. Turn mute off to hear the tone.';
     return;
   }
 
-  const schedule = scheduleMorseText(pasteText.value, timing.value);
+  const token = pasteToken + 1;
+  pasteToken = token;
+  pastePlaying.value = true;
+  pasteOriginIndex.value = fromIndex;
+  const schedule = scheduleMorseTextFromIndex(pasteText.value, timing.value, fromIndex);
 
   if (schedule.events.length === 0) {
+    if (token !== pasteToken) {
+      return;
+    }
+
     stopPlayback();
-    audioProblem.value = pasteText.value.trim()
-      ? 'No Morse characters in that text. Unsupported characters are skipped.'
-      : 'Paste text to play.';
+
+    if (fromIndex === 0) {
+      audioProblem.value = pasteText.value.trim()
+        ? 'No Morse characters in that text. Unsupported characters are skipped.'
+        : 'Paste text to play.';
+    }
+
     return;
   }
 
   clearPasteHighlight();
   audioProblem.value = '';
   playing.value = true;
-  const result = await player.playEvents(schedule.events, {
-    timing: timing.value,
-    frequencyHz: Number(toneHz.value) || 600,
-    volume: Number(volume.value),
-    onEnded: () => {
-      playing.value = false;
-      clearPasteHighlight();
-    },
-  });
+  const result = await player.playEvents(schedule.events, toneOptions(() => {
+    if (token !== pasteToken) {
+      return;
+    }
+
+    pastePlaying.value = false;
+    playing.value = false;
+    clearPasteHighlight();
+  }));
+
+  if (token !== pasteToken) {
+    return;
+  }
 
   if (!result.ok || !playing.value) {
+    pastePlaying.value = false;
     playing.value = false;
     clearPasteHighlight();
     reportAudioFailure(result.reason);
@@ -236,8 +274,12 @@ async function onPlayText(): Promise<void> {
   armPasteHighlight(schedule);
 }
 
+function onPlayText(): void {
+  void playPasteFrom(0);
+}
+
 function onPasteEdit(): void {
-  if (activePaste.value || pasteTimers.length > 0) {
+  if (pastePlaying.value || activePaste.value || pasteTimers.length > 0) {
     stopPlayback();
   }
 }
@@ -303,7 +345,7 @@ function playReference(id: string): void {
 }
 
 onUnmounted(() => {
-  clearPasteHighlight();
+  cancelPasteSession();
   void player.close();
 });
 </script>
@@ -453,6 +495,7 @@ onUnmounted(() => {
       <h3 id="morse-paste" class="text-sm font-semibold text-highlighted">Play text</h3>
       <p class="mt-1 text-xs text-muted">
         Paste text and play it with the speed, character speed, tone, and volume above.
+        Changing one of those while text is playing restarts at the current character.
         A space or a single newline is a word gap. A blank line is {{ MORSE_PARAGRAPH_WORD_GAPS }} word gaps.
         Characters with no Morse code are skipped.
       </p>

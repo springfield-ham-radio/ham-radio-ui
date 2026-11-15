@@ -31,7 +31,7 @@ The chart stops at the allocations in § 97.301. The old 3.3–3.5 GHz amateur s
 
 Practice is listening. Pick character sets, an overall speed in WPM, and a character speed. Start plays one character. Replay plays it again. Check scores the typed answer. Reveal shows it and, if you had not checked, counts a miss. Reset clears the session.
 
-Play text takes pasted text and sends it with the same speed, character speed, tone, and volume. Play starts the tone. Stop cancels it immediately and silences the audio. The character that is sounding is marked while it plays.
+Play text takes pasted text and sends it with the same speed, character speed, tone, and volume as practice. Play reads those controls at that moment and queues the tones. Moving overall speed, character speed, tone, or volume while the text is still playing drops the queued tones and starts again at the character that is sounding, using the new settings. Stop cancels playback immediately and silences the audio. The character that is sounding is marked while it plays.
 
 Element timing follows ITU-R M.1677-1: dot : dash is 1 : 3, and the gaps inside a character, between characters, and between words are 1 : 3 : 7. PARIS is 50 of those units. A dot is 1.2 / character-speed seconds.
 

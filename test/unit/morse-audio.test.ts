@@ -132,6 +132,32 @@ describe('Morse audio player', () => {
     }
   });
 
+  it('plays a faster pasted schedule with shorter tone spacing', async () => {
+    const context = new FakeContext();
+    const player = createMorsePlayer(() => context);
+    const slow = scheduleMorseText('E E', morseTiming(5, 18));
+    const fast = scheduleMorseText('E E', morseTiming(20, 40));
+    const slowGap = (slow.marks[1]?.startSeconds ?? 0) - (slow.marks[0]?.startSeconds ?? 0);
+    const fastGap = (fast.marks[1]?.startSeconds ?? 0) - (fast.marks[0]?.startSeconds ?? 0);
+
+    expect(fast.events[0]?.durationSeconds).toBeCloseTo(1.2 / 40, 10);
+    expect(slow.events[0]?.durationSeconds).toBeCloseTo(1.2 / 18, 10);
+    expect(fastGap).toBeLessThan(slowGap);
+
+    await player.playEvents(fast.events, {
+      timing: morseTiming(20, 40),
+      frequencyHz: 700,
+      volume: 0.4,
+    });
+
+    const first = context.oscillators[0];
+    const second = context.oscillators[1];
+
+    expect((first?.stopped[0] ?? 0) - (first?.started[0] ?? 0)).toBeCloseTo(fast.events[0]?.durationSeconds ?? 0, 8);
+    expect((second?.started[0] ?? 0) - (first?.started[0] ?? 0)).toBeCloseTo(fastGap, 8);
+    expect(first?.frequency.value).toBe(700);
+  });
+
   it('stops scheduled tones and closes the context', async () => {
     const context = new FakeContext();
     const player = createMorsePlayer(() => context);
