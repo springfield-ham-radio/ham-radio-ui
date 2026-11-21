@@ -1,16 +1,10 @@
 <script setup lang="ts">
-import type { RadioMemoryMap, RadioSettings, RadioSettingValue } from '@springfield/ham-radio-api';
+import type { RadioMemoryMap, RadioSettings } from '@springfield/ham-radio-api';
 import { type RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { resolveModuleIcon } from '~/utils/module-icons';
 import { collectMemoryMapUiGroups, fieldSubgroup } from '~/utils/settings-groups';
-import { fieldHasStringChoices, settingsStringChoices, stringChoiceSelectItems } from '~/utils/settings-field-choices';
-import { settingsFieldHelp, settingsFieldLabel, settingsFieldMenuNumber } from '~/utils/settings-field-help';
-import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
-import {
-  layoutSettingsFields,
-  settingsSwitchCheckboxHelp,
-  type SettingsSwitchGroup,
-} from '~/utils/settings-switch-groups';
+import { settingsFieldHelp } from '~/utils/settings-field-help';
+import { layoutSettingsSection } from '~/utils/settings-layout';
 
 const props = withDefaults(
   defineProps<{
@@ -28,9 +22,6 @@ const emit = defineEmits<{
   'update:settings': [settings: RadioSettings];
 }>();
 
-const EMPTY_SELECT_VALUE = '__empty__';
-
-const { settingsFieldsGridStyle, showMenuNumbers } = useAppearanceSettings();
 const contentPane = useTemplateRef<HTMLElement>('contentPane');
 
 const groupEntries = computed(() => collectMemoryMapUiGroups(props.memoryMap));
@@ -109,25 +100,6 @@ function groupHasChanges(entry: { fields: { path: string }[] }): boolean {
   return entry.fields.some((field) => changedPathSet.value.has(field.path));
 }
 
-function fieldChanged(path: string): boolean {
-  return changedPathSet.value.has(path);
-}
-
-/**
- * Dirty marker painted on the control itself.
- *
- * `highlight` plus `color="warning"` is Nuxt UI's inset ring (`rounded-md` on
- * inputs and selects, `rounded-full` on a switch), so the indicator shares
- * the field's radius instead of a square border beside it.
- */
-function changedControlBindings(path: string): { color: 'warning'; highlight: true } | undefined {
-  if (!fieldChanged(path)) {
-    return undefined;
-  }
-
-  return { color: 'warning', highlight: true };
-}
-
 const groupSelectItems = computed(() => {
   return groupEntries.value.map((entry) => ({
     label: groupHasChanges(entry) ? `${entry.label} · Changed` : entry.label,
@@ -139,151 +111,8 @@ function groupIcon(entry: { icon?: string }): string {
   return resolveModuleIcon(entry.icon);
 }
 
-function fieldValue(field: RadioMemoryMapUiField): RadioSettingValue | undefined {
-  return getSettingAtPath(props.settings, field.path);
-}
-
-function updateField(field: RadioMemoryMapUiField, value: RadioSettingValue): void {
-  if (Object.is(fieldValue(field), value)) {
-    return;
-  }
-
-  emit('update:settings', setSettingAtPath(props.settings, field.path, value));
-}
-
-function selectValue(field: RadioMemoryMapUiField): string {
-  const value = fieldValue(field);
-
-  if (value === undefined || value === null || value === '') {
-    return EMPTY_SELECT_VALUE;
-  }
-
-  return String(value);
-}
-
-function selectItems(field: RadioMemoryMapUiField): { label: string; value: string }[] {
-  const choices = settingsStringChoices(field.value);
-
-  if (choices) {
-    return stringChoiceSelectItems(choices, fieldValue(field), EMPTY_SELECT_VALUE);
-  }
-
-  return enumSelectItems(field);
-}
-
-function showsSelect(field: RadioMemoryMapUiField): boolean {
-  return field.ui.widget === 'select' || fieldHasStringChoices(field);
-}
-
-function enumSelectItems(field: RadioMemoryMapUiField): { label: string; value: string }[] {
-  if (field.value?.kind !== 'enum') {
-    return [];
-  }
-
-  const items: { label: string; value: string }[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of field.value.values) {
-    const value = entry === '' ? EMPTY_SELECT_VALUE : entry;
-
-    if (seen.has(value)) {
-      continue;
-    }
-
-    seen.add(value);
-    items.push({
-      label: entry === '' ? 'None' : entry,
-      value,
-    });
-  }
-
-  return items;
-}
-
-function updateSelect(field: RadioMemoryMapUiField, value: unknown): void {
-  const next = value === EMPTY_SELECT_VALUE || value === undefined || value === null ? '' : String(value);
-  updateField(field, next);
-}
-
-function numberValue(field: RadioMemoryMapUiField): number {
-  const value = fieldValue(field);
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function updateNumber(field: RadioMemoryMapUiField, value: number | null | undefined): void {
-  const next = typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  updateField(field, next);
-}
-
-function textValue(field: RadioMemoryMapUiField): string {
-  const value = fieldValue(field);
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  return '';
-}
-
-function isWritable(field: RadioMemoryMapUiField): boolean {
-  return field.ui.writable !== false;
-}
-
 function selectGroup(group: string): void {
   selectedGroup.value = group;
-}
-
-function fieldLabel(field: RadioMemoryMapUiField): string {
-  return settingsFieldLabel(field, showMenuNumbers.value);
-}
-
-/** Menu index drawn as a muted prefix. Hidden when the preference is off or the field has no menu. */
-function visibleMenuNumber(field: RadioMemoryMapUiField): number | undefined {
-  if (!showMenuNumbers.value) {
-    return undefined;
-  }
-
-  return settingsFieldMenuNumber(field);
-}
-
-function fieldFormUi(field: RadioMemoryMapUiField) {
-  const isSwitch = field.ui.widget === 'switch';
-  const hasHelp = helpByPath.value.has(field.path);
-
-  if (!isSwitch && !hasHelp) {
-    return undefined;
-  }
-
-  return {
-    ...(isSwitch
-      ? {
-          root: 'flex items-center justify-between gap-3',
-          wrapper: 'min-w-0 flex-1',
-          container: 'mt-0 shrink-0',
-        }
-      : {}),
-    ...(hasHelp ? { labelWrapper: 'justify-start' } : {}),
-  };
-}
-
-function switchGroupFormUi(group: SettingsSwitchGroup) {
-  if (!group.help) {
-    return undefined;
-  }
-
-  return { labelWrapper: 'justify-start' };
-}
-
-function groupChanged(group: SettingsSwitchGroup): boolean {
-  return group.fields.some((field) => fieldChanged(field.path));
-}
-
-function checkboxHelp(field: RadioMemoryMapUiField, group: SettingsSwitchGroup) {
-  return settingsSwitchCheckboxHelp(field, group);
 }
 </script>
 
@@ -359,144 +188,13 @@ function checkboxHelp(field: RadioMemoryMapUiField, group: SettingsSwitchGroup) 
               <HelpTooltip v-if="section.description" :text="section.description" />
             </header>
 
-            <div class="settings-fields-grid" :style="settingsFieldsGridStyle">
-              <template v-for="cell in layoutSettingsFields(section.fields)" :key="cell.key">
-                <UFormField
-                  v-if="cell.kind === 'field'"
-                  :label="fieldLabel(cell.field)"
-                  :ui="fieldFormUi(cell.field)"
-                >
-                  <template v-if="fieldChanged(cell.field.path) || visibleMenuNumber(cell.field) !== undefined" #label>
-                    <span class="inline-flex min-w-0 items-center gap-1.5">
-                      <span
-                        v-if="visibleMenuNumber(cell.field) !== undefined"
-                        class="shrink-0 font-mono text-xs tabular-nums text-muted"
-                      >{{ visibleMenuNumber(cell.field) }}</span>
-                      <span>{{ cell.field.ui.label }}</span>
-                      <UTooltip v-if="fieldChanged(cell.field.path)" text="Changed">
-                        <UBadge
-                          color="warning"
-                          variant="subtle"
-                          size="xs"
-                          class="size-1.5 rounded-full p-0"
-                          aria-label="Changed"
-                        />
-                      </UTooltip>
-                    </span>
-                  </template>
-                  <template v-if="helpByPath.get(cell.field.path)" #hint>
-                    <HelpTooltip
-                      :menu="helpByPath.get(cell.field.path)?.menuLabel"
-                      :text="helpByPath.get(cell.field.path)?.description"
-                      :constraint="helpByPath.get(cell.field.path)?.constraint"
-                    />
-                  </template>
-
-                  <UInputNumber
-                    v-if="cell.field.ui.widget === 'integer' || cell.field.ui.widget === 'number'"
-                    v-bind="changedControlBindings(cell.field.path)"
-                    :model-value="numberValue(cell.field)"
-                    :min="cell.field.value?.kind === 'integer' ? cell.field.value.min : undefined"
-                    :max="cell.field.value?.kind === 'integer' ? cell.field.value.max : undefined"
-                    :disabled="!isWritable(cell.field)"
-                    class="w-full"
-                    @update:model-value="updateNumber(cell.field, $event)"
-                  />
-
-                  <USelect
-                    v-else-if="showsSelect(cell.field)"
-                    v-bind="changedControlBindings(cell.field.path)"
-                    :model-value="selectValue(cell.field)"
-                    :items="selectItems(cell.field)"
-                    :disabled="!isWritable(cell.field)"
-                    class="w-full"
-                    @update:model-value="updateSelect(cell.field, $event)"
-                  />
-
-                  <USwitch
-                    v-else-if="cell.field.ui.widget === 'switch'"
-                    v-bind="changedControlBindings(cell.field.path)"
-                    :model-value="Boolean(fieldValue(cell.field))"
-                    :disabled="!isWritable(cell.field)"
-                    @update:model-value="updateField(cell.field, Boolean($event))"
-                  />
-
-                  <UInput
-                    v-else
-                    v-bind="changedControlBindings(cell.field.path)"
-                    :model-value="textValue(cell.field)"
-                    :disabled="!isWritable(cell.field)"
-                    class="w-full"
-                    @update:model-value="updateField(cell.field, String($event ?? ''))"
-                  />
-                </UFormField>
-
-                <UFormField
-                  v-else
-                  class="min-w-0"
-                  :label="cell.group.label"
-                  :ui="switchGroupFormUi(cell.group)"
-                >
-                  <template #label>
-                    <span class="inline-flex min-w-0 items-center gap-1.5">
-                      <span class="shrink-0 font-mono text-xs tabular-nums text-muted">{{ cell.group.menuNumber }}</span>
-                      <span v-if="cell.group.code">{{ cell.group.code }}</span>
-                      <UTooltip v-if="groupChanged(cell.group)" text="Changed">
-                        <UBadge
-                          color="warning"
-                          variant="subtle"
-                          size="xs"
-                          class="size-1.5 rounded-full p-0"
-                          aria-label="Changed"
-                        />
-                      </UTooltip>
-                    </span>
-                  </template>
-                  <template v-if="cell.group.help" #hint>
-                    <HelpTooltip
-                      :menu="cell.group.help.menuLabel"
-                      :text="cell.group.help.description"
-                      :constraint="cell.group.help.constraint"
-                    />
-                  </template>
-
-                  <div class="flex flex-col gap-2">
-                    <div
-                      v-for="field in cell.group.fields"
-                      :key="field.path"
-                      class="flex items-center justify-between gap-3"
-                    >
-                      <span class="inline-flex min-w-0 items-center gap-1.5 text-sm text-default">
-                        <span>{{ field.ui.label }}</span>
-                        <HelpTooltip
-                          v-if="checkboxHelp(field, cell.group)"
-                          :menu="checkboxHelp(field, cell.group)?.menuLabel"
-                          :text="checkboxHelp(field, cell.group)?.description"
-                          :constraint="checkboxHelp(field, cell.group)?.constraint"
-                        />
-                        <UTooltip v-if="fieldChanged(field.path)" text="Changed">
-                          <UBadge
-                            color="warning"
-                            variant="subtle"
-                            size="xs"
-                            class="size-1.5 rounded-full p-0"
-                            aria-label="Changed"
-                          />
-                        </UTooltip>
-                      </span>
-                      <USwitch
-                        v-bind="changedControlBindings(field.path)"
-                        :model-value="Boolean(fieldValue(field))"
-                        :disabled="!isWritable(field)"
-                        :aria-label="field.ui.label"
-                        class="shrink-0"
-                        @update:model-value="updateField(field, Boolean($event))"
-                      />
-                    </div>
-                  </div>
-                </UFormField>
-              </template>
-            </div>
+            <SettingsFieldGrid
+              :cells="layoutSettingsSection(section.fields)"
+              :settings="settings"
+              :changed-paths="changedPaths"
+              :help-by-path="helpByPath"
+              @update:settings="emit('update:settings', $event)"
+            />
           </section>
         </div>
       </div>

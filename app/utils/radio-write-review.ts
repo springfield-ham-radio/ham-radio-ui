@@ -20,7 +20,9 @@ import {
   type ChannelValidationLicense,
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
+import { formatCoordinate, fieldComposite, type SettingsCoordinateComposite } from '~/utils/settings-coordinate';
 import { collectMemoryMapUiGroups, fieldSubgroup, type SettingsUiGroup } from '~/utils/settings-groups';
+import { fieldRecord, recordFieldLabel } from '~/utils/settings-record';
 import { getSettingAtPath } from '~/utils/settings-path';
 
 /** Shown through the frequency, offset, and tone rows, or filled in by the codec. */
@@ -302,24 +304,61 @@ function fieldSectionName(field: RadioMemoryMapUiField): string | undefined {
  * A subgroup heading on that page is prefixed onto the setting label.
  * Legacy groups keep the field label alone.
  */
-function reviewSettingLabel(group: SettingsUiGroup, field: RadioMemoryMapUiField): string {
+function reviewRecordLabel(field: RadioMemoryMapUiField, label: string): string {
+  const record = fieldRecord(field);
+  return record ? `${record.label} · ${label}` : label;
+}
+
+function reviewSubgroupPrefix(group: SettingsUiGroup, field: RadioMemoryMapUiField, label: string): string {
   if (!fieldSectionName(field)) {
-    return field.ui.label;
+    return label;
   }
 
   const subgroupId = fieldSubgroup(field);
 
   if (!subgroupId) {
-    return field.ui.label;
+    return label;
   }
 
   const subgroup = group.groups.find((entry) => entry.id === subgroupId);
 
   if (!subgroup) {
-    return field.ui.label;
+    return label;
   }
 
-  return `${subgroup.label} · ${field.ui.label}`;
+  return `${subgroup.label} · ${label}`;
+}
+
+function reviewSettingLabel(group: SettingsUiGroup, field: RadioMemoryMapUiField): string {
+  return reviewSubgroupPrefix(group, field, reviewRecordLabel(field, recordFieldLabel(field)));
+}
+
+function reviewCompositeLabel(group: SettingsUiGroup, field: RadioMemoryMapUiField, composite: SettingsCoordinateComposite): string {
+  return reviewSubgroupPrefix(group, field, reviewRecordLabel(field, composite.label));
+}
+
+function coordinatePartValue(
+  settings: RadioSettings,
+  members: readonly RadioMemoryMapUiField[],
+  part: SettingsCoordinateComposite['part'],
+): number {
+  const field = members.find((entry) => fieldComposite(entry)?.part === part);
+  const value = field ? getSettingAtPath(settings, field.path) : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function formatCompositeSettings(
+  composite: SettingsCoordinateComposite,
+  members: readonly RadioMemoryMapUiField[],
+  settings: RadioSettings,
+): string {
+  return formatCoordinate(
+    coordinatePartValue(settings, members, 'degrees'),
+    coordinatePartValue(settings, members, 'minutes'),
+    coordinatePartValue(settings, members, 'fraction'),
+    composite.fractionScale,
+    composite.axis,
+  );
 }
 
 function diffSettings(
@@ -334,9 +373,54 @@ function diffSettings(
   const groups: WriteReviewSettingsGroup[] = [];
 
   for (const group of collectMemoryMapUiGroups(memoryMap)) {
+    const compositeMembers = new Map<string, RadioMemoryMapUiField[]>();
+
+    for (const field of group.fields) {
+      const composite = fieldComposite(field);
+
+      if (!composite) {
+        continue;
+      }
+
+      const members = compositeMembers.get(composite.id);
+
+      if (members) {
+        members.push(field);
+      } else {
+        compositeMembers.set(composite.id, [field]);
+      }
+    }
+
+    const emittedComposites = new Set<string>();
     const fields: WriteReviewFieldChange[] = [];
 
     for (const field of group.fields) {
+      const composite = fieldComposite(field);
+
+      if (composite) {
+        if (emittedComposites.has(composite.id)) {
+          continue;
+        }
+
+        emittedComposites.add(composite.id);
+        const members = compositeMembers.get(composite.id) ?? [];
+        const changed = members.some(
+          (member) => !settingValuesEqual(getSettingAtPath(before, member.path), getSettingAtPath(after, member.path)),
+        );
+
+        if (!changed) {
+          continue;
+        }
+
+        fields.push({
+          id: `composite:${composite.id}`,
+          label: reviewCompositeLabel(group, members[0] ?? field, composite),
+          before: formatCompositeSettings(composite, members, before),
+          after: formatCompositeSettings(composite, members, after),
+        });
+        continue;
+      }
+
       const left = getSettingAtPath(before, field.path);
       const right = getSettingAtPath(after, field.path);
 

@@ -437,4 +437,70 @@ describe('diffRadioPrograms', () => {
     expect(diff.settingsGroups).toEqual([]);
     expect(summarizeWriteReview(diff)).toBe('No channel or setting changes.');
   });
+
+  it('should label a record field and collapse a coordinate into one review line', () => {
+    const objectRecord = { id: 'aprs-object', index: 1, label: 'Object 1' };
+    const latitude = (part: 'degrees' | 'minutes' | 'fraction', id: string) => ({
+      id,
+      type: 'u8' as const,
+      value: { kind: 'integer' as const, min: 0, max: 10000 },
+      ui: {
+        group: 'aprs',
+        subgroup: 'beacon-tx',
+        label: `Latitude ${part}`,
+        widget: 'integer' as const,
+        section: 'APRS',
+        sectionOrder: 5,
+        menu: { number: 516, code: 'Object' },
+        record: objectRecord,
+        composite: { id: 'obj1-lat', kind: 'coordinate', axis: 'lat', part, fractionScale: 10000, label: 'Latitude' },
+      },
+    });
+    const map = {
+      version: '1.0.0',
+      groups: [{ id: 'aprs', label: 'APRS', groups: [{ id: 'beacon-tx', label: 'Beacon TX Control' }] }],
+      structs: [
+        {
+          id: 'aprsObject',
+          seek: 0,
+          fields: [
+            {
+              id: 'name',
+              type: 'u8',
+              value: { kind: 'ascii', length: 9 },
+              ui: {
+                group: 'aprs',
+                subgroup: 'beacon-tx',
+                label: 'Name 1',
+                widget: 'text',
+                section: 'APRS',
+                sectionOrder: 5,
+                menu: { number: 516, code: 'Object' },
+                record: objectRecord,
+              },
+            },
+            latitude('degrees', 'latDegrees'),
+            latitude('minutes', 'latMinutes'),
+            latitude('fraction', 'latFraction'),
+          ],
+        },
+      ],
+    } as RadioMemoryMap;
+
+    const before = program([], { aprsObject: { name: 'EYE', latDegrees: 30, latMinutes: 12, latFraction: 3400 } });
+    const after = program([], { aprsObject: { name: 'SAT', latDegrees: 0, latMinutes: 0, latFraction: 0 } });
+    const diff = diffRadioPrograms(before, after, map);
+    const fields = diff.settingsGroups[0]?.fields ?? [];
+
+    expect(fields.map((field) => field.label)).toEqual([
+      'Beacon TX Control · Object 1 · Name',
+      'Beacon TX Control · Object 1 · Latitude',
+    ]);
+    expect(fields[1]).toMatchObject({
+      id: 'composite:obj1-lat',
+      before: "30° 12.34'",
+      after: "00° 00.00'",
+    });
+    expect(fields.some((field) => field.id.includes('latDegrees'))).toBe(false);
+  });
 });
