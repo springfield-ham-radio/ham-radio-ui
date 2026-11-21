@@ -1,3 +1,14 @@
+## [3.10.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.9.0...v3.10.0) (2026-11-21)
+
+### Features
+
+* **settings:** sub-group headings, record tabs, and split coordinate inputs ([#223](https://github.com/springfield-ham-radio/ham-radio-ui/issues/223)) ([f3ea596](https://github.com/springfield-ham-radio/ham-radio-ui/commit/f3ea596aa5d14152734d7eb9d7c466b44d27155f))
+
+### Bug Fixes
+
+* **deps:** bump the production-npm group with 4 updates ([#219](https://github.com/springfield-ham-radio/ham-radio-ui/issues/219)) ([395f7b6](https://github.com/springfield-ham-radio/ham-radio-ui/commit/395f7b6a887b87f27ebe7ae02b15451c440fa330))
+* **deps:** bump the rust-crates group in /src-tauri with 3 updates ([#217](https://github.com/springfield-ham-radio/ham-radio-ui/issues/217)) ([d872840](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d872840d3dfcfa6bc7389cf0ae0fd390291d568b))
+
 ## [3.9.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.8.0...v3.9.0) (2026-11-15)
 
 ### Features
