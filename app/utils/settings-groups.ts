@@ -5,6 +5,7 @@ import {
   type RadioMemoryMapUiField,
 } from '@springfield/ham-radio-utils';
 import { resolveModuleIcon } from './module-icons';
+import { settingsFieldMenuNumber } from './settings-field-help';
 
 /**
  * Menu-group name on a setting.
@@ -256,13 +257,113 @@ function sectionGroupId(label: string, used: Set<string>): string {
   return id;
 }
 
-function toSectionGroup(id: string, label: string, fields: RadioMemoryMapUiField[]): SettingsUiGroup {
+/**
+ * Declared parent for one section.
+ * `ui.group` selects `memoryMap.groups` when every field in the section names the same id.
+ * Otherwise a group whose label equals `ui.section` is the parent.
+ */
+function declaredParentForSection(
+  groups: readonly SettingsGroup[],
+  sectionLabel: string,
+  fields: readonly RadioMemoryMapUiField[],
+): SettingsGroup | undefined {
+  const ids = new Set<string>();
+
+  for (const field of fields) {
+    const id = field.ui.group.trim();
+
+    if (id.length > 0) {
+      ids.add(id);
+    }
+  }
+
+  if (ids.size === 1) {
+    const [id] = ids;
+    const byId = groups.find((group) => group.id === id);
+
+    if (byId) {
+      return byId;
+    }
+  }
+
+  return groups.find((group) => group.label.trim() === sectionLabel);
+}
+
+function smallestMenuNumber(fields: readonly RadioMemoryMapUiField[]): number | undefined {
+  let smallest: number | undefined;
+
+  for (const field of fields) {
+    const menuNumber = settingsFieldMenuNumber(field);
+
+    if (menuNumber !== undefined && (smallest === undefined || menuNumber < smallest)) {
+      smallest = menuNumber;
+    }
+  }
+
+  return smallest;
+}
+
+/**
+ * Subgroup headings for one section page.
+ * `collectUiSubgroups` applies declared labels and sorts fields by `ui.order`,
+ * keeping memory-map order when `ui.order` ties. Declared headings stay in
+ * declared order. Headings with no declaration follow, by the smallest menu
+ * number among their fields, then first-seen order.
+ */
+function collectSectionSubgroups(declared: SettingsGroup | undefined, fields: RadioMemoryMapUiField[]): SettingsUiSubgroup[] {
+  const subgroups = collectUiSubgroups(declared, fields);
+  const declaredIds = new Set((declared?.groups ?? []).map((subgroup) => subgroup.id));
+  const declaredSubgroups: SettingsUiSubgroup[] = [];
+  const undeclared: { subgroup: SettingsUiSubgroup; index: number; menu?: number }[] = [];
+
+  for (const subgroup of subgroups) {
+    if (declaredIds.has(subgroup.id)) {
+      declaredSubgroups.push(subgroup);
+      continue;
+    }
+
+    const menu = smallestMenuNumber(subgroup.fields);
+    undeclared.push({
+      subgroup,
+      index: undeclared.length,
+      ...(menu === undefined ? {} : { menu }),
+    });
+  }
+
+  undeclared.sort((left, right) => {
+    const leftRanked = left.menu !== undefined;
+    const rightRanked = right.menu !== undefined;
+
+    if (leftRanked && rightRanked && left.menu !== right.menu) {
+      return left.menu - right.menu;
+    }
+
+    if (leftRanked !== rightRanked) {
+      return leftRanked ? -1 : 1;
+    }
+
+    return left.index - right.index;
+  });
+
+  return [...declaredSubgroups, ...undeclared.map((entry) => entry.subgroup)];
+}
+
+function toSectionGroup(
+  id: string,
+  label: string,
+  fields: RadioMemoryMapUiField[],
+  declared?: SettingsGroup,
+): SettingsUiGroup {
+  const sameLabel = declared?.label.trim() === label;
+
   return {
     id,
     label,
-    icon: resolveModuleIcon(undefined),
+    description: sameLabel ? declared?.description : undefined,
+    icon: resolveModuleIcon(sameLabel ? declared?.icon : undefined),
+    warning: sameLabel ? declared?.warning : undefined,
     fields,
-    groups: [],
+    groups: collectSectionSubgroups(declared, fields),
   };
 }
 
@@ -270,9 +371,9 @@ function toSectionGroup(id: string, label: string, fields: RadioMemoryMapUiField
  * Group settings by the driver's `section` name.
  * Returns undefined when no visible setting has a section, so the caller keeps
  * the legacy group layout. Ranked sections sort by the smallest `ui.sectionOrder`.
- * Unranked sections keep first-seen order after those. Fields stay in memory-map
- * order. Menu numbers are not consulted. Settings with no section share a final
- * Other group with any section explicitly named Other.
+ * Unranked sections keep first-seen order after those. The section's field list
+ * stays in memory-map order. Settings with no section share a final Other group
+ * with any section explicitly named Other.
  */
 function collectSectionGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapUiField[]): SettingsUiGroup[] | undefined {
   const sectionMeta = sectionMetaByField(memoryMap);
@@ -322,12 +423,27 @@ function collectSectionGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMapU
   }
 
   const usedIds = new Set<string>();
-  const groups = sortSectionNames(order, rank, firstSeen).map((name) =>
-    toSectionGroup(sectionGroupId(name, usedIds), name, buckets.get(name) ?? []),
-  );
+  const parents = declaredGroups(memoryMap);
+  const groups = sortSectionNames(order, rank, firstSeen).map((name) => {
+    const sectionFields = buckets.get(name) ?? [];
+
+    return toSectionGroup(
+      sectionGroupId(name, usedIds),
+      name,
+      sectionFields,
+      declaredParentForSection(parents, name, sectionFields),
+    );
+  });
 
   if (otherFields.length > 0) {
-    groups.push(toSectionGroup(sectionGroupId(OTHER_SECTION_ID, usedIds), OTHER_SECTION_LABEL, otherFields));
+    groups.push(
+      toSectionGroup(
+        sectionGroupId(OTHER_SECTION_ID, usedIds),
+        OTHER_SECTION_LABEL,
+        otherFields,
+        declaredParentForSection(parents, OTHER_SECTION_LABEL, otherFields),
+      ),
+    );
   }
 
   return groups;
@@ -364,11 +480,17 @@ function collectLegacyUiGroups(memoryMap: RadioMemoryMap, fields: RadioMemoryMap
  * Collect radio-wide UI fields grouped for the Settings tab.
  *
  * When any visible setting defines `ui.section` (or a top-level `section`),
- * those names become the left-nav groups and the panel heading. Fields stay in
- * memory-map order. Sections with `ui.sectionOrder` sort by the smallest value
- * in the section (lower first). Sections without one keep first-seen order
- * after the ordered sections. Other is always last. Menu numbers are never
- * used as headings.
+ * those names are the only left-nav entries. Sections with `ui.sectionOrder`
+ * sort by the smallest value in the section (lower first). Sections without
+ * one keep first-seen order after the ordered sections. Other is always last.
+ *
+ * Inside a section, the declared parent (`ui.group`, or a group label equal to
+ * the section) supplies subgroup headings. Declared headings stay in that
+ * order. Other subgroup ids follow by the smallest menu number on their
+ * fields, then first-seen order. Each heading's fields sort by `ui.order`,
+ * and equal orders keep memory-map order. Fields with no subgroup stay on the
+ * section, ahead of those headings. A section with no subgroups stays one
+ * flat list in memory-map order. Menu numbers are never used as headings.
  *
  * When no setting defines a section, top-level `memoryMap.groups` stay the left
  * nav. Nested `groups` plus field `ui.subgroup` stay headed sections in the
