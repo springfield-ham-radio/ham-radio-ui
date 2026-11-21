@@ -4,8 +4,8 @@ import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { fieldHasStringChoices, settingsStringChoices, stringChoiceSelectItems } from '~/utils/settings-field-choices';
 import { settingsFieldMenuNumber, type SettingsFieldHelp } from '~/utils/settings-field-help';
 import {
-  formatCoordinate,
-  parseCoordinate,
+  coordinateDegreeMax,
+  partsFromCoordinate,
   type SettingsCoordinatePart,
 } from '~/utils/settings-coordinate';
 import {
@@ -35,7 +35,7 @@ const EMPTY_SELECT_VALUE = '__empty__';
 const { settingsFieldsGridStyle, showMenuNumbers } = useAppearanceSettings();
 const changedPathSet = computed(() => new Set(props.changedPaths));
 const selectedRecordTab = ref<Record<string, number>>({});
-const coordinateDraft = ref<Record<string, string>>({});
+const coordinateDraft = ref<Record<string, { degrees: number | null; minutes: number | null }>>({});
 const coordinateError = ref<Record<string, string | undefined>>({});
 
 function fieldChanged(path: string): boolean {
@@ -226,24 +226,56 @@ function coordinatePartValue(cell: SettingsCoordinateCell, part: SettingsCoordin
   return match ? numberValue(match.field) : 0;
 }
 
-function coordinateText(cell: SettingsCoordinateCell): string {
-  const draft = coordinateDraft.value[cell.key];
-
-  if (draft !== undefined) {
-    return draft;
-  }
-
-  return formatCoordinate(
-    coordinatePartValue(cell, 'degrees'),
-    coordinatePartValue(cell, 'minutes'),
-    coordinatePartValue(cell, 'fraction'),
-    cell.fractionScale,
-    cell.axis,
-  );
+function storedCoordinateMinutes(cell: SettingsCoordinateCell): number {
+  const scale = cell.fractionScale > 0 ? cell.fractionScale : 1;
+  return coordinatePartValue(cell, 'minutes') + coordinatePartValue(cell, 'fraction') / scale;
 }
 
-function editCoordinate(cell: SettingsCoordinateCell, value: string | number | undefined): void {
-  coordinateDraft.value = { ...coordinateDraft.value, [cell.key]: String(value ?? '') };
+function coordinateDegrees(cell: SettingsCoordinateCell): number | null {
+  return coordinateDraft.value[cell.key]?.degrees ?? coordinatePartValue(cell, 'degrees');
+}
+
+function coordinateMinutes(cell: SettingsCoordinateCell): number | null {
+  return coordinateDraft.value[cell.key]?.minutes ?? storedCoordinateMinutes(cell);
+}
+
+function editCoordinate(cell: SettingsCoordinateCell, side: 'degrees' | 'minutes', value: number | null | undefined): void {
+  const nextValue = typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const draft = {
+    degrees: side === 'degrees' ? nextValue : coordinateDegrees(cell),
+    minutes: side === 'minutes' ? nextValue : coordinateMinutes(cell),
+  };
+  const parsed = partsFromCoordinate(draft.degrees, draft.minutes, cell.axis, cell.fractionScale);
+
+  if ('error' in parsed) {
+    coordinateDraft.value = { ...coordinateDraft.value, [cell.key]: draft };
+    coordinateError.value = { ...coordinateError.value, [cell.key]: parsed.error };
+    return;
+  }
+
+  const drafts = { ...coordinateDraft.value };
+  const errors = { ...coordinateError.value };
+  delete drafts[cell.key];
+  delete errors[cell.key];
+  coordinateDraft.value = drafts;
+  coordinateError.value = errors;
+
+  let next = props.settings;
+
+  for (const part of cell.parts) {
+    const stored = part.part === 'degrees' ? parsed.degrees : part.part === 'minutes' ? parsed.minutes : parsed.fraction;
+    const current = getSettingAtPath(next, part.field.path);
+
+    if (Object.is(current, stored)) {
+      continue;
+    }
+
+    next = setSettingAtPath(next, part.field.path, stored);
+  }
+
+  if (next !== props.settings) {
+    updateSettings(next);
+  }
 }
 
 function coordinateWritable(cell: SettingsCoordinateCell): boolean {
@@ -262,44 +294,6 @@ function coordinateHelp(cell: SettingsCoordinateCell): SettingsFieldHelp | undef
   return undefined;
 }
 
-function commitCoordinate(cell: SettingsCoordinateCell): void {
-  const draft = coordinateDraft.value[cell.key];
-
-  if (draft === undefined) {
-    return;
-  }
-
-  const parsed = parseCoordinate(draft, cell.axis, cell.fractionScale);
-
-  if ('error' in parsed) {
-    coordinateError.value = { ...coordinateError.value, [cell.key]: parsed.error };
-    return;
-  }
-
-  const drafts = { ...coordinateDraft.value };
-  const errors = { ...coordinateError.value };
-  delete drafts[cell.key];
-  delete errors[cell.key];
-  coordinateDraft.value = drafts;
-  coordinateError.value = errors;
-
-  let next = props.settings;
-
-  for (const part of cell.parts) {
-    const value = part.part === 'degrees' ? parsed.degrees : part.part === 'minutes' ? parsed.minutes : parsed.fraction;
-    const current = getSettingAtPath(next, part.field.path);
-
-    if (Object.is(current, value)) {
-      continue;
-    }
-
-    next = setSettingAtPath(next, part.field.path, value);
-  }
-
-  if (next !== props.settings) {
-    updateSettings(next);
-  }
-}
 </script>
 
 <template>
@@ -434,15 +428,44 @@ function commitCoordinate(cell: SettingsCoordinateCell): void {
             :constraint="coordinateHelp(cell)?.constraint"
           />
         </template>
-        <UInput
-          v-bind="changedCoordinateBindings(cell)"
-          :model-value="coordinateText(cell)"
-          :disabled="!coordinateWritable(cell)"
-          class="w-full"
-          @update:model-value="editCoordinate(cell, $event)"
-          @blur="commitCoordinate(cell)"
-          @keydown.enter.prevent="commitCoordinate(cell)"
-        />
+        <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <UInputNumber
+            v-bind="changedCoordinateBindings(cell)"
+            :model-value="coordinateDegrees(cell)"
+            :min="0"
+            :max="coordinateDegreeMax(cell.axis)"
+            :step="1"
+            :step-snapping="false"
+            :allow-invalid="true"
+            :format-options="{ maximumFractionDigits: 0, useGrouping: false }"
+            :increment="false"
+            :decrement="false"
+            disable-wheel-change
+            :disabled="!coordinateWritable(cell)"
+            class="w-20"
+            :aria-label="`${cell.label} degrees`"
+            @update:model-value="editCoordinate(cell, 'degrees', $event)"
+          />
+          <span class="text-base leading-none text-default" aria-hidden="true">°</span>
+          <UInputNumber
+            v-bind="changedCoordinateBindings(cell)"
+            :model-value="coordinateMinutes(cell)"
+            :min="0"
+            :max="59.99"
+            :step="0.01"
+            :step-snapping="false"
+            :allow-invalid="true"
+            :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }"
+            :increment="false"
+            :decrement="false"
+            disable-wheel-change
+            :disabled="!coordinateWritable(cell)"
+            class="w-24"
+            :aria-label="`${cell.label} minutes`"
+            @update:model-value="editCoordinate(cell, 'minutes', $event)"
+          />
+          <span class="text-base leading-none text-default" aria-hidden="true">′</span>
+        </div>
       </UFormField>
 
       <div v-else class="col-span-full space-y-3">

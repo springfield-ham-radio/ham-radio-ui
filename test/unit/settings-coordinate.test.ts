@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { fieldComposite, formatCoordinate, parseCoordinate } from '../../app/utils/settings-coordinate.ts';
+import { fieldComposite, formatCoordinate, parseCoordinate, partsFromCoordinate } from '../../app/utils/settings-coordinate.ts';
 
 function coordinateField(part: 'degrees' | 'minutes' | 'fraction'): RadioMemoryMapUiField {
   return {
@@ -31,6 +31,25 @@ describe('formatCoordinate', () => {
 
   it('should pad longitude degrees to three digits', () => {
     expect(formatCoordinate(97, 45, 6700, 10000, 'lon')).toBe("097° 45.67'");
+  });
+});
+
+describe('partsFromCoordinate', () => {
+  it('should split decimal minutes into whole minutes and a scaled fraction', () => {
+    expect(partsFromCoordinate(30, 12.34, 'lat', 10000)).toEqual({ degrees: 30, minutes: 12, fraction: 3400 });
+    expect(partsFromCoordinate(97, 45.67, 'lon', 10000)).toEqual({ degrees: 97, minutes: 45, fraction: 6700 });
+    expect(partsFromCoordinate(90, 59.99, 'lat', 10000)).toEqual({ degrees: 90, minutes: 59, fraction: 9900 });
+    expect(partsFromCoordinate(0, 0, 'lat', 10000)).toEqual({ degrees: 0, minutes: 0, fraction: 0 });
+  });
+
+  it('should reject degrees and minutes outside the coordinate range', () => {
+    expect(partsFromCoordinate(91, 0, 'lat', 10000)).toEqual({ error: 'Latitude degrees must be 0–90.' });
+    expect(partsFromCoordinate(30.5, 0, 'lat', 10000)).toEqual({ error: 'Latitude degrees must be 0–90.' });
+    expect(partsFromCoordinate(181, 0, 'lon', 10000)).toEqual({ error: 'Longitude degrees must be 0–180.' });
+    expect(partsFromCoordinate(30, 60, 'lat', 10000)).toEqual({ error: 'Minutes must be 0–59.99.' });
+    expect(partsFromCoordinate(30, -1, 'lat', 10000)).toEqual({ error: 'Minutes must be 0–59.99.' });
+    expect(partsFromCoordinate(null, 12.34, 'lat', 10000)).toEqual({ error: 'Latitude degrees must be 0–90.' });
+    expect(partsFromCoordinate(30, null, 'lat', 10000)).toEqual({ error: 'Minutes must be 0–59.99.' });
   });
 });
 

@@ -12,6 +12,11 @@ describe('changed settings fields', () => {
     expect(source).toContain('highlight: true');
     expect(source).toContain('showMenuNumbers');
     expect(source).toContain('visibleMenuNumber(cell.field)');
+    expect(source).toContain(':aria-label="`${cell.label} degrees`"');
+    expect(source).toContain(':aria-label="`${cell.label} minutes`"');
+    expect(source).toContain('aria-hidden="true">°</span>');
+    expect(source).toContain('aria-hidden="true">′</span>');
+    expect(source).not.toContain('class="w-full"\n          @update:model-value="editCoordinate');
     expect(form).toContain('layoutSettingsSection(section.fields)');
 
     const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
