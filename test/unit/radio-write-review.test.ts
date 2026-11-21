@@ -252,6 +252,118 @@ describe('diffRadioPrograms', () => {
     expect(summarizeWriteReview(diff)).toBe('2 settings changed.');
   });
 
+  it('should prefix a section subgroup on a changed setting and leave legacy subgroup labels alone', () => {
+    const sectioned = {
+      version: '1.0.0',
+      groups: [
+        {
+          id: 'aprs',
+          label: 'APRS',
+          groups: [{ id: 'beacon-tx', label: 'Beacon TX Control' }],
+        },
+        {
+          id: 'basic',
+          label: 'Basic Settings',
+          groups: [{ id: 'receive', label: 'Receive' }],
+        },
+      ],
+      structs: [
+        {
+          id: 'settings',
+          seek: 0,
+          fields: [
+            {
+              id: 'method',
+              type: 'u8',
+              value: { kind: 'enum', values: ['Manual', 'PTT'] },
+              ui: {
+                group: 'aprs',
+                subgroup: 'beacon-tx',
+                label: 'Method',
+                widget: 'select',
+                section: 'APRS',
+                sectionOrder: 5,
+                menu: { number: 510, code: 'Method' },
+              },
+            },
+            {
+              id: 'groupName',
+              type: 'u8',
+              value: { kind: 'ascii', length: 8 },
+              ui: {
+                group: 'memory',
+                label: 'Group name',
+                widget: 'text',
+                section: 'Memory',
+                sectionOrder: 2,
+              },
+            },
+            {
+              id: 'squelch',
+              type: 'u8',
+              value: { kind: 'integer', min: 0, max: 9 },
+              ui: { group: 'basic', subgroup: 'receive', label: 'Squelch', widget: 'integer' },
+            },
+          ],
+        },
+      ],
+    } as RadioMemoryMap;
+
+    const before = program([], { settings: { method: 'Manual', groupName: 'A', squelch: 1 } });
+    const after = program([], { settings: { method: 'PTT', groupName: 'B', squelch: 4 } });
+    const diff = diffRadioPrograms(before, after, sectioned);
+
+    expect(diff.settingsGroups).toEqual([
+      {
+        id: 'memory',
+        label: 'Memory',
+        fields: [{ id: 'settings.groupName', label: 'Group name', before: 'A', after: 'B' }],
+      },
+      {
+        id: 'aprs',
+        label: 'APRS',
+        fields: [{ id: 'settings.method', label: 'Beacon TX Control · Method', before: 'Manual', after: 'PTT' }],
+      },
+      {
+        id: 'other',
+        label: 'Other',
+        fields: [{ id: 'settings.squelch', label: 'Squelch', before: '1', after: '4' }],
+      },
+    ]);
+
+    const legacy = {
+      version: '1.0.0',
+      groups: [{ id: 'basic', label: 'Basic Settings', groups: [{ id: 'receive', label: 'Receive' }] }],
+      structs: [
+        {
+          id: 'settings',
+          seek: 0,
+          fields: [
+            {
+              id: 'squelch',
+              type: 'u8',
+              value: { kind: 'integer', min: 0, max: 9 },
+              ui: { group: 'basic', subgroup: 'receive', label: 'Squelch', widget: 'integer' },
+            },
+          ],
+        },
+      ],
+    } as RadioMemoryMap;
+    const legacyDiff = diffRadioPrograms(
+      program([], { settings: { squelch: 1 } }),
+      program([], { settings: { squelch: 4 } }),
+      legacy,
+    );
+
+    expect(legacyDiff.settingsGroups).toEqual([
+      {
+        id: 'basic',
+        label: 'Basic Settings',
+        fields: [{ id: 'settings.squelch', label: 'Squelch', before: '1', after: '4' }],
+      },
+    ]);
+  });
+
   it('should summarize mixed channel and setting changes', () => {
     const before = program([channel({ channelNumber: 1 })]);
     const after = program([], { settings: { squelch: 1 } });

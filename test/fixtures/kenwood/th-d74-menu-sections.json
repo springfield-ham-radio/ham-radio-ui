@@ -1,0 +1,4116 @@
+{
+  "version": "1.7.0",
+  "description": "Kenwood TH-D74 clone image: 1000 memories in 6-per-256-byte groups, flags, names, and menu settings",
+  "groups": [
+    {
+      "id": "tx-rx",
+      "label": "TX/RX",
+      "icon": "i-lucide-radio-tower",
+      "groups": [
+        {
+          "id": "rx",
+          "label": "RX"
+        },
+        {
+          "id": "tx",
+          "label": "TX"
+        },
+        {
+          "id": "rx-filter",
+          "label": "RX Filter"
+        },
+        {
+          "id": "scan",
+          "label": "Scan"
+        },
+        {
+          "id": "repeater",
+          "label": "Repeater"
+        },
+        {
+          "id": "vox",
+          "label": "VOX"
+        },
+        {
+          "id": "dtmf",
+          "label": "DTMF"
+        },
+        {
+          "id": "cw",
+          "label": "CW"
+        },
+        {
+          "id": "others",
+          "label": "Others"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "icon": "i-lucide-database",
+      "groups": [
+        {
+          "id": "memory-channel",
+          "label": "Memory Channel"
+        }
+      ]
+    },
+    {
+      "id": "audio-file",
+      "label": "Audio File",
+      "icon": "i-lucide-audio-lines",
+      "groups": [
+        {
+          "id": "voice-message",
+          "label": "Voice Message"
+        }
+      ]
+    },
+    {
+      "id": "aprs",
+      "label": "APRS",
+      "icon": "i-lucide-map-pinned",
+      "groups": [
+        {
+          "id": "basic-settings",
+          "label": "Basic Settings",
+          "description": "Menu 500 stores the callsign and SSID as separate text. The callsign is 6 bytes at 0x1200, NUL-padded. The SSID is the literal suffix, including the hyphen (for example -7), in 3 NUL-padded bytes at 0x1206. It is not a 0-15 index. A shorter callsign does not shift the SSID."
+        },
+        {
+          "id": "beacon-tx",
+          "label": "Beacon TX Control",
+          "description": "Menus 510 through 516. Beacon method, interval, decay, proportional pathing, speed, altitude, and three object records at 0x1900, 0x1940, and 0x1980. The byte at each object base+0x08 is left unchanged. The byte at 0x19C0 is not mapped."
+        },
+        {
+          "id": "qsy",
+          "label": "QSY Information"
+        },
+        {
+          "id": "smartbeaconing",
+          "label": "SmartBeaconing"
+        },
+        {
+          "id": "waypoint",
+          "label": "Waypoint"
+        },
+        {
+          "id": "packet-filter",
+          "label": "Packet Filter"
+        },
+        {
+          "id": "others",
+          "label": "Others"
+        }
+      ]
+    },
+    {
+      "id": "digital",
+      "label": "Digital",
+      "icon": "i-lucide-satellite",
+      "groups": [
+        {
+          "id": "tx-rx",
+          "label": "TX/RX",
+          "description": "Menu 610 is an 8-character callsign at 0x2B1 and a 4-character memo at 0x2B9, both space-padded. The radio shows them as CALL/MEMO."
+        }
+      ]
+    },
+    {
+      "id": "configuration",
+      "label": "Configuration",
+      "icon": "i-lucide-settings",
+      "groups": [
+        {
+          "id": "display",
+          "label": "Display"
+        },
+        {
+          "id": "audio",
+          "label": "Audio"
+        },
+        {
+          "id": "battery",
+          "label": "Battery"
+        },
+        {
+          "id": "auxiliary",
+          "label": "Auxiliary"
+        },
+        {
+          "id": "lock",
+          "label": "Lock"
+        },
+        {
+          "id": "units",
+          "label": "Units"
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "id": "flags",
+      "seek": "0x2000",
+      "count": 1000,
+      "stride": 4,
+      "emptyWhen": {
+        "equals": 255
+      },
+      "clearEmpty": true,
+      "fields": [
+        {
+          "id": "used",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 255
+          }
+        },
+        {
+          "id": "_unknown1",
+          "type": "bits",
+          "width": 7,
+          "reserved": true
+        },
+        {
+          "id": "lockout",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Scan skip",
+            "widget": "switch",
+            "description": "Skips this memory during scan. The channel stays in memory and can still be selected directly."
+          }
+        },
+        {
+          "id": "group",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 29
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Memory group",
+            "widget": "integer",
+            "description": "Memory group this channel belongs to. Group scan and group link use this number."
+          }
+        },
+        {
+          "id": "_unknownFF",
+          "type": "u8",
+          "reserved": true
+        }
+      ]
+    },
+    {
+      "id": "channels",
+      "seek": "0x4000",
+      "count": 1000,
+      "stride": 40,
+      "groupSize": 6,
+      "groupPad": 16,
+      "emptyWhen": {
+        "equals": 255
+      },
+      "clearEmpty": true,
+      "fields": [
+        {
+          "id": "freq",
+          "type": "u32",
+          "value": {
+            "kind": "integer"
+          }
+        },
+        {
+          "id": "offset",
+          "type": "u32",
+          "value": {
+            "kind": "integer"
+          }
+        },
+        {
+          "id": "tuning_step",
+          "type": "bits",
+          "width": 4,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "5",
+              "6.25",
+              "8.33",
+              "9",
+              "10",
+              "12.5",
+              "15",
+              "20",
+              "25",
+              "30",
+              "50",
+              "100"
+            ]
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Tuning step (kHz)",
+            "widget": "select",
+            "description": "How far the frequency moves for each click of the tuning control, in kHz."
+          }
+        },
+        {
+          "id": "split_tuning_step",
+          "type": "bits",
+          "width": 3,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "5",
+              "6.25",
+              "8.33",
+              "9",
+              "10",
+              "12.5",
+              "15",
+              "20"
+            ]
+          }
+        },
+        {
+          "id": "_unknown2",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "_unknown3_0",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "mode",
+          "type": "bits",
+          "width": 3,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "FM",
+              "DV",
+              "AM",
+              "LSB",
+              "USB",
+              "CW",
+              "NFM",
+              "DR"
+            ]
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Mode",
+            "widget": "select",
+            "description": "Modulation for this memory. FM and DV are the usual voice modes. AM, SSB, and CW are for the bands that support them."
+          }
+        },
+        {
+          "id": "narrow",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "fine_mode",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "fine_step",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "20",
+              "100",
+              "500",
+              "1000"
+            ]
+          }
+        },
+        {
+          "id": "tone_mode",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "ctcss_mode",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "dtcs_mode",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "cross_mode",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "_unknown4_0",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "split",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "id": "duplex",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "",
+              "+",
+              "-"
+            ]
+          },
+          "ui": {
+            "group": "channel",
+            "label": "Duplex",
+            "widget": "select",
+            "description": "Repeater shift. Blank transmits on the receive frequency. + transmits above it and − transmits below it."
+          }
+        },
+        {
+          "id": "rtone",
+          "type": "u8",
+          "value": {
+            "kind": "ctcss-index",
+            "values": [
+              670,
+              693,
+              719,
+              744,
+              770,
+              797,
+              825,
+              854,
+              885,
+              915,
+              948,
+              974,
+              1000,
+              1035,
+              1072,
+              1109,
+              1148,
+              1188,
+              1230,
+              1273,
+              1318,
+              1365,
+              1413,
+              1462,
+              1514,
+              1567,
+              1598,
+              1622,
+              1655,
+              1679,
+              1713,
+              1738,
+              1773,
+              1799,
+              1835,
+              1862,
+              1899,
+              1928,
+              1966,
+              1995,
+              2035,
+              2065,
+              2107,
+              2181,
+              2257,
+              2291,
+              2336,
+              2418,
+              2503,
+              2541
+            ]
+          }
+        },
+        {
+          "id": "_unknownctone",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "ctone",
+          "type": "bits",
+          "width": 6,
+          "value": {
+            "kind": "ctcss-index",
+            "values": [
+              670,
+              693,
+              719,
+              744,
+              770,
+              797,
+              825,
+              854,
+              885,
+              915,
+              948,
+              974,
+              1000,
+              1035,
+              1072,
+              1109,
+              1148,
+              1188,
+              1230,
+              1273,
+              1318,
+              1365,
+              1413,
+              1462,
+              1514,
+              1567,
+              1598,
+              1622,
+              1655,
+              1679,
+              1713,
+              1738,
+              1773,
+              1799,
+              1835,
+              1862,
+              1899,
+              1928,
+              1966,
+              1995,
+              2035,
+              2065,
+              2107,
+              2181,
+              2257,
+              2291,
+              2336,
+              2418,
+              2503,
+              2541
+            ]
+          }
+        },
+        {
+          "id": "_unknowndtcs",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "dtcs_code",
+          "type": "bits",
+          "width": 7,
+          "value": {
+            "kind": "dcs-index",
+            "values": [
+              23,
+              25,
+              26,
+              31,
+              32,
+              36,
+              43,
+              47,
+              51,
+              53,
+              54,
+              65,
+              71,
+              72,
+              73,
+              74,
+              114,
+              115,
+              116,
+              122,
+              125,
+              131,
+              132,
+              134,
+              143,
+              145,
+              152,
+              155,
+              156,
+              162,
+              165,
+              172,
+              174,
+              205,
+              212,
+              223,
+              225,
+              226,
+              243,
+              244,
+              245,
+              246,
+              251,
+              252,
+              255,
+              261,
+              263,
+              265,
+              266,
+              271,
+              274,
+              306,
+              311,
+              315,
+              325,
+              331,
+              332,
+              343,
+              346,
+              351,
+              356,
+              364,
+              365,
+              371,
+              411,
+              412,
+              413,
+              423,
+              431,
+              432,
+              445,
+              446,
+              452,
+              454,
+              455,
+              462,
+              464,
+              465,
+              466,
+              503,
+              506,
+              516,
+              523,
+              526,
+              532,
+              546,
+              565,
+              606,
+              612,
+              624,
+              627,
+              631,
+              632,
+              654,
+              662,
+              664,
+              703,
+              712,
+              723,
+              731,
+              732,
+              734,
+              743,
+              754
+            ]
+          }
+        },
+        {
+          "id": "_unknown5_1",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "cross_mode_mode",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "DTCS->",
+              "Tone->DTCS",
+              "DTCS->Tone",
+              "Tone->Tone"
+            ]
+          }
+        },
+        {
+          "id": "_unknown5_2",
+          "type": "bits",
+          "width": 2,
+          "reserved": true
+        },
+        {
+          "id": "dig_squelch",
+          "type": "bits",
+          "width": 2,
+          "value": {
+            "kind": "enum",
+            "values": [
+              "",
+              "Code",
+              "Callsign"
+            ]
+          },
+          "ui": {
+            "group": "channel",
+            "label": "D-STAR squelch",
+            "widget": "select",
+            "description": "D-STAR digital squelch. Blank hears every digital signal. Code opens only for a matching digital code. Callsign opens only for a matching callsign."
+          }
+        },
+        {
+          "id": "dv_urcall",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 8,
+            "pad": 0
+          },
+          "ui": {
+            "group": "channel",
+            "label": "URCALL",
+            "widget": "text",
+            "description": "D-STAR Your Call (URCALL). CQCQCQ calls anyone. A station callsign calls that station. A repeater gateway callsign routes the transmission."
+          }
+        },
+        {
+          "id": "dv_rpt1call",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 8,
+            "pad": 0
+          },
+          "ui": {
+            "group": "channel",
+            "label": "RPT1",
+            "widget": "text",
+            "description": "D-STAR repeater 1 callsign, usually the local repeater you transmit to, with its module letter in the eighth position."
+          }
+        },
+        {
+          "id": "dv_rpt2call",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 8,
+            "pad": 0
+          },
+          "ui": {
+            "group": "channel",
+            "label": "RPT2",
+            "widget": "text",
+            "description": "D-STAR repeater 2 callsign, usually the gateway or the distant repeater, with its module letter in the eighth position."
+          }
+        },
+        {
+          "id": "_unknown9",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "dv_code",
+          "type": "bits",
+          "width": 7,
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 127
+          },
+          "ui": {
+            "group": "channel",
+            "label": "D-STAR code",
+            "widget": "integer",
+            "description": "Digital code squelch number used when D-STAR squelch is set to Code. Both stations must use the same code."
+          }
+        }
+      ]
+    },
+    {
+      "id": "names",
+      "seek": "0x10000",
+      "count": 1000,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 16,
+            "pad": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "beatShift",
+      "seek": "0x1000",
+      "fields": [
+        {
+          "id": "type",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Type 1",
+              "Type 2",
+              "Type 3",
+              "Type 4",
+              "Type 5",
+              "Type 6",
+              "Type 7",
+              "Type 8"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "rx",
+            "label": "Beat Shift",
+            "widget": "select",
+            "menu": {
+              "number": 101,
+              "code": "Beat Shift"
+            },
+            "description": "Shifts the radio's internal beat so a birdie moves off the frequency you are listening to. Measured index 0 is Type 1 through index 7 is Type 8.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 10100
+          }
+        }
+      ]
+    },
+    {
+      "id": "txInhibit",
+      "seek": "0x1001",
+      "fields": [
+        {
+          "id": "txInhibit",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "tx",
+            "label": "TX Inhibit",
+            "widget": "switch",
+            "menu": {
+              "number": 110,
+              "code": "TX Inhibit"
+            },
+            "description": "Blocks the transmitter so the radio cannot be keyed. Receive still works.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 11000
+          }
+        }
+      ]
+    },
+    {
+      "id": "timeoutTimer",
+      "seek": "0x1003",
+      "fields": [
+        {
+          "id": "timeout",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "0.5min",
+              "1.0min",
+              "1.5min",
+              "2.0min",
+              "2.5min",
+              "3.0min",
+              "3.5min",
+              "4.0min",
+              "4.5min",
+              "5.0min",
+              "10min"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "tx",
+            "label": "Time-Out Timer",
+            "widget": "select",
+            "menu": {
+              "number": 111,
+              "code": "Time-out Timer"
+            },
+            "description": "Ends a transmission that stays keyed longer than this. The steps run from 0.5 minutes to 5.0 minutes in half-minute steps, then 10 minutes. Clone images confirm index 0x09 is 5.0 min and 0x0A is 10 min, which matches this list.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 11100
+          }
+        }
+      ]
+    },
+    {
+      "id": "micSensitivity",
+      "seek": "0x1006",
+      "fields": [
+        {
+          "id": "sensitivity",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "High",
+              "Medium",
+              "Low"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "tx",
+            "label": "Mic Sensitivity",
+            "widget": "select",
+            "menu": {
+              "number": 112,
+              "code": "Mic. Sensitivity"
+            },
+            "description": "Microphone sensitivity. Clone images confirm 0x00 High, 0x01 Medium, and 0x02 Low.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 11200
+          }
+        }
+      ]
+    },
+    {
+      "id": "ssbHighCut",
+      "seek": "0x1008",
+      "fields": [
+        {
+          "id": "cutoff",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "2.2kHz",
+              "2.4kHz",
+              "2.6kHz",
+              "2.8kHz",
+              "3.0kHz"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "rx-filter",
+            "label": "SSB High Cut",
+            "widget": "select",
+            "menu": {
+              "number": 120,
+              "code": "SSB High Cut"
+            },
+            "description": "SSB receive high-cut frequency. Clone images confirm 0x00 = 2.2 kHz, 0x01 = 2.4 kHz, 0x02 = 2.6 kHz, 0x03 = 2.8 kHz, and 0x04 = 3.0 kHz.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 12000
+          }
+        }
+      ]
+    },
+    {
+      "id": "cwWidth",
+      "seek": "0x1009",
+      "fields": [
+        {
+          "id": "width",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "0.3kHz",
+              "0.5kHz",
+              "1.0kHz",
+              "1.5kHz",
+              "2.0kHz"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "rx-filter",
+            "label": "CW Width",
+            "widget": "select",
+            "menu": {
+              "number": 121,
+              "code": "CW Width"
+            },
+            "description": "CW receive filter width. Measured on the radio: 0x00 = 0.3 kHz, 0x01 = 0.5 kHz, 0x02 = 1.0 kHz, 0x03 = 1.5 kHz, and 0x04 = 2.0 kHz.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 12100
+          }
+        }
+      ]
+    },
+    {
+      "id": "amHighCut",
+      "seek": "0x100A",
+      "fields": [
+        {
+          "id": "cutoff",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "3.0kHz",
+              "4.5kHz",
+              "6.0kHz",
+              "7.5kHz"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "rx-filter",
+            "label": "AM High Cut",
+            "widget": "select",
+            "menu": {
+              "number": 122,
+              "code": "AM High Cut"
+            },
+            "description": "AM receive high-cut frequency. Measured on the radio: 0x00 = 3.0 kHz, 0x01 = 4.5 kHz, 0x02 = 6.0 kHz, and 0x03 = 7.5 kHz.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 12200
+          }
+        }
+      ]
+    },
+    {
+      "id": "scanResume",
+      "seek": "0x100C",
+      "fields": [
+        {
+          "id": "resume",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Time",
+              "Carrier",
+              "Seek"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "scan",
+            "label": "Scan Resume",
+            "widget": "select",
+            "menu": {
+              "number": 130,
+              "code": "Resume"
+            },
+            "description": "What analog scan does after it stops on a signal. Time resumes after the restart timer. Carrier resumes when the signal drops. Seek stops and stays. Digital scan resume is menu 131.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 13000
+          }
+        }
+      ]
+    },
+    {
+      "id": "digitalScanResume",
+      "seek": "0x100D",
+      "fields": [
+        {
+          "id": "resume",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Time",
+              "Carrier",
+              "Seek"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "scan",
+            "label": "Resume (Digital)",
+            "widget": "select",
+            "menu": {
+              "number": 131,
+              "code": "Resume (Digital)"
+            },
+            "description": "What digital scan does after it stops on a signal. Measured on the radio: 0 = Time, 1 = Carrier, 2 = Seek.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 13100
+          }
+        }
+      ]
+    },
+    {
+      "id": "timeRestart",
+      "seek": "0x100E",
+      "fields": [
+        {
+          "id": "seconds",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 1,
+            "max": 10
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "scan",
+            "label": "Time Restart",
+            "widget": "integer",
+            "menu": {
+              "number": 132,
+              "code": "Time Restart"
+            },
+            "description": "How long Time scan stays on a signal before it resumes, in seconds. The radio stores the number itself, 1 through 10. The manual default is 5.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 13200
+          }
+        }
+      ]
+    },
+    {
+      "id": "carrierRestart",
+      "seek": "0x100F",
+      "fields": [
+        {
+          "id": "seconds",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 1,
+            "max": 10
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "scan",
+            "label": "Carrier Restart",
+            "widget": "integer",
+            "menu": {
+              "number": 133,
+              "code": "Carrier Restart"
+            },
+            "description": "How long Carrier scan waits after the signal drops before it resumes, in seconds. The radio stores the number itself, 1 through 10. The manual default is 2.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 13300
+          }
+        }
+      ]
+    },
+    {
+      "id": "scanAutoBacklight",
+      "seek": "0x1012",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "scan",
+            "label": "Scan Auto Backlight",
+            "widget": "switch",
+            "menu": {
+              "number": 135,
+              "code": "Scan Auto Backlight"
+            },
+            "description": "Turns the backlight on when scan stops on a signal. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 13500
+          }
+        }
+      ]
+    },
+    {
+      "id": "autoOffset",
+      "seek": "0x1018",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "repeater",
+            "label": "Auto Offset",
+            "widget": "switch",
+            "menu": {
+              "number": 141,
+              "code": "Auto Offset"
+            },
+            "description": "Applies the standard repeater offset for the current band. Measured by switching the menu from On to Off: 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 14100
+          }
+        }
+      ]
+    },
+    {
+      "id": "callKey",
+      "seek": "0x1019",
+      "fields": [
+        {
+          "id": "mode",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "CALL",
+              "1750Hz"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "repeater",
+            "label": "CALL Key",
+            "widget": "select",
+            "menu": {
+              "number": 142,
+              "code": "CALL Key"
+            },
+            "description": "What the CALL key sends. 0 is CALL and 1 is 1750 Hz.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 14200
+          }
+        }
+      ]
+    },
+    {
+      "id": "tone1750Hold",
+      "seek": "0x101A",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "repeater",
+            "label": "1750Hz TX Hold",
+            "widget": "switch",
+            "menu": {
+              "number": 143,
+              "code": "1750Hz TX Hold"
+            },
+            "description": "Keeps transmitting the 1750 Hz tone while the CALL key stays pressed. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 14300
+          }
+        }
+      ]
+    },
+    {
+      "id": "vox",
+      "seek": "0x101B",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "vox",
+            "label": "VOX",
+            "widget": "switch",
+            "menu": {
+              "number": 150,
+              "code": "VOX"
+            },
+            "description": "Keys the transmitter from microphone audio. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 15000
+          }
+        }
+      ]
+    },
+    {
+      "id": "voxGain",
+      "seek": "0x101C",
+      "fields": [
+        {
+          "id": "gain",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 9
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "vox",
+            "label": "VOX Gain",
+            "widget": "integer",
+            "menu": {
+              "number": 151,
+              "code": "VOX Gain"
+            },
+            "description": "How loud the microphone audio must be before VOX keys the transmitter. The byte is the level itself, 0 through 9.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 15100
+          }
+        }
+      ]
+    },
+    {
+      "id": "voxDelay",
+      "seek": "0x101D",
+      "fields": [
+        {
+          "id": "delay",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "250ms",
+              "500ms",
+              "750ms",
+              "1000ms",
+              "1500ms",
+              "2000ms",
+              "3000ms"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "vox",
+            "label": "VOX Delay",
+            "widget": "select",
+            "menu": {
+              "number": 152,
+              "code": "VOX Delay"
+            },
+            "description": "How long the radio stays keyed after you stop talking. Measured index 0 is 250 ms through 3000 ms.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 15200
+          }
+        }
+      ]
+    },
+    {
+      "id": "txOnBusy",
+      "seek": "0x101E",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "vox",
+            "label": "TX on Busy",
+            "widget": "switch",
+            "menu": {
+              "number": 153,
+              "code": "TX on Busy"
+            },
+            "description": "Allows transmit while the channel is busy. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 15300
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfSpeed",
+      "seek": "0x101F",
+      "fields": [
+        {
+          "id": "speed",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "50ms",
+              "100ms",
+              "150ms"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "DTMF Encode Speed",
+            "widget": "select",
+            "menu": {
+              "number": 160,
+              "code": "DTMF Encode Speed"
+            },
+            "description": "How long each DTMF digit is sent. 0 is 50 ms, 1 is 100 ms, and 2 is 150 ms.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 16000
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfPause",
+      "seek": "0x1020",
+      "fields": [
+        {
+          "id": "pause",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "100ms",
+              "250ms",
+              "500ms",
+              "750ms",
+              "1000ms",
+              "1500ms",
+              "2000ms"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "Pause Time",
+            "widget": "select",
+            "menu": {
+              "number": 161,
+              "code": "Pause Time"
+            },
+            "description": "Pause between DTMF digits. Index 0 is 100 ms through 2000 ms.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 16100
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfHold",
+      "seek": "0x1021",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "DTMF TX Hold",
+            "widget": "switch",
+            "menu": {
+              "number": 162,
+              "code": "DTMF TX Hold"
+            },
+            "description": "Holds the transmitter after the DTMF string. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 16200
+          }
+        }
+      ]
+    },
+    {
+      "id": "cwPitch",
+      "seek": "0x1024",
+      "fields": [
+        {
+          "id": "pitch",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "400Hz",
+              "500Hz",
+              "600Hz",
+              "700Hz",
+              "800Hz",
+              "900Hz",
+              "1000Hz"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "cw",
+            "label": "CW Pitch",
+            "widget": "select",
+            "menu": {
+              "number": 170,
+              "code": "Pitch Frequency"
+            },
+            "description": "CW sidetone pitch. Clone images confirm 0x01 = 500 Hz, 0x04 = 800 Hz, and 0x06 = 1000 Hz. Those measurements confirm 100 Hz steps from 400 Hz at 0x00. The remaining steps follow that confirmed pattern.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 17000
+          }
+        }
+      ]
+    },
+    {
+      "id": "cwReverse",
+      "seek": "0x1026",
+      "fields": [
+        {
+          "id": "mode",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Normal",
+              "Reverse"
+            ]
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "cw",
+            "label": "CW Reverse",
+            "widget": "select",
+            "menu": {
+              "number": 171,
+              "code": "CW Reverse"
+            },
+            "description": "Swaps the CW sideband. 0 is Normal and 1 is Reverse.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 17100
+          }
+        }
+      ]
+    },
+    {
+      "id": "qsoLog",
+      "seek": "0x1027",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "others",
+            "label": "QSO Log",
+            "widget": "switch",
+            "menu": {
+              "number": 180,
+              "code": "QSO Log"
+            },
+            "description": "Records QSOs in the radio log. 0 is Off and 1 is On.",
+            "section": "TX/RX",
+            "sectionOrder": 1,
+            "order": 18000
+          }
+        }
+      ]
+    },
+    {
+      "id": "groupNames",
+      "seek": "0x14800",
+      "count": 30,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 16,
+            "pad": 32
+          },
+          "ui": {
+            "group": "memory",
+            "label": "Group name",
+            "widget": "text",
+            "description": "Name shown for this memory group.",
+            "section": "Memory",
+            "sectionOrder": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "recallMethod",
+      "seek": "0x1030",
+      "fields": [
+        {
+          "id": "method",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "All Bands",
+              "Current Band"
+            ]
+          },
+          "ui": {
+            "group": "memory",
+            "subgroup": "memory-channel",
+            "label": "Recall Method",
+            "widget": "select",
+            "menu": {
+              "number": 202,
+              "code": "Recall Method"
+            },
+            "description": "Which memories the channel knob walks through. 0 is All Bands. 1 is Current Band.",
+            "section": "Memory",
+            "sectionOrder": 2,
+            "order": 20200
+          }
+        }
+      ]
+    },
+    {
+      "id": "txMonitor",
+      "seek": "0x1032",
+      "fields": [
+        {
+          "id": "monitor",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "audio-file",
+            "subgroup": "voice-message",
+            "label": "TX Monitor",
+            "widget": "switch",
+            "menu": {
+              "number": 311,
+              "code": "TX Monitor"
+            },
+            "description": "Lets you hear your own transmitted audio. Stored as 1 On and 0 Off.",
+            "section": "Audio File",
+            "sectionOrder": 3,
+            "order": 31100
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsMyCall",
+      "seek": "0x1200",
+      "fields": [
+        {
+          "id": "callsign",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 6,
+            "pad": 0
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "My Callsign",
+            "widget": "text",
+            "menu": {
+              "number": 500,
+              "code": "My Callsign"
+            },
+            "description": "APRS callsign, up to 6 characters, NUL-padded. The SSID is the next field and does not move when this callsign is shorter than 6 characters.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50000
+          }
+        },
+        {
+          "id": "ssid",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 3,
+            "pad": 0
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "SSID",
+            "widget": "text",
+            "menu": {
+              "number": 500,
+              "code": "My Callsign"
+            },
+            "description": "APRS SSID as stored text, including the hyphen, for example -7 or -15. This is not a 0-15 index. Three bytes, NUL-padded. Together with the 6-character callsign this fills menu 500, which allows 9 characters.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50000
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsIcon",
+      "seek": "0x1367",
+      "fields": [
+        {
+          "id": "symbol",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 2,
+            "pad": 0,
+            "choices": [
+              {
+                "label": "Person",
+                "value": "/["
+              },
+              {
+                "label": "Bicycle",
+                "value": "/b"
+              },
+              {
+                "label": "Motorcycle",
+                "value": "/<"
+              },
+              {
+                "label": "Car",
+                "value": "/>"
+              },
+              {
+                "label": "Bus",
+                "value": "/U"
+              },
+              {
+                "label": "Railroad Engine",
+                "value": "/="
+              },
+              {
+                "label": "Home",
+                "value": "/-"
+              },
+              {
+                "label": "Yagi@QTH",
+                "value": "/y"
+              },
+              {
+                "label": "KENWOOD",
+                "value": "\\K"
+              },
+              {
+                "label": "Radio",
+                "value": "\\Y"
+              },
+              {
+                "label": "RV",
+                "value": "/R"
+              },
+              {
+                "label": "Van",
+                "value": "/v"
+              },
+              {
+                "label": "Jeep",
+                "value": "/j"
+              },
+              {
+                "label": "Truck",
+                "value": "/k"
+              },
+              {
+                "label": "Truck (18-wheeler)",
+                "value": "/u"
+              },
+              {
+                "label": "Police",
+                "value": "/P"
+              },
+              {
+                "label": "Ambulance",
+                "value": "/a"
+              },
+              {
+                "label": "Fire Truck",
+                "value": "/f"
+              },
+              {
+                "label": "Canoe",
+                "value": "/C"
+              },
+              {
+                "label": "Boat",
+                "value": "/s"
+              },
+              {
+                "label": "Sailboat",
+                "value": "/Y"
+              },
+              {
+                "label": "APRStt",
+                "value": "\\A"
+              },
+              {
+                "label": "X",
+                "value": "/."
+              },
+              {
+                "label": "Triangle",
+                "value": "\\n"
+              },
+              {
+                "label": "Small Circle",
+                "value": "\\o"
+              },
+              {
+                "label": "Red Dot",
+                "value": "//"
+              },
+              {
+                "label": "Big Question Mark",
+                "value": "\\."
+              },
+              {
+                "label": "Balloon",
+                "value": "/O"
+              },
+              {
+                "label": "Glider",
+                "value": "/g"
+              },
+              {
+                "label": "Helicopter",
+                "value": "/X"
+              },
+              {
+                "label": "Aircraft",
+                "value": "/'"
+              },
+              {
+                "label": "Large Aircraft",
+                "value": "/^"
+              },
+              {
+                "label": "Shuttle",
+                "value": "/S"
+              },
+              {
+                "label": "Satellite",
+                "value": "\\S"
+              },
+              {
+                "label": "Rover",
+                "value": "/p"
+              },
+              {
+                "label": "Eyeball",
+                "value": "/E"
+              },
+              {
+                "label": "Portable (Tent)",
+                "value": "/;"
+              },
+              {
+                "label": "HAM Store",
+                "value": "\\h"
+              },
+              {
+                "label": "School",
+                "value": "/K"
+              },
+              {
+                "label": "Hospital",
+                "value": "/h"
+              },
+              {
+                "label": "Red Cross",
+                "value": "/+"
+              },
+              {
+                "label": "Lighthouse",
+                "value": "\\L"
+              },
+              {
+                "label": "Speedpost",
+                "value": "\\m"
+              },
+              {
+                "label": "WorkZone",
+                "value": "\\j"
+              },
+              {
+                "label": "Wreck",
+                "value": "\\x"
+              },
+              {
+                "label": "Sheriff",
+                "value": "/!"
+              },
+              {
+                "label": "Fire",
+                "value": "/:"
+              },
+              {
+                "label": "Sunny",
+                "value": "\\U"
+              },
+              {
+                "label": "Gale Flags",
+                "value": "\\g"
+              },
+              {
+                "label": "Tornado",
+                "value": "\\t"
+              },
+              {
+                "label": "National WX Service Site",
+                "value": "/W"
+              },
+              {
+                "label": "WX",
+                "value": "/_"
+              },
+              {
+                "label": "Digipeater",
+                "value": "/#"
+              },
+              {
+                "label": "Mic-E Repeater",
+                "value": "/m"
+              },
+              {
+                "label": "QSO Repeater",
+                "value": "/r"
+              },
+              {
+                "label": "Circle",
+                "value": "/0"
+              },
+              {
+                "label": "IRLP",
+                "value": "I0"
+              },
+              {
+                "label": "EchoLink",
+                "value": "E0"
+              },
+              {
+                "label": "Node",
+                "value": "/n"
+              },
+              {
+                "label": "Gateway",
+                "value": "/&"
+              },
+              {
+                "label": "DF station",
+                "value": "/\\"
+              },
+              {
+                "label": "Dish Antenna",
+                "value": "/`"
+              },
+              {
+                "label": "PC User",
+                "value": "/L"
+              },
+              {
+                "label": "SSTV",
+                "value": "/T"
+              },
+              {
+                "label": "ATV",
+                "value": "/V"
+              },
+              {
+                "label": "BBS",
+                "value": "/B"
+              }
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "Icon",
+            "widget": "select",
+            "menu": {
+              "number": 501,
+              "code": "Icon"
+            },
+            "description": "APRS symbol, stored as the table character and the symbol code. Radio is \\Y and RV is /R. The list is the TH-D74 manual icon names mapped to the public APRS symbol table (symbolsX.txt and symbols-new.txt). A symbol that is not in the list is left as those two characters. Edited text is NUL-padded.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50100
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsDataSpeed",
+      "seek": "0x120C",
+      "fields": [
+        {
+          "id": "speed",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "1200 bps",
+              "9600 bps"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "Data Speed",
+            "widget": "select",
+            "menu": {
+              "number": 505,
+              "code": "Data Speed"
+            },
+            "description": "APRS packet speed. Measured on the radio: 0 is 1200 bps and 1 is 9600 bps.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50500
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsDataBand",
+      "seek": "0x120B",
+      "fields": [
+        {
+          "id": "band",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Band A",
+              "Band B"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "Data Band",
+            "widget": "select",
+            "menu": {
+              "number": 506,
+              "code": "Data Band"
+            },
+            "description": "Band used for APRS data. Measured on the radio: 0 is Band A and 1 is Band B.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50600
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsDcdSense",
+      "seek": "0x120D",
+      "fields": [
+        {
+          "id": "sense",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Busy",
+              "Detect Data",
+              "Off"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "DCD Sense",
+            "widget": "select",
+            "menu": {
+              "number": 507,
+              "code": "DCD Sense"
+            },
+            "description": "How the radio decides the channel is busy before an APRS transmission. Measured on the radio: 0 is Busy, 1 is Detect Data, and 2 is Off.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50700
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsTxDelay",
+      "seek": "0x120F",
+      "fields": [
+        {
+          "id": "delay",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "100ms",
+              "150ms",
+              "200ms",
+              "300ms",
+              "400ms",
+              "500ms",
+              "750ms",
+              "1000ms"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "TX Delay",
+            "widget": "select",
+            "menu": {
+              "number": 508,
+              "code": "TX Delay"
+            },
+            "description": "Delay after keying before the APRS packet. Index 0 is 100 ms, then 150, 200, 300, 400, 500, 750, and 1000 ms. Measured 200 ms is index 2 and 500 ms is index 5.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 50800
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsLock",
+      "seek": "0x120A",
+      "fields": [
+        {
+          "id": "_unused",
+          "type": "bits",
+          "width": 5,
+          "reserved": true
+        },
+        {
+          "id": "aprsKey",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "APRS Key",
+            "widget": "switch",
+            "order": 50903,
+            "menu": {
+              "number": 509,
+              "code": "APRS Lock"
+            },
+            "description": "Locks the APRS key. Bit 2 (0x04). Bits 3-7 of this byte stay as they were.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "ptt",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "PTT",
+            "widget": "switch",
+            "order": 50902,
+            "menu": {
+              "number": 509,
+              "code": "APRS Lock"
+            },
+            "description": "Locks PTT. Bit 1 (0x02). The other bits in this byte stay as they were.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "frequency",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "basic-settings",
+            "label": "Frequency",
+            "widget": "switch",
+            "order": 50901,
+            "menu": {
+              "number": 509,
+              "code": "APRS Lock"
+            },
+            "description": "Locks the APRS frequency. Bit 0 (0x01). The other bits in this byte stay as they were.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsBeaconMethod",
+      "seek": "0x136A",
+      "fields": [
+        {
+          "id": "method",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Manual",
+              "PTT",
+              "Auto",
+              "SmartBeaconing"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Method",
+            "widget": "select",
+            "menu": {
+              "number": 510,
+              "code": "Method"
+            },
+            "description": "Beacon transmit method. Measured on the radio: 0 is Manual and 1 is PTT. The manual also lists Auto and SmartBeaconing. 2 and 3 follow that order and were not measured.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51000
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsInitialInterval",
+      "seek": "0x136B",
+      "fields": [
+        {
+          "id": "interval",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "0.2 min",
+              "0.5 min",
+              "1 min",
+              "2 min",
+              "3 min",
+              "5 min",
+              "10 min",
+              "20 min",
+              "30 min",
+              "60 min"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Initial Interval",
+            "widget": "select",
+            "menu": {
+              "number": 511,
+              "code": "Initial Interval"
+            },
+            "description": "Initial beacon interval. Index into 0.2, 0.5, 1, 2, 3, 5, 10, 20, 30, and 60 minutes. Measured 1 min is index 2 and 10 min is index 6.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51100
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsDecayAlgorithm",
+      "seek": "0x136C",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Decay Algorithm",
+            "widget": "switch",
+            "menu": {
+              "number": 512,
+              "code": "Decay Algorithm"
+            },
+            "description": "Decay algorithm for the beacon interval. Measured on the radio: 0 is Off and 1 is On.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51200
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsProportionalPathing",
+      "seek": "0x136D",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Prop. Pathing",
+            "widget": "switch",
+            "menu": {
+              "number": 513,
+              "code": "Prop. Pathing"
+            },
+            "description": "Proportional pathing. Measured on the radio: 0 is Off and 1 is On.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51300
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsBeaconSpeed",
+      "seek": "0x1220",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Speed",
+            "widget": "switch",
+            "menu": {
+              "number": 514,
+              "code": "Speed"
+            },
+            "description": "Includes speed in the beacon. Measured on the radio: 0 is Off and 1 is On. The manual groups this with altitude under Beacon TX Control.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51400
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsBeaconAltitude",
+      "seek": "0x1221",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Altitude",
+            "widget": "switch",
+            "menu": {
+              "number": 515,
+              "code": "Altitude"
+            },
+            "description": "Includes altitude in the beacon. Measured on the radio: 0 is Off and 1 is On.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 51500
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsObject",
+      "seek": "0x1900",
+      "fields": [
+        {
+          "id": "latitudeDegrees",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 255
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Latitude Degrees",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object latitude degrees. Measured on the radio: 30 is stored as 0x1E.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "latitudeMinutes",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 255
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Latitude Minutes",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Whole minutes of object latitude. Measured on the radio: 12.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "latitudeFraction",
+          "type": "u16",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 65535
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Latitude Fraction",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Fractional minutes of object latitude, in 1/10000 minute, stored as a little-endian uint16. Measured 0x0D48 is 3400, which is 0.34 minute.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "longitudeDegrees",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 255
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Longitude Degrees",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object longitude degrees. Measured on the radio: 97 is stored as 0x61.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "longitudeMinutes",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 255
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Longitude Minutes",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Whole minutes of object longitude. Measured on the radio: 45.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "longitudeFraction",
+          "type": "u16",
+          "value": {
+            "kind": "integer",
+            "min": 0,
+            "max": 65535
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Longitude Fraction",
+            "widget": "integer",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Fractional minutes of object longitude, in 1/10000 minute, stored as a little-endian uint16. Measured 0x1A2C is 6700, which is 0.67 minute.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "_hemisphere",
+          "type": "u8",
+          "reserved": true
+        },
+        {
+          "id": "name",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 9,
+            "pad": 0
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Name",
+            "widget": "text",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object name, up to 9 characters. Edited text is NUL-padded. Empty storage is 9 zero bytes.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "type",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Live Object",
+              "Killed Object",
+              "Live Item",
+              "Killed Item"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Type",
+            "widget": "select",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object type. Measured on the radio: 0 is Live Object and 1 is Killed Object. The manual also lists Live Item and Killed Item. 2 and 3 follow that order and were not measured.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "method",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "Temp.",
+              "Auto (15 min)",
+              "Auto (30 min)",
+              "Auto (60 min)"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Method",
+            "widget": "select",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object transmit method. Measured on the radio: 0 is Off and 1 is Temp. The manual also lists Auto (15 min), Auto (30 min), and Auto (60 min). 2, 3, and 4 follow that order and were not measured.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "icon",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 2,
+            "pad": 0,
+            "choices": [
+              {
+                "label": "Person",
+                "value": "/["
+              },
+              {
+                "label": "Bicycle",
+                "value": "/b"
+              },
+              {
+                "label": "Motorcycle",
+                "value": "/<"
+              },
+              {
+                "label": "Car",
+                "value": "/>"
+              },
+              {
+                "label": "Bus",
+                "value": "/U"
+              },
+              {
+                "label": "Railroad Engine",
+                "value": "/="
+              },
+              {
+                "label": "Home",
+                "value": "/-"
+              },
+              {
+                "label": "Yagi@QTH",
+                "value": "/y"
+              },
+              {
+                "label": "KENWOOD",
+                "value": "\\K"
+              },
+              {
+                "label": "Radio",
+                "value": "\\Y"
+              },
+              {
+                "label": "RV",
+                "value": "/R"
+              },
+              {
+                "label": "Van",
+                "value": "/v"
+              },
+              {
+                "label": "Jeep",
+                "value": "/j"
+              },
+              {
+                "label": "Truck",
+                "value": "/k"
+              },
+              {
+                "label": "Truck (18-wheeler)",
+                "value": "/u"
+              },
+              {
+                "label": "Police",
+                "value": "/P"
+              },
+              {
+                "label": "Ambulance",
+                "value": "/a"
+              },
+              {
+                "label": "Fire Truck",
+                "value": "/f"
+              },
+              {
+                "label": "Canoe",
+                "value": "/C"
+              },
+              {
+                "label": "Boat",
+                "value": "/s"
+              },
+              {
+                "label": "Sailboat",
+                "value": "/Y"
+              },
+              {
+                "label": "APRStt",
+                "value": "\\A"
+              },
+              {
+                "label": "X",
+                "value": "/."
+              },
+              {
+                "label": "Triangle",
+                "value": "\\n"
+              },
+              {
+                "label": "Small Circle",
+                "value": "\\o"
+              },
+              {
+                "label": "Red Dot",
+                "value": "//"
+              },
+              {
+                "label": "Big Question Mark",
+                "value": "\\."
+              },
+              {
+                "label": "Balloon",
+                "value": "/O"
+              },
+              {
+                "label": "Glider",
+                "value": "/g"
+              },
+              {
+                "label": "Helicopter",
+                "value": "/X"
+              },
+              {
+                "label": "Aircraft",
+                "value": "/'"
+              },
+              {
+                "label": "Large Aircraft",
+                "value": "/^"
+              },
+              {
+                "label": "Shuttle",
+                "value": "/S"
+              },
+              {
+                "label": "Satellite",
+                "value": "\\S"
+              },
+              {
+                "label": "Rover",
+                "value": "/p"
+              },
+              {
+                "label": "Eyeball",
+                "value": "/E"
+              },
+              {
+                "label": "Portable (Tent)",
+                "value": "/;"
+              },
+              {
+                "label": "HAM Store",
+                "value": "\\h"
+              },
+              {
+                "label": "School",
+                "value": "/K"
+              },
+              {
+                "label": "Hospital",
+                "value": "/h"
+              },
+              {
+                "label": "Red Cross",
+                "value": "/+"
+              },
+              {
+                "label": "Lighthouse",
+                "value": "\\L"
+              },
+              {
+                "label": "Speedpost",
+                "value": "\\m"
+              },
+              {
+                "label": "WorkZone",
+                "value": "\\j"
+              },
+              {
+                "label": "Wreck",
+                "value": "\\x"
+              },
+              {
+                "label": "Sheriff",
+                "value": "/!"
+              },
+              {
+                "label": "Fire",
+                "value": "/:"
+              },
+              {
+                "label": "Sunny",
+                "value": "\\U"
+              },
+              {
+                "label": "Gale Flags",
+                "value": "\\g"
+              },
+              {
+                "label": "Tornado",
+                "value": "\\t"
+              },
+              {
+                "label": "National WX Service Site",
+                "value": "/W"
+              },
+              {
+                "label": "WX",
+                "value": "/_"
+              },
+              {
+                "label": "Digipeater",
+                "value": "/#"
+              },
+              {
+                "label": "Mic-E Repeater",
+                "value": "/m"
+              },
+              {
+                "label": "QSO Repeater",
+                "value": "/r"
+              },
+              {
+                "label": "Circle",
+                "value": "/0"
+              },
+              {
+                "label": "IRLP",
+                "value": "I0"
+              },
+              {
+                "label": "EchoLink",
+                "value": "E0"
+              },
+              {
+                "label": "Node",
+                "value": "/n"
+              },
+              {
+                "label": "Gateway",
+                "value": "/&"
+              },
+              {
+                "label": "DF station",
+                "value": "/\\"
+              },
+              {
+                "label": "Dish Antenna",
+                "value": "/`"
+              },
+              {
+                "label": "PC User",
+                "value": "/L"
+              },
+              {
+                "label": "SSTV",
+                "value": "/T"
+              },
+              {
+                "label": "ATV",
+                "value": "/V"
+              },
+              {
+                "label": "BBS",
+                "value": "/B"
+              }
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Icon",
+            "widget": "select",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object symbol, stored as the table character and the symbol code, the same list as menu 501. Measured /E is Eyeball and \\S is Satellite. A symbol that is not in the list is left as those two characters. Edited text is NUL-padded.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "comment",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 42,
+            "pad": 0
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "beacon-tx",
+            "label": "Comment",
+            "widget": "text",
+            "order": 51600,
+            "menu": {
+              "number": 516,
+              "code": "Object"
+            },
+            "description": "Object comment, up to 42 characters. Edited text is NUL-padded. Empty storage is 42 zero bytes.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        }
+      ],
+      "count": 3,
+      "stride": 64
+    },
+    {
+      "id": "aprsShiftOffset",
+      "seek": "0x1363",
+      "fields": [
+        {
+          "id": "enabled",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "qsy",
+            "label": "Shift/Offset",
+            "widget": "switch",
+            "menu": {
+              "number": 522,
+              "code": "Shift/Offset"
+            },
+            "description": "Includes the repeater shift and offset in APRS QSY information. 0 is Off and 1 is On.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 52200
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsQsyLimit",
+      "seek": "0x1364",
+      "fields": [
+        {
+          "id": "distance",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "10 mi",
+              "20 mi",
+              "30 mi",
+              "40 mi",
+              "50 mi",
+              "60 mi",
+              "70 mi",
+              "80 mi",
+              "90 mi",
+              "100 mi",
+              "110 mi",
+              "120 mi",
+              "130 mi",
+              "140 mi",
+              "150 mi",
+              "160 mi",
+              "170 mi",
+              "180 mi",
+              "190 mi",
+              "200 mi",
+              "210 mi",
+              "220 mi",
+              "230 mi",
+              "240 mi",
+              "250 mi",
+              "260 mi",
+              "270 mi",
+              "280 mi",
+              "290 mi",
+              "300 mi",
+              "310 mi",
+              "320 mi",
+              "330 mi",
+              "340 mi",
+              "350 mi",
+              "360 mi",
+              "370 mi",
+              "380 mi",
+              "390 mi",
+              "400 mi",
+              "410 mi",
+              "420 mi",
+              "430 mi",
+              "440 mi",
+              "450 mi",
+              "460 mi",
+              "470 mi",
+              "480 mi",
+              "490 mi",
+              "500 mi",
+              "510 mi",
+              "520 mi",
+              "530 mi",
+              "540 mi",
+              "550 mi",
+              "560 mi",
+              "570 mi",
+              "580 mi",
+              "590 mi",
+              "600 mi",
+              "610 mi",
+              "620 mi",
+              "630 mi",
+              "640 mi",
+              "650 mi",
+              "660 mi",
+              "670 mi",
+              "680 mi",
+              "690 mi",
+              "700 mi",
+              "710 mi",
+              "720 mi",
+              "730 mi",
+              "740 mi",
+              "750 mi",
+              "760 mi",
+              "770 mi",
+              "780 mi",
+              "790 mi",
+              "800 mi",
+              "810 mi",
+              "820 mi",
+              "830 mi",
+              "840 mi",
+              "850 mi",
+              "860 mi",
+              "870 mi",
+              "880 mi",
+              "890 mi",
+              "900 mi",
+              "910 mi",
+              "920 mi",
+              "930 mi",
+              "940 mi",
+              "950 mi",
+              "960 mi",
+              "970 mi",
+              "980 mi",
+              "990 mi",
+              "1000 mi",
+              "1010 mi",
+              "1020 mi",
+              "1030 mi",
+              "1040 mi",
+              "1050 mi",
+              "1060 mi",
+              "1070 mi",
+              "1080 mi",
+              "1090 mi",
+              "1100 mi",
+              "1110 mi",
+              "1120 mi",
+              "1130 mi",
+              "1140 mi",
+              "1150 mi",
+              "1160 mi",
+              "1170 mi",
+              "1180 mi",
+              "1190 mi",
+              "1200 mi",
+              "1210 mi",
+              "1220 mi",
+              "1230 mi",
+              "1240 mi",
+              "1250 mi",
+              "1260 mi",
+              "1270 mi",
+              "1280 mi",
+              "1290 mi",
+              "1300 mi",
+              "1310 mi",
+              "1320 mi",
+              "1330 mi",
+              "1340 mi",
+              "1350 mi",
+              "1360 mi",
+              "1370 mi",
+              "1380 mi",
+              "1390 mi",
+              "1400 mi",
+              "1410 mi",
+              "1420 mi",
+              "1430 mi",
+              "1440 mi",
+              "1450 mi",
+              "1460 mi",
+              "1470 mi",
+              "1480 mi",
+              "1490 mi",
+              "1500 mi",
+              "1510 mi",
+              "1520 mi",
+              "1530 mi",
+              "1540 mi",
+              "1550 mi",
+              "1560 mi",
+              "1570 mi",
+              "1580 mi",
+              "1590 mi",
+              "1600 mi",
+              "1610 mi",
+              "1620 mi",
+              "1630 mi",
+              "1640 mi",
+              "1650 mi",
+              "1660 mi",
+              "1670 mi",
+              "1680 mi",
+              "1690 mi",
+              "1700 mi",
+              "1710 mi",
+              "1720 mi",
+              "1730 mi",
+              "1740 mi",
+              "1750 mi",
+              "1760 mi",
+              "1770 mi",
+              "1780 mi",
+              "1790 mi",
+              "1800 mi",
+              "1810 mi",
+              "1820 mi",
+              "1830 mi",
+              "1840 mi",
+              "1850 mi",
+              "1860 mi",
+              "1870 mi",
+              "1880 mi",
+              "1890 mi",
+              "1900 mi",
+              "1910 mi",
+              "1920 mi",
+              "1930 mi",
+              "1940 mi",
+              "1950 mi",
+              "1960 mi",
+              "1970 mi",
+              "1980 mi",
+              "1990 mi",
+              "2000 mi",
+              "2010 mi",
+              "2020 mi",
+              "2030 mi",
+              "2040 mi",
+              "2050 mi",
+              "2060 mi",
+              "2070 mi",
+              "2080 mi",
+              "2090 mi",
+              "2100 mi",
+              "2110 mi",
+              "2120 mi",
+              "2130 mi",
+              "2140 mi",
+              "2150 mi",
+              "2160 mi",
+              "2170 mi",
+              "2180 mi",
+              "2190 mi",
+              "2200 mi",
+              "2210 mi",
+              "2220 mi",
+              "2230 mi",
+              "2240 mi",
+              "2250 mi",
+              "2260 mi",
+              "2270 mi",
+              "2280 mi",
+              "2290 mi",
+              "2300 mi",
+              "2310 mi",
+              "2320 mi",
+              "2330 mi",
+              "2340 mi",
+              "2350 mi",
+              "2360 mi",
+              "2370 mi",
+              "2380 mi",
+              "2390 mi",
+              "2400 mi",
+              "2410 mi",
+              "2420 mi",
+              "2430 mi",
+              "2440 mi",
+              "2450 mi",
+              "2460 mi",
+              "2470 mi",
+              "2480 mi",
+              "2490 mi",
+              "2500 mi"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "qsy",
+            "label": "QSY Limit Distance",
+            "widget": "select",
+            "menu": {
+              "number": 523,
+              "code": "QSY Limit Distance"
+            },
+            "description": "Farthest station the radio will tune from QSY data. The manual steps are Off, then 10 through 2500. The byte stores that distance in tens of miles: 0 is Off and 246 is 2460 mi. The choices are shown in miles.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 52300
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsSlowRate",
+      "seek": "0x1370",
+      "fields": [
+        {
+          "id": "minutes",
+          "type": "u8",
+          "value": {
+            "kind": "integer",
+            "min": 1,
+            "max": 100
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "smartbeaconing",
+            "label": "Slow Rate",
+            "widget": "integer",
+            "menu": {
+              "number": 531,
+              "code": "Slow Rate"
+            },
+            "description": "SmartBeaconing transmit interval at low speed, in minutes. The manual range is 1 to 100. The default in the manual is 30. The byte is the number of minutes.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 53100
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsWaypointFormat",
+      "seek": "0x1213",
+      "fields": [
+        {
+          "id": "format",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "NMEA",
+              "MAGELLAN",
+              "KENWOOD"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "waypoint",
+            "label": "Waypoint Format",
+            "widget": "select",
+            "menu": {
+              "number": 540,
+              "code": "Format"
+            },
+            "description": "Waypoint sentence format. Measured bytes are 0 NMEA and 2 KENWOOD. MAGELLAN is 1 from the manual order between those two.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 54000
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsPositionLimit",
+      "seek": "0x1365",
+      "fields": [
+        {
+          "id": "distance",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "10 mi",
+              "20 mi",
+              "30 mi",
+              "40 mi",
+              "50 mi",
+              "60 mi",
+              "70 mi",
+              "80 mi",
+              "90 mi",
+              "100 mi",
+              "110 mi",
+              "120 mi",
+              "130 mi",
+              "140 mi",
+              "150 mi",
+              "160 mi",
+              "170 mi",
+              "180 mi",
+              "190 mi",
+              "200 mi",
+              "210 mi",
+              "220 mi",
+              "230 mi",
+              "240 mi",
+              "250 mi",
+              "260 mi",
+              "270 mi",
+              "280 mi",
+              "290 mi",
+              "300 mi",
+              "310 mi",
+              "320 mi",
+              "330 mi",
+              "340 mi",
+              "350 mi",
+              "360 mi",
+              "370 mi",
+              "380 mi",
+              "390 mi",
+              "400 mi",
+              "410 mi",
+              "420 mi",
+              "430 mi",
+              "440 mi",
+              "450 mi",
+              "460 mi",
+              "470 mi",
+              "480 mi",
+              "490 mi",
+              "500 mi",
+              "510 mi",
+              "520 mi",
+              "530 mi",
+              "540 mi",
+              "550 mi",
+              "560 mi",
+              "570 mi",
+              "580 mi",
+              "590 mi",
+              "600 mi",
+              "610 mi",
+              "620 mi",
+              "630 mi",
+              "640 mi",
+              "650 mi",
+              "660 mi",
+              "670 mi",
+              "680 mi",
+              "690 mi",
+              "700 mi",
+              "710 mi",
+              "720 mi",
+              "730 mi",
+              "740 mi",
+              "750 mi",
+              "760 mi",
+              "770 mi",
+              "780 mi",
+              "790 mi",
+              "800 mi",
+              "810 mi",
+              "820 mi",
+              "830 mi",
+              "840 mi",
+              "850 mi",
+              "860 mi",
+              "870 mi",
+              "880 mi",
+              "890 mi",
+              "900 mi",
+              "910 mi",
+              "920 mi",
+              "930 mi",
+              "940 mi",
+              "950 mi",
+              "960 mi",
+              "970 mi",
+              "980 mi",
+              "990 mi",
+              "1000 mi",
+              "1010 mi",
+              "1020 mi",
+              "1030 mi",
+              "1040 mi",
+              "1050 mi",
+              "1060 mi",
+              "1070 mi",
+              "1080 mi",
+              "1090 mi",
+              "1100 mi",
+              "1110 mi",
+              "1120 mi",
+              "1130 mi",
+              "1140 mi",
+              "1150 mi",
+              "1160 mi",
+              "1170 mi",
+              "1180 mi",
+              "1190 mi",
+              "1200 mi",
+              "1210 mi",
+              "1220 mi",
+              "1230 mi",
+              "1240 mi",
+              "1250 mi",
+              "1260 mi",
+              "1270 mi",
+              "1280 mi",
+              "1290 mi",
+              "1300 mi",
+              "1310 mi",
+              "1320 mi",
+              "1330 mi",
+              "1340 mi",
+              "1350 mi",
+              "1360 mi",
+              "1370 mi",
+              "1380 mi",
+              "1390 mi",
+              "1400 mi",
+              "1410 mi",
+              "1420 mi",
+              "1430 mi",
+              "1440 mi",
+              "1450 mi",
+              "1460 mi",
+              "1470 mi",
+              "1480 mi",
+              "1490 mi",
+              "1500 mi",
+              "1510 mi",
+              "1520 mi",
+              "1530 mi",
+              "1540 mi",
+              "1550 mi",
+              "1560 mi",
+              "1570 mi",
+              "1580 mi",
+              "1590 mi",
+              "1600 mi",
+              "1610 mi",
+              "1620 mi",
+              "1630 mi",
+              "1640 mi",
+              "1650 mi",
+              "1660 mi",
+              "1670 mi",
+              "1680 mi",
+              "1690 mi",
+              "1700 mi",
+              "1710 mi",
+              "1720 mi",
+              "1730 mi",
+              "1740 mi",
+              "1750 mi",
+              "1760 mi",
+              "1770 mi",
+              "1780 mi",
+              "1790 mi",
+              "1800 mi",
+              "1810 mi",
+              "1820 mi",
+              "1830 mi",
+              "1840 mi",
+              "1850 mi",
+              "1860 mi",
+              "1870 mi",
+              "1880 mi",
+              "1890 mi",
+              "1900 mi",
+              "1910 mi",
+              "1920 mi",
+              "1930 mi",
+              "1940 mi",
+              "1950 mi",
+              "1960 mi",
+              "1970 mi",
+              "1980 mi",
+              "1990 mi",
+              "2000 mi",
+              "2010 mi",
+              "2020 mi",
+              "2030 mi",
+              "2040 mi",
+              "2050 mi",
+              "2060 mi",
+              "2070 mi",
+              "2080 mi",
+              "2090 mi",
+              "2100 mi",
+              "2110 mi",
+              "2120 mi",
+              "2130 mi",
+              "2140 mi",
+              "2150 mi",
+              "2160 mi",
+              "2170 mi",
+              "2180 mi",
+              "2190 mi",
+              "2200 mi",
+              "2210 mi",
+              "2220 mi",
+              "2230 mi",
+              "2240 mi",
+              "2250 mi",
+              "2260 mi",
+              "2270 mi",
+              "2280 mi",
+              "2290 mi",
+              "2300 mi",
+              "2310 mi",
+              "2320 mi",
+              "2330 mi",
+              "2340 mi",
+              "2350 mi",
+              "2360 mi",
+              "2370 mi",
+              "2380 mi",
+              "2390 mi",
+              "2400 mi",
+              "2410 mi",
+              "2420 mi",
+              "2430 mi",
+              "2440 mi",
+              "2450 mi",
+              "2460 mi",
+              "2470 mi",
+              "2480 mi",
+              "2490 mi",
+              "2500 mi"
+            ]
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Position Limit",
+            "widget": "select",
+            "menu": {
+              "number": 550,
+              "code": "Position Limit"
+            },
+            "description": "Ignores stations farther than this. The manual steps are Off, then 10 through 2500. The byte stores that distance in tens of miles: 0 is Off and 248 is 2480 mi. The choices are shown in miles.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 55000
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsFilterType",
+      "seek": "0x1366",
+      "fields": [
+        {
+          "id": "_unused",
+          "type": "bits",
+          "width": 1,
+          "reserved": true
+        },
+        {
+          "id": "others",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Others",
+            "widget": "switch",
+            "order": 55107,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives other packet types. Bit 6 (0x40), assumed from the manual list. Bit 7 is unused and is left unchanged.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "oneWay",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "1-WAY",
+            "widget": "switch",
+            "order": 55106,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives one-way trackers. Bit 5 (0x20). Manual order places 1-WAY on this bit of the measured 0x20 and 0x04 pair.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "navitra",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "NAVITRA",
+            "widget": "switch",
+            "order": 55105,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives NAVITRA stations. Bit 4 (0x10), assumed from the manual list.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "object",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Object",
+            "widget": "switch",
+            "order": 55104,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives object packets. Bit 3 (0x08), assumed from the manual list.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "mobile",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Mobile",
+            "widget": "switch",
+            "order": 55103,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives mobile stations. Bit 2 (0x04). Manual order places Mobile on this bit of the measured 0x20 and 0x04 pair.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "digipeater",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Digipeater",
+            "widget": "switch",
+            "order": 55102,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives digipeaters. Bit 1 (0x02), assumed from the manual list.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        },
+        {
+          "id": "weather",
+          "type": "bits",
+          "width": 1,
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "packet-filter",
+            "label": "Weather",
+            "widget": "switch",
+            "order": 55101,
+            "menu": {
+              "number": 551,
+              "code": "Filter Type"
+            },
+            "description": "Receives weather stations. Bit 0 (0x01), assumed from the manual list.",
+            "section": "APRS",
+            "sectionOrder": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "aprsBulletinGroup",
+      "seek": "0x183B",
+      "fields": [
+        {
+          "id": "codes",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 35,
+            "pad": 0
+          },
+          "ui": {
+            "group": "aprs",
+            "subgroup": "others",
+            "label": "Bulletin Group Code",
+            "widget": "text",
+            "menu": {
+              "number": 585,
+              "code": "Bulletin Group Code"
+            },
+            "description": "Bulletin group codes, up to 6 codes of 5 characters, separated by commas. The manual allows 0-9, A-Z, comma, and hyphen. The field is 35 bytes, which holds 6 codes plus the commas between them. Empty storage is 35 zero bytes. Edited text is NUL-padded.",
+            "section": "APRS",
+            "sectionOrder": 5,
+            "order": 58500
+          }
+        }
+      ]
+    },
+    {
+      "id": "dstarMyCall",
+      "seek": "0x02B1",
+      "fields": [
+        {
+          "id": "callsign",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 8,
+            "pad": 32
+          },
+          "ui": {
+            "group": "digital",
+            "subgroup": "tx-rx",
+            "label": "My Callsign",
+            "widget": "text",
+            "menu": {
+              "number": 610,
+              "code": "My Callsign"
+            },
+            "description": "D-STAR My Callsign, up to 8 characters. Stored space-padded. The radio shows it with the memo as CALL/MEMO.",
+            "section": "Digital",
+            "sectionOrder": 6,
+            "order": 61000
+          }
+        },
+        {
+          "id": "memo",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 4,
+            "pad": 32
+          },
+          "ui": {
+            "group": "digital",
+            "subgroup": "tx-rx",
+            "label": "Callsign memo",
+            "widget": "text",
+            "menu": {
+              "number": 610,
+              "code": "My Callsign"
+            },
+            "description": "Four-character note stored immediately after My Callsign. The radio shows the pair as CALL/MEMO. Edited text is space-padded.",
+            "section": "Digital",
+            "sectionOrder": 6,
+            "order": 61000
+          }
+        }
+      ]
+    },
+    {
+      "id": "backlight",
+      "seek": "0x1060",
+      "fields": [
+        {
+          "id": "control",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Manual",
+              "On",
+              "Auto",
+              "Auto (DC-IN)"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "display",
+            "label": "Backlight Control",
+            "widget": "select",
+            "menu": {
+              "number": 900,
+              "code": "Backlight Control"
+            },
+            "description": "When the display backlight turns on. Manual follows the backlight key. On stays lit. Auto lights while you operate the radio, then follows the backlight timer. Auto (DC-IN) stays lit on external power and follows Auto on the battery.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 90000
+          }
+        }
+      ]
+    },
+    {
+      "id": "lcdBrightness",
+      "seek": "0x1062",
+      "fields": [
+        {
+          "id": "brightness",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Low",
+              "Medium",
+              "High"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "display",
+            "label": "LCD Brightness",
+            "widget": "select",
+            "menu": {
+              "number": 902,
+              "code": "LCD Brightness"
+            },
+            "description": "Display brightness. Clone images confirm 0x00 Low, 0x01 Medium, and 0x02 High.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 90200
+          }
+        }
+      ]
+    },
+    {
+      "id": "powerOnMessage",
+      "seek": "0x10C0",
+      "fields": [
+        {
+          "id": "message",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 16,
+            "pad": 0
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "display",
+            "label": "Power-on Message",
+            "widget": "text",
+            "menu": {
+              "number": 903,
+              "code": "Power-on Message"
+            },
+            "description": "Text shown for a couple of seconds when the radio is turned on. Up to 16 characters. Edited text is NUL-padded.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 90300
+          }
+        }
+      ]
+    },
+    {
+      "id": "beep",
+      "seek": "0x1071",
+      "fields": [
+        {
+          "id": "beep",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "audio",
+            "label": "Key Beep",
+            "widget": "switch",
+            "menu": {
+              "number": 914,
+              "code": "Beep"
+            },
+            "description": "Beeps when a key is pressed.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 91400
+          }
+        }
+      ]
+    },
+    {
+      "id": "battery",
+      "seek": "0x1076",
+      "fields": [
+        {
+          "id": "saver",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "0.2s",
+              "0.4s",
+              "0.6s",
+              "0.8s",
+              "1.0s",
+              "2.0s",
+              "3.0s",
+              "4.0s",
+              "5.0s"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "battery",
+            "label": "Battery Saver",
+            "widget": "select",
+            "menu": {
+              "number": 920,
+              "code": "Battery Saver"
+            },
+            "description": "How long the receiver sleeps between checks while the squelch is closed. Off keeps it awake. Longer times save more battery and can miss the start of a short call.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 92000
+          }
+        },
+        {
+          "id": "apo",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "15min",
+              "30min",
+              "60min"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "battery",
+            "label": "Auto Power Off",
+            "widget": "select",
+            "menu": {
+              "number": 921,
+              "code": "APO"
+            },
+            "description": "Turns the radio off after this long with no keypress or tuning. Off disables it. Scanning keeps the radio awake.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 92100
+          }
+        }
+      ]
+    },
+    {
+      "id": "cursorShift",
+      "seek": "0x107F",
+      "fields": [
+        {
+          "id": "delay",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "Off",
+              "1.0s",
+              "1.5s",
+              "2.0s"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "auxiliary",
+            "label": "Cursor Shift",
+            "widget": "select",
+            "menu": {
+              "number": 945,
+              "code": "Cursor Shift"
+            },
+            "description": "How long the radio waits before moving the text cursor. Clone images confirm 0x00 Off, 0x01 = 1.0 s, 0x02 = 1.5 s, and 0x03 = 2.0 s.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 94500
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfKeysLock",
+      "seek": "0x1085",
+      "fields": [
+        {
+          "id": "locked",
+          "type": "u8",
+          "value": {
+            "kind": "boolean"
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "lock",
+            "label": "DTMF Keys Lock",
+            "widget": "switch",
+            "menu": {
+              "number": 961,
+              "code": "DTMF Keys Lock"
+            },
+            "description": "Stops the keypad from sending DTMF tones while transmitting. Clone images confirm 0 is Off and 1 is On.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 96100
+          }
+        }
+      ]
+    },
+    {
+      "id": "speedDistance",
+      "seek": "0x1088",
+      "fields": [
+        {
+          "id": "unit",
+          "type": "u8",
+          "value": {
+            "kind": "enum",
+            "values": [
+              "mi/h",
+              "km/h",
+              "knots"
+            ]
+          },
+          "ui": {
+            "group": "configuration",
+            "subgroup": "units",
+            "label": "Speed/Distance",
+            "widget": "select",
+            "menu": {
+              "number": 970,
+              "code": "Speed, Distance"
+            },
+            "description": "Units for speed and distance. Clone images confirm 0x00 = mi/h, 0x01 = km/h, and 0x02 = knots. The manual's printed order depends on the region and does not match these bytes.",
+            "section": "Configuration",
+            "sectionOrder": 9,
+            "order": 97000
+          }
+        }
+      ]
+    }
+  ],
+  "channelBindings": {
+    "records": "channels",
+    "names": "names",
+    "nameField": "name",
+    "extras": "flags",
+    "receiveFrequency": "freq",
+    "transmitFrequency": "offset",
+    "receiveTone": "ctone",
+    "transmitTone": "rtone"
+  }
+}

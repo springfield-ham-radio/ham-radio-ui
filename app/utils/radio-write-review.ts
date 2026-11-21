@@ -20,7 +20,7 @@ import {
   type ChannelValidationLicense,
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
-import { collectMemoryMapUiGroups } from '~/utils/settings-groups';
+import { collectMemoryMapUiGroups, fieldSubgroup, type SettingsUiGroup } from '~/utils/settings-groups';
 import { getSettingAtPath } from '~/utils/settings-path';
 
 /** Shown through the frequency, offset, and tone rows, or filled in by the codec. */
@@ -286,6 +286,42 @@ function diffFields(before: ReviewField[], after: ReviewField[], kind: WriteRevi
   return changes;
 }
 
+function fieldSectionName(field: RadioMemoryMapUiField): string | undefined {
+  const section = (field.ui as RadioMemoryMapUiField['ui'] & { section?: unknown }).section;
+
+  if (typeof section !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = section.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Section pages already use the section as the review heading.
+ * A subgroup heading on that page is prefixed onto the setting label.
+ * Legacy groups keep the field label alone.
+ */
+function reviewSettingLabel(group: SettingsUiGroup, field: RadioMemoryMapUiField): string {
+  if (!fieldSectionName(field)) {
+    return field.ui.label;
+  }
+
+  const subgroupId = fieldSubgroup(field);
+
+  if (!subgroupId) {
+    return field.ui.label;
+  }
+
+  const subgroup = group.groups.find((entry) => entry.id === subgroupId);
+
+  if (!subgroup) {
+    return field.ui.label;
+  }
+
+  return `${subgroup.label} · ${field.ui.label}`;
+}
+
 function diffSettings(
   before: RadioSettings,
   after: RadioSettings,
@@ -312,7 +348,7 @@ function diffSettings(
       const afterValue = formatMemoryMapFieldValue(right, field);
       fields.push({
         id: field.path,
-        label: field.ui.label,
+        label: reviewSettingLabel(group, field),
         before: beforeValue || EMPTY_VALUE,
         after: afterValue || EMPTY_VALUE,
       });

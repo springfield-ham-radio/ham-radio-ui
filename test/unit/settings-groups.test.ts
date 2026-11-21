@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMap, RadioMemoryMapField } from '@springfield/ham-radio-api';
-import { collectMemoryMapUiGroups } from '../../app/utils/settings-groups.ts';
+import { collectMemoryMapUiGroups, fieldSubgroup } from '../../app/utils/settings-groups.ts';
+import { layoutSettingsFields } from '../../app/utils/settings-switch-groups.ts';
 
 function setting(
   id: string,
@@ -377,5 +379,197 @@ describe('collectMemoryMapUiGroups', () => {
     expect(grouped.map((group) => group.label)).toEqual(['Audio', 'Other']);
     expect(grouped[0]?.fields.map((field) => field.ui.label)).toEqual(['Key Beep']);
     expect(grouped[1]?.fields.map((field) => field.fieldId)).toEqual(['squelch']);
+  });
+
+  it('should keep a flat section page when no field has a subgroup', () => {
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap([setting('beep', 'Key Beep', 'Audio', undefined, 1), setting('callsign', 'My Callsign', 'APRS', undefined, 5)]),
+    );
+
+    expect(grouped.map((group) => group.groups)).toEqual([[], []]);
+  });
+
+  it('should order undeclared subgroup headings by the smallest menu number, then first-seen', () => {
+    const beacon = setting('method', 'Method', 'APRS', undefined, 5);
+    const qsy = setting('offset', 'Shift', 'APRS', undefined, 5);
+    const plain = setting('notes', 'Notes', 'APRS', undefined, 5);
+    const laterPlain = setting('comment', 'Comment', 'APRS', undefined, 5);
+    beacon.ui = { ...beacon.ui!, subgroup: 'beacon-tx', menu: { number: 510, code: 'Method' } };
+    qsy.ui = { ...qsy.ui!, subgroup: 'qsy', menu: { number: 522, code: 'Shift' } };
+    plain.ui = { ...plain.ui!, subgroup: 'notes' };
+    laterPlain.ui = { ...laterPlain.ui!, subgroup: 'comment' };
+
+    const grouped = collectMemoryMapUiGroups(sectionMap([qsy, beacon, laterPlain, plain]));
+    const aprs = grouped[0];
+
+    expect(aprs?.label).toBe('APRS');
+    expect(aprs?.groups.map((subgroup) => subgroup.label)).toEqual(['Beacon Tx', 'Qsy', 'Comment', 'Notes']);
+    expect(aprs?.groups.map((subgroup) => subgroup.id)).toEqual(['beacon-tx', 'qsy', 'comment', 'notes']);
+  });
+
+  it('should use a declared parent by ui.group id before a label match', () => {
+    const method = setting('method', 'Method', 'APRS', undefined, 5);
+    method.ui = { ...method.ui!, group: 'aprs', subgroup: 'basic-settings', menu: { number: 500, code: 'Method' } };
+
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap(
+        [method],
+        [
+          { id: 'aprs', label: 'Wrong', groups: [{ id: 'basic-settings', label: 'From Id' }] },
+          { id: 'other', label: 'APRS', groups: [{ id: 'basic-settings', label: 'From Label' }] },
+        ],
+      ),
+    );
+
+    expect(grouped[0]?.groups.map((subgroup) => subgroup.label)).toEqual(['From Id']);
+    expect(grouped[0]?.icon).toBe('i-lucide-sliders-horizontal');
+  });
+
+  it('should use a declared parent whose label equals the section when ui.group does not match', () => {
+    const method = setting('method', 'Method', 'APRS', undefined, 5);
+    method.ui = { ...method.ui!, group: 'legacy', subgroup: 'qsy', menu: { number: 522, code: 'QSY' } };
+
+    const grouped = collectMemoryMapUiGroups(
+      sectionMap(
+        [method],
+        [{ id: 'aprs', label: 'APRS', icon: 'i-lucide-map-pinned', groups: [{ id: 'qsy', label: 'QSY Information' }] }],
+      ),
+    );
+
+    expect(grouped[0]?.groups.map((subgroup) => subgroup.label)).toEqual(['QSY Information']);
+    expect(grouped[0]?.icon).toBe('i-lucide-map-pinned');
+  });
+});
+
+/**
+ * Kenwood TH-D74 memory map from radio-module-kenwood
+ * branch cursor/th-d74-aprs-beacon-510-515-a7aa at 2341c6a.
+ * `ui.section` is the radio menu category. Nested `memoryMap.groups` are the
+ * sub-group headings, in menu order. `ui.order` is menu*100, and every menu
+ * 516 field uses 51600.
+ */
+const thD74MenuSections = JSON.parse(
+  readFileSync(new URL('../fixtures/kenwood/th-d74-menu-sections.json', import.meta.url), 'utf8'),
+) as RadioMemoryMap;
+
+describe('collectMemoryMapUiGroups TH-D74 menu sections', () => {
+  const grouped = collectMemoryMapUiGroups(thD74MenuSections);
+
+  it('should list only the radio menu categories in the sidebar', () => {
+    expect(grouped.map((group) => group.label)).toEqual([
+      'TX/RX',
+      'Memory',
+      'Audio File',
+      'APRS',
+      'Digital',
+      'Configuration',
+    ]);
+    expect(grouped.map((group) => group.id)).toEqual([
+      'tx-rx',
+      'memory',
+      'audio-file',
+      'aprs',
+      'digital',
+      'configuration',
+    ]);
+    expect(grouped.map((group) => group.icon)).toEqual([
+      'i-lucide-radio-tower',
+      'i-lucide-database',
+      'i-lucide-audio-lines',
+      'i-lucide-map-pinned',
+      'i-lucide-satellite',
+      'i-lucide-settings',
+    ]);
+    expect(grouped.some((group) => group.label === 'Basic Settings' || group.label === 'Beacon TX Control')).toBe(false);
+  });
+
+  it('should split APRS under the declared subgroup headings in menu order', () => {
+    const aprs = grouped.find((group) => group.label === 'APRS');
+
+    expect(aprs?.groups.map((subgroup) => subgroup.label)).toEqual([
+      'Basic Settings',
+      'Beacon TX Control',
+      'QSY Information',
+      'SmartBeaconing',
+      'Waypoint',
+      'Packet Filter',
+      'Others',
+    ]);
+    expect(aprs?.groups[0]?.description).toContain('Menu 500');
+    expect(aprs?.groups[1]?.description).toContain('Menus 510 through 516');
+    expect(aprs?.fields.filter((field) => !fieldSubgroup(field))).toEqual([]);
+  });
+
+  it('should keep menu 516 objects in memory-map order when ui.order ties', () => {
+    const beacon = grouped.find((group) => group.label === 'APRS')?.groups.find((subgroup) => subgroup.id === 'beacon-tx');
+    const objectFields = beacon?.fields.filter((field) => field.ui.menu?.number === 516) ?? [];
+    const labels = objectFields.map((field) => field.ui.label);
+
+    expect(beacon?.fields[0]?.ui.label).toBe('Method');
+    expect(labels[0]).toBe('Latitude Degrees 1');
+    expect(labels.indexOf('Name 1')).toBeLessThan(labels.indexOf('Latitude Degrees 2'));
+    expect(labels.indexOf('Name 2')).toBeLessThan(labels.indexOf('Name 3'));
+    expect(labels.at(-1)).toBe('Comment 3');
+    expect(objectFields.map((field) => field.path).filter((path) => path.endsWith('.name'))).toEqual([
+      'aprsObject.0.name',
+      'aprsObject.1.name',
+      'aprsObject.2.name',
+    ]);
+  });
+
+  it('should fold boolean switches that share a menu number inside one subgroup', () => {
+    const basic = grouped.find((group) => group.label === 'APRS')?.groups.find((subgroup) => subgroup.id === 'basic-settings');
+    const cells = layoutSettingsFields(basic?.fields ?? []);
+    const lock = cells.find((cell) => cell.kind === 'switches' && cell.group.menuNumber === 509);
+
+    expect(lock?.kind).toBe('switches');
+
+    if (lock?.kind !== 'switches') {
+      return;
+    }
+
+    expect(lock.group.fields.map((field) => field.ui.label)).toEqual(['Frequency', 'PTT', 'APRS Key']);
+    expect(cells.filter((cell) => (cell.kind === 'switches' ? cell.group.menuNumber : cell.field.ui.menu?.number) === 509)).toHaveLength(1);
+  });
+
+  it('should leave Memory group names ungrouped and ahead of Memory Channel', () => {
+    const memory = grouped.find((group) => group.label === 'Memory');
+    const ungrouped = memory?.fields.filter((field) => !fieldSubgroup(field)) ?? [];
+
+    expect(memory?.groups.map((subgroup) => subgroup.label)).toEqual(['Memory Channel']);
+    expect(ungrouped.map((field) => field.ui.label)).toEqual(
+      Array.from({ length: 30 }, (_, index) => `Group name ${index + 1}`),
+    );
+    expect(memory?.groups[0]?.fields.map((field) => field.ui.label)).toEqual(['Recall Method']);
+    expect(memory?.groups.some((subgroup) => subgroup.fields.some((field) => field.structId === 'groupNames'))).toBe(false);
+  });
+
+  it('should use the declared subgroup labels for the other menu categories', () => {
+    expect(grouped.find((group) => group.label === 'TX/RX')?.groups.map((subgroup) => subgroup.label)).toEqual([
+      'RX',
+      'TX',
+      'RX Filter',
+      'Scan',
+      'Repeater',
+      'VOX',
+      'DTMF',
+      'CW',
+      'Others',
+    ]);
+    expect(grouped.find((group) => group.label === 'Configuration')?.groups.map((subgroup) => subgroup.label)).toEqual([
+      'Display',
+      'Audio',
+      'Battery',
+      'Auxiliary',
+      'Lock',
+      'Units',
+    ]);
+    expect(grouped.find((group) => group.label === 'Digital')?.groups[0]).toMatchObject({
+      id: 'tx-rx',
+      label: 'TX/RX',
+    });
+    expect(grouped.find((group) => group.label === 'Audio File')?.groups.map((subgroup) => subgroup.label)).toEqual([
+      'Voice Message',
+    ]);
   });
 });
