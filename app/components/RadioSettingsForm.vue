@@ -181,7 +181,7 @@ function selectGroup(group: string): void {
             v-for="(section, index) in selectedSections"
             :key="section.id"
             class="space-y-3"
-            :class="index > 0 ? 'border-t border-default pt-5' : undefined"
+            :class="index > 0 ? 'border-t-2 border-accented pt-5' : undefined"
           >
             <header v-if="section.label" class="flex items-center gap-1">
               <h3 class="text-sm font-semibold text-highlighted">{{ section.label }}</h3>
