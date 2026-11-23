@@ -128,23 +128,62 @@ describe('layoutSettingsSection', () => {
 
     const cells = records.tabs[0]?.cells ?? [];
 
-    expect(cells.map((cell) => (cell.kind === 'field' ? 'Name' : cell.kind === 'coordinate' ? cell.label : cell.kind))).toEqual([
+    expect(cells.map((cell) => (cell.kind === 'field' ? 'Name' : cell.kind === 'coordinatePair' ? 'Latitude+Longitude' : cell.kind))).toEqual([
       'Name',
-      'Latitude',
-      'Longitude',
+      'Latitude+Longitude',
     ]);
 
-    const latitude = cells[1];
+    const pair = cells[1];
 
-    expect(latitude?.kind).toBe('coordinate');
+    expect(pair?.kind).toBe('coordinatePair');
 
-    if (latitude?.kind !== 'coordinate') {
+    if (pair?.kind !== 'coordinatePair') {
       return;
     }
 
-    expect(latitude.menuNumber).toBe(516);
-    expect(latitude.parts.map((part) => part.part)).toEqual(['degrees', 'minutes', 'fraction']);
-    expect(latitude.axis).toBe('lat');
+    expect(pair.latitude.menuNumber).toBe(516);
+    expect(pair.latitude.parts.map((part) => part.part)).toEqual(['degrees', 'minutes', 'fraction']);
+    expect(pair.latitude.axis).toBe('lat');
+    expect(pair.longitude.axis).toBe('lon');
+    expect(layoutCellPaths(pair)).toEqual([
+      'latDeg',
+      'latMin',
+      'latFrac',
+      'lonDeg',
+      'lonMin',
+      'lonFrac',
+    ]);
+  });
+
+  it('should keep lone coordinate cells when latitude and longitude are not adjacent', () => {
+    const fields = [
+      uiField('name', 'Name', { record: record(1) }, 51610),
+      uiField('latDeg', 'Latitude Degrees', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'degrees', 'Latitude') }, 51630),
+      uiField('latMin', 'Latitude Minutes', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'minutes', 'Latitude') }, 51631),
+      uiField('latFrac', 'Latitude Fraction', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'fraction', 'Latitude') }, 51632),
+      uiField('method', 'Method', { record: record(1) }, 51635),
+      uiField('lonDeg', 'Longitude Degrees', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'degrees', 'Longitude') }, 51640),
+      uiField('lonMin', 'Longitude Minutes', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'minutes', 'Longitude') }, 51641),
+      uiField('lonFrac', 'Longitude Fraction', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'fraction', 'Longitude') }, 51642),
+    ];
+    const laid = layoutSettingsSection(fields);
+    const records = laid[0];
+
+    expect(records?.kind).toBe('records');
+
+    if (records?.kind !== 'records') {
+      return;
+    }
+
+    const cells = records.tabs[0]?.cells ?? [];
+
+    expect(
+      cells.map((cell) =>
+        cell.kind === 'field' ? recordFieldLabel(cell.field) : cell.kind === 'coordinate' ? cell.label : cell.kind,
+      ),
+    ).toEqual(['Name', 'Latitude', 'Method', 'Longitude']);
+    expect(cells[1]?.kind).toBe('coordinate');
+    expect(cells[3]?.kind).toBe('coordinate');
   });
 
   it('should fold hemisphere into the coordinate cell and omit it from plain layout', () => {

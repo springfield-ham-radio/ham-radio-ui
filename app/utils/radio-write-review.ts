@@ -347,7 +347,7 @@ function coordinatePartValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function compositeHemisphereText(members: readonly RadioMemoryMapUiField[], settings: RadioSettings): string {
+function compositeHemispherePrefix(members: readonly RadioMemoryMapUiField[], settings: RadioSettings): string {
   const field = members.find((entry) => fieldComposite(entry)?.part === 'hemisphere');
 
   if (!field) {
@@ -357,7 +357,7 @@ function compositeHemisphereText(members: readonly RadioMemoryMapUiField[], sett
   const value = getSettingAtPath(settings, field.path);
   const text = typeof value === 'string' ? value.trim() : '';
 
-  return text.length > 0 ? ` ${text}` : '';
+  return text.length > 0 ? `${text} ` : '';
 }
 
 function formatCompositeSettings(
@@ -366,13 +366,14 @@ function formatCompositeSettings(
   settings: RadioSettings,
 ): string {
   return (
+    compositeHemispherePrefix(members, settings) +
     formatCoordinate(
       coordinatePartValue(settings, members, 'degrees'),
       coordinatePartValue(settings, members, 'minutes'),
       coordinatePartValue(settings, members, 'fraction'),
       composite.fractionScale,
       composite.axis,
-    ) + compositeHemisphereText(members, settings)
+    )
   );
 }
 

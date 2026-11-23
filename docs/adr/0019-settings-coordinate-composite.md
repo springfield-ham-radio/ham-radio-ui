@@ -8,7 +8,9 @@
 
 Radio module memory maps can mark several sibling settings fields as one logical coordinate by giving each field the same `ui.composite.id` with `kind: "coordinate"`. HamBench folds those fields into one degrees-and-minutes row in **Settings** instead of showing separate inputs for each byte.
 
-Drivers such as the Kenwood TH-D74 also map latitude and longitude hemisphere as enum fields that share the same composite id. Those parts must render inline (N/S or E/W) at the end of the row, not as a separate form field below it.
+Drivers such as the Kenwood TH-D74 also map latitude and longitude hemisphere as enum fields that share the same composite id. Those parts must render inline on the coordinate row (N/S or E/W), matching the radio faceplate order (`N(S): Latitude`).
+
+On wide layouts the settings form uses two columns. Adjacent latitude and longitude coordinate cells would otherwise land in different columns and read as unrelated fields.
 
 ## Decision
 
@@ -21,10 +23,13 @@ Drivers such as the Kenwood TH-D74 also map latitude and longitude hemisphere as
 
 `fieldComposite()` in `settings-coordinate.ts` accepts all four parts. `layoutSettingsSection()` groups every recognized part into one `SettingsCoordinateCell`, marks each path consumed, and leaves non-composite fields unchanged when a group has no `hemisphere` part.
 
-`SettingsFieldGrid` renders degrees, minutes, and the prime mark as before. When a `hemisphere` part is present, a compact select after the minutes input uses that field’s enum values and labels. Hemisphere edits use the same dirty tracking and write path as other settings fields. Write review appends the hemisphere letter to the formatted coordinate when the composite includes that part.
+When layout emits a latitude coordinate cell immediately followed by a longitude coordinate cell, `foldAdjacentCoordinatePairs()` replaces them with one `coordinatePair` cell so **Settings** can span the full grid width and stack latitude above longitude. No extra driver metadata is required beyond existing composite ids and field order.
+
+`SettingsFieldGrid` renders each coordinate row in radio order: optional hemisphere select, degrees, minutes, and the prime mark. When a `hemisphere` part is present, a compact select before the degrees input uses that field’s enum values and labels. Hemisphere edits use the same dirty tracking and write path as other settings fields. Write review prefixes the hemisphere letter on the formatted value (for example `N 30° 12.34′`).
 
 ## Consequences
 
 - New coordinate composites should declare `fractionScale` on the hemisphere field as well as on the numeric parts so `fieldComposite()` validation stays consistent.
 - Composites that omit `hemisphere` behave exactly as they did before this record.
-- Hemisphere-only changes appear in write review with an updated trailing letter.
+- Hemisphere-only changes appear in write review with an updated leading letter.
+- Latitude and longitude stay paired only when they are adjacent after layout folding; a field between them keeps separate cells.

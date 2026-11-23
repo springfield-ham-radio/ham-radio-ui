@@ -18,6 +18,11 @@ describe('changed settings fields', () => {
     expect(source).toContain('aria-hidden="true">′</span>');
     expect(source).toContain('coordinateHemispherePart(cell)');
     expect(source).toContain("cell.axis === 'lat' ? 'North or south' : 'East or west'");
+    expect(source).toMatch(
+      /<USelect[\s\S]*coordinateHemispherePart\(cell\)[\s\S]*<UInputNumber[\s\S]*editCoordinate\(cell, 'degrees'/,
+    );
+    expect(source).toContain("cell.kind === 'coordinatePair'");
+    expect(source).toContain("'--settings-columns': '1'");
     expect(source).toContain('@update:model-value="updateSelect(coordinateHemispherePart(cell)!.field, $event)"');
     expect(source).not.toContain('class="w-full"\n          @update:model-value="editCoordinate');
     expect(form).toContain('layoutSettingsSection(section.fields)');
