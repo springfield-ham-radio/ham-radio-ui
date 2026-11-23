@@ -33,13 +33,13 @@
     "release": "semantic-release"
   },
   "dependencies": {
-    "@nuxt/ui": "4.12.0",
+    "@nuxt/ui": "4.13.0",
     "@springfield/ham-radio-api": "18.5.0",
     "@springfield/ham-radio-driver": "^3.8.0",
     "@springfield/ham-radio-registry": "2.1.1",
     "@springfield/ham-radio-utils": "^4.19.0",
     "@tanstack/vue-virtual": "^3.13.52",
-    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-opener": "^2.7.3",
     "@tauri-apps/plugin-os": "^2.2.0",
@@ -50,12 +50,12 @@
     "eventemitter3": "^5.0.4",
     "katex": "^0.19.1",
     "loglayer": "^9.4.0",
-    "maplibre-gl": "^6.18.0",
+    "maplibre-gl": "^6.19.0",
     "nuxt": "^4.6.4",
     "sortablejs": "^1.15.7",
     "tauri-plugin-serialplugin-api": "3.0.8",
     "vue": "^3.5.45",
-    "vue-router": "^5.5.0"
+    "vue-router": "^5.5.1"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.154",
