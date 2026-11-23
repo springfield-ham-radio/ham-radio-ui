@@ -1,3 +1,15 @@
+## [3.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.10.1...v3.11.0) (2026-11-23)
+
+### Features
+
+* **settings:** inline hemisphere in coordinate rows ([#231](https://github.com/springfield-ham-radio/ham-radio-ui/issues/231)) ([d338991](https://github.com/springfield-ham-radio/ham-radio-ui/commit/d3389917831ebc49e52229fa7387f58ef56017f6))
+* **ui:** use ToggleGroup for short option pickers ([#232](https://github.com/springfield-ham-radio/ham-radio-ui/issues/232)) ([45bd8ca](https://github.com/springfield-ham-radio/ham-radio-ui/commit/45bd8ca4d1d2caf1deefe3b890d0630bba05f929))
+
+### Bug Fixes
+
+* **deps:** bump the production-npm group with 4 updates ([#227](https://github.com/springfield-ham-radio/ham-radio-ui/issues/227)) ([e077af7](https://github.com/springfield-ham-radio/ham-radio-ui/commit/e077af7dda077bf63f0f04ecfe82d5dbb55de395))
+* **deps:** bump the rust-crates group in /src-tauri with 4 updates ([#225](https://github.com/springfield-ham-radio/ham-radio-ui/issues/225)) ([106ed92](https://github.com/springfield-ham-radio/ham-radio-ui/commit/106ed92d476866e488153d36ba49773cc60079a2))
+
 ## [3.10.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.10.0...v3.10.1) (2026-11-22)
 
 ### Bug Fixes
