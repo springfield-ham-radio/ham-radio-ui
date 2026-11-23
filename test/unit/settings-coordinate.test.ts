@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { fieldComposite, formatCoordinate, parseCoordinate, partsFromCoordinate } from '../../app/utils/settings-coordinate.ts';
 
-function coordinateField(part: 'degrees' | 'minutes' | 'fraction'): RadioMemoryMapUiField {
+function coordinateField(part: 'degrees' | 'minutes' | 'fraction' | 'hemisphere'): RadioMemoryMapUiField {
   return {
     path: `object.${part}`,
     structId: 'object',
@@ -77,6 +77,7 @@ describe('parseCoordinate', () => {
 describe('fieldComposite', () => {
   it('should read a coordinate composite and ignore other kinds', () => {
     expect(fieldComposite(coordinateField('degrees'))?.label).toBe('Latitude');
+    expect(fieldComposite(coordinateField('hemisphere'))?.part).toBe('hemisphere');
 
     const other = coordinateField('degrees');
     other.ui = { ...other.ui, composite: { id: 'x', kind: 'grid', label: 'Grid' } } as typeof other.ui;

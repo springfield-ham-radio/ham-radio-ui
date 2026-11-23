@@ -347,17 +347,32 @@ function coordinatePartValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+function compositeHemisphereText(members: readonly RadioMemoryMapUiField[], settings: RadioSettings): string {
+  const field = members.find((entry) => fieldComposite(entry)?.part === 'hemisphere');
+
+  if (!field) {
+    return '';
+  }
+
+  const value = getSettingAtPath(settings, field.path);
+  const text = typeof value === 'string' ? value.trim() : '';
+
+  return text.length > 0 ? ` ${text}` : '';
+}
+
 function formatCompositeSettings(
   composite: SettingsCoordinateComposite,
   members: readonly RadioMemoryMapUiField[],
   settings: RadioSettings,
 ): string {
-  return formatCoordinate(
-    coordinatePartValue(settings, members, 'degrees'),
-    coordinatePartValue(settings, members, 'minutes'),
-    coordinatePartValue(settings, members, 'fraction'),
-    composite.fractionScale,
-    composite.axis,
+  return (
+    formatCoordinate(
+      coordinatePartValue(settings, members, 'degrees'),
+      coordinatePartValue(settings, members, 'minutes'),
+      coordinatePartValue(settings, members, 'fraction'),
+      composite.fractionScale,
+      composite.axis,
+    ) + compositeHemisphereText(members, settings)
   );
 }
 
