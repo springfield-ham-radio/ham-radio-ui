@@ -263,6 +263,10 @@ function editCoordinate(cell: SettingsCoordinateCell, side: 'degrees' | 'minutes
   let next = props.settings;
 
   for (const part of cell.parts) {
+    if (part.part === 'hemisphere') {
+      continue;
+    }
+
     const stored = part.part === 'degrees' ? parsed.degrees : part.part === 'minutes' ? parsed.minutes : parsed.fraction;
     const current = getSettingAtPath(next, part.field.path);
 
@@ -278,8 +282,19 @@ function editCoordinate(cell: SettingsCoordinateCell, side: 'degrees' | 'minutes
   }
 }
 
+function coordinateHemispherePart(cell: SettingsCoordinateCell): SettingsCoordinateCell['parts'][number] | undefined {
+  return cell.parts.find((entry) => entry.part === 'hemisphere');
+}
+
 function coordinateWritable(cell: SettingsCoordinateCell): boolean {
-  return cell.parts.every((part) => isWritable(part.field));
+  return cell.parts
+    .filter((part) => part.part !== 'hemisphere')
+    .every((part) => isWritable(part.field));
+}
+
+function coordinateHemisphereWritable(cell: SettingsCoordinateCell): boolean {
+  const hemisphere = coordinateHemispherePart(cell);
+  return hemisphere ? isWritable(hemisphere.field) : false;
 }
 
 function coordinateHelp(cell: SettingsCoordinateCell): SettingsFieldHelp | undefined {
@@ -429,6 +444,16 @@ function coordinateHelp(cell: SettingsCoordinateCell): SettingsFieldHelp | undef
           />
         </template>
         <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <USelect
+            v-if="coordinateHemispherePart(cell)"
+            v-bind="changedControlBindings(coordinateHemispherePart(cell)!.field.path)"
+            :model-value="selectValue(coordinateHemispherePart(cell)!.field)"
+            :items="selectItems(coordinateHemispherePart(cell)!.field)"
+            :disabled="!coordinateHemisphereWritable(cell)"
+            class="w-16 shrink-0"
+            :aria-label="cell.axis === 'lat' ? 'North or south' : 'East or west'"
+            @update:model-value="updateSelect(coordinateHemispherePart(cell)!.field, $event)"
+          />
           <UInputNumber
             v-bind="changedCoordinateBindings(cell)"
             :model-value="coordinateDegrees(cell)"
@@ -467,6 +492,17 @@ function coordinateHelp(cell: SettingsCoordinateCell): SettingsFieldHelp | undef
           <span class="text-base leading-none text-default" aria-hidden="true">′</span>
         </div>
       </UFormField>
+
+      <div v-else-if="cell.kind === 'coordinatePair'" class="col-span-full">
+        <SettingsFieldGrid
+          :style="{ ...settingsFieldsGridStyle, '--settings-columns': '1' }"
+          :cells="[cell.latitude, cell.longitude]"
+          :settings="settings"
+          :changed-paths="changedPaths"
+          :help-by-path="helpByPath"
+          @update:settings="updateSettings"
+        />
+      </div>
 
       <div v-else class="col-span-full space-y-3">
         <div class="flex flex-wrap gap-1 border-b border-default" role="tablist" :aria-label="cell.tabs[0]?.label ?? 'Records'">

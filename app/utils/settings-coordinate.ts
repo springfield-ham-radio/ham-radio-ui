@@ -1,7 +1,7 @@
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 
 export type SettingsCoordinateAxis = 'lat' | 'lon';
-export type SettingsCoordinatePart = 'degrees' | 'minutes' | 'fraction';
+export type SettingsCoordinatePart = 'degrees' | 'minutes' | 'fraction' | 'hemisphere';
 
 /** Degrees and decimal minutes stored as separate memory-map fields. */
 export interface SettingsCoordinateComposite {
@@ -21,7 +21,7 @@ export interface SettingsCoordinateParts {
 
 export type SettingsCoordinateParse = SettingsCoordinateParts | { error: string };
 
-const PARTS = new Set<SettingsCoordinatePart>(['degrees', 'minutes', 'fraction']);
+const PARTS = new Set<SettingsCoordinatePart>(['degrees', 'minutes', 'fraction', 'hemisphere']);
 
 /**
  * `ui.composite` for a coordinate part.

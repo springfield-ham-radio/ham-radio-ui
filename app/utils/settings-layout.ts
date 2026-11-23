@@ -15,6 +15,14 @@ export interface SettingsCoordinateCell {
   parts: { part: SettingsCoordinatePart; field: RadioMemoryMapUiField }[];
 }
 
+/** Adjacent latitude and longitude coordinate cells, stacked in one grid column. */
+export interface SettingsCoordinatePairCell {
+  kind: 'coordinatePair';
+  key: string;
+  latitude: SettingsCoordinateCell;
+  longitude: SettingsCoordinateCell;
+}
+
 export interface SettingsRecordTab {
   index: number;
   label: string;
@@ -29,7 +37,7 @@ export interface SettingsRecordCell {
 }
 
 /** One grid cell after record tabs, coordinate inputs, and switch groups are folded. */
-export type SettingsLayoutCell = SettingsFieldCell | SettingsCoordinateCell | SettingsRecordCell;
+export type SettingsLayoutCell = SettingsFieldCell | SettingsCoordinateCell | SettingsCoordinatePairCell | SettingsRecordCell;
 
 function fieldUiOrder(field: RadioMemoryMapUiField): number | undefined {
   const order = field.ui.order;
@@ -128,7 +136,33 @@ function layoutPlain(fields: readonly RadioMemoryMapUiField[]): Array<SettingsFi
   });
 
   flush();
-  return cells;
+  return foldAdjacentCoordinatePairs(cells);
+}
+
+function foldAdjacentCoordinatePairs(
+  cells: Array<SettingsFieldCell | SettingsCoordinateCell>,
+): Array<SettingsFieldCell | SettingsCoordinateCell | SettingsCoordinatePairCell> {
+  const folded: Array<SettingsFieldCell | SettingsCoordinateCell | SettingsCoordinatePairCell> = [];
+
+  for (let index = 0; index < cells.length; index++) {
+    const cell = cells[index]!;
+    const next = cells[index + 1];
+
+    if (cell.kind === 'coordinate' && cell.axis === 'lat' && next?.kind === 'coordinate' && next.axis === 'lon') {
+      folded.push({
+        kind: 'coordinatePair',
+        key: `coordinate-pair:${cell.key}:${next.key}`,
+        latitude: cell,
+        longitude: next,
+      });
+      index += 1;
+      continue;
+    }
+
+    folded.push(cell);
+  }
+
+  return folded;
 }
 
 function buildRecordCell(id: string, fields: readonly RadioMemoryMapUiField[]): SettingsRecordCell {
@@ -187,8 +221,10 @@ function buildRecordCell(id: string, fields: readonly RadioMemoryMapUiField[]): 
  * Fields that share `ui.record.id` become one tabbed block at the first field.
  * Tabs follow `ui.record.index`. Inside a tab, fields follow `ui.order`, then
  * memory-map order. Fields that share `ui.composite.id` become one coordinate
- * input at the first part. Boolean switches that share a menu number still fold
- * into one cell. Fields without those keys stay in memory-map order.
+ * input at the first part. Latitude and longitude coordinate cells that appear
+ * back-to-back fold into one pair cell so a two-column grid keeps them stacked.
+ * Boolean switches that share a menu number still fold into one cell. Fields
+ * without those keys stay in memory-map order.
  */
 export function layoutSettingsSection(fields: readonly RadioMemoryMapUiField[]): SettingsLayoutCell[] {
   const byRecord = new Map<string, RadioMemoryMapUiField[]>();
@@ -255,6 +291,10 @@ export function layoutCellPaths(cell: SettingsLayoutCell): string[] {
 
   if (cell.kind === 'coordinate') {
     return cell.parts.map((part) => part.field.path);
+  }
+
+  if (cell.kind === 'coordinatePair') {
+    return [...layoutCellPaths(cell.latitude), ...layoutCellPaths(cell.longitude)];
   }
 
   return cell.tabs.flatMap((tab) => tab.cells.flatMap((entry) => layoutCellPaths(entry)));

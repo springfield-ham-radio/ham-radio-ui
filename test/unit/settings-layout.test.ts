@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
-import { layoutSettingsSection } from '../../app/utils/settings-layout.ts';
+import { layoutCellPaths, layoutSettingsSection } from '../../app/utils/settings-layout.ts';
 import { recordFieldLabel } from '../../app/utils/settings-record.ts';
 import { layoutSettingsFields } from '../../app/utils/settings-switch-groups.ts';
 
@@ -31,7 +31,12 @@ function record(index: number, label = `Object ${index}`) {
   return { id: 'aprs-object', index, label };
 }
 
-function coordinate(id: string, axis: 'lat' | 'lon', part: 'degrees' | 'minutes' | 'fraction', label: string) {
+function coordinate(
+  id: string,
+  axis: 'lat' | 'lon',
+  part: 'degrees' | 'minutes' | 'fraction' | 'hemisphere',
+  label: string,
+) {
   return { id, kind: 'coordinate', axis, part, fractionScale: 10000, label };
 }
 
@@ -123,23 +128,96 @@ describe('layoutSettingsSection', () => {
 
     const cells = records.tabs[0]?.cells ?? [];
 
-    expect(cells.map((cell) => (cell.kind === 'field' ? 'Name' : cell.kind === 'coordinate' ? cell.label : cell.kind))).toEqual([
+    expect(cells.map((cell) => (cell.kind === 'field' ? 'Name' : cell.kind === 'coordinatePair' ? 'Latitude+Longitude' : cell.kind))).toEqual([
       'Name',
-      'Latitude',
-      'Longitude',
+      'Latitude+Longitude',
     ]);
 
-    const latitude = cells[1];
+    const pair = cells[1];
 
+    expect(pair?.kind).toBe('coordinatePair');
+
+    if (pair?.kind !== 'coordinatePair') {
+      return;
+    }
+
+    expect(pair.latitude.menuNumber).toBe(516);
+    expect(pair.latitude.parts.map((part) => part.part)).toEqual(['degrees', 'minutes', 'fraction']);
+    expect(pair.latitude.axis).toBe('lat');
+    expect(pair.longitude.axis).toBe('lon');
+    expect(layoutCellPaths(pair)).toEqual([
+      'latDeg',
+      'latMin',
+      'latFrac',
+      'lonDeg',
+      'lonMin',
+      'lonFrac',
+    ]);
+  });
+
+  it('should keep lone coordinate cells when latitude and longitude are not adjacent', () => {
+    const fields = [
+      uiField('name', 'Name', { record: record(1) }, 51610),
+      uiField('latDeg', 'Latitude Degrees', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'degrees', 'Latitude') }, 51630),
+      uiField('latMin', 'Latitude Minutes', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'minutes', 'Latitude') }, 51631),
+      uiField('latFrac', 'Latitude Fraction', { record: record(1), composite: coordinate('obj1-lat', 'lat', 'fraction', 'Latitude') }, 51632),
+      uiField('method', 'Method', { record: record(1) }, 51635),
+      uiField('lonDeg', 'Longitude Degrees', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'degrees', 'Longitude') }, 51640),
+      uiField('lonMin', 'Longitude Minutes', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'minutes', 'Longitude') }, 51641),
+      uiField('lonFrac', 'Longitude Fraction', { record: record(1), composite: coordinate('obj1-lon', 'lon', 'fraction', 'Longitude') }, 51642),
+    ];
+    const laid = layoutSettingsSection(fields);
+    const records = laid[0];
+
+    expect(records?.kind).toBe('records');
+
+    if (records?.kind !== 'records') {
+      return;
+    }
+
+    const cells = records.tabs[0]?.cells ?? [];
+
+    expect(
+      cells.map((cell) =>
+        cell.kind === 'field' ? recordFieldLabel(cell.field) : cell.kind === 'coordinate' ? cell.label : cell.kind,
+      ),
+    ).toEqual(['Name', 'Latitude', 'Method', 'Longitude']);
+    expect(cells[1]?.kind).toBe('coordinate');
+    expect(cells[3]?.kind).toBe('coordinate');
+  });
+
+  it('should fold hemisphere into the coordinate cell and omit it from plain layout', () => {
+    const fields = [
+      uiField('latDeg', 'Latitude Degrees', { composite: coordinate('obj1-lat', 'lat', 'degrees', 'Latitude') }, 51630),
+      uiField('latMin', 'Latitude Minutes', { composite: coordinate('obj1-lat', 'lat', 'minutes', 'Latitude') }, 51631),
+      uiField('latFrac', 'Latitude Fraction', { composite: coordinate('obj1-lat', 'lat', 'fraction', 'Latitude') }, 51632),
+      uiField(
+        'latHem',
+        'Latitude Hemisphere',
+        { widget: 'select', composite: coordinate('obj1-lat', 'lat', 'hemisphere', 'Latitude') },
+        51633,
+      ),
+      uiField('other', 'Other'),
+    ];
+    fields[3] = {
+      ...fields[3]!,
+      value: { kind: 'enum', values: ['N', 'S'] },
+    } as RadioMemoryMapUiField;
+
+    const laid = layoutSettingsSection(fields);
+
+    expect(laid.map((cell) => cell.kind)).toEqual(['coordinate', 'field']);
+    expect(laid[1]?.kind === 'field' ? laid[1].field.path : '').toBe('other');
+
+    const latitude = laid[0];
     expect(latitude?.kind).toBe('coordinate');
 
     if (latitude?.kind !== 'coordinate') {
       return;
     }
 
-    expect(latitude.menuNumber).toBe(516);
-    expect(latitude.parts.map((part) => part.part)).toEqual(['degrees', 'minutes', 'fraction']);
-    expect(latitude.axis).toBe('lat');
+    expect(latitude.parts.map((part) => part.part)).toEqual(['degrees', 'minutes', 'fraction', 'hemisphere']);
+    expect(layoutCellPaths(latitude)).toEqual(['latDeg', 'latMin', 'latFrac', 'latHem']);
   });
 });
 
