@@ -3205,7 +3205,7 @@ __metadata:
     semantic-release: "npm:25.0.9"
     sortablejs: "npm:^1.15.7"
     tailwindcss: "npm:^4.3.5"
-    tauri-plugin-serialplugin-api: "npm:3.0.8"
+    tauri-plugin-serialplugin-api: "npm:4.2.2"
     typescript: "npm:7.0.2"
     vitest: "npm:^5.1.1"
     vue: "npm:^3.5.45"
@@ -3498,10 +3498,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/api@npm:>=2.0.0-beta.6":
-  version: 2.11.1
-  resolution: "@tauri-apps/api@npm:2.11.1"
-  checksum: 10c0/78a08a64ee7eab9d34bd4ba1bdc3a2440c7e9cc5737b3f1d77bd80fa38b0cb5e9601efe04da40c947c5da2ca38dc702bec21b4ae96b18ee5f3e82980d1f0b325
+"@tauri-apps/api@npm:^2.0.0, @tauri-apps/api@npm:^2.12.5":
+  version: 2.12.5
+  resolution: "@tauri-apps/api@npm:2.12.5"
+  checksum: 10c0/fa35056017c27d1812b246590f09a81b0dde097aa4062c5978f44bcce82363e9e4b7b35c18524d29d96ab63f87a77504d1ef1b851ed7ffd3241bfff27686c1c7
   languageName: node
   linkType: hard
 
@@ -3509,13 +3509,6 @@ __metadata:
   version: 2.12.3
   resolution: "@tauri-apps/api@npm:2.12.3"
   checksum: 10c0/80a2fc50e39960ac0270940f73b9ba81b8bc3c1518355cdd54490d2d906f8da18da9b46d8b31b9b1cfda874c65272a56a1b536ceba0b965cc3a1e547423e82c9
-  languageName: node
-  linkType: hard
-
-"@tauri-apps/api@npm:^2.12.5":
-  version: 2.12.5
-  resolution: "@tauri-apps/api@npm:2.12.5"
-  checksum: 10c0/fa35056017c27d1812b246590f09a81b0dde097aa4062c5978f44bcce82363e9e4b7b35c18524d29d96ab63f87a77504d1ef1b851ed7ffd3241bfff27686c1c7
   languageName: node
   linkType: hard
 
@@ -12177,12 +12170,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tauri-plugin-serialplugin-api@npm:3.0.8":
-  version: 3.0.8
-  resolution: "tauri-plugin-serialplugin-api@npm:3.0.8"
+"tauri-plugin-serialplugin-api@npm:4.2.2":
+  version: 4.2.2
+  resolution: "tauri-plugin-serialplugin-api@npm:4.2.2"
   dependencies:
-    "@tauri-apps/api": "npm:>=2.0.0-beta.6"
-  checksum: 10c0/0c6c8d4b0d6b843218e47d82527b05891701b93c588055210321f000ded7a0d5d80157431921d553dd92ebce4b6877781ccc120fa758d881a5a260c47b54e68d
+    "@tauri-apps/api": "npm:^2.0.0"
+  checksum: 10c0/0937c1016bfcab392239213b06cdbcdd5161c6605079e73781d88266fb1de9f05c657da002bb4dfe4e5b0bf62d010505e40608790d618fcf387dec1370d0171d
   languageName: node
   linkType: hard
 
