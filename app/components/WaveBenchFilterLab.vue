@@ -52,9 +52,9 @@ const chartLayoutItems: TabsItem[] = [
 ];
 
 const frequencyUnitItems = [
-  { label: 'Hz', value: 'Hz' },
-  { label: 'kHz', value: 'kHz' },
-  { label: 'MHz', value: 'MHz' },
+  { label: 'Hz', value: 'Hz' as const },
+  { label: 'kHz', value: 'kHz' as const },
+  { label: 'MHz', value: 'MHz' as const },
 ];
 
 const defaultPreset = FILTER_PRESETS[0]!;
@@ -73,6 +73,31 @@ const cutoffUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.
 const centerUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.centerHz));
 const bandwidthUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.bandwidthHz));
 const probeUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.testFrequencyHz));
+
+const cutoffUnitToggle = requiredToggleGroupModel(
+  () => cutoffUnit.value,
+  (value) => {
+    cutoffUnit.value = value;
+  },
+);
+const centerUnitToggle = requiredToggleGroupModel(
+  () => centerUnit.value,
+  (value) => {
+    centerUnit.value = value;
+  },
+);
+const bandwidthUnitToggle = requiredToggleGroupModel(
+  () => bandwidthUnit.value,
+  (value) => {
+    bandwidthUnit.value = value;
+  },
+);
+const probeUnitToggle = requiredToggleGroupModel(
+  () => probeUnit.value,
+  (value) => {
+    probeUnit.value = value;
+  },
+);
 
 const design = computed(() => {
   return designFilter({
@@ -403,7 +428,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                   :format-options="{ maximumFractionDigits: 6 }"
                   class="min-w-0 flex-1"
                 />
-                <USelect v-model="cutoffUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+                <UToggleGroup
+                  v-model="cutoffUnitToggle"
+                  attached
+                  size="xs"
+                  color="neutral"
+                  variant="outline"
+                  active-variant="subtle"
+                  :items="frequencyUnitItems"
+                />
               </div>
             </UFormField>
 
@@ -417,7 +450,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                     :format-options="{ maximumFractionDigits: 6 }"
                     class="min-w-0 flex-1"
                   />
-                  <USelect v-model="centerUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+                  <UToggleGroup
+                    v-model="centerUnitToggle"
+                    attached
+                    size="xs"
+                    color="neutral"
+                    variant="outline"
+                    active-variant="subtle"
+                    :items="frequencyUnitItems"
+                  />
                 </div>
               </UFormField>
               <UFormField label="Bandwidth" :help="`Q = ${(design.qualityFactor ?? 0).toFixed(2)}`">
@@ -429,7 +470,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                     :format-options="{ maximumFractionDigits: 6 }"
                     class="min-w-0 flex-1"
                   />
-                  <USelect v-model="bandwidthUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+                  <UToggleGroup
+                    v-model="bandwidthUnitToggle"
+                    attached
+                    size="xs"
+                    color="neutral"
+                    variant="outline"
+                    active-variant="subtle"
+                    :items="frequencyUnitItems"
+                  />
                 </div>
               </UFormField>
             </template>
@@ -537,7 +586,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                   :format-options="{ maximumFractionDigits: 6 }"
                   class="min-w-0 flex-1"
                 />
-                <USelect v-model="probeUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+                <UToggleGroup
+                  v-model="probeUnitToggle"
+                  attached
+                  size="xs"
+                  color="neutral"
+                  variant="outline"
+                  active-variant="subtle"
+                  :items="frequencyUnitItems"
+                />
               </div>
               <USlider v-model="probeSlider" :min="0" :max="1000" :step="1" />
               <div class="grid grid-cols-2 gap-2">

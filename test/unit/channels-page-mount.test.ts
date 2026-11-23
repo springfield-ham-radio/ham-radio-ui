@@ -154,10 +154,10 @@ describe('Channels page mount', () => {
     expect(filterRow).toContain('flex flex-wrap items-end');
     expect(filterRow).not.toContain('flex-nowrap');
     expect(filterRow).toContain('label="Linked"');
-    expect(filterRow).toContain('v-model="linkedFilter"');
+    expect(filterRow).toContain('v-model="linkedFilterToggle"');
     expect(filterRow.indexOf('Range (mi)')).toBeLessThan(filterRow.indexOf('label="Linked"'));
     expect(filterRow).toContain('v-if="isTripGroup"');
-    expect(filterRow).toContain('v-model="tripOpenFilter"');
+    expect(filterRow).toContain('v-model="tripOpenFilterToggle"');
     expect(source).toContain("label: 'Linked only', value: 'linked-only'");
     expect(source).toContain("label: 'Open use only', value: 'open-only'");
     expect(filterRow).not.toContain('ChannelLibraryFilterCheckbox');

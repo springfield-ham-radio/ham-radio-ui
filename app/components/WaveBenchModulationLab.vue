@@ -30,10 +30,29 @@ const messageUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters
 const deviationUnit = ref<FrequencyUnit>(unitForFrequency(defaultPreset.parameters.fmDeviationHz));
 
 const frequencyUnitItems = [
-  { label: 'Hz', value: 'Hz' },
-  { label: 'kHz', value: 'kHz' },
-  { label: 'MHz', value: 'MHz' },
+  { label: 'Hz', value: 'Hz' as const },
+  { label: 'kHz', value: 'kHz' as const },
+  { label: 'MHz', value: 'MHz' as const },
 ];
+
+const carrierUnitToggle = requiredToggleGroupModel(
+  () => carrierUnit.value,
+  (value) => {
+    carrierUnit.value = value;
+  },
+);
+const messageUnitToggle = requiredToggleGroupModel(
+  () => messageUnit.value,
+  (value) => {
+    messageUnit.value = value;
+  },
+);
+const deviationUnitToggle = requiredToggleGroupModel(
+  () => deviationUnit.value,
+  (value) => {
+    deviationUnit.value = value;
+  },
+);
 
 const parameters = computed<ModulationParameters>(() => ({
   carrierAmplitude: positive(carrierAmplitude.value, 1),
@@ -254,7 +273,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                   :format-options="{ maximumFractionDigits: 6 }"
                   class="min-w-0 flex-1"
                 />
-                <USelect v-model="carrierUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+                <UToggleGroup
+                  v-model="carrierUnitToggle"
+                  attached
+                  size="xs"
+                  color="neutral"
+                  variant="outline"
+                  active-variant="subtle"
+                  :items="frequencyUnitItems"
+                />
               </div>
             </UFormField>
             <USlider v-model="carrierSlider" :min="0" :max="1000" :step="1" />
@@ -282,7 +309,15 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                 :format-options="{ maximumFractionDigits: 6 }"
                 class="min-w-0 flex-1"
               />
-              <USelect v-model="messageUnit" :items="frequencyUnitItems" value-key="value" class="w-24" />
+              <UToggleGroup
+                v-model="messageUnitToggle"
+                attached
+                size="xs"
+                color="neutral"
+                variant="outline"
+                active-variant="subtle"
+                :items="frequencyUnitItems"
+              />
             </div>
           </UFormField>
         </section>
@@ -324,7 +359,16 @@ function sliderToHz(slider: number, minHz: number, maxHz: number): number {
                 :format-options="{ maximumFractionDigits: 6 }"
                 class="min-w-0 flex-1"
               />
-              <USelect v-model="deviationUnit" :items="frequencyUnitItems" value-key="value" class="w-24" :disabled="!enableFm" />
+              <UToggleGroup
+                v-model="deviationUnitToggle"
+                attached
+                size="xs"
+                color="neutral"
+                variant="outline"
+                active-variant="subtle"
+                :items="frequencyUnitItems"
+                :disabled="!enableFm"
+              />
             </div>
           </UFormField>
         </section>
