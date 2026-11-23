@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DropdownMenuItem, TabsItem } from '@nuxt/ui';
+import type { DropdownMenuItem, TabsItem, ToggleGroupItem } from '@nuxt/ui';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { useImportExportRunner } from '~/importExport/runner';
 import type { RadioBoardLayout } from '~/utils/radio-board';
@@ -216,9 +216,25 @@ const panelClass = computed(() => {
   return 'grid-cols-1 auto-rows-[minmax(36rem,1fr)] overflow-auto xl:grid-cols-2';
 });
 
-function selectLayout(next: RadioBoardLayout): void {
-  setLayout(next);
-}
+const layoutToggleItems: ToggleGroupItem[] = [
+  {
+    value: 'tabs',
+    icon: 'i-lucide-gallery-horizontal',
+    title: 'Tabs',
+    'aria-label': 'Show radios in tabs',
+  },
+  {
+    value: 'tile',
+    icon: 'i-lucide-layout-grid',
+    title: 'Tile',
+    'aria-label': 'Tile radios',
+  },
+];
+
+const layoutToggle = requiredToggleGroupModel(
+  () => layout.value,
+  (next: RadioBoardLayout) => setLayout(next),
+);
 
 async function closeRadio(id: string): Promise<void> {
   const port = cardById(id)?.catPort;
@@ -239,28 +255,15 @@ async function closeRadio(id: string): Promise<void> {
         Open a saved radio to read, write, or control it. Each card keeps its own memory.
       </p>
       <div class="flex shrink-0 items-center gap-1.5">
-        <UFieldGroup size="sm">
-          <UTooltip text="Tabs">
-            <UButton
-              icon="i-lucide-gallery-horizontal"
-              color="neutral"
-              :variant="layout === 'tabs' ? 'subtle' : 'outline'"
-              aria-label="Show radios in tabs"
-              :aria-pressed="layout === 'tabs'"
-              @click="selectLayout('tabs')"
-            />
-          </UTooltip>
-          <UTooltip text="Tile">
-            <UButton
-              icon="i-lucide-layout-grid"
-              color="neutral"
-              :variant="layout === 'tile' ? 'subtle' : 'outline'"
-              aria-label="Tile radios"
-              :aria-pressed="layout === 'tile'"
-              @click="selectLayout('tile')"
-            />
-          </UTooltip>
-        </UFieldGroup>
+        <UToggleGroup
+          v-model="layoutToggle"
+          attached
+          size="sm"
+          color="neutral"
+          variant="outline"
+          active-variant="subtle"
+          :items="layoutToggleItems"
+        />
         <UDropdownMenu :items="addRadioItems">
           <UButton
             icon="i-lucide-plus"

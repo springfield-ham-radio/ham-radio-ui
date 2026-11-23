@@ -2,9 +2,13 @@
 const { unit, setUnit } = useDistanceUnit();
 
 const items = [
-  { label: 'Miles', value: 'mi' },
-  { label: 'Kilometers', value: 'km' },
+  { label: 'Miles', value: 'mi' as const },
+  { label: 'Kilometers', value: 'km' as const },
 ];
+
+function onDistanceUnitChange(value: unknown): void {
+  commitRequiredToggleGroupValue(value, setUnit);
+}
 </script>
 
 <template>
@@ -14,14 +18,15 @@ const items = [
         <p class="text-sm font-medium text-highlighted">Distance units</p>
         <p class="text-xs text-muted">Miles or kilometers for the Channels distance column. Miles is the default.</p>
       </div>
-      <USelect
+      <UToggleGroup
         :model-value="unit"
-        :items="items"
-        value-key="value"
+        attached
         color="neutral"
-        class="w-40"
+        variant="outline"
+        active-variant="subtle"
+        :items="items"
         aria-label="Distance units"
-        @update:model-value="setUnit"
+        @update:model-value="onDistanceUnitChange"
       />
     </div>
   </div>

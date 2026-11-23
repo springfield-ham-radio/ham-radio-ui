@@ -363,6 +363,15 @@ function extraSelectItems(field: RadioMemoryMapUiField) {
   return editor.kind === 'select' ? editor.items : [];
 }
 
+function extraSelectUsesToggleGroup(field: RadioMemoryMapUiField): boolean {
+  const items = extraSelectItems(field);
+  return items.length > 0 && items.length <= 3;
+}
+
+function updateExtraSelect(field: RadioMemoryMapUiField, value: unknown): void {
+  commitRequiredToggleGroupValue(value, (next) => updateExtra(field, next));
+}
+
 function extraIntegerValue(field: RadioMemoryMapUiField): number {
   const editor = extraEditor(field);
   const raw = extraValue(field);
@@ -611,8 +620,20 @@ function submitCreate(): void {
                 :constraint="extraHelp(field)?.constraint"
               />
             </template>
+            <UToggleGroup
+              v-if="extraEditor(field).kind === 'select' && extraSelectUsesToggleGroup(field)"
+              :model-value="serializeChannelFieldValue(field, extraValue(field))"
+              attached
+              color="neutral"
+              variant="outline"
+              active-variant="subtle"
+              :items="extraSelectItems(field)"
+              class="w-full"
+              @update:model-value="updateExtraSelect(field, $event)"
+            />
+
             <USelect
-              v-if="extraEditor(field).kind === 'select'"
+              v-else-if="extraEditor(field).kind === 'select'"
               :model-value="serializeChannelFieldValue(field, extraValue(field))"
               :items="extraSelectItems(field)"
               class="w-full"

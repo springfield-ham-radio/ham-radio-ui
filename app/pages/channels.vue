@@ -273,7 +273,21 @@ const onAirFilterItems = [
   { label: 'On air', value: 'on-air' as const },
   { label: 'Off air', value: 'off-air' as const },
 ];
+const onAirFilterToggle = computed({
+  get: () => onAirFilter.value,
+  set: (onAir: ChannelOnAirFilter | null | undefined) => {
+    commitRequiredToggleGroupValue(onAir, (value) => {
+      onAirFilter.value = value;
+    });
+  },
+});
 const linkedFilter = ref<ChannelLinkedFilter>('all');
+const linkedFilterToggle = requiredToggleGroupModel(
+  () => linkedFilter.value,
+  (value) => {
+    linkedFilter.value = value;
+  },
+);
 const linkedFilterItems = [
   { label: 'All', value: 'all' as const },
   { label: 'Linked only', value: 'linked-only' as const },
@@ -282,6 +296,12 @@ const tripOpenFilterItems = [
   { label: 'All', value: 'all' as const },
   { label: 'Open use only', value: 'open-only' as const },
 ];
+const tripOpenFilterToggle = requiredToggleGroupModel(
+  () => tripOpenFilter.value,
+  (value) => {
+    tripOpenFilter.value = value;
+  },
+);
 const channelMapSettings = ref(readChannelMapSettings());
 const showMap = computed({
   get: () => channelMapSettings.value.open,
@@ -1501,14 +1521,15 @@ async function onPackImportApply(): Promise<void> {
             :search-input="libraryBandFilterOptions.length > 8"
           />
         </UFormField>
-        <UFormField label="On-air" class="w-32 shrink-0">
-          <USelect
-            v-model="onAirFilter"
-            :items="onAirFilterItems"
-            value-key="value"
-            color="neutral"
+        <UFormField label="On-air" class="shrink-0">
+          <UToggleGroup
+            v-model="onAirFilterToggle"
+            attached
             size="sm"
-            class="w-full"
+            color="neutral"
+            variant="outline"
+            active-variant="subtle"
+            :items="onAirFilterItems"
           />
         </UFormField>
         <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
@@ -1534,24 +1555,26 @@ async function onPackImportApply(): Promise<void> {
             aria-label="Map range ring radius"
           />
         </UFormField>
-        <UFormField label="Linked" class="w-32 shrink-0">
-          <USelect
-            v-model="linkedFilter"
-            :items="linkedFilterItems"
-            value-key="value"
-            color="neutral"
+        <UFormField label="Linked" class="shrink-0">
+          <UToggleGroup
+            v-model="linkedFilterToggle"
+            attached
             size="sm"
-            class="w-full"
+            color="neutral"
+            variant="outline"
+            active-variant="subtle"
+            :items="linkedFilterItems"
           />
         </UFormField>
-        <UFormField v-if="isTripGroup" label="Open use" class="w-32 shrink-0">
-          <USelect
-            v-model="tripOpenFilter"
-            :items="tripOpenFilterItems"
-            value-key="value"
-            color="neutral"
+        <UFormField v-if="isTripGroup" label="Open use" class="shrink-0">
+          <UToggleGroup
+            v-model="tripOpenFilterToggle"
+            attached
             size="sm"
-            class="w-full"
+            color="neutral"
+            variant="outline"
+            active-variant="subtle"
+            :items="tripOpenFilterItems"
           />
         </UFormField>
         <div class="ml-auto flex shrink-0 items-center gap-1.5 pb-0.5">
