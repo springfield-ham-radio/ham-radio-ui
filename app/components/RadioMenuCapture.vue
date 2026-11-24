@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import DriverMemoryHexDiff from '~/components/driver/DriverMemoryHexDiff.vue';
 import { requiredToggleGroupModel } from '~/utils/required-toggle-group-model';
 import { loadMenuCaptureBaseline, loadMenuCaptureStepImage } from '~/utils/menu-capture-io';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 type WizardPhase = 'intro' | 'baseline' | 'change' | 'review' | 'more' | 'restore' | 'export';
+
+const toast = useToast();
 
 const {
   session,
@@ -21,7 +22,8 @@ const {
   startSession,
   readBaseline,
   readStepImage,
-  commitStep,
+  recordCapturedStep,
+  patchLastCapturedStep,
   redoLastStep,
   restoreBaseline,
   exportCapture,
@@ -64,6 +66,25 @@ const stepperItems = [
   { title: 'Restore', value: 'restore' },
   { title: 'Export', value: 'export' },
 ];
+
+const phaseInstructions: Record<WizardPhase, string | undefined> = {
+  intro:
+    'HamBench will read a baseline image, you change one front-panel menu at a time, then HamBench writes the original image back. Save the capture file and send it to your driver maintainer. Nothing is uploaded.',
+  baseline: 'Put the radio in clone mode. Do not change any menus. When you are ready, read the baseline image.',
+  change:
+    'On the radio, change exactly one menu and save it on the radio (use the confirm key if the manual requires it). Enter the menu number and what changed, then read the radio.',
+  review: 'Check the memory diff and mapped fields. Keep this step to continue, or Redo to read again after fixing the radio.',
+  more: 'Capture more menus or restore the baseline image when you are finished.',
+  restore:
+    'HamBench writes the saved baseline back to the radio and reads it again to verify. Your card editor memory refreshes only when verification succeeds.',
+  export: 'Save the capture file locally and send it yourself. HamBench does not upload it.',
+};
+
+const activePhaseInstruction = computed(() => {
+  const resolved = phase.value === 'more' ? 'more' : phase.value === 'review' ? 'review' : phase.value;
+
+  return phaseInstructions[resolved];
+});
 
 const menuPrefill = computed(() => {
   const number = menuNumber.value;
@@ -136,7 +157,17 @@ async function onReadStep(): Promise<void> {
   const number = menuNumber.value;
   const current = session.value;
 
-  if (number === undefined || !current || !menuName.value.trim() || !changeFrom.value.trim() || !changeTo.value.trim()) {
+  if (number === undefined || !current) {
+    return;
+  }
+
+  if (!menuName.value.trim() || !changeFrom.value.trim() || !changeTo.value.trim()) {
+    toast.add({
+      title: 'Describe the menu change',
+      description: 'Enter the menu number, name, original value, and new value before reading the radio.',
+      color: 'warning',
+      icon: 'i-lucide-triangle-alert',
+    });
     return;
   }
 
@@ -153,14 +184,31 @@ async function onReadStep(): Promise<void> {
 
   pendingBeforeImage.value = before;
   pendingAfterImage.value = after;
-  pendingAnalysis.value = analyzeMenuCaptureStep({
+  const analyzed = analyzeMenuCaptureStep({
     before,
     after,
     memoryMap: memoryMap.value,
     memoryConfig: memoryConfig.value,
     ignore: ignoreEntries.value,
   });
+
+  pendingBeforeImage.value = before;
+  pendingAfterImage.value = after;
+  pendingAnalysis.value = analyzed;
   reviewDecision.value = 'keep';
+
+  await recordCapturedStep({
+    menuNumber: number,
+    menuName: menuName.value.trim(),
+    nameSource: menuNameSource.value,
+    menuCode: menuPrefill.value?.fields.find((field) => field.code)?.code,
+    from: changeFrom.value.trim(),
+    to: changeTo.value.trim(),
+    note: changeNote.value,
+    afterImage: after,
+    analyzed,
+  });
+
   phase.value = 'review';
 }
 
@@ -173,6 +221,7 @@ async function onConfirmReview(): Promise<void> {
   }
 
   if (reviewDecision.value === 'redo') {
+    await redoLastStep();
     pendingBeforeImage.value = undefined;
     pendingAfterImage.value = undefined;
     pendingAnalysis.value = undefined;
@@ -180,7 +229,7 @@ async function onConfirmReview(): Promise<void> {
     return;
   }
 
-  await commitStep({
+  await patchLastCapturedStep({
     menuNumber: number,
     menuName: menuName.value.trim(),
     nameSource: menuNameSource.value,
@@ -188,7 +237,6 @@ async function onConfirmReview(): Promise<void> {
     from: changeFrom.value.trim(),
     to: changeTo.value.trim(),
     note: changeNote.value,
-    afterImage: image,
   });
 
   pendingBeforeImage.value = undefined;
@@ -280,11 +328,11 @@ async function onExport(): Promise<void> {
         class="w-full"
       />
 
+      <p v-if="activePhaseInstruction" class="text-sm text-muted">
+        {{ activePhaseInstruction }}
+      </p>
+
       <section v-if="phase === 'intro'" class="space-y-3">
-        <p class="text-sm text-muted">
-          HamBench will read a baseline image, you change one front-panel menu at a time, then HamBench writes the original image back.
-          Save the capture file and send it to your driver maintainer. Nothing is uploaded.
-        </p>
         <div class="flex flex-wrap gap-2">
           <UButton v-if="!session" label="Start menu capture" color="primary" :disabled="captureBusy" @click="onStart" />
           <UButton
@@ -299,33 +347,18 @@ async function onExport(): Promise<void> {
       </section>
 
       <section v-else-if="phase === 'baseline'" class="space-y-3">
-        <p class="text-sm text-muted">
-          Put the radio in clone mode. Do not change any menus. When you are ready, read the baseline image.
-        </p>
         <UButton label="Read baseline" icon="i-hambench-radio-read" color="primary" :loading="captureBusy" @click="onReadBaseline" />
       </section>
 
       <section v-else-if="phase === 'change'" class="space-y-3">
-        <p class="text-sm text-muted">
-          On the radio, change exactly one menu and save it on the radio (use the confirm key if the manual requires it). Then describe the change here.
-        </p>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Menu number">
-            <UInput v-model.number="menuNumber" type="number" min="0" class="w-full" />
-          </UFormField>
-          <UFormField label="Menu name">
-            <UInput v-model="menuName" class="w-full" :placeholder="menuPrefill?.prefilledName ?? 'Menu name'" />
-          </UFormField>
-          <UFormField label="Original value">
-            <UInput v-model="changeFrom" class="w-full font-mono" />
-          </UFormField>
-          <UFormField label="New value">
-            <UInput v-model="changeTo" class="w-full font-mono" />
-          </UFormField>
-        </div>
-        <UFormField label="Notes (optional)">
-          <UTextarea v-model="changeNote" :rows="2" class="w-full" />
-        </UFormField>
+        <MenuCaptureStepFields
+          v-model:menu-number="menuNumber"
+          v-model:menu-name="menuName"
+          v-model:change-from="changeFrom"
+          v-model:change-to="changeTo"
+          v-model:change-note="changeNote"
+          :menu-prefill-hint="menuPrefill?.prefilledName"
+        />
         <p v-if="menuPrefill && menuPrefill.fields.length > 1" class="text-xs text-muted">
           Menu {{ menuPrefill.menuNumber }} also maps to: {{ menuPrefill.fields.map((field) => field.label).join(', ') }}.
         </p>
@@ -333,6 +366,14 @@ async function onExport(): Promise<void> {
       </section>
 
       <section v-else-if="phase === 'review' && pendingAnalysis && pendingBeforeImage && pendingAfterImage" class="space-y-3">
+        <MenuCaptureStepFields
+          v-model:menu-number="menuNumber"
+          v-model:menu-name="menuName"
+          v-model:change-from="changeFrom"
+          v-model:change-to="changeTo"
+          v-model:change-note="changeNote"
+          :menu-prefill-hint="menuPrefill?.prefilledName"
+        />
         <UAlert
           v-if="pendingAnalysis.flags.includes('empty')"
           color="warning"
@@ -365,10 +406,10 @@ async function onExport(): Promise<void> {
           ]"
           class="w-full"
         />
-        <DriverMemoryHexDiff
+        <MenuCaptureDiffRuns
           v-if="pendingAnalysis.diff.runCount > 0"
-          :before="pendingBeforeImage"
-          :after="pendingAfterImage"
+          :diff="pendingAnalysis.diff"
+          :menu-number="menuNumber"
           before-label="Previous read"
           after-label="This read"
         />
@@ -376,7 +417,7 @@ async function onExport(): Promise<void> {
       </section>
 
       <section v-else-if="phase === 'more'" class="space-y-3">
-        <p class="text-sm text-muted">
+        <p class="text-sm font-medium text-toned">
           {{ session?.steps.length ?? 0 }} menu{{ (session?.steps.length ?? 0) === 1 ? '' : 's' }} captured.
         </p>
         <div class="flex flex-wrap gap-2">
@@ -412,7 +453,6 @@ async function onExport(): Promise<void> {
       </section>
 
       <section v-else-if="phase === 'export'" class="space-y-3">
-        <p class="text-sm text-muted">Save the capture file and send it yourself. HamBench does not upload it.</p>
         <div class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Callsign">
             <UInput v-model="callsign" class="w-full uppercase" />

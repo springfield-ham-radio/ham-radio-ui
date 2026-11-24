@@ -250,7 +250,7 @@ export function useMenuCapture() {
     }
   }
 
-  async function commitStep(input: {
+  async function recordCapturedStep(input: {
     menuNumber: number;
     menuName: string;
     nameSource: 'map' | 'operator';
@@ -259,6 +259,7 @@ export function useMenuCapture() {
     to: string;
     note?: string;
     afterImage: Uint8Array;
+    analyzed: ReturnType<typeof analyzeMenuCaptureStep>;
   }): Promise<void> {
     const savedRadioId = savedRadio.value?.id;
     const current = session.value;
@@ -270,18 +271,6 @@ export function useMenuCapture() {
     const stepIndex = current.steps.length + 1;
     const fileName = menuCaptureStepImageFileName(stepIndex);
     const comparedTo = comparedToForStepIndex(stepIndex);
-    const previousImage =
-      stepIndex === 1
-        ? await loadMenuCaptureBaseline(savedRadioId)
-        : await loadMenuCaptureStepImage(savedRadioId, current.steps.at(-1)!.imageFileName);
-
-    const analyzed = analyzeMenuCaptureStep({
-      before: previousImage,
-      after: input.afterImage,
-      memoryMap: memoryMap.value,
-      memoryConfig: memoryConfig.value,
-      ignore: ignoreEntries.value,
-    });
 
     await saveMenuCaptureStepImage(savedRadioId, fileName, input.afterImage);
     const sha = await sha256Hex(input.afterImage);
@@ -300,8 +289,8 @@ export function useMenuCapture() {
         to: input.to,
         ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       },
-      flags: analyzed.flags,
-      diff: analyzed.diff,
+      flags: input.analyzed.flags,
+      diff: input.analyzed.diff,
       imageFileName: fileName,
       imageSha256: sha,
       imageByteLength: input.afterImage.length,
@@ -311,6 +300,44 @@ export function useMenuCapture() {
       ...current,
       updatedAt: new Date().toISOString(),
       steps: [...current.steps, nextStep],
+    });
+  }
+
+  async function patchLastCapturedStep(input: {
+    menuNumber: number;
+    menuName: string;
+    nameSource: 'map' | 'operator';
+    menuCode?: string;
+    from: string;
+    to: string;
+    note?: string;
+  }): Promise<void> {
+    const current = session.value;
+    const last = current?.steps.at(-1);
+
+    if (!current || !last) {
+      return;
+    }
+
+    const updated: MenuCaptureSessionState['steps'][number] = {
+      ...last,
+      menu: {
+        number: input.menuNumber,
+        name: input.menuName,
+        ...(input.menuCode ? { code: input.menuCode } : {}),
+        nameSource: input.nameSource,
+      },
+      change: {
+        from: input.from,
+        to: input.to,
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+      },
+    };
+
+    await persistSession({
+      ...current,
+      updatedAt: new Date().toISOString(),
+      steps: [...current.steps.slice(0, -1), updated],
     });
   }
 
@@ -528,7 +555,8 @@ export function useMenuCapture() {
     startSession,
     readBaseline,
     readStepImage,
-    commitStep,
+    recordCapturedStep,
+    patchLastCapturedStep,
     redoLastStep,
     redoFromStep,
     restoreBaseline,
