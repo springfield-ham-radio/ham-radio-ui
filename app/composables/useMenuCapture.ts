@@ -26,6 +26,11 @@ import {
   saveMenuCaptureSession,
   saveMenuCaptureStepImage,
 } from '~/utils/menu-capture-io';
+import {
+  canStartMenuCaptureSession,
+  loadedRadioConfigForCardModel,
+  menuCaptureWizardGate,
+} from '~/utils/menu-capture-catalog';
 import { resolveMenuCaptureIgnoreForConfig } from '~/utils/menu-capture-module-config';
 import { memoryMapFromConfig, type LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
@@ -39,7 +44,6 @@ export function useMenuCapture() {
   const {
     savedRadio,
     cardRadio,
-    activeRadioId,
     settingsMemoryMap,
     configurations,
     transferInFlight,
@@ -56,18 +60,30 @@ export function useMenuCapture() {
   const working = ref(false);
   const ignoreEntries = ref<Awaited<ReturnType<typeof resolveMenuCaptureIgnoreForConfig>>>([]);
 
-  const activeConfig = computed(() => {
-    const modelId = activeRadioId.value?.model;
+  const activeConfig = computed(() =>
+    loadedRadioConfigForCardModel(cardRadio.value?.model, configurations.value),
+  );
 
-    if (!modelId) {
-      return undefined;
-    }
-
-    return configurations.value.find((config) => config.id.model === modelId);
-  });
+  const catalogRadioId = computed(() => activeConfig.value?.id);
+  const wizardGate = computed(() =>
+    menuCaptureWizardGate({
+      canPersist: canPersist.value,
+      model: cardRadio.value?.model,
+      serialPort: savedRadio.value?.serialPort,
+      configurations: configurations.value,
+    }),
+  );
 
   const memoryConfig = computed(() => activeConfig.value?.memoryConfig);
-  const memoryMap = computed(() => settingsMemoryMap.value ?? memoryMapFromConfig(activeConfig.value!));
+  const memoryMap = computed(() => {
+    if (settingsMemoryMap.value) {
+      return settingsMemoryMap.value;
+    }
+
+    const config = activeConfig.value;
+
+    return config ? memoryMapFromConfig(config) : undefined;
+  });
   const canPersist = computed(() => Boolean(savedRadio.value?.id && isTauriRuntime()));
   const captureBusy = computed(() => Boolean(cardId.value && (transferInFlight.value || working.value)));
   const hasBaseline = computed(() => Boolean(session.value?.baselineByteLength));
@@ -131,20 +147,14 @@ export function useMenuCapture() {
     const savedRadioId = savedRadio.value?.id;
     const port = savedRadio.value?.serialPort;
 
-    if (!savedRadioId || !port || !activeRadioId.value) {
+    if (!canStartMenuCaptureSession({ savedRadioId, serialPort: port, config: activeConfig.value })) {
       toast.add({
         title: 'Radio not ready',
-        description: 'Save this radio with a programming port and read it once before starting menu capture.',
-        color: 'warning',
-        icon: 'i-lucide-triangle-alert',
-      });
-      return;
-    }
-
-    if (!activeConfig.value?.writeMemory) {
-      toast.add({
-        title: 'Write not supported',
-        description: 'This radio cannot be restored from HamBench because its driver has no memory write.',
+        description: !port
+          ? 'Save this radio with a programming port before starting menu capture.'
+          : !activeConfig.value
+            ? 'Install the driver for this radio under Preferences → Drivers.'
+            : 'This radio cannot be restored from HamBench because its driver has no memory write.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -389,7 +399,7 @@ export function useMenuCapture() {
   async function exportCapture(input: { callsign?: string; notes?: string; firmware?: string | null }): Promise<string | undefined> {
     const savedRadioId = savedRadio.value?.id;
     const current = session.value;
-    const radioId = activeRadioId.value;
+    const radioId = catalogRadioId.value;
     const config = activeConfig.value;
 
     if (!savedRadioId || !current || !radioId || !config || current.baselineByteLength === 0) {
@@ -493,6 +503,13 @@ export function useMenuCapture() {
     { immediate: true },
   );
 
+  watch(
+    () => [cardRadio.value?.model, configurations.value.length] as const,
+    () => {
+      void refreshIgnoreList();
+    },
+  );
+
   return {
     session,
     loadingSession,
@@ -503,7 +520,9 @@ export function useMenuCapture() {
     cardId,
     savedRadio,
     cardRadio,
-    activeRadioId,
+    catalogRadioId,
+    wizardGate,
+    configurations,
     activeConfig: activeConfig as ComputedRef<LoadedRadioConfig | undefined>,
     ignoreEntries,
     startSession,

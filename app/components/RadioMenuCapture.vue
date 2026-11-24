@@ -2,6 +2,7 @@
 import DriverMemoryHexDiff from '~/components/driver/DriverMemoryHexDiff.vue';
 import { requiredToggleGroupModel } from '~/utils/required-toggle-group-model';
 import { loadMenuCaptureBaseline, loadMenuCaptureStepImage } from '~/utils/menu-capture-io';
+import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 type WizardPhase = 'intro' | 'baseline' | 'change' | 'review' | 'more' | 'restore' | 'export';
 
@@ -14,7 +15,9 @@ const {
   isCaptureActive,
   savedRadio,
   cardRadio,
-  activeRadioId,
+  activeConfig,
+  wizardGate,
+  configurations,
   startSession,
   readBaseline,
   readStepImage,
@@ -62,7 +65,6 @@ const stepperItems = [
   { title: 'Export', value: 'export' },
 ];
 
-const captureReady = computed(() => Boolean(savedRadio.value?.serialPort && cardRadio.value?.model));
 const menuPrefill = computed(() => {
   const number = menuNumber.value;
 
@@ -247,16 +249,16 @@ async function onExport(): Promise<void> {
     />
 
     <UAlert
-      v-else-if="!activeRadioId"
-      color="info"
+      v-else-if="wizardGate === 'driver-missing'"
+      color="warning"
       variant="subtle"
-      icon="i-lucide-info"
-      title="Read the radio first"
-      description="Use Read on the Channels tab once so HamBench knows which driver and memory map to use."
+      icon="i-lucide-triangle-alert"
+      title="Driver not installed"
+      :description="`Install the ${savedRadioModelLabel(cardRadio!, configurations)} driver under Preferences → Drivers.`"
     />
 
     <UAlert
-      v-else-if="!captureReady"
+      v-else-if="wizardGate === 'port-missing'"
       color="warning"
       variant="subtle"
       icon="i-lucide-unplug"
@@ -264,7 +266,7 @@ async function onExport(): Promise<void> {
       description="Set a serial port on this saved radio before you start menu capture."
     />
 
-    <template v-else-if="activeRadioId && !loadingSession">
+    <template v-else-if="wizardGate === 'ready' && !loadingSession">
       <p v-if="isCaptureActive" class="text-xs text-muted">
         This programming port stays reserved for menu capture until you restore the radio and export, or discard the session.
         Read and Write on this card are paused.

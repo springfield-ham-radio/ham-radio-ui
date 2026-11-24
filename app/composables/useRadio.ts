@@ -85,6 +85,7 @@ import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { addToRadioDevFixture, DEV_FIXTURE_SERIAL_PORT, isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
+import { radioIdForMenuCaptureSession } from '~/utils/menu-capture-catalog';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import { serialPortMatchKey } from '~/utils/serial-port-list';
 import { serialLogEntryCount, type SerialLogOperation } from '~/utils/serial-log-file';
@@ -1416,7 +1417,11 @@ export function useRadio() {
     }
 
     const session = readSession(sessionId);
-    const radioId = session?.activeRadioId;
+    const radioId = radioIdForMenuCaptureSession(
+      session?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
 
     if (!radioId) {
       return undefined;
@@ -1494,7 +1499,11 @@ export function useRadio() {
     }
 
     const session = readSession(sessionId);
-    const radioId = session?.activeRadioId;
+    const radioId = radioIdForMenuCaptureSession(
+      session?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
 
     if (!session || !radioId) {
       return false;
@@ -1566,7 +1575,11 @@ export function useRadio() {
     serialPortPath: string,
   ): Promise<void> {
     const session = readSession(sessionId);
-    const radioId = session?.activeRadioId;
+    const radioId = radioIdForMenuCaptureSession(
+      session?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
 
     if (!radioId) {
       return;
