@@ -1,4 +1,5 @@
 {
   "name": "HamBench",
-  "install": "cd src-tauri && rustup toolchain install && cd .. && rustup show && yarn install"
+  "user": "ubuntu",
+  "install": "bash .cursor/cloud-install.sh"
 }
