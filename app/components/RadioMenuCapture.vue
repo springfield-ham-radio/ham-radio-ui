@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { requiredToggleGroupModel } from '~/utils/required-toggle-group-model';
 import { loadMenuCaptureBaseline, loadMenuCaptureStepImage } from '~/utils/menu-capture-io';
 import type { MenuCaptureStepDiff } from '~/utils/menu-capture';
 import { menuCaptureReviewHasVisibleDiff } from '~/utils/menu-capture-review';
@@ -34,7 +33,6 @@ const {
   restoreBaseline,
   exportCapture,
   completeExportedSession,
-  releasePortHold,
   discardSession,
   defaultCallsign,
   menuLookup,
@@ -57,14 +55,7 @@ const firmware = ref('');
 const pendingBeforeImage = shallowRef<Uint8Array | undefined>();
 const pendingAfterImage = shallowRef<Uint8Array | undefined>();
 const pendingAnalysis = shallowRef<ReturnType<typeof analyzeMenuCaptureStep> | undefined>();
-const reviewDecision = ref<'keep' | 'redo'>('keep');
 const restoreConfirmed = ref(false);
-const reviewDecisionModel = requiredToggleGroupModel(
-  () => reviewDecision.value,
-  (value) => {
-    reviewDecision.value = value;
-  },
-);
 const restoring = ref(false);
 const exportSavedPath = ref<string | undefined>();
 const exportCompleted = ref(false);
@@ -85,7 +76,7 @@ const phaseInstructions: Record<WizardPhase, string | undefined> = {
   baseline: 'Put the radio in clone mode. Do not change any menus. When you are ready, read the baseline image.',
   change:
     'On the radio, change exactly one menu and save it on the radio (use the confirm key if the manual requires it). Enter the menu number and what changed, then read the radio.',
-  review: 'Check the memory diff and mapped fields. Keep this step to continue, or Redo to read again after fixing the radio.',
+  review: 'Check the memory diff and mapped fields. Keep and continue, or redo this step after fixing the radio.',
   more: 'Capture more menus or restore the baseline image when you are finished.',
   restore:
     'HamBench writes the saved baseline back to the radio and reads it again to verify. Your card editor memory refreshes only when verification succeeds.',
@@ -226,7 +217,6 @@ async function onReadStep(): Promise<void> {
   pendingBeforeImage.value = before;
   pendingAfterImage.value = after;
   pendingAnalysis.value = analyzed;
-  reviewDecision.value = 'keep';
 
   await recordCapturedStep({
     menuNumber: number,
@@ -243,20 +233,11 @@ async function onReadStep(): Promise<void> {
   phase.value = 'review';
 }
 
-async function onConfirmReview(): Promise<void> {
+async function onKeepAndContinueReview(): Promise<void> {
   const image = pendingAfterImage.value;
   const number = menuNumber.value;
 
   if (!image || number === undefined) {
-    return;
-  }
-
-  if (reviewDecision.value === 'redo') {
-    await redoLastStep();
-    pendingBeforeImage.value = undefined;
-    pendingAfterImage.value = undefined;
-    pendingAnalysis.value = undefined;
-    phase.value = 'change';
     return;
   }
 
@@ -279,6 +260,14 @@ async function onConfirmReview(): Promise<void> {
   changeTo.value = '';
   changeNote.value = '';
   phase.value = 'more';
+}
+
+async function onRedoReviewStep(): Promise<void> {
+  await redoLastStep();
+  pendingBeforeImage.value = undefined;
+  pendingAfterImage.value = undefined;
+  pendingAnalysis.value = undefined;
+  phase.value = 'change';
 }
 
 async function onRestore(): Promise<void> {
@@ -329,8 +318,13 @@ async function onStartNewCapture(): Promise<void> {
   phase.value = 'intro';
 }
 
-function onDone(): void {
-  releasePortHold();
+async function onDone(): Promise<void> {
+  await discardSession();
+  exportSavedPath.value = undefined;
+  exportCompleted.value = false;
+  operatorNotes.value = '';
+  firmware.value = '';
+  phase.value = 'intro';
   emit('close');
 }
 
@@ -442,11 +436,10 @@ async function onConfirmDiscardSession(): Promise<void> {
         />
         <UAlert
           v-if="pendingAnalysis.flags.includes('wide')"
-          color="warning"
+          color="info"
           variant="subtle"
-          icon="i-lucide-triangle-alert"
-          title="Wide diff"
-          description="More than one memory region changed. Change only one menu, or redo this step."
+          icon="i-lucide-info"
+          description="Changes in more than one memory region. That is fine if one menu stores data in several places; otherwise redo this step."
         />
         <p class="text-sm text-muted">
           {{ pendingAnalysis.diff.byteCount }} byte{{ pendingAnalysis.diff.byteCount === 1 ? '' : 's' }} changed in
@@ -455,15 +448,6 @@ async function onConfirmDiscardSession(): Promise<void> {
             ({{ pendingAnalysis.diff.ignoredByteCount }} ignored)
           </span>
         </p>
-        <UToggleGroup
-          v-model="reviewDecisionModel"
-          type="single"
-          :items="[
-            { label: 'Keep this step', value: 'keep' },
-            { label: 'Redo this step', value: 'redo' },
-          ]"
-          class="w-full"
-        />
         <MenuCaptureDiffRuns
           v-if="reviewDiff && reviewDiff.runCount > 0"
           :key="`${session?.steps.length ?? 0}-${reviewDiff.byteCount}`"
@@ -472,7 +456,10 @@ async function onConfirmDiscardSession(): Promise<void> {
           before-label="Previous read"
           after-label="This read"
         />
-        <UButton label="Continue" color="primary" @click="onConfirmReview" />
+        <div class="flex flex-wrap gap-2">
+          <UButton label="Keep and continue" color="primary" @click="onKeepAndContinueReview" />
+          <UButton label="Redo this step" color="neutral" variant="outline" @click="onRedoReviewStep" />
+        </div>
       </section>
 
       <section v-else-if="phase === 'more'" class="space-y-3">

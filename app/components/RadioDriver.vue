@@ -9,6 +9,7 @@ const props = defineProps<{
   modelId?: string;
 }>();
 
+const { enabled: developerTools } = useDeveloperTools();
 const { configurations, activeRadioId } = useRadio();
 const toast = useToast();
 
@@ -17,6 +18,12 @@ const hasRadio = computed(() => Boolean(resolvedModelId.value));
 
 const driverTab = ref('read');
 const viewMode = ref<'diagram' | 'json'>('diagram');
+
+watch(developerTools, (on) => {
+  if (!on && driverTab.value === 'menu-capture') {
+    driverTab.value = 'read';
+  }
+});
 const copying = ref(false);
 
 const selectedConfig = computed(() => {
@@ -29,12 +36,20 @@ const selectedConfig = computed(() => {
   return configurations.value.find((config) => String(config.id.model) === modelId);
 });
 
-const driverItems = computed<TabsItem[]>(() => [
-  { label: 'Read', icon: 'i-hambench-radio-read', slot: 'read' as const, value: 'read' },
-  { label: 'Write', icon: 'i-hambench-radio-write', slot: 'write' as const, value: 'write' },
-  { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
-  { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
-]);
+const driverItems = computed<TabsItem[]>(() => {
+  const tabs: TabsItem[] = [
+    { label: 'Read', icon: 'i-hambench-radio-read', slot: 'read' as const, value: 'read' },
+    { label: 'Write', icon: 'i-hambench-radio-write', slot: 'write' as const, value: 'write' },
+    { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
+    { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
+  ];
+
+  if (developerTools.value) {
+    tabs.push({ label: 'Menu capture', icon: 'i-lucide-waypoints', slot: 'menu-capture' as const, value: 'menu-capture' });
+  }
+
+  return tabs;
+});
 
 const viewItems = computed<TabsItem[]>(() => [
   {
@@ -131,7 +146,7 @@ async function copyJson(): Promise<void> {
             trigger: 'grow-0',
           }"
         />
-        <div class="flex items-center gap-2">
+        <div v-if="driverTab !== 'menu-capture'" class="flex items-center gap-2">
           <UTabs
             v-model="viewMode"
             :items="viewItems"
@@ -156,8 +171,9 @@ async function copyJson(): Promise<void> {
         </div>
       </div>
 
+      <RadioMenuCapture v-if="driverTab === 'menu-capture'" @close="driverTab = 'read'" />
       <RadioDriverProtocolPanel
-        v-if="driverTab === 'read'"
+        v-else-if="driverTab === 'read'"
         :protocol="readSteps"
         :memory-config="selectedConfig.memoryConfig"
         :serial-summary="serialSummary"
@@ -178,7 +194,7 @@ async function copyJson(): Promise<void> {
         scope="channels"
       />
       <RadioDriverCodecPanel
-        v-else
+        v-else-if="driverTab === 'settings'"
         :memory-map="settingsMap"
         :memory-config="settingsMemoryConfig"
         :view-mode="viewMode"

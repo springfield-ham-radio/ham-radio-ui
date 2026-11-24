@@ -91,6 +91,15 @@ describe('menu capture review UI', () => {
     expect(wizard).toContain('recordCapturedStep');
     expect(wizard).toContain('activePhaseInstruction');
     expect(wizard).not.toContain('DriverMemoryHexDiff');
+    expect(wizard).toContain('Keep and continue');
+    expect(wizard).toContain('onKeepAndContinueReview');
+    expect(wizard).toContain('onRedoReviewStep');
+    expect(wizard).not.toContain('UToggleGroup');
+    expect(wizard).not.toContain('requiredToggleGroupModel');
+    expect(wizard).not.toContain('Change only one menu');
+    expect(wizard).toContain(
+      'Changes in more than one memory region. That is fine if one menu stores data in several places; otherwise redo this step.',
+    );
 
     expect(diffPanel).toContain('run.context');
     expect(diffPanel).toContain('menuCaptureFieldReviewLines');

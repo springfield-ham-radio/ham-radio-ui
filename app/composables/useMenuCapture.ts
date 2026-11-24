@@ -7,6 +7,7 @@ import {
   lookupMenuCaptureByNumber,
   menuCaptureMenuCodeForStep,
   menuCaptureSessionNeedsPortHold,
+  menuCaptureSessionShouldResume,
   menuCaptureStepImageFileName,
   removeLastMenuCaptureSessionStep,
   removeMenuCaptureSessionStepFrom,
@@ -101,6 +102,13 @@ export function useMenuCapture() {
       const stored = await loadMenuCaptureSession(savedRadioId);
 
       if (!stored) {
+        session.value = undefined;
+        setMenuCapturePortHold(savedRadioId, undefined);
+        return;
+      }
+
+      if (!menuCaptureSessionShouldResume(stored)) {
+        await discardMenuCaptureSession(savedRadioId);
         session.value = undefined;
         setMenuCapturePortHold(savedRadioId, undefined);
         return;
