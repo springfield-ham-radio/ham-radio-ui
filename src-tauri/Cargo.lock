@@ -51,12 +51,11 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "android-usb-serial"
-version = "0.1.2"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bde0f64bc5605e759cadb7ee8c5c145d3efe497efb4d1ed1e420ecc846bf4ff"
+checksum = "be45e345723b7861f46917744ee33e88491bde9eac6f01a5f818ea1f6c47f654"
 dependencies = [
  "libc",
- "log",
  "nusb",
  "serialport",
 ]
@@ -1158,7 +1157,7 @@ dependencies = [
  "rustc_version",
  "toml 1.1.4+spec-1.1.0",
  "vswhom",
- "winreg",
+ "winreg 0.55.0",
 ]
 
 [[package]]
@@ -4049,6 +4048,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
 name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4634,6 +4639,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial-codec"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee7b78a5c85fba919943e0d90e67d7374ffda0f59e53e6db71c4a88580fd47b"
+dependencies = [
+ "regex-lite",
+ "serde",
+]
+
+[[package]]
 name = "serialize-to-javascript"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4653,6 +4668,24 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "serialplugin-core"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbe7fab3483898c8ce571bf3ac9e0ac45af14762722d4067871e40954feb422"
+dependencies = [
+ "android-usb-serial",
+ "jni 0.21.1",
+ "log",
+ "serde",
+ "serde_json",
+ "serial-codec",
+ "serialport",
+ "socket2",
+ "tauri",
+ "winreg 0.56.0",
 ]
 
 [[package]]
@@ -5761,16 +5794,15 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-serialplugin"
-version = "3.0.9"
+version = "4.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cbd7d1c5d71dbf5fb9879863d10110f98855bef937d79b31f973ea3053c420a"
+checksum = "4f58ea596175b4cd090346623c72cac84a0fa3466b6e0d8d3f493ff1f585ad34"
 dependencies = [
- "android-usb-serial",
- "jni 0.21.1",
  "log",
  "serde",
  "serde_json",
- "serialport",
+ "serial-codec",
+ "serialplugin-core",
  "tauri",
  "tauri-plugin",
 ]
@@ -7204,6 +7236,16 @@ checksum = "cb5a765337c50e9ec252c2069be9bf91c7df47afb103b642ba3a53bf8101be97"
 dependencies = [
  "cfg-if",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "winreg"
+version = "0.56.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
