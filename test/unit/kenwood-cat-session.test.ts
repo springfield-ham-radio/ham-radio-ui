@@ -73,6 +73,25 @@ const handheldProfile = kenwoodCatProfileFromConfig({
   modeCommand: 'MD',
 });
 
+const d74Profile = kenwoodCatProfileFromConfig({
+  protocol: 'kenwood',
+  vfoCount: 2,
+  frequencyCommands: ['FQ'],
+  frequencyWidth: 10,
+  bandIndexed: true,
+  modes: ['FM', 'DV', 'AM', 'LSB', 'USB', 'CW', 'NFM', 'DR', 'WFM', 'R-CW'],
+  bandModes: [
+    ['FM', 'DV', 'AM', 'NFM', 'DR', 'WFM'],
+    ['FM', 'DV', 'AM', 'LSB', 'USB', 'CW', 'NFM', 'DR', 'WFM', 'R-CW'],
+  ],
+  powers: ['H', 'M', 'L', 'EL'],
+  modeCommand: 'MD',
+  bandControl: true,
+  powerBandIndex: true,
+  vfoModeCommand: 'VM',
+  vfoModes: ['VFO', 'Memory', 'Call', 'DV'],
+});
+
 describe('KenwoodCatSession', () => {
   it('should identify a dual-band radio and poll both VFOs', async () => {
     const transport = new FakeCatTransport();
@@ -213,6 +232,162 @@ describe('KenwoodCatSession', () => {
     const status = await session.connect();
 
     expect(status.radioIdentity).toBe('TM-D710');
+  });
+
+  it('should poll a band-indexed dual-band radio without BC select or bare FQ', async () => {
+    const transport = new FakeCatTransport();
+    transport.enqueue(
+      'ID TH-D74',
+      'BC 0',
+      'FQ 0,0145470000',
+      'MD 0,7',
+      'PC 0,0',
+      'VM 0,3',
+      'FQ 1,0144390000',
+      'MD 1,0',
+      'PC 1,3',
+      'VM 1,0',
+    );
+
+    const session = new KenwoodCatSession({
+      transport,
+      profile: d74Profile,
+      delayMs: 0,
+    });
+    const status = await session.connect();
+
+    expect(transport.sent).toEqual([
+      'ID',
+      'BC',
+      'FQ 0',
+      'MD 0',
+      'PC 0',
+      'VM 0',
+      'FQ 1',
+      'MD 1',
+      'PC 1',
+      'VM 1',
+    ]);
+    expect(status.radioIdentity).toBe('TH-D74');
+    expect(status.controlBand).toBe(0);
+    expect(status.vfos[0]).toMatchObject({
+      band: 0,
+      frequencyHz: 145_470_000,
+      mode: 'DR',
+      power: 'H',
+      activity: 'DV',
+      readOnly: true,
+    });
+    expect(status.vfos[1]).toMatchObject({
+      band: 1,
+      frequencyHz: 144_390_000,
+      mode: 'FM',
+      power: 'EL',
+      activity: 'VFO',
+      readOnly: false,
+    });
+    expect(status.vfos[1]?.modes).toContain('NFM');
+    expect(status.vfos[0]?.modes).not.toContain('LSB');
+  });
+
+  it('should set band-indexed frequency mode and power on the editable band', async () => {
+    const transport = new FakeCatTransport();
+    transport.enqueue(
+      'ID TH-D74',
+      'BC 0',
+      'FQ 0,0145470000',
+      'MD 0,7',
+      'PC 0,0',
+      'VM 0,3',
+      'FQ 1,0144390000',
+      'MD 1,0',
+      'PC 1,3',
+      'VM 1,0',
+      'FQ 1,0144395000',
+      'MD 1,6',
+      'PC 1,2',
+    );
+
+    const session = new KenwoodCatSession({
+      transport,
+      profile: d74Profile,
+      delayMs: 0,
+    });
+    await session.connect();
+    await session.setFrequency(1, 144_395_000);
+    await session.setMode(1, 'NFM');
+    await session.setPower(1, 'L');
+
+    expect(transport.sent).toContain('FQ 1,0144395000');
+    expect(transport.sent).toContain('MD 1,6');
+    expect(transport.sent).toContain('PC 1,2');
+    expect(transport.sent).not.toContain('BC 1');
+    expect(transport.sent).not.toContain('FO 1');
+  });
+
+  it('should refuse band-indexed edits when VM is not VFO mode', async () => {
+    const transport = new FakeCatTransport();
+    transport.enqueue(
+      'ID TH-D74',
+      'BC 0',
+      'FQ 0,0145470000',
+      'MD 0,7',
+      'PC 0,0',
+      'VM 0,3',
+      'FQ 1,0144390000',
+      'MD 1,0',
+      'PC 1,3',
+      'VM 1,0',
+    );
+
+    const session = new KenwoodCatSession({
+      transport,
+      profile: d74Profile,
+      delayMs: 0,
+    });
+    await session.connect();
+    const sentBefore = [...transport.sent];
+
+    await expect(session.setFrequency(0, 145_500_000)).rejects.toThrow(/not in VFO mode/);
+    await expect(session.setMode(0, 'LSB')).rejects.toThrow(/not in VFO mode/);
+    expect(transport.sent).toEqual(sentBefore);
+  });
+
+  it('should accept one-field BC on band-indexed poll and repeat BC on refresh', async () => {
+    const transport = new FakeCatTransport();
+    transport.enqueue(
+      'ID TH-D74',
+      'BC 0',
+      'FQ 0,0145470000',
+      'MD 0,7',
+      'PC 0,0',
+      'VM 0,3',
+      'FQ 1,0144390000',
+      'MD 1,0',
+      'PC 1,3',
+      'VM 1,0',
+      'BC 0',
+      'FQ 0,0145470000',
+      'MD 0,7',
+      'PC 0,0',
+      'VM 0,3',
+      'FQ 1,0144390000',
+      'MD 1,0',
+      'PC 1,3',
+      'VM 1,0',
+    );
+
+    const session = new KenwoodCatSession({
+      transport,
+      profile: d74Profile,
+      delayMs: 0,
+    });
+    await session.connect();
+    await session.poll();
+
+    expect(transport.sent.filter((line) => line === 'BC')).toHaveLength(2);
+    expect(transport.sent).not.toContain('BC 0');
+    expect(transport.sent).not.toContain('BC 1');
   });
 });
 

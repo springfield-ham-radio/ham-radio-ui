@@ -30,8 +30,9 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0019](./0019-settings-coordinate-composite.md) | accepted | Settings coordinate `ui.composite` parts |
 | [0020](./0020-short-option-toggle-group.md) | accepted | ToggleGroup vs USelect for short option pickers |
 | [0021](./0021-menu-capture-session.md) | proposed | Guided menu capture session per radio card |
+| [0022](./0022-kenwood-band-indexed-cat.md) | proposed | Kenwood band-indexed CAT (TH-D74) |
 
-Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0022. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
+Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0023. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
 ## Status
 

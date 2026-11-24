@@ -66,7 +66,7 @@ const disabled = computed(() => props.radio.busy);
         v-for="vfo in radio.status.vfos"
         :key="`${radio.port}-${vfo.band}`"
         :vfo="vfo"
-        :modes="modes"
+        :modes="vfo.modes ?? modes"
         :powers="powers"
         :is-control="vfo.band === radio.status.controlBand"
         :transmitting="radio.status.transmitting"
