@@ -153,6 +153,11 @@ export interface MenuCaptureSessionStep {
   imageByteLength: number;
 }
 
+export interface MenuCaptureSessionExportRecord {
+  savedAt: string;
+  path?: string;
+}
+
 export interface MenuCaptureSessionState {
   sessionId: string;
   savedRadioId: string;
@@ -167,6 +172,13 @@ export interface MenuCaptureSessionState {
   restore?: MenuCaptureRestoreRecord;
   operatorNotes?: string;
   firmware?: string | null;
+  /** Set when a `.hmenucap` was saved; session no longer holds the programming port. */
+  completedAt?: string;
+  export?: MenuCaptureSessionExportRecord;
+}
+
+export function menuCaptureSessionNeedsPortHold(session: MenuCaptureSessionState): boolean {
+  return !session.completedAt && Boolean(session.serialPort);
 }
 
 const HEX_BYTE = (value: number | undefined): string =>
@@ -455,6 +467,10 @@ function annotateRun(
         : undefined;
       const menu = uiField?.ui.menu;
       const menuNumber = menu && typeof menu.number === 'number' ? menu.number : undefined;
+      const fieldMenuCode =
+        menuNumber !== undefined
+          ? menuCaptureDistinctMenuCode(uiLabel ?? '', typeof menu?.code === 'string' ? menu.code : undefined)
+          : undefined;
 
       fieldById.set(key, {
         structId: hit.structId,
@@ -464,7 +480,7 @@ function annotateRun(
           ? {
               menu: {
                 number: menuNumber,
-                ...(typeof menu?.code === 'string' && menu.code.trim() ? { code: menu.code.trim() } : {}),
+                ...(fieldMenuCode ? { code: fieldMenuCode } : {}),
               },
             }
           : {}),

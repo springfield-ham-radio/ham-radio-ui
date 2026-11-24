@@ -1499,14 +1499,20 @@ export function useRadio() {
       return false;
     }
 
-    const session = readSession(sessionId);
+    const editorSession = readSession(sessionId);
     const radioId = radioIdForMenuCaptureSession(
-      session?.activeRadioId,
+      editorSession?.activeRadioId,
       boundRadio(sessionId)?.model,
       configurations.value,
     );
 
-    if (!session || !radioId) {
+    if (!radioId) {
+      toast.add({
+        title: 'Could not restore radio',
+        description: 'Install the driver for this radio under Preferences → Drivers.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
       return false;
     }
 
@@ -1523,10 +1529,17 @@ export function useRadio() {
 
     if (!config?.writeMemory) {
       finishTransferOperation(sessionId);
+      toast.add({
+        title: 'Could not restore radio',
+        description: 'This driver cannot write memory back to the radio.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
       return false;
     }
 
   try {
+    const backupSession = editorSession ?? emptyRadioCardSession();
     const backup =
       options?.preRestoreBackupImage && options.preRestoreBackupImage.length > 0
         ? await persistPrewriteBackupImage(
@@ -1539,7 +1552,7 @@ export function useRadio() {
           )
         : await preparePrewriteBackup(
             sessionId,
-            { ...session, radioBaseline: undefined, backupBaselineStale: true },
+            { ...backupSession, radioBaseline: undefined, backupBaselineStale: true },
             radioId,
             serialPortPath,
             config,

@@ -34,6 +34,7 @@ const {
   restoreBaseline,
   exportCapture,
   completeExportedSession,
+  releasePortHold,
   discardSession,
   defaultCallsign,
   menuLookup,
@@ -134,6 +135,13 @@ watch(
   (value) => {
     if (!value) {
       phase.value = 'intro';
+      return;
+    }
+
+    if (value.completedAt) {
+      phase.value = 'export';
+      exportCompleted.value = true;
+      exportSavedPath.value = value.export?.path;
       return;
     }
 
@@ -322,6 +330,7 @@ async function onStartNewCapture(): Promise<void> {
 }
 
 function onDone(): void {
+  releasePortHold();
   emit('close');
 }
 

@@ -6,6 +6,7 @@ import {
   imagesMatchExceptMenuCaptureIgnore,
   lookupMenuCaptureByNumber,
   menuCaptureMenuCodeForStep,
+  menuCaptureSessionNeedsPortHold,
   menuCaptureStepImageFileName,
   removeLastMenuCaptureSessionStep,
   removeMenuCaptureSessionStepFrom,
@@ -107,8 +108,10 @@ export function useMenuCapture() {
 
       session.value = stored;
 
-      if (stored.serialPort) {
-        setMenuCapturePortHold(savedRadioId, stored.serialPort);
+      if (menuCaptureSessionNeedsPortHold(stored)) {
+        setMenuCapturePortHold(savedRadioId, stored.serialPort!);
+      } else {
+        setMenuCapturePortHold(savedRadioId, undefined);
       }
     } catch (cause) {
       session.value = undefined;
@@ -410,6 +413,17 @@ export function useMenuCapture() {
       );
 
       if (!wrote) {
+        await persistSession({
+          ...current,
+          updatedAt: new Date().toISOString(),
+          restore: { writtenAt, matchesBaseline: false },
+        });
+        toast.add({
+          title: 'Could not restore radio',
+          description: 'The baseline image was not written. Check the cable and programming port, then try again.',
+          color: 'error',
+          icon: 'i-lucide-circle-alert',
+        });
         return { verified: false };
       }
 
@@ -492,10 +506,25 @@ export function useMenuCapture() {
     const savedPath = await saveBinaryFileWithPicker(zip, defaultPath, 'Save menu capture');
 
     if (savedPath) {
+      const completedAt = new Date().toISOString();
+      await persistSession({
+        ...current,
+        updatedAt: completedAt,
+        completedAt,
+        export: { savedAt: completedAt, path: savedPath },
+      });
       setMenuCapturePortHold(savedRadioId, undefined);
     }
 
     return savedPath;
+  }
+
+  function releasePortHold(): void {
+    const savedRadioId = savedRadio.value?.id;
+
+    if (savedRadioId) {
+      setMenuCapturePortHold(savedRadioId, undefined);
+    }
   }
 
   async function completeExportedSession(): Promise<void> {
@@ -567,6 +596,7 @@ export function useMenuCapture() {
     restoreBaseline,
     exportCapture,
     completeExportedSession,
+    releasePortHold,
     discardSession,
     defaultCallsign,
     menuLookup,

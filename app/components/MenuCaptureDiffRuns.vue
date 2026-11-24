@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { MenuCaptureStepDiff } from '~/utils/menu-capture';
 import { menuCaptureFieldReviewLines } from '~/utils/menu-capture-review';
 
