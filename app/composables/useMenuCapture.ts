@@ -5,16 +5,15 @@ import {
   comparedToForStepIndex,
   imagesMatchExceptMenuCaptureIgnore,
   lookupMenuCaptureByNumber,
+  menuCaptureMenuCodeForStep,
   menuCaptureStepImageFileName,
   removeLastMenuCaptureSessionStep,
   removeMenuCaptureSessionStepFrom,
-  resolvedIgnoreForExport,
-  resolveMenuCaptureIgnore,
   sha256Hex,
-  type MenuCaptureDocument,
   type MenuCaptureSessionState,
   MENU_CAPTURE_FILE_EXTENSION,
 } from '~/utils/menu-capture';
+import { buildMenuCaptureExportDocument } from '~/utils/menu-capture-export';
 import {
   deleteMenuCaptureImages,
   discardMenuCaptureSession,
@@ -32,7 +31,7 @@ import {
   menuCaptureMemoryMap,
   menuCaptureWizardGate,
 } from '~/utils/menu-capture-catalog';
-import { resolveMenuCaptureIgnoreForConfig } from '~/utils/menu-capture-module-config';
+import { resolveMenuCaptureIgnoreForConfig, resolveMenuCaptureModuleIdentity } from '~/utils/menu-capture-module-config';
 import { menuCaptureUseStepImageForPrewriteBackup } from '~/utils/menu-capture-restore-backup';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
@@ -268,6 +267,12 @@ export function useMenuCapture() {
 
     await saveMenuCaptureStepImage(savedRadioId, fileName, input.afterImage);
     const sha = await sha256Hex(input.afterImage);
+    const menuCode = menuCaptureMenuCodeForStep(
+      input.menuNumber,
+      input.menuName,
+      memoryMap.value,
+      input.menuCode,
+    );
     const nextStep: MenuCaptureSessionState['steps'][number] = {
       index: stepIndex,
       readAt: new Date().toISOString(),
@@ -275,7 +280,7 @@ export function useMenuCapture() {
       menu: {
         number: input.menuNumber,
         name: input.menuName,
-        ...(input.menuCode ? { code: input.menuCode } : {}),
+        ...(menuCode ? { code: menuCode } : {}),
         nameSource: input.nameSource,
       },
       change: {
@@ -313,12 +318,18 @@ export function useMenuCapture() {
       return;
     }
 
+    const menuCode = menuCaptureMenuCodeForStep(
+      input.menuNumber,
+      input.menuName,
+      memoryMap.value,
+      input.menuCode,
+    );
     const updated: MenuCaptureSessionState['steps'][number] = {
       ...last,
       menu: {
         number: input.menuNumber,
         name: input.menuName,
-        ...(input.menuCode ? { code: input.menuCode } : {}),
+        ...(menuCode ? { code: menuCode } : {}),
         nameSource: input.nameSource,
       },
       change: {
@@ -449,48 +460,24 @@ export function useMenuCapture() {
 
     const baseline = await loadMenuCaptureBaseline(savedRadioId);
     const images: Record<string, Uint8Array> = { 'baseline.img': baseline };
-    const resolved = resolveMenuCaptureIgnore(ignoreEntries.value, memoryConfig.value, baseline.length);
-    const document: MenuCaptureDocument = {
-      schemaVersion: 1,
-      kind: 'ham-radio-menu-capture',
+    const moduleIdentity = await resolveMenuCaptureModuleIdentity(config);
+    const document = buildMenuCaptureExportDocument({
       exportedAt: new Date().toISOString(),
       app: { name: 'HamBench', version: APP_VERSION },
       operator: {
         ...(input.callsign?.trim() ? { callsign: input.callsign.trim().toUpperCase() } : {}),
         ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
       },
-      radio: {
-        manufacturer: radioId.manufacturer,
-        model: String(radioId.model),
-        name: savedRadio.value?.name,
-        moduleId: config.metadata?.moduleId,
-        moduleVersion: config.metadata?.moduleVersion,
-        memoryMapVersion: memoryMap.value?.version,
-        firmware: input.firmware ?? current.firmware ?? null,
-      },
-      ignore: resolvedIgnoreForExport(resolved),
-      baseline: {
-        file: 'images/baseline.img',
-        byteLength: baseline.length,
-        sha256: current.baselineSha256,
-        readAt: current.baselineReadAt,
-      },
-      steps: current.steps.map((step) => ({
-        index: step.index,
-        readAt: step.readAt,
-        comparedTo: step.comparedTo,
-        menu: step.menu,
-        change: step.change,
-        image: {
-          file: `images/${step.imageFileName}`,
-          byteLength: step.imageByteLength,
-          sha256: step.imageSha256,
-        },
-        flags: step.flags,
-        diff: step.diff,
-      })),
-      ...(current.restore ? { restore: current.restore } : {}),
-    };
+      radioId,
+      savedRadioName: savedRadio.value?.name,
+      ...moduleIdentity,
+      memoryMapVersion: memoryMap.value?.version,
+      firmware: input.firmware ?? current.firmware ?? null,
+      ignore: ignoreEntries.value,
+      memoryConfig: memoryConfig.value,
+      baselineLength: baseline.length,
+      session: current,
+    });
 
     for (const step of current.steps) {
       images[step.imageFileName] = await loadMenuCaptureStepImage(savedRadioId, step.imageFileName);
@@ -509,6 +496,10 @@ export function useMenuCapture() {
     }
 
     return savedPath;
+  }
+
+  async function completeExportedSession(): Promise<void> {
+    await discardSession();
   }
 
   async function discardSession(): Promise<void> {
@@ -575,6 +566,7 @@ export function useMenuCapture() {
     redoFromStep,
     restoreBaseline,
     exportCapture,
+    completeExportedSession,
     discardSession,
     defaultCallsign,
     menuLookup,

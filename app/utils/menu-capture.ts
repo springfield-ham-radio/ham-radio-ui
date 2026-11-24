@@ -571,6 +571,46 @@ function menuLabelFromField(field: RadioMemoryMapUiField): string {
   return code || field.ui.label;
 }
 
+/** Driver `ui.menu.code` when it is present and not the same string as the menu name. */
+export function menuCaptureDistinctMenuCode(menuName: string, code: string | undefined): string | undefined {
+  const trimmed = code?.trim();
+
+  if (!trimmed || trimmed === menuName.trim()) {
+    return undefined;
+  }
+
+  return trimmed;
+}
+
+export function menuCaptureMenuCodeForStep(
+  menuNumber: number,
+  menuName: string,
+  memoryMap: RadioMemoryMap | undefined,
+  operatorCode?: string,
+): string | undefined {
+  const fromMap =
+    memoryMap === undefined
+      ? undefined
+      : lookupMenuCaptureByNumber(memoryMap, menuNumber).fields.map((field) => field.code).find(Boolean);
+
+  const candidate = menuCaptureDistinctMenuCode(menuName, operatorCode) ?? fromMap;
+
+  return menuCaptureDistinctMenuCode(menuName, candidate);
+}
+
+export function normalizeMenuCaptureStepMenuForExport(
+  menu: MenuCaptureStepRecord['menu'],
+): MenuCaptureStepRecord['menu'] {
+  const code = menuCaptureDistinctMenuCode(menu.name, menu.code);
+
+  return {
+    number: menu.number,
+    name: menu.name,
+    nameSource: menu.nameSource,
+    ...(code ? { code } : {}),
+  };
+}
+
 export function lookupMenuCaptureByNumber(memoryMap: RadioMemoryMap, menuNumber: number): MenuCaptureMenuLookup {
   const fields = collectMemoryMapUiFields(memoryMap).filter((field) => settingsFieldMenuNumber(field) === menuNumber);
   const lookupFields: MenuCaptureMenuLookupField[] = fields.map((field) => ({

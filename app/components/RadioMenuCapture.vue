@@ -7,6 +7,10 @@ import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 type WizardPhase = 'intro' | 'baseline' | 'change' | 'review' | 'more' | 'restore' | 'export';
 
+const emit = defineEmits<{
+  close: [];
+}>();
+
 const toast = useToast();
 
 const {
@@ -29,6 +33,7 @@ const {
   redoLastStep,
   restoreBaseline,
   exportCapture,
+  completeExportedSession,
   discardSession,
   defaultCallsign,
   menuLookup,
@@ -60,6 +65,10 @@ const reviewDecisionModel = requiredToggleGroupModel(
   },
 );
 const restoring = ref(false);
+const exportSavedPath = ref<string | undefined>();
+const exportCompleted = ref(false);
+const discardConfirmOpen = ref(false);
+const exporting = ref(false);
 
 const stepperItems = [
   { title: 'Start', value: 'intro' },
@@ -285,17 +294,43 @@ async function onRestore(): Promise<void> {
 }
 
 async function onExport(): Promise<void> {
-  const path = await exportCapture({
-    callsign: callsign.value,
-    notes: operatorNotes.value,
-    firmware: firmware.value.trim() || null,
-  });
+  exporting.value = true;
 
-  if (path) {
-    operatorNotes.value = operatorNotes.value.trim()
-      ? `${operatorNotes.value.trim()}\nSaved ${path}`
-      : `Saved ${path}`;
+  try {
+    const path = await exportCapture({
+      callsign: callsign.value,
+      notes: operatorNotes.value,
+      firmware: firmware.value.trim() || null,
+    });
+
+    if (path) {
+      exportSavedPath.value = path;
+      exportCompleted.value = true;
+    }
+  } finally {
+    exporting.value = false;
   }
+}
+
+async function onStartNewCapture(): Promise<void> {
+  await completeExportedSession();
+  exportSavedPath.value = undefined;
+  exportCompleted.value = false;
+  operatorNotes.value = '';
+  firmware.value = '';
+  phase.value = 'intro';
+}
+
+function onDone(): void {
+  emit('close');
+}
+
+async function onConfirmDiscardSession(): Promise<void> {
+  discardConfirmOpen.value = false;
+  await discardSession();
+  exportSavedPath.value = undefined;
+  exportCompleted.value = false;
+  phase.value = 'intro';
 }
 </script>
 
@@ -356,7 +391,7 @@ async function onExport(): Promise<void> {
             variant="outline"
             @click="phase = hasBaseline ? 'change' : 'baseline'"
           />
-          <UButton v-if="session" label="Discard session" color="neutral" variant="ghost" @click="discardSession" />
+          <UButton v-if="session" label="Discard session" color="neutral" variant="ghost" @click="discardConfirmOpen = true" />
         </div>
       </section>
 
@@ -478,13 +513,44 @@ async function onExport(): Promise<void> {
           </UFormField>
         </div>
         <UFormField label="Notes for the driver maintainer">
-          <UTextarea v-model="operatorNotes" :rows="3" class="w-full" />
+          <UTextarea v-model="operatorNotes" :rows="3" class="w-full" :readonly="exportCompleted" :disabled="exportCompleted" />
         </UFormField>
         <div class="flex flex-wrap gap-2">
-          <UButton label="Save capture file" icon="i-lucide-download" color="primary" @click="onExport" />
-          <UButton label="Discard session" color="neutral" variant="ghost" @click="discardSession" />
+          <UButton
+            v-if="!exportCompleted"
+            label="Save capture file"
+            icon="i-lucide-download"
+            color="primary"
+            :loading="exporting"
+            @click="onExport"
+          />
+          <UButton v-else label="Start new capture" color="primary" @click="onStartNewCapture" />
+          <UButton label="Done" color="neutral" variant="outline" :disabled="!exportCompleted" @click="onDone" />
+          <UButton label="Discard session" color="neutral" variant="ghost" @click="discardConfirmOpen = true" />
         </div>
+        <UAlert
+          v-if="exportSavedPath"
+          color="success"
+          variant="subtle"
+          icon="i-lucide-circle-check"
+          title="Capture saved"
+          :description="exportSavedPath"
+        />
       </section>
     </template>
+
+    <UModal v-model:open="discardConfirmOpen" :ui="{ content: 'sm:max-w-md' }">
+      <template #content>
+        <div class="space-y-4 p-4">
+          <p class="text-sm text-toned">
+            Discard this menu capture session? Baseline and step images on this card will be deleted and the programming port will be released.
+          </p>
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" @click="discardConfirmOpen = false" />
+            <UButton label="Discard session" color="error" @click="onConfirmDiscardSession" />
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

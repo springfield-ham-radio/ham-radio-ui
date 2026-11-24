@@ -1461,7 +1461,7 @@ async function onSaveSerialLog(): Promise<void> {
         />
       </template>
       <template #menu-capture>
-        <RadioMenuCapture v-if="activeTab === 'menu-capture'" />
+        <RadioMenuCapture v-if="activeTab === 'menu-capture'" @close="activeTab = 'channels'" />
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />

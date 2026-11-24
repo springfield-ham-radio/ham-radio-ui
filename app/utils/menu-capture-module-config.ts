@@ -59,6 +59,26 @@ export function ignoreEntriesFromModuleJson(modelId: string, documents: readonly
 }
 
 /** Install directories are `.../<module-id>/<version>`. */
+/** Installed driver row on disk: metadata, then catalog version, then install path. */
+export async function resolveMenuCaptureModuleIdentity(
+  config: LoadedRadioConfig | undefined,
+): Promise<{ moduleId?: string; moduleVersion?: string }> {
+  if (!config) {
+    return {};
+  }
+
+  const modelId = String(config.id.model);
+  const record = await getRadioCatalogRecord(modelId);
+  const fromInstallPath = moduleIdentityFromInstallPath(record?.sourcePath);
+  const moduleId = config.metadata?.moduleId?.trim() || fromInstallPath?.moduleId;
+  const moduleVersion = record?.version || config.metadata?.moduleVersion?.trim() || fromInstallPath?.version;
+
+  return {
+    ...(moduleId ? { moduleId } : {}),
+    ...(moduleVersion ? { moduleVersion } : {}),
+  };
+}
+
 export function moduleIdentityFromInstallPath(sourcePath: string | undefined): { moduleId: string; version: string } | undefined {
   if (!sourcePath) {
     return undefined;
