@@ -33,6 +33,7 @@ import {
   menuCaptureWizardGate,
 } from '~/utils/menu-capture-catalog';
 import { resolveMenuCaptureIgnoreForConfig } from '~/utils/menu-capture-module-config';
+import { menuCaptureUseStepImageForPrewriteBackup } from '~/utils/menu-capture-restore-backup';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { backupFileSegment } from '~/utils/radio-image-backup';
@@ -375,7 +376,27 @@ export function useMenuCapture() {
 
     try {
       const baseline = await loadMenuCaptureBaseline(savedRadioId);
-      const wrote = await writeRadioImageForMenuCapture(id, port, baseline, current.baudRate);
+      let preRestoreBackupImage: Uint8Array | undefined;
+
+      if (current.steps.length > 0) {
+        const lastStep = current.steps.at(-1)!;
+
+        try {
+          preRestoreBackupImage = await loadMenuCaptureStepImage(savedRadioId, lastStep.imageFileName);
+        } catch {
+          preRestoreBackupImage = undefined;
+        }
+      }
+
+      const wrote = await writeRadioImageForMenuCapture(
+        id,
+        port,
+        baseline,
+        current.baudRate,
+        menuCaptureUseStepImageForPrewriteBackup(current.steps, preRestoreBackupImage)
+          ? { preRestoreBackupImage }
+          : undefined,
+      );
 
       if (!wrote) {
         return { verified: false };

@@ -1493,6 +1493,7 @@ export function useRadio() {
     serialPortPath: string,
     image: Uint8Array,
     baudRate?: number,
+    options?: { preRestoreBackupImage?: Uint8Array },
   ): Promise<boolean> {
     if (refuseDevFixtureHardware('write')) {
       return false;
@@ -1526,16 +1527,24 @@ export function useRadio() {
     }
 
   try {
-    // The editor baseline is not the radio: the operator changed menus on the radio.
-    // Force a fresh pre-write read so a failed restore still has that image on disk.
-    const backup = await preparePrewriteBackup(
-      sessionId,
-      { ...session, radioBaseline: undefined, backupBaselineStale: true },
-      radioId,
-      serialPortPath,
-      config,
-      baudRate,
-    );
+    const backup =
+      options?.preRestoreBackupImage && options.preRestoreBackupImage.length > 0
+        ? await persistPrewriteBackupImage(
+            sessionId,
+            radioId,
+            serialPortPath,
+            config,
+            options.preRestoreBackupImage,
+            true,
+          )
+        : await preparePrewriteBackup(
+            sessionId,
+            { ...session, radioBaseline: undefined, backupBaselineStale: true },
+            radioId,
+            serialPortPath,
+            config,
+            baudRate,
+          );
 
     if (!backup.ready) {
       finishTransferOperation(sessionId);
@@ -1614,28 +1623,17 @@ export function useRadio() {
    * by a write that stopped after sending bytes. Returns false when the operator
    * stops the write because that backup could not be made.
    */
-  async function preparePrewriteBackup(
+  async function persistPrewriteBackupImage(
     sessionId: string,
-    session: RadioCardSession,
     radioId: RadioId,
     serialPortPath: string,
     config: LoadedRadioConfig,
-    baudRate?: number,
+    image: Uint8Array,
+    freshBackupSaved: boolean,
   ): Promise<{ ready: boolean; freshBackupSaved: boolean }> {
     const settings = readRadioImageBackupSettings();
 
     if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
-      return { ready: true, freshBackupSaved: false };
-    }
-
-    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
-    const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
-
-    if (image === 'abort') {
-      return { ready: false, freshBackupSaved: false };
-    }
-
-    if (image === 'skip') {
       return { ready: true, freshBackupSaved: false };
     }
 
@@ -1648,7 +1646,7 @@ export function useRadio() {
     });
 
     if (captured.status !== 'failed') {
-      return { ready: true, freshBackupSaved: !usedBaseline };
+      return { ready: true, freshBackupSaved };
     }
 
     logger.error(`Failed to back up radio image before write: ${captured.message}`);
@@ -1674,6 +1672,34 @@ export function useRadio() {
     }
 
     return { ready: true, freshBackupSaved: false };
+  }
+
+  async function preparePrewriteBackup(
+    sessionId: string,
+    session: RadioCardSession,
+    radioId: RadioId,
+    serialPortPath: string,
+    config: LoadedRadioConfig,
+    baudRate?: number,
+  ): Promise<{ ready: boolean; freshBackupSaved: boolean }> {
+    const settings = readRadioImageBackupSettings();
+
+    if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
+      return { ready: true, freshBackupSaved: false };
+    }
+
+    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
+    const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
+
+    if (image === 'abort') {
+      return { ready: false, freshBackupSaved: false };
+    }
+
+    if (image === 'skip') {
+      return { ready: true, freshBackupSaved: false };
+    }
+
+    return persistPrewriteBackupImage(sessionId, radioId, serialPortPath, config, image, !usedBaseline);
   }
 
   /**
