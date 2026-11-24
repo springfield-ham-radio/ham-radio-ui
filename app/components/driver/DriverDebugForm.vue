@@ -2,12 +2,23 @@
 import type { Radio, RadioModelId, RadioProgressIndicator } from '@springfield/ham-radio-api';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { summarizeMemoryImages } from '~/utils/driver-debug';
-import { serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortMatchKey, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { releaseSerialPortHold } from '~/utils/serial-idle-hold';
 
 const { compiled } = useDriverDraft();
 const toast = useToast();
+const menuCapturePortHolds = useState<Record<string, string>>('menu-capture-port-holds', () => ({}));
+const portBlockedByMenuCapture = computed(() => {
+  const selected = port.value;
+
+  if (!selected) {
+    return false;
+  }
+
+  const key = serialPortMatchKey(selected);
+  return Object.values(menuCapturePortHolds.value).some((heldPort) => serialPortMatchKey(heldPort) === key);
+});
 
 const kind = shallowRef<'channel' | 'setting'>('setting');
 const fieldName = shallowRef('');
@@ -31,7 +42,13 @@ const kindItems = [
 ];
 
 const canRead = computed(() => {
-  return Boolean(port.value) && compiled.value.errorCount === 0 && compiled.value.document.readMemory.length > 0 && !reading.value;
+  return (
+    Boolean(port.value) &&
+    compiled.value.errorCount === 0 &&
+    compiled.value.document.readMemory.length > 0 &&
+    !reading.value &&
+    !portBlockedByMenuCapture.value
+  );
 });
 
 const diffSummary = computed(() => {
@@ -138,6 +155,16 @@ async function readClone(which: 'first' | 'second'): Promise<void> {
     return;
   }
 
+  if (portBlockedByMenuCapture.value) {
+    toast.add({
+      title: 'Serial port in use',
+      description: 'A menu capture session is using this port. Finish or discard it first.',
+      color: 'warning',
+      icon: 'i-lucide-triangle-alert',
+    });
+    return;
+  }
+
   reading.value = which;
   readError.value = '';
   const indicator = progressIndicator();
@@ -234,6 +261,7 @@ onMounted(() => {
         <UButton label="Refresh ports" color="neutral" variant="outline" size="sm" :loading="loadingPorts" @click="loadPorts" />
       </div>
       <p v-if="portError" class="text-sm text-error">{{ portError }}</p>
+      <p v-if="portBlockedByMenuCapture" class="text-sm text-warning">Menu capture is using this port.</p>
       <p v-if="compiled.errorCount > 0" class="text-sm text-error">Fix the protocol errors before reading the radio.</p>
       <p v-else-if="compiled.document.readMemory.length === 0" class="text-sm text-muted">Add a read step before cloning.</p>
       <div class="flex flex-wrap gap-2">

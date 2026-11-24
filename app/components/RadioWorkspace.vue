@@ -80,6 +80,7 @@ const {
   redoMemoryEdit,
   comparisonBaseline,
   comparisonSource,
+  menuCaptureActive,
 } = useRadio();
 const { cards } = useRadioBoard();
 const { radioById } = useSavedRadios();
@@ -124,6 +125,7 @@ function modelSupportsCat(model: string | undefined): boolean {
 }
 
 const supportsCat = computed(() => modelSupportsCat(cardRadio.value?.model));
+const menuCaptureBlocksCard = computed(() => menuCaptureActive(injectedCardId?.value));
 const supportsAprs = computed(() => {
   const radio = cardRadio.value;
 
@@ -157,6 +159,7 @@ const items = computed<TabsItem[]>(() => {
 
   tabs.push(
     { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
+    { label: 'Menu capture', icon: 'i-lucide-waypoints', slot: 'menu-capture' as const, value: 'menu-capture' },
     { label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' },
     { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
     { label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' },
@@ -1189,15 +1192,18 @@ async function onSaveSerialLog(): Promise<void> {
             </span>
           </UTooltip>
           <USeparator orientation="vertical" class="h-5" />
-          <UTooltip :text="readFromRadio.label">
-            <UButton
-              :icon="readFromRadio.icon"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              :aria-label="readFromRadio.label"
-              @click="run(readFromRadio.id)"
-            />
+          <UTooltip :text="menuCaptureBlocksCard ? 'Menu capture is using this radio' : readFromRadio.label">
+            <span class="inline-flex">
+              <UButton
+                :icon="readFromRadio.icon"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                :disabled="menuCaptureBlocksCard"
+                :aria-label="readFromRadio.label"
+                @click="run(readFromRadio.id)"
+              />
+            </span>
           </UTooltip>
           <UTooltip v-if="pendingChangeTotal > 0" :text="pendingChangeSummary">
             <UBadge
@@ -1216,7 +1222,7 @@ async function onSaveSerialLog(): Promise<void> {
                 color="neutral"
                 variant="outline"
                 size="sm"
-                :disabled="!canWriteMemory"
+                :disabled="!canWriteMemory || menuCaptureBlocksCard"
                 :aria-label="writeToRadio.label"
                 @click="run(writeToRadio.id)"
               />
@@ -1453,6 +1459,9 @@ async function onSaveSerialLog(): Promise<void> {
           :model="cardRadio?.model"
           :radio-name="cardRadio?.name"
         />
+      </template>
+      <template #menu-capture>
+        <RadioMenuCapture v-if="activeTab === 'menu-capture'" />
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />

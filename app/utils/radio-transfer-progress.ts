@@ -4,7 +4,7 @@ import { serialPortMatchKey } from '~/utils/serial-port-list';
 /** Shared with `useRadio` and the serial reconnect plugin. */
 export const RADIO_CARD_TRANSFERS_KEY = 'radio-card-transfers';
 
-export type RadioTransferKind = 'import' | 'write' | 'backup';
+export type RadioTransferKind = 'import' | 'write' | 'backup' | 'capture';
 
 /**
  * One radio card's read, write, or pre-write backup.
