@@ -1,3 +1,9 @@
+## [3.13.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.12.0...v3.13.0) (2026-11-24)
+
+### Features
+
+* guided menu capture wizard and session storage ([#234](https://github.com/springfield-ham-radio/ham-radio-ui/issues/234)) ([21f6ba8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/21f6ba8eeaa86982bde383915a3d07bc570f9ee5))
+
 ## [3.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.11.0...v3.12.0) (2026-11-24)
 
 ### Features
