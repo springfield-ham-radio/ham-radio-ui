@@ -54,4 +54,4 @@ On **Connect**, HamBench sends `ID` (no wake CR on the D74), then polls each ban
 
 `ID\r` → `ID TH-D74\r`, then `BC\r` → `BC 0\r`, then `FQ 0\r` → `FQ 0,0145470000\r`, and the same pattern for band 1. The session does not send bare `FQ`/`MD`/`PC`, does not use the 21-field `FO` channel, and does not select bands with `BC 0` / `BC 1` during poll.
 
-Band A’s selectable modes omit SSB and CW. A yellow **Memory**, **Call**, or **DV** badge means that VFO card is read-only: frequency, mode, and power editors are disabled, but **Log contact** and **Hold to transmit** still work. **CTRL** still marks the PTT band from `BC`.
+Band A’s selectable modes omit SSB and CW. A **VFO** badge is neutral; a yellow **Memory**, **Call**, or **DV** badge means that VFO card is read-only: frequency, mode, and power editors are disabled, but **Log contact** and **Hold to transmit** still work. **CTRL** still marks the PTT band from `BC`.

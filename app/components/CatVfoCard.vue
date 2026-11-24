@@ -36,6 +36,8 @@ const powerItems = computed(() =>
 const privilegeWarning = computed(() => getTransmitPrivilegeWarning(props.vfo.frequencyHz, props.privilege));
 const editorsDisabled = computed(() => props.disabled || props.vfo.readOnly === true);
 
+const activityBadgeColor = computed(() => (props.vfo.activity === 'VFO' ? 'neutral' : 'warning'));
+
 watch(
   () => props.vfo.frequencyHz,
   (frequencyHz) => {
@@ -110,7 +112,7 @@ function onPttUp(): void {
         <UBadge
           v-if="vfo.activity"
           :label="vfo.activity"
-          color="warning"
+          :color="activityBadgeColor"
           variant="subtle"
           size="sm"
         />

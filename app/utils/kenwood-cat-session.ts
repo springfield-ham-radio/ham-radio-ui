@@ -217,9 +217,10 @@ export class KenwoodCatSession {
     let controlBand = status.controlBand;
 
     if (this.profile.bandControl) {
-      const bandControl = this.profile.vfoChannel
-        ? await this.command('BC')
-        : await this.tryCommand('BC');
+      const bandControl =
+        this.profile.vfoChannel || this.profile.bandIndexed
+          ? await this.command('BC')
+          : await this.tryCommand('BC');
 
       if (bandControl) {
         controlBand = asBand(Number.parseInt(bandControl.fields[0] ?? '0', 10));

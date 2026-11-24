@@ -4,7 +4,12 @@ import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { createCatSerialLog, type CatSerialLogSnapshot } from '~/utils/cat-serial-log';
 import { kenwoodCatProfileFromConfig } from '~/utils/kenwood-cat-profile';
 import { openKenwoodCatSerialTransport } from '~/utils/kenwood-cat-serial';
-import { KenwoodCatSession, type CatStatus, type CatVfo } from '~/utils/kenwood-cat-session';
+import {
+  KenwoodCatSession,
+  type CatStatus,
+  type CatTransport,
+  type CatVfo,
+} from '~/utils/kenwood-cat-session';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { memoryFileDisplayName } from '~/utils/radio-memory-file';
 import { isTauriRuntime, saveJsonFileWithPicker } from '~/utils/radio-memory-file-io';
@@ -113,9 +118,12 @@ export function useCat() {
     const traffic = createCatSerialLog();
     failedConnectLog.value = traffic.snapshot();
 
+    let transport: CatTransport | undefined;
+
     try {
+      const profile = kenwoodCatProfileFromConfig(radio.cat);
       await releaseSerialPortHold();
-      const transport = await openKenwoodCatSerialTransport(path, radio.serialConfig, baudRate, (direction, data) => {
+      transport = await openKenwoodCatSerialTransport(path, radio.serialConfig, baudRate, (direction, data) => {
         if (!traffic.isEnabled()) {
           return;
         }
@@ -132,17 +140,10 @@ export function useCat() {
       });
       const nextSession = new KenwoodCatSession({
         transport,
-        profile: kenwoodCatProfileFromConfig(radio.cat),
+        profile,
       });
 
-      let status: CatStatus;
-
-      try {
-        status = await nextSession.connect();
-      } catch (cause) {
-        await transport.close().catch(() => undefined);
-        throw cause;
-      }
+      const status = await nextSession.connect();
 
       runtimes.set(path, {
         session: nextSession,
@@ -173,6 +174,10 @@ export function useCat() {
         icon: 'i-lucide-cable',
       });
     } catch (cause) {
+      if (transport) {
+        await transport.close().catch(() => undefined);
+      }
+
       const message = cause instanceof Error ? cause.message : 'Failed to open CAT session';
       error.value = message;
       const report = await createRadioErrorReport(
