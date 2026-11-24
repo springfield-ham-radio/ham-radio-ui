@@ -29,10 +29,11 @@ import {
 import {
   canStartMenuCaptureSession,
   loadedRadioConfigForCardModel,
+  menuCaptureMemoryMap,
   menuCaptureWizardGate,
 } from '~/utils/menu-capture-catalog';
 import { resolveMenuCaptureIgnoreForConfig } from '~/utils/menu-capture-module-config';
-import { memoryMapFromConfig, type LoadedRadioConfig } from '~/utils/radio-catalog-db';
+import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { backupFileSegment } from '~/utils/radio-image-backup';
 import { radioCardIdKey } from '~/composables/radio-card-context';
@@ -75,15 +76,7 @@ export function useMenuCapture() {
   );
 
   const memoryConfig = computed(() => activeConfig.value?.memoryConfig);
-  const memoryMap = computed(() => {
-    if (settingsMemoryMap.value) {
-      return settingsMemoryMap.value;
-    }
-
-    const config = activeConfig.value;
-
-    return config ? memoryMapFromConfig(config) : undefined;
-  });
+  const memoryMap = computed(() => menuCaptureMemoryMap(settingsMemoryMap.value, activeConfig.value));
   const canPersist = computed(() => Boolean(savedRadio.value?.id && isTauriRuntime()));
   const captureBusy = computed(() => Boolean(cardId.value && (transferInFlight.value || working.value)));
   const hasBaseline = computed(() => Boolean(session.value?.baselineByteLength));

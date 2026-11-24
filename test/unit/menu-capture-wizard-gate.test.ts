@@ -4,8 +4,10 @@ import {
   canStartMenuCaptureSession,
   loadedRadioConfigForCardModel,
   menuCaptureWizardGate,
+  menuCaptureMemoryMap,
   radioIdForMenuCaptureSession,
 } from '../../app/utils/menu-capture-catalog.ts';
+import type { RadioMemoryMap } from '@springfield/ham-radio-api';
 import { menuCaptureIgnoreFromConfig } from '../../app/utils/menu-capture-module-config.ts';
 
 function thD74Config(): LoadedRadioConfig {
@@ -61,6 +63,13 @@ describe('menu capture wizard without editor memory', () => {
     expect(
       radioIdForMenuCaptureSession(undefined, 'TH-D74', configurations)?.model,
     ).toBe('TH-D74');
+  });
+
+  it('uses the driver memory map when the editor has no settings map loaded', () => {
+    const catalogMap = { version: '1.0.0', structs: [] } as RadioMemoryMap;
+
+    expect(menuCaptureMemoryMap(undefined, { ...thD74Config(), memoryMap: catalogMap })).toBe(catalogMap);
+    expect(menuCaptureMemoryMap(catalogMap, thD74Config())).toBe(catalogMap);
   });
 
   it('shows driver not installed when the model is unknown to the catalog', () => {

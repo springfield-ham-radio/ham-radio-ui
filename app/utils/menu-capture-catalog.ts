@@ -1,5 +1,6 @@
-import type { RadioId } from '@springfield/ham-radio-api';
+import type { RadioId, RadioMemoryMap } from '@springfield/ham-radio-api';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
+import { memoryMapFromConfig } from '~/utils/radio-catalog-db';
 
 /** Same lookup as `RadioReadDialog` when resolving the driver for a saved radio. */
 export function loadedRadioConfigForCardModel(
@@ -63,4 +64,16 @@ export function radioIdForMenuCaptureSession(
   }
 
   return loadedRadioConfigForCardModel(cardModel, configurations)?.id;
+}
+
+/** Settings map after a full read, otherwise the driver's catalog memory map. */
+export function menuCaptureMemoryMap(
+  settingsMemoryMap: RadioMemoryMap | undefined,
+  config: LoadedRadioConfig | undefined,
+): RadioMemoryMap | undefined {
+  if (settingsMemoryMap) {
+    return settingsMemoryMap;
+  }
+
+  return config ? memoryMapFromConfig(config) : undefined;
 }

@@ -1,4 +1,4 @@
-import type { MenuCaptureFieldAnnotation, MenuCaptureStepDiff } from '~/utils/menu-capture';
+import type { MenuCaptureFieldAnnotation, MenuCaptureStepDiff, MenuCaptureStepRecord } from '~/utils/menu-capture';
 
 /** One line of mapped-field context for the review panel. */
 export function menuCaptureFieldReviewLines(
@@ -39,5 +39,31 @@ export function formatMenuCaptureReviewFieldLine(
 }
 
 export function menuCaptureReviewHasVisibleDiff(diff: MenuCaptureStepDiff | undefined): boolean {
-  return Boolean(diff && diff.runCount > 0 && diff.runs.some((run) => run.context.length > 0));
+  return Boolean(
+    diff && diff.runCount > 0 && diff.runs.some((run) => run.context.length > 0 || run.before.length > 0),
+  );
+}
+
+/** Address list for a step diff (one run per changed region). */
+export function menuCaptureStepDiffAddresses(step: MenuCaptureStepRecord): string[] {
+  return step.diff.runs.map((run) => run.address);
+}
+
+/** Single-line summary for the captured-steps list. */
+export function formatMenuCaptureCapturedStepSummary(step: MenuCaptureStepRecord): string {
+  const menu = `Menu ${step.menu.number} · ${step.menu.name}`;
+  const change = `${step.change.from} → ${step.change.to}`;
+  const addresses = menuCaptureStepDiffAddresses(step).join(', ') || 'no address';
+  return `${menu} · ${change} · ${addresses}`;
+}
+
+/** Field labels from the persisted diff for one captured step. */
+export function menuCaptureCapturedStepFieldLines(step: MenuCaptureStepRecord): string[] {
+  const lines: string[] = [];
+
+  for (const run of step.diff.runs) {
+    lines.push(...menuCaptureFieldReviewLines(run.fields, step.menu.number));
+  }
+
+  return lines;
 }

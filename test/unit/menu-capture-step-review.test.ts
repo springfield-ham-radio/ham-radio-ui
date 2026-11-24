@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { RadioMemoryConfig, RadioMemoryMap } from '@springfield/ham-radio-api';
 import { buildMenuCaptureStepDiff } from '../../app/utils/menu-capture.ts';
 import {
+  formatMenuCaptureCapturedStepSummary,
   formatMenuCaptureReviewFieldLine,
+  menuCaptureCapturedStepFieldLines,
   menuCaptureFieldReviewLines,
   menuCaptureReviewHasVisibleDiff,
 } from '../../app/utils/menu-capture-review.ts';
+import type { MenuCaptureStepRecord } from '../../app/utils/menu-capture.ts';
 
 const sparseMemoryConfig: RadioMemoryConfig = {
   chunkSize: 0,
@@ -74,9 +77,15 @@ describe('menu capture review UI', () => {
     const wizard = readFileSync(new URL('../../app/components/RadioMenuCapture.vue', import.meta.url), 'utf8');
     const diffPanel = readFileSync(new URL('../../app/components/MenuCaptureDiffRuns.vue', import.meta.url), 'utf8');
     const fields = readFileSync(new URL('../../app/components/MenuCaptureStepFields.vue', import.meta.url), 'utf8');
+    const capturedList = readFileSync(
+      new URL('../../app/components/MenuCaptureCapturedStepsList.vue', import.meta.url),
+      'utf8',
+    );
 
     expect(wizard).toContain('MenuCaptureDiffRuns');
     expect(wizard).toContain('MenuCaptureStepFields');
+    expect(wizard).toContain('MenuCaptureCapturedStepsList');
+    expect(wizard).toContain('reviewDiff');
     expect(wizard).toContain("phase === 'review'");
     expect(wizard).toContain("phase === 'change'");
     expect(wizard).toContain('recordCapturedStep');
@@ -87,5 +96,59 @@ describe('menu capture review UI', () => {
     expect(diffPanel).toContain('menuCaptureFieldReviewLines');
     expect(fields).toContain('Menu number');
     expect(fields).toContain('Original value');
+    expect(capturedList).toContain('formatMenuCaptureCapturedStepSummary');
+  });
+
+  it('formats captured step summaries for the post-keep list', () => {
+    const hardwareMap: RadioMemoryMap = {
+      version: '1.0.0',
+      structs: [
+        {
+          id: 'ledControl',
+          seek: '0x1028',
+          fields: [
+            { id: 'padding', type: 'bits', width: 6, reserved: true },
+            {
+              id: 'fmRadio',
+              type: 'bits',
+              width: 2,
+              value: { kind: 'enum', choices: ['0', '1', '2', '3'] },
+              ui: {
+                group: 'led',
+                label: 'LED Control',
+                widget: 'switch',
+                menu: { number: 181, code: 'FM Radio' },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const before = new Uint8Array(0x1030);
+    const after = before.slice();
+    before[0x1028] = 0x01;
+    after[0x1028] = 0x03;
+
+    const diff = buildMenuCaptureStepDiff(before, after, hardwareMap, sparseMemoryConfig, []);
+
+    const step: MenuCaptureStepRecord = {
+      index: 1,
+      readAt: new Date().toISOString(),
+      comparedTo: { kind: 'baseline' },
+      menu: { number: 181, name: 'LED Control', nameSource: 'map' },
+      change: { from: '01', to: '03' },
+      flags: [],
+      diff,
+      imageFileName: 'step-001.img',
+      imageSha256: 'abc',
+      imageByteLength: 0x1030,
+    };
+
+    expect(formatMenuCaptureCapturedStepSummary(step)).toContain('Menu 181');
+    expect(formatMenuCaptureCapturedStepSummary(step)).toContain('01 → 03');
+    expect(menuCaptureCapturedStepFieldLines(step).some((line) => line.includes('LED Control'))).toBe(true);
+    expect(diff.runs[0]?.address).toBe('0x1028');
+    expect(diff.runs[0]?.context.length).toBeGreaterThan(0);
+    expect(diff.runs[0]?.context[0]?.address).toBe('0x1020');
   });
 });

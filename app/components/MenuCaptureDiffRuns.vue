@@ -36,10 +36,22 @@ const afterColumn = computed(() => props.afterLabel ?? 'This read');
           <div class="min-w-0 flex-1 font-medium">{{ afterColumn }}</div>
         </div>
         <div class="divide-y divide-default font-mono text-xs">
-          <div v-for="(row, rowIndex) in run.context" :key="rowIndex" class="grid grid-cols-[6rem_1fr_1fr] gap-2 px-3 py-1.5">
+          <div
+            v-for="(row, rowIndex) in run.context"
+            :key="`${run.address}-${row.address}-${rowIndex}`"
+            class="grid grid-cols-[6rem_1fr_1fr] gap-2 px-3 py-1.5"
+          >
             <span class="text-toned">{{ row.address }}</span>
-            <span class="whitespace-pre text-muted">{{ row.before }}</span>
-            <span class="whitespace-pre text-primary">{{ row.after }}</span>
+            <span class="whitespace-pre break-all text-muted">{{ row.before }}</span>
+            <span class="whitespace-pre break-all text-primary">{{ row.after }}</span>
+          </div>
+          <div
+            v-if="run.context.length === 0"
+            class="grid grid-cols-[6rem_1fr_1fr] gap-2 px-3 py-1.5"
+          >
+            <span class="text-toned">{{ run.address }}</span>
+            <span class="whitespace-pre break-all text-muted">{{ run.before }}</span>
+            <span class="whitespace-pre break-all text-primary">{{ run.after }}</span>
           </div>
         </div>
       </div>

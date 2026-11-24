@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { requiredToggleGroupModel } from '~/utils/required-toggle-group-model';
 import { loadMenuCaptureBaseline, loadMenuCaptureStepImage } from '~/utils/menu-capture-io';
+import type { MenuCaptureStepDiff } from '~/utils/menu-capture';
+import { menuCaptureReviewHasVisibleDiff } from '~/utils/menu-capture-review';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 type WizardPhase = 'intro' | 'baseline' | 'change' | 'review' | 'more' | 'restore' | 'export';
@@ -84,6 +86,18 @@ const activePhaseInstruction = computed(() => {
   const resolved = phase.value === 'more' ? 'more' : phase.value === 'review' ? 'review' : phase.value;
 
   return phaseInstructions[resolved];
+});
+
+/** Prefer the step row just persisted on disk so review matches session.json. */
+const reviewDiff = computed((): MenuCaptureStepDiff | undefined => {
+  const persisted = session.value?.steps.at(-1)?.diff;
+  const pending = pendingAnalysis.value?.diff;
+
+  if (persisted && menuCaptureReviewHasVisibleDiff(persisted)) {
+    return persisted;
+  }
+
+  return pending;
 });
 
 const menuPrefill = computed(() => {
@@ -407,8 +421,9 @@ async function onExport(): Promise<void> {
           class="w-full"
         />
         <MenuCaptureDiffRuns
-          v-if="pendingAnalysis.diff.runCount > 0"
-          :diff="pendingAnalysis.diff"
+          v-if="reviewDiff && reviewDiff.runCount > 0"
+          :key="`${session?.steps.length ?? 0}-${reviewDiff.byteCount}`"
+          :diff="reviewDiff"
           :menu-number="menuNumber"
           before-label="Previous read"
           after-label="This read"
@@ -420,6 +435,7 @@ async function onExport(): Promise<void> {
         <p class="text-sm font-medium text-toned">
           {{ session?.steps.length ?? 0 }} menu{{ (session?.steps.length ?? 0) === 1 ? '' : 's' }} captured.
         </p>
+        <MenuCaptureCapturedStepsList v-if="session?.steps.length" :steps="session.steps" />
         <div class="flex flex-wrap gap-2">
           <UButton label="Capture another menu" color="primary" @click="phase = 'change'" />
           <UButton label="Restore original radio image" color="neutral" variant="outline" @click="phase = 'restore'" />
