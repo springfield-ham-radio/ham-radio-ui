@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ignoreEntriesFromModuleJson } from '../../app/utils/menu-capture-module-config.ts';
+import { ignoreEntriesFromModuleJson, moduleIdentityFromInstallPath } from '../../app/utils/menu-capture-module-config.ts';
 import {
   MENU_CAPTURE_SCHEMA_VERSION,
   buildMenuCaptureZip,
@@ -69,6 +69,10 @@ describe('menu capture schema and zip', () => {
     expect(ignoreEntriesFromModuleJson('TH-D74', [other, kenwood])).toEqual([
       { address: '0x038C', length: 1, reason: 'Read counter' },
     ]);
+    expect(moduleIdentityFromInstallPath('/data/radio-module-kenwood/1.15.1')).toEqual({
+      moduleId: 'radio-module-kenwood',
+      version: '1.15.1',
+    });
   });
 
   it('rejects the wrong schema version', () => {

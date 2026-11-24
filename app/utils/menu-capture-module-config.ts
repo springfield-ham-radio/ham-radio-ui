@@ -58,6 +58,23 @@ export function ignoreEntriesFromModuleJson(modelId: string, documents: readonly
   return [];
 }
 
+/** Install directories are `.../<module-id>/<version>`. */
+export function moduleIdentityFromInstallPath(sourcePath: string | undefined): { moduleId: string; version: string } | undefined {
+  if (!sourcePath) {
+    return undefined;
+  }
+
+  const parts = sourcePath.replace(/\\/g, '/').split('/').filter((part) => part.length > 0);
+  const version = parts.at(-1);
+  const moduleId = parts.at(-2);
+
+  if (!version || !moduleId || !moduleId.startsWith('radio-module-')) {
+    return undefined;
+  }
+
+  return { moduleId, version };
+}
+
 async function readInstalledModuleJson(config: LoadedRadioConfig): Promise<string[]> {
   if (!isTauriRuntime()) {
     return [];
@@ -72,8 +89,9 @@ async function readInstalledModuleJson(config: LoadedRadioConfig): Promise<strin
     paths.add(record.sourcePath);
   }
 
-  const moduleId = config.metadata?.moduleId?.trim();
-  const version = record?.version || config.metadata?.moduleVersion?.trim();
+  const fromInstallPath = moduleIdentityFromInstallPath(record?.sourcePath);
+  const moduleId = config.metadata?.moduleId?.trim() || fromInstallPath?.moduleId;
+  const version = record?.version || config.metadata?.moduleVersion?.trim() || fromInstallPath?.version;
 
   if (moduleId && version) {
     try {
