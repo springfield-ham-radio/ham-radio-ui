@@ -1,6 +1,6 @@
 # Driver
 
-The **Radio → Driver** tab shows how HamBench talks to the loaded radio. Sub-tabs cover **Read**, **Write**, **Channels**, and **Settings**. Use **Read** / **Write** on the Radio page to read or program a radio, or **Open** / **Save** for a memory file. Until a memory is loaded, the tab also offers **Read from Radio** and **Open Memory**.
+The **Radio → Driver** tab shows how HamBench talks to the loaded radio. Sub-tabs cover **Read**, **Write**, **Channels**, and **Settings**. When **Developer tools** is enabled in Preferences → Developer, a **Menu capture** sub-tab appears for guided capture sessions on saved radios. Use **Read** / **Write** on the Radio page to read or program a radio, or **Open** / **Save** for a memory file. Until a memory is loaded, the tab also offers **Read from Radio** and **Open Memory**.
 
 ## Read and write
 

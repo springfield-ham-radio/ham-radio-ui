@@ -250,6 +250,29 @@
           <SerialPortNamesPreference v-model="portAliases" />
         </section>
 
+        <section v-else-if="currentSection === 'developer'" class="flex flex-col gap-4">
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Developer tools</p>
+                <p class="text-xs text-muted">
+                  Show guided menu capture on each saved radio's Driver tab. For driver authors collecting byte evidence, not typical programming.
+                </p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerToolsEnabled"
+                  aria-label="Developer tools"
+                  @update:model-value="setDeveloperToolsEnabled"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex flex-col gap-4 px-4 py-4">
@@ -414,6 +437,7 @@ import { onboardingHomeIsDone, showOnboardingPreferencesEntry } from '~/utils/on
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { customMapStyleUrl, setCustomMapStyleUrl, showMenuNumbers, setShowMenuNumbers } = useAppearanceSettings();
+const { enabled: developerToolsEnabled, setEnabled: setDeveloperToolsEnabled } = useDeveloperTools();
 const { persisted, reopen: reopenOnboarding } = useOnboarding();
 const { directory } = useOperatorLicense();
 const { stations } = useStationAntennas();
@@ -441,7 +465,18 @@ useHead({
   title: 'Preferences',
 });
 
-type PreferenceSection = 'appearance' | 'updates' | 'licenses' | 'radios' | 'backups' | 'channels' | 'drivers' | 'stations' | 'serial' | 'sniffer';
+type PreferenceSection =
+  | 'appearance'
+  | 'updates'
+  | 'licenses'
+  | 'radios'
+  | 'backups'
+  | 'channels'
+  | 'drivers'
+  | 'stations'
+  | 'serial'
+  | 'developer'
+  | 'sniffer';
 
 const sections = [
   {
@@ -497,6 +532,12 @@ const sections = [
     label: 'Serial ports',
     icon: 'i-lucide-usb',
     tileClass: 'bg-orange-500',
+  },
+  {
+    id: 'developer' as const,
+    label: 'Developer',
+    icon: 'i-lucide-wrench',
+    tileClass: 'bg-zinc-600',
   },
   {
     id: 'sniffer' as const,
@@ -974,6 +1015,7 @@ const currentSection = computed<PreferenceSection>(() => {
     section === 'drivers' ||
     section === 'serial' ||
     section === 'updates' ||
+    section === 'developer' ||
     section === 'sniffer'
   ) {
     return section;

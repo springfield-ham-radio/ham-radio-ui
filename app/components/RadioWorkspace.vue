@@ -159,7 +159,6 @@ const items = computed<TabsItem[]>(() => {
 
   tabs.push(
     { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
-    { label: 'Menu capture', icon: 'i-lucide-waypoints', slot: 'menu-capture' as const, value: 'menu-capture' },
     { label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' },
     { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
     { label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' },
@@ -1459,9 +1458,6 @@ async function onSaveSerialLog(): Promise<void> {
           :model="cardRadio?.model"
           :radio-name="cardRadio?.name"
         />
-      </template>
-      <template #menu-capture>
-        <RadioMenuCapture v-if="activeTab === 'menu-capture'" @close="activeTab = 'channels'" />
       </template>
       <template #settings>
         <RadioMemoryEmpty v-if="!activeRadioId" />
