@@ -1,6 +1,6 @@
 # Sniffer
 
-HamBench talks to a separate headless sniffer process over HTTP. Set **Host** and **Port** in Preferences. The desktop app can also **install, start, and stop** the sniffer for you — on this computer, or on that host when **Control over SSH** is enabled.
+HamBench talks to a separate headless sniffer process over HTTP. Set **Host** and **Port** in Preferences → Sniffer. Enable **Radio Sniffer tab** in Preferences → Developer to open **Radio → Sniffer** on each card. The desktop app can also **install, start, and stop** the sniffer for you — on this computer, or on that host when **Control over SSH** is enabled.
 
 ## Connection
 

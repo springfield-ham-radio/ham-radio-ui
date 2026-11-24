@@ -143,6 +143,8 @@ const anyOpenCardSupportsCat = computed(() =>
   cards.value.some((card) => modelSupportsCat(radioById(card.savedRadioId)?.model ?? card.guest?.model)),
 );
 
+const { panels: developerPanels } = useDeveloperPanels();
+
 const items = computed<TabsItem[]>(() => {
   const tabs: TabsItem[] = [
     { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
@@ -157,13 +159,23 @@ const items = computed<TabsItem[]>(() => {
     tabs.push({ label: 'Packet', icon: 'i-lucide-waypoints', slot: 'packet' as const, value: 'packet' });
   }
 
-  tabs.push(
-    { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
-    { label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' },
-    { label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' },
-    { label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' },
-    { label: 'Sniffer', icon: 'i-lucide-audio-lines', slot: 'sniffer' as const, value: 'sniffer' },
-  );
+  tabs.push({ label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' });
+
+  if (developerPanels.value.radioDriver) {
+    tabs.push({ label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' });
+  }
+
+  if (developerPanels.value.radioHex) {
+    tabs.push({ label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' });
+  }
+
+  if (developerPanels.value.radioDebug) {
+    tabs.push({ label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' });
+  }
+
+  if (developerPanels.value.radioSniffer) {
+    tabs.push({ label: 'Sniffer', icon: 'i-lucide-audio-lines', slot: 'sniffer' as const, value: 'sniffer' });
+  }
 
   return tabs;
 });
@@ -172,6 +184,17 @@ const route = useRoute();
 const router = useRouter();
 
 const activeTab = shallowRef(import.meta.dev && route.query.fixture === 'packet' ? 'packet' : 'channels');
+
+watch(
+  () => items.value.map((item) => item.value),
+  (visible) => {
+    const current = activeTab.value;
+
+    if (!visible.some((value) => value === current)) {
+      activeTab.value = 'channels';
+    }
+  },
+);
 
 function catalogResolved(): boolean {
   return !isLoading.value && (catalogLoaded.value || configurations.value.length > 0);

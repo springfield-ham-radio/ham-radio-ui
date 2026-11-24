@@ -254,16 +254,94 @@
           <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
             <div class="flex items-center justify-between gap-4 px-4 py-3">
               <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted">Developer tools</p>
+                <p class="text-sm font-medium text-highlighted">Driver development</p>
                 <p class="text-xs text-muted">
-                  Show guided menu capture on each saved radio's Driver tab. For driver authors collecting byte evidence, not typical programming.
+                  Show the main Driver tab and module editor for authoring radio protocols. Off by default.
                 </p>
               </div>
               <ClientOnly>
                 <USwitch
-                  :model-value="developerToolsEnabled"
-                  aria-label="Developer tools"
-                  @update:model-value="setDeveloperToolsEnabled"
+                  :model-value="developerPanels.driverDevelopment"
+                  aria-label="Driver development"
+                  @update:model-value="(on) => setDeveloperPanel('driverDevelopment', on)"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Radio Driver tab</p>
+                <p class="text-xs text-muted">
+                  Show the Driver tab on each radio card, including guided menu capture. For driver authors, not typical programming.
+                </p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerPanels.radioDriver"
+                  aria-label="Radio Driver tab"
+                  @update:model-value="(on) => setDeveloperPanel('radioDriver', on)"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Radio Hex Dump tab</p>
+                <p class="text-xs text-muted">Show the hex dump and memory map on each radio card.</p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerPanels.radioHex"
+                  aria-label="Radio Hex Dump tab"
+                  @update:model-value="(on) => setDeveloperPanel('radioHex', on)"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Radio Debug tab</p>
+                <p class="text-xs text-muted">Show clone serial traffic and Save serial log on each radio card.</p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerPanels.radioDebug"
+                  aria-label="Radio Debug tab"
+                  @update:model-value="(on) => setDeveloperPanel('radioDebug', on)"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Radio Sniffer tab</p>
+                <p class="text-xs text-muted">Show the sniffer bridge on each radio card. Host settings stay under Sniffer.</p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerPanels.radioSniffer"
+                  aria-label="Radio Sniffer tab"
+                  @update:model-value="(on) => setDeveloperPanel('radioSniffer', on)"
                 />
                 <template #fallback>
                   <div class="h-5 w-9 rounded-full bg-elevated" />
@@ -437,7 +515,7 @@ import { onboardingHomeIsDone, showOnboardingPreferencesEntry } from '~/utils/on
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 const { customMapStyleUrl, setCustomMapStyleUrl, showMenuNumbers, setShowMenuNumbers } = useAppearanceSettings();
-const { enabled: developerToolsEnabled, setEnabled: setDeveloperToolsEnabled } = useDeveloperTools();
+const { panels: developerPanels, setPanel: setDeveloperPanel } = useDeveloperPanels();
 const { persisted, reopen: reopenOnboarding } = useOnboarding();
 const { directory } = useOperatorLicense();
 const { stations } = useStationAntennas();

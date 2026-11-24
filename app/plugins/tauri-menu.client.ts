@@ -4,7 +4,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { IMPORT_EXPORT_IDS } from '~/importExport/ids';
 import { runImportExport } from '~/importExport/registry';
 import { showRadioImageBackups } from '~/utils/radio-image-backup-io';
-import { readDeveloperMode } from '~/utils/developer-mode';
 import { CHANNEL_PRINT_ERROR_EVENT } from '~/utils/channel-print-window';
 import { ZOOM_BY_COMMAND, wheelZoomMultiplier, zoomCommandForKey } from '~/utils/zoom';
 
@@ -13,28 +12,9 @@ export default defineNuxtPlugin(() => {
   const toast = useToast();
   const { requestPrintFromMenu } = useChannelPrint();
   const { checkForUpdate } = useAppUpdater();
-  const { setEnabled: setDeveloperMode } = useDeveloperMode();
 
   void (async () => {
     try {
-      await listen<boolean>('developer-mode-changed', (event) => {
-        const checked = event.payload === true;
-        setDeveloperMode(checked);
-
-        if (checked) {
-          void router.push('/driver');
-          return;
-        }
-
-        if (router.currentRoute.value.path.startsWith('/driver')) {
-          void router.push('/');
-        }
-      });
-      try {
-        await invoke('set_developer_mode', { enabled: readDeveloperMode() });
-      } catch {
-        // The desktop shell is an older build that does not have the View menu command yet.
-      }
       await listen('open-preferences', () => {
         void router.push('/preferences');
       });

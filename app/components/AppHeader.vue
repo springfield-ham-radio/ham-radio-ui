@@ -13,7 +13,7 @@ const { memoryFilePath } = useRadio();
 const openMemoryShortcut = importExportShortcut(IMPORT_EXPORT_IDS.openMemory);
 const saveMemoryShortcut = importExportShortcut(IMPORT_EXPORT_IDS.saveMemory);
 const saveMemoryAsShortcut = importExportShortcut(IMPORT_EXPORT_IDS.saveMemoryAs);
-const { enabled: developerMode } = useDeveloperMode();
+const { panels: developerPanels } = useDeveloperPanels();
 
 const isPreferences = computed(() => route.path.startsWith('/preferences'));
 const isRadioPage = computed(() => route.path === '/');
@@ -33,7 +33,7 @@ const sectionItems = computed<TabsItem[]>(() => {
     { label: 'Reference', icon: 'i-lucide-book-open', value: 'reference' },
   ];
 
-  if (developerMode.value) {
+  if (developerPanels.value.driverDevelopment) {
     items.push({ label: 'Driver', icon: 'i-lucide-cpu', value: 'driver' });
   }
 

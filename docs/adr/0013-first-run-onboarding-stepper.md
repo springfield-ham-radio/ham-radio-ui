@@ -76,7 +76,7 @@ On launch, after `useRadio().initialize()` and a count of `saved_channels` and `
 - SQLite has at least one installed `radio_models` row, one `saved_channels` row, or one `station_log_qsos` row.
 - The backup directory lists at least one image.
 
-The default empty Home station is not existing data. Appearance, distance unit, developer mode, and serial-port filter preferences are not existing data either. A profile that already has data is marked completed before the modal can paint, including someone who only has a license, only has channels, or only has a located Home.
+The default empty Home station is not existing data. Appearance, distance unit, developer panel preferences ([0023](./0023-developer-panels.md)), and serial-port filter preferences are not existing data either. A profile that already has data is marked completed before the modal can paint, including someone who only has a license, only has channels, or only has a located Home.
 
 ### Startup module install
 
