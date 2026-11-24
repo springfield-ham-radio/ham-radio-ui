@@ -1,3 +1,9 @@
+## [3.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.13.0...v3.14.0) (2026-11-24)
+
+### Features
+
+* **cat:** band-indexed Kenwood session for TH-D74 ([#236](https://github.com/springfield-ham-radio/ham-radio-ui/issues/236)) ([c41d577](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c41d577ff048dca7258a38efb4e3f79bc6391bba))
+
 ## [3.13.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.12.0...v3.13.0) (2026-11-24)
 
 ### Features
