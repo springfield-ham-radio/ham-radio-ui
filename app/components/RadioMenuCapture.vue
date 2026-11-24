@@ -182,7 +182,7 @@ async function onConfirmReview(): Promise<void> {
     menuNumber: number,
     menuName: menuName.value.trim(),
     nameSource: menuNameSource.value,
-    menuCode: menuPrefill.value?.prefilledName,
+    menuCode: menuPrefill.value?.fields.find((field) => field.code)?.code,
     from: changeFrom.value.trim(),
     to: changeTo.value.trim(),
     note: changeNote.value,

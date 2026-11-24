@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ignoreEntriesFromModuleJson } from '../../app/utils/menu-capture-module-config.ts';
 import {
   MENU_CAPTURE_SCHEMA_VERSION,
   buildMenuCaptureZip,
@@ -53,6 +54,21 @@ describe('menu capture schema and zip', () => {
 
     expect(parsed).not.toHaveProperty('extra');
     expect(parsed.steps).toHaveLength(1);
+  });
+
+  it('reads capture.ignore from raw module JSON for the matching model', () => {
+    const kenwood = JSON.stringify({
+      id: { model: 'TH-D74' },
+      capture: { ignore: [{ address: '0x038C', length: 1, reason: 'Read counter' }] },
+    });
+    const other = JSON.stringify({
+      id: { model: 'TM-D710' },
+      capture: { ignore: [{ address: '0x0001', length: 2 }] },
+    });
+
+    expect(ignoreEntriesFromModuleJson('TH-D74', [other, kenwood])).toEqual([
+      { address: '0x038C', length: 1, reason: 'Read counter' },
+    ]);
   });
 
   it('rejects the wrong schema version', () => {

@@ -1,4 +1,5 @@
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
+import { getRadioCatalogRecord } from '~/utils/radio-catalog-db';
 import {
   mergeMenuCaptureIgnore,
   parseMenuCaptureConfigFromModule,
@@ -23,21 +24,83 @@ export function menuCaptureIgnoreFromConfig(config: LoadedRadioConfig | undefine
   return capture.ignore;
 }
 
-async function readModuleConfigJson(config: LoadedRadioConfig): Promise<unknown | undefined> {
-  const sourcePath = config.metadata?.pluginPath;
+/**
+ * Pick `capture.ignore` from raw module JSON texts for one model.
+ * Used when catalog hydration does not keep the key.
+ */
+export function ignoreEntriesFromModuleJson(modelId: string, documents: readonly string[]): MenuCaptureIgnoreEntry[] {
+  for (const text of documents) {
+    let parsed: unknown;
 
-  if (!sourcePath || !isTauriRuntime()) {
-    return undefined;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      continue;
+    }
+
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      continue;
+    }
+
+    const id = (parsed as { id?: { model?: unknown } }).id?.model;
+
+    if (id !== undefined && String(id) !== modelId) {
+      continue;
+    }
+
+    const entries = parseMenuCaptureConfigFromModule(parsed);
+
+    if (entries.length > 0) {
+      return entries;
+    }
+  }
+
+  return [];
+}
+
+async function readInstalledModuleJson(config: LoadedRadioConfig): Promise<string[]> {
+  if (!isTauriRuntime()) {
+    return [];
   }
 
   const { invoke } = await import('@tauri-apps/api/core');
+  const modelId = String(config.id.model);
+  const record = await getRadioCatalogRecord(modelId);
+  const paths = new Set<string>();
 
-  try {
-    const text = await invoke<string>('load_text_file', { path: sourcePath });
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
+  if (record?.sourcePath?.toLowerCase().endsWith('.json')) {
+    paths.add(record.sourcePath);
   }
+
+  const moduleId = config.metadata?.moduleId?.trim();
+  const version = record?.version || config.metadata?.moduleVersion?.trim();
+
+  if (moduleId && version) {
+    try {
+      const listed = await invoke<string[]>('list_installed_radio_module_configs', {
+        moduleId,
+        version,
+      });
+
+      for (const path of listed) {
+        paths.add(path);
+      }
+    } catch {
+      // The module directory may not be installed in this profile.
+    }
+  }
+
+  const documents: string[] = [];
+
+  for (const path of paths) {
+    try {
+      documents.push(await invoke<string>('load_text_file', { path }));
+    } catch {
+      // Skip a config the process cannot read.
+    }
+  }
+
+  return documents;
 }
 
 /**
@@ -52,8 +115,11 @@ export async function resolveMenuCaptureIgnoreForConfig(
     return [];
   }
 
-  const raw = await readModuleConfigJson(config);
-  const fromRaw = raw ? parseMenuCaptureConfigFromModule(raw) : [];
+  if (fromHydrated.length > 0) {
+    return fromHydrated;
+  }
 
-  return mergeMenuCaptureIgnore(fromHydrated, fromRaw);
+  const documents = await readInstalledModuleJson(config);
+
+  return mergeMenuCaptureIgnore(fromHydrated, ignoreEntriesFromModuleJson(String(config.id.model), documents));
 }

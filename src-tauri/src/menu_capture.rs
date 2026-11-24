@@ -55,44 +55,53 @@ fn session_dir(app: &AppHandle, saved_radio_id: &str) -> Result<PathBuf, String>
     Ok(path)
 }
 
-fn contained_in(parent: &Path, child: &Path) -> Result<(), String> {
-    let canonical_parent = parent.canonicalize().map_err(|error| error.to_string())?;
-    let canonical_child = child.canonicalize().map_err(|error| error.to_string())?;
-
-    if !canonical_child.starts_with(&canonical_parent) {
-        return Err("Invalid menu capture path".into());
+/// `file_name` must be a single path segment. The file itself may not exist yet.
+fn child_in_directory(dir: &Path, file_name: &str) -> Result<PathBuf, String> {
+    if file_name.is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains("..")
+    {
+        return Err("Invalid menu capture file name".into());
     }
 
-    Ok(())
-}
+    let path = dir.join(file_name);
+    let canonical_dir = dir.canonicalize().map_err(|error| error.to_string())?;
+    let parent = path.parent().ok_or_else(|| "Invalid menu capture path".to_string())?;
+    let canonical_parent = parent.canonicalize().map_err(|error| error.to_string())?;
 
-fn session_file_path(app: &AppHandle, saved_radio_id: &str) -> Result<PathBuf, String> {
-    let dir = session_dir(app, saved_radio_id)?;
-    let path = dir.join(SESSION_FILE);
-
-    if dir.exists() {
-        contained_in(&captures_root(app)?, &path)?;
+    if canonical_parent != canonical_dir {
+        return Err("Invalid menu capture path".into());
     }
 
     Ok(path)
 }
 
 fn image_path(app: &AppHandle, saved_radio_id: &str, file_name: &str) -> Result<PathBuf, String> {
-    if file_name != BASELINE_FILE {
+    if file_name == BASELINE_FILE {
+        // Baseline is a fixed name. Step names are checked below.
+    } else {
         validate_step_image_name(file_name)?;
-    } else if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
-        return Err("Invalid image file name".into());
     }
 
     let dir = session_dir(app, saved_radio_id)?;
-    let path = dir.join(file_name);
-    contained_in(&captures_root(app)?, &path)?;
-    Ok(path)
+
+    if !dir.is_dir() {
+        return Err("Menu capture session was not found".into());
+    }
+
+    child_in_directory(&dir, file_name)
 }
 
 #[tauri::command]
 pub fn menu_capture_load_session(app: AppHandle, saved_radio_id: String) -> Result<Option<String>, String> {
-    let path = session_file_path(&app, &saved_radio_id)?;
+    let dir = session_dir(&app, &saved_radio_id)?;
+
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+
+    let path = child_in_directory(&dir, SESSION_FILE)?;
 
     if !path.is_file() {
         return Ok(None);
@@ -109,8 +118,7 @@ pub fn menu_capture_save_session(app: AppHandle, saved_radio_id: String, content
 
     let dir = session_dir(&app, &saved_radio_id)?;
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    let path = dir.join(SESSION_FILE);
-    contained_in(&captures_root(&app)?, &path)?;
+    let path = child_in_directory(&dir, SESSION_FILE)?;
     fs::write(path, contents).map_err(|error| error.to_string())
 }
 
@@ -202,14 +210,21 @@ pub fn menu_capture_discard_session(app: AppHandle, saved_radio_id: String) -> R
         return Ok(());
     }
 
-    contained_in(&captures_root(&app)?, &dir)?;
+    let root = captures_root(&app)?;
+    let canonical_root = root.canonicalize().map_err(|error| error.to_string())?;
+    let canonical_dir = dir.canonicalize().map_err(|error| error.to_string())?;
+
+    if canonical_dir == canonical_root || !canonical_dir.starts_with(&canonical_root) {
+        return Err("Invalid menu capture path".into());
+    }
 
     fs::remove_dir_all(dir).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_saved_radio_id, validate_step_image_name};
+    use super::{child_in_directory, validate_saved_radio_id, validate_step_image_name};
+    use std::fs;
 
     #[test]
     fn accepts_step_image_names() {
@@ -223,5 +238,19 @@ mod tests {
         assert!(validate_step_image_name("../baseline.img").is_err());
         assert!(validate_step_image_name("step-12.img").is_err());
         assert!(validate_step_image_name("baseline.img").is_err());
+    }
+
+    #[test]
+    fn allows_a_missing_baseline_file_inside_the_session_directory() {
+        let dir = std::env::temp_dir().join(format!("hambench-menu-capture-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("temp session dir");
+
+        let path = child_in_directory(&dir, "baseline.img").expect("baseline path");
+        assert!(!path.exists());
+        assert_eq!(path.file_name().and_then(|name| name.to_str()), Some("baseline.img"));
+        assert!(child_in_directory(&dir, "../baseline.img").is_err());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

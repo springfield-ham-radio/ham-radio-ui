@@ -103,6 +103,7 @@ export function useMenuCapture() {
       }
     } catch (cause) {
       session.value = undefined;
+      setMenuCapturePortHold(savedRadioId, undefined);
       toast.add({
         title: 'Could not load menu capture',
         description: cause instanceof Error ? cause.message : 'The saved session is unavailable.',
@@ -133,7 +134,17 @@ export function useMenuCapture() {
     if (!savedRadioId || !port || !activeRadioId.value) {
       toast.add({
         title: 'Radio not ready',
-        description: 'Save this radio with a programming port before starting menu capture.',
+        description: 'Save this radio with a programming port and read it once before starting menu capture.',
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return;
+    }
+
+    if (!activeConfig.value?.writeMemory) {
+      toast.add({
+        title: 'Write not supported',
+        description: 'This radio cannot be restored from HamBench because its driver has no memory write.',
         color: 'warning',
         icon: 'i-lucide-triangle-alert',
       });
@@ -177,14 +188,33 @@ export function useMenuCapture() {
         return false;
       }
 
-      await saveMenuCaptureBaseline(savedRadioId, image);
-      const hash = await sha256Hex(image);
+      let stored = image;
+
+      try {
+        await saveMenuCaptureBaseline(savedRadioId, image);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : '';
+
+        if (!message.includes('already has a baseline')) {
+          throw cause;
+        }
+
+        stored = await loadMenuCaptureBaseline(savedRadioId);
+        toast.add({
+          title: 'Baseline already saved',
+          description: 'HamBench kept the original baseline image for this session.',
+          color: 'neutral',
+          icon: 'i-lucide-info',
+        });
+      }
+
+      const hash = await sha256Hex(stored);
       await persistSession({
         ...session.value,
         updatedAt: new Date().toISOString(),
-        baselineReadAt: new Date().toISOString(),
+        baselineReadAt: session.value.baselineReadAt || new Date().toISOString(),
         baselineSha256: hash,
-        baselineByteLength: image.length,
+        baselineByteLength: stored.length,
       });
       setMenuCapturePortHold(savedRadioId, port);
       return true;
@@ -421,7 +451,13 @@ export function useMenuCapture() {
     const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
     const defaultPath = `${vendor}_${model}_${stamp}.${MENU_CAPTURE_FILE_EXTENSION}`;
 
-    return saveBinaryFileWithPicker(zip, defaultPath, 'Save menu capture');
+    const savedPath = await saveBinaryFileWithPicker(zip, defaultPath, 'Save menu capture');
+
+    if (savedPath) {
+      setMenuCapturePortHold(savedRadioId, undefined);
+    }
+
+    return savedPath;
   }
 
   async function discardSession(): Promise<void> {

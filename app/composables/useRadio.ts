@@ -1517,7 +1517,16 @@ export function useRadio() {
     }
 
   try {
-    const backup = await preparePrewriteBackup(sessionId, session, radioId, serialPortPath, config, baudRate);
+    // The editor baseline is not the radio: the operator changed menus on the radio.
+    // Force a fresh pre-write read so a failed restore still has that image on disk.
+    const backup = await preparePrewriteBackup(
+      sessionId,
+      { ...session, radioBaseline: undefined, backupBaselineStale: true },
+      radioId,
+      serialPortPath,
+      config,
+      baudRate,
+    );
 
     if (!backup.ready) {
       finishTransferOperation(sessionId);
