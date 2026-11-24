@@ -1,3 +1,10 @@
+## [3.15.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.15.0...v3.15.1) (2026-11-24)
+
+### Bug Fixes
+
+* **deps:** bump tauri-plugin-serialplugin in /src-tauri ([#226](https://github.com/springfield-ham-radio/ham-radio-ui/issues/226)) ([5838e29](https://github.com/springfield-ham-radio/ham-radio-ui/commit/5838e295038c6fbb85e9dcbd941860b943825bfa))
+* **deps:** bump tauri-plugin-serialplugin-api from 3.0.8 to 4.2.2 ([#230](https://github.com/springfield-ham-radio/ham-radio-ui/issues/230)) ([759aab9](https://github.com/springfield-ham-radio/ham-radio-ui/commit/759aab9ada347d6e3cf2458cdddbdc45211062d7))
+
 ## [3.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.14.0...v3.15.0) (2026-11-24)
 
 ### Features
