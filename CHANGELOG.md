@@ -1,3 +1,9 @@
+## [3.15.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.14.0...v3.15.0) (2026-11-24)
+
+### Features
+
+* gate menu capture behind Developer tools on Driver tab ([330e169](https://github.com/springfield-ham-radio/ham-radio-ui/commit/330e169d351ad7c506cba46c49237b01e52ab3f8))
+
 ## [3.14.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.13.0...v3.14.0) (2026-11-24)
 
 ### Features
