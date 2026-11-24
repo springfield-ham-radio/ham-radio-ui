@@ -1,3 +1,9 @@
+## [3.12.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.11.0...v3.12.0) (2026-11-24)
+
+### Features
+
+* menu capture diff engine and .hmenucap export schema ([#233](https://github.com/springfield-ham-radio/ham-radio-ui/issues/233)) ([495de28](https://github.com/springfield-ham-radio/ham-radio-ui/commit/495de28e8b1ca2d6d157aa5a9188558f2a2f8dae))
+
 ## [3.11.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.10.1...v3.11.0) (2026-11-23)
 
 ### Features
