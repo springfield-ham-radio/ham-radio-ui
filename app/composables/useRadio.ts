@@ -85,7 +85,9 @@ import type { GuestRadio } from '~/utils/radio-board';
 import { writeRememberedRadio } from '~/utils/remembered-radio';
 import { addToRadioDevFixture, DEV_FIXTURE_SERIAL_PORT, isDevFixtureSerialPort } from '~/utils/add-to-radio-dev-fixture';
 import { channelSchemaFromSettingsSchema } from '~/utils/channel-validation';
+import { radioIdForMenuCaptureSession } from '~/utils/menu-capture-catalog';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
+import { serialPortMatchKey } from '~/utils/serial-port-list';
 import { serialLogEntryCount, type SerialLogOperation } from '~/utils/serial-log-file';
 import {
   hasPendingBackupFailureDecision,
@@ -244,6 +246,8 @@ export function useRadio() {
   const writeOpen = useState('radio-write-open', () => false);
   /** In-progress and failed reads and writes, one record per radio card. */
   const transfers = useState<RadioTransferMap>(RADIO_CARD_TRANSFERS_KEY, () => ({}));
+  /** Programming port held for an active menu capture session on this card. */
+  const menuCapturePortHolds = useState<Record<string, string>>('menu-capture-port-holds', () => ({}));
   const sessions = useState<Record<string, RadioCardSession>>('radio-card-sessions', () => ({}));
   const modulesInstallOpen = useState('radio-modules-install-open', () => false);
   const modulesInstallRequired = useState('radio-modules-install-required', () => false);
@@ -505,10 +509,50 @@ export function useRadio() {
   }
 
   function syncMemoryPortHolds(): void {
-    setHolderPorts('memory', inFlightTransferPorts(transfers.value));
+    const ports = [
+      ...new Set([...inFlightTransferPorts(transfers.value), ...Object.values(menuCapturePortHolds.value)]),
+    ];
+    setHolderPorts('memory', ports);
+  }
+
+  function setMenuCapturePortHold(targetCardId: string, port: string | undefined): void {
+    const next = { ...menuCapturePortHolds.value };
+
+    if (port) {
+      next[targetCardId] = port;
+    } else {
+      delete next[targetCardId];
+    }
+
+    menuCapturePortHolds.value = next;
+    syncMemoryPortHolds();
+  }
+
+  function menuCaptureActive(targetCardId: string | undefined): boolean {
+    return Boolean(targetCardId && menuCapturePortHolds.value[targetCardId]);
+  }
+
+  function menuCaptureHeldPort(targetCardId: string | undefined): string | undefined {
+    return targetCardId ? menuCapturePortHolds.value[targetCardId] : undefined;
   }
 
   function beginTransferOperation(cardId: string, port: string): boolean {
+    const portKey = serialPortMatchKey(port);
+    const captureBlock = Object.entries(menuCapturePortHolds.value).find(
+      ([otherCardId, heldPort]) => otherCardId !== cardId && serialPortMatchKey(heldPort) === portKey,
+    );
+
+    if (captureBlock) {
+      const blocked = transferBlockedMessage('port');
+      toast.add({
+        title: blocked.title,
+        description: blocked.description,
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+      });
+      return false;
+    }
+
     const claimed = beginRadioTransfer(transfers.value, { cardId, port, now: Date.now() });
 
     if (!claimed.ok) {
@@ -1361,6 +1405,230 @@ export function useRadio() {
   }
 
   /**
+   * Read the radio for menu capture without loading bytes into the editor memory.
+   */
+  async function readRadioImageForMenuCapture(
+    sessionId: string,
+    serialPortPath: string,
+    baudRate?: number,
+  ): Promise<Uint8Array | undefined> {
+    if (refuseDevFixtureHardware('read')) {
+      return undefined;
+    }
+
+    const session = readSession(sessionId);
+    const radioId = radioIdForMenuCaptureSession(
+      session?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
+
+    if (!radioId) {
+      return undefined;
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
+      return undefined;
+    }
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      finishTransferOperation(sessionId);
+      return undefined;
+    }
+
+    const config = getConfiguration(radioId);
+
+    if (!config?.readMemory) {
+      finishTransferOperation(sessionId);
+      return undefined;
+    }
+
+    const progressIndicator = startProgress('capture', sessionId, serialPortPath);
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
+
+    try {
+      const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
+      closeProgress(sessionId);
+
+      if (memoryData == undefined || memoryData.length === 0) {
+        captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        return undefined;
+      }
+
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      return memoryData.slice();
+    } catch (cause) {
+      closeProgress(sessionId);
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+
+      if (!isCancelledTransfer(sessionId, cause)) {
+        const report = await createRadioErrorReport(
+          radioErrorContextFromRadio('read', 'menu capture read', {
+            radioId,
+            cardName: boundRadio(sessionId)?.name,
+            config,
+            port: serialPortPath,
+          }),
+          cause,
+        );
+        showRadioErrorToast(toast, logger, {
+          title: 'Could not read radio',
+          report,
+          logMessage: 'Failed menu capture read',
+        });
+      }
+
+      return undefined;
+    } finally {
+      finishTransferOperation(sessionId);
+    }
+  }
+
+  /**
+   * Write a specific raw image during menu capture restore. Does not use editor memory.
+   */
+  async function writeRadioImageForMenuCapture(
+    sessionId: string,
+    serialPortPath: string,
+    image: Uint8Array,
+    baudRate?: number,
+    options?: { preRestoreBackupImage?: Uint8Array },
+  ): Promise<boolean> {
+    if (refuseDevFixtureHardware('write')) {
+      return false;
+    }
+
+    const editorSession = readSession(sessionId);
+    const radioId = radioIdForMenuCaptureSession(
+      editorSession?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
+
+    if (!radioId) {
+      toast.add({
+        title: 'Could not restore radio',
+        description: 'Install the driver for this radio under Preferences → Drivers.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
+      return false;
+    }
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      finishTransferOperation(sessionId);
+      return false;
+    }
+
+    const config = getConfiguration(radioId);
+
+    if (!config?.writeMemory) {
+      finishTransferOperation(sessionId);
+      toast.add({
+        title: 'Could not restore radio',
+        description: 'This driver cannot write memory back to the radio.',
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      });
+      return false;
+    }
+
+  try {
+    const backupSession = editorSession ?? emptyRadioCardSession();
+    const backup =
+      options?.preRestoreBackupImage && options.preRestoreBackupImage.length > 0
+        ? await persistPrewriteBackupImage(
+            sessionId,
+            radioId,
+            serialPortPath,
+            config,
+            options.preRestoreBackupImage,
+            true,
+          )
+        : await preparePrewriteBackup(
+            sessionId,
+            { ...backupSession, radioBaseline: undefined, backupBaselineStale: true },
+            radioId,
+            serialPortPath,
+            config,
+            baudRate,
+          );
+
+    if (!backup.ready) {
+      finishTransferOperation(sessionId);
+      return false;
+    }
+
+    const progressIndicator = startProgress('write', sessionId, serialPortPath);
+    const { RadioDriver } = await import('@springfield/ham-radio-driver');
+    const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
+
+    try {
+      await driver.writeRadio(serialPortPath, image, progressIndicator);
+      closeProgress(sessionId);
+      captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
+      return !isTransferCanceled(sessionId);
+    } catch (cause) {
+      closeProgress(sessionId);
+      captureSerialLog(sessionId, driver, 'write', radioId, serialPortPath);
+
+      if (!isCancelledTransfer(sessionId, cause)) {
+        await assignWriteProgressError(radioId, sessionId, config, serialPortPath, cause, backup.freshBackupSaved);
+      }
+
+      return false;
+    }
+  } finally {
+    finishTransferOperation(sessionId);
+  }
+  }
+
+  /**
+   * After menu capture verification, align the card programming session with the radio.
+   */
+  async function refreshCardMemoryFromVerifiedCapture(
+    sessionId: string,
+    image: Uint8Array,
+    serialPortPath: string,
+  ): Promise<void> {
+    const session = readSession(sessionId);
+    const radioId = radioIdForMenuCaptureSession(
+      session?.activeRadioId,
+      boundRadio(sessionId)?.model,
+      configurations.value,
+    );
+
+    if (!radioId) {
+      return;
+    }
+
+    const undoWarning = await applyLoadedMemory(image, radioId, sessionId, serialPortPath);
+    const loaded = readSession(sessionId);
+    patchSession(sessionId, {
+      memoryFilePath: undefined,
+      radioBaseline: image.slice(),
+      radioBaselineProgram: loaded?.program ? cloneRadioProgram(loaded.program) : undefined,
+      backupBaselineStale: false,
+    });
+    clearBrowserFileHandle();
+
+    if (undoWarning) {
+      showRadioErrorToast(toast, logger, {
+        title: 'Undo unavailable after restore',
+        report: undoWarning,
+        color: 'warning',
+        icon: 'i-lucide-triangle-alert',
+        logMessage: 'Undo snapshot failed after menu capture restore',
+      });
+    }
+  }
+
+  /**
    * Save the image currently on the radio before replacing it.
    *
    * Uses the last successful download or write when that still describes the
@@ -1368,28 +1636,17 @@ export function useRadio() {
    * by a write that stopped after sending bytes. Returns false when the operator
    * stops the write because that backup could not be made.
    */
-  async function preparePrewriteBackup(
+  async function persistPrewriteBackupImage(
     sessionId: string,
-    session: RadioCardSession,
     radioId: RadioId,
     serialPortPath: string,
     config: LoadedRadioConfig,
-    baudRate?: number,
+    image: Uint8Array,
+    freshBackupSaved: boolean,
   ): Promise<{ ready: boolean; freshBackupSaved: boolean }> {
     const settings = readRadioImageBackupSettings();
 
     if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
-      return { ready: true, freshBackupSaved: false };
-    }
-
-    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
-    const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
-
-    if (image === 'abort') {
-      return { ready: false, freshBackupSaved: false };
-    }
-
-    if (image === 'skip') {
       return { ready: true, freshBackupSaved: false };
     }
 
@@ -1402,7 +1659,7 @@ export function useRadio() {
     });
 
     if (captured.status !== 'failed') {
-      return { ready: true, freshBackupSaved: !usedBaseline };
+      return { ready: true, freshBackupSaved };
     }
 
     logger.error(`Failed to back up radio image before write: ${captured.message}`);
@@ -1428,6 +1685,34 @@ export function useRadio() {
     }
 
     return { ready: true, freshBackupSaved: false };
+  }
+
+  async function preparePrewriteBackup(
+    sessionId: string,
+    session: RadioCardSession,
+    radioId: RadioId,
+    serialPortPath: string,
+    config: LoadedRadioConfig,
+    baudRate?: number,
+  ): Promise<{ ready: boolean; freshBackupSaved: boolean }> {
+    const settings = readRadioImageBackupSettings();
+
+    if (!shouldCaptureRadioImageBackup(settings, isTauriRuntime())) {
+      return { ready: true, freshBackupSaved: false };
+    }
+
+    const usedBaseline = prewriteBackupReusesRadioBaseline(session.radioBaseline, session.backupBaselineStale);
+    const image = await prewriteBackupImage(sessionId, session, radioId, serialPortPath, config, baudRate);
+
+    if (image === 'abort') {
+      return { ready: false, freshBackupSaved: false };
+    }
+
+    if (image === 'skip') {
+      return { ready: true, freshBackupSaved: false };
+    }
+
+    return persistPrewriteBackupImage(sessionId, radioId, serialPortPath, config, image, !usedBaseline);
   }
 
   /**
@@ -2720,6 +3005,12 @@ export function useRadio() {
     writeToRadio,
     writeTarget,
     readRadioForWriteReview,
+    readRadioImageForMenuCapture,
+    writeRadioImageForMenuCapture,
+    refreshCardMemoryFromVerifiedCapture,
+    setMenuCapturePortHold,
+    menuCaptureActive,
+    menuCaptureHeldPort,
     updateSettings,
     updateChannel,
     addChannel,

@@ -74,6 +74,16 @@ const progressCopy = computed(() => {
     };
   }
 
+  if (progressKind.value === 'capture') {
+    return {
+      title: progressError.value ? 'Menu capture read failed' : 'Reading for menu capture',
+      description: progressError.value
+        ? 'The radio could not be read for menu capture. Check the cable connection and try again.'
+        : 'Keep the programming cable connected until this read finishes.',
+      errorTitle: 'Could not read radio',
+    };
+  }
+
   if (progressKind.value === 'backup') {
     return {
       title: progressError.value ? 'Backup failed' : 'Backing up radio',
