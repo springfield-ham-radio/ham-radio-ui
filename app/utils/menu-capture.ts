@@ -482,9 +482,13 @@ function annotateRun(
       ? run.start
       : (bufferOffsetToRadioAddress(run.start, memoryConfig, bufferLength) ?? run.start);
 
-  const rowStart = Math.floor(run.start / HEX_DUMP_BYTES_PER_ROW) * HEX_DUMP_BYTES_PER_ROW;
-  const context: MenuCaptureDiffContextRow[] = [
-    {
+  const firstRow = Math.floor(run.start / HEX_DUMP_BYTES_PER_ROW) * HEX_DUMP_BYTES_PER_ROW;
+  const lastOffset = run.start + Math.max(run.before.length - 1, 0);
+  const lastRow = Math.floor(lastOffset / HEX_DUMP_BYTES_PER_ROW) * HEX_DUMP_BYTES_PER_ROW;
+  const context: MenuCaptureDiffContextRow[] = [];
+
+  for (let rowStart = firstRow; rowStart <= lastRow; rowStart += HEX_DUMP_BYTES_PER_ROW) {
+    context.push({
       address: formatAddress(
         memoryConfig === undefined
           ? rowStart
@@ -496,8 +500,8 @@ function annotateRun(
       after: Array.from({ length: HEX_DUMP_BYTES_PER_ROW }, (_, cell) =>
         HEX_BYTE(rowStart + cell < after.length ? after[rowStart + cell] : undefined),
       ).join(' '),
-    },
-  ];
+    });
+  }
 
   return {
     offset: run.start,

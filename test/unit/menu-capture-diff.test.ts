@@ -100,6 +100,17 @@ describe('menu capture diff', () => {
     expect(diff.runs[0]?.fields.some((field) => field.fieldId === 'padding')).toBe(false);
   });
 
+  it('includes every 16-byte row a run touches', () => {
+    const before = new Uint8Array(32);
+    const after = before.slice();
+    after[15] = 1;
+    after[16] = 2;
+    const diff = buildMenuCaptureStepDiff(before, after, undefined, undefined, []);
+
+    expect(diff.runs).toHaveLength(1);
+    expect(diff.runs[0]?.context).toHaveLength(2);
+  });
+
   it('marks unmapped offsets and includes hex context', () => {
     const before = Uint8Array.from([0, 0, 0]);
     const after = Uint8Array.from([0, 0, 1]);
