@@ -1,4 +1,5 @@
 mod channel_pack_fetch;
+mod menu_capture;
 mod radio_image_backup;
 mod radio_modules;
 mod sniffer_ssh;
@@ -360,6 +361,15 @@ fn save_text_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    std::fs::write(&path, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn load_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|error| error.to_string())
 }
@@ -701,6 +711,7 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             zoom::zoom_reset_command,
             zoom::zoom_by_command,
             save_text_file,
+            save_binary_file,
             load_text_file,
             sqlite_transaction::execute_sqlite_transaction,
             radio_image_backup::radio_image_backups_directory,
@@ -709,6 +720,14 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             radio_image_backup::save_radio_image_backup,
             radio_image_backup::load_radio_image_backup,
             radio_image_backup::delete_radio_image_backups,
+            menu_capture::menu_capture_load_session,
+            menu_capture::menu_capture_save_session,
+            menu_capture::menu_capture_save_baseline,
+            menu_capture::menu_capture_load_baseline,
+            menu_capture::menu_capture_save_step_image,
+            menu_capture::menu_capture_load_step_image,
+            menu_capture::menu_capture_delete_images,
+            menu_capture::menu_capture_discard_session,
             fetch_repeaterbook_search,
             channel_pack_fetch::fetch_channel_pack,
             radio_modules::download_and_install_radio_module,

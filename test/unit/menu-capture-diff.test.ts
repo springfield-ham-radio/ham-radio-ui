@@ -111,6 +111,42 @@ describe('menu capture diff', () => {
     expect(diff.runs[0]?.context).toHaveLength(2);
   });
 
+  it('omits duplicate menu.code on diff field annotations', () => {
+    const map: RadioMemoryMap = {
+      version: '1.0.0',
+      structs: [
+        {
+          id: 'led',
+          seek: '0x0010',
+          fields: [
+            { id: 'pad', type: 'bits', width: 7, reserved: true },
+            {
+              id: 'fmRadio',
+              type: 'bits',
+              width: 1,
+              value: { kind: 'boolean' },
+              ui: {
+                label: 'LED Control',
+                widget: 'switch',
+                menu: { number: 181, code: 'LED Control' },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const before = new Uint8Array(32);
+    const after = before.slice();
+    before[0x10] = 0b1000_0000;
+    after[0x10] = 0b1000_0001;
+
+    const diff = buildMenuCaptureStepDiff(before, after, map, sparseMemoryConfig, []);
+    const field = diff.runs[0]?.fields.find((entry) => entry.fieldId === 'fmRadio');
+
+    expect(field?.menu?.number).toBe(181);
+    expect(field?.menu).not.toHaveProperty('code');
+  });
+
   it('marks unmapped offsets and includes hex context', () => {
     const before = Uint8Array.from([0, 0, 0]);
     const after = Uint8Array.from([0, 0, 1]);
