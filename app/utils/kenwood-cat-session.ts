@@ -8,7 +8,12 @@ import {
   parseKenwoodFrequencyHz,
   type KenwoodCatReply,
 } from '~/utils/kenwood-cat-control';
-import { labelAt, lookupCatCode, type KenwoodCatProfile } from '~/utils/kenwood-cat-profile';
+import {
+  labelAt,
+  lookupCatCode,
+  selectableModesForBand,
+  type KenwoodCatProfile,
+} from '~/utils/kenwood-cat-profile';
 
 export interface CatTransport {
   write(bytes: Uint8Array): Promise<void>;
@@ -23,6 +28,12 @@ export interface CatVfo {
   frequencyHz: number;
   mode: string;
   power?: string;
+  /** VFO / Memory / Call / DV from `VM` when the module declares it. */
+  activity?: string;
+  /** True when the band is not in VFO mode (editors disabled). */
+  readOnly?: boolean;
+  /** Mode names allowed on this band when `bandModes` is set. */
+  modes?: string[];
 }
 
 export interface CatStatus {
@@ -41,6 +52,8 @@ export interface KenwoodCatSessionOptions {
   timeoutMs?: number;
   delayMs?: number;
 }
+
+const VFO_ACTIVITY_EDITABLE_CODE = 0;
 
 function sleep(ms: number): Promise<void> {
   if (ms <= 0) {
@@ -76,6 +89,11 @@ function frequencyFromReply(reply: KenwoodCatReply): number | undefined {
   return undefined;
 }
 
+function modeLabelFromReply(profile: KenwoodCatProfile, fields: string[]): string {
+  const code = lastInteger(fields);
+  return labelAt(profile.modes, code) ?? `Mode ${code}`;
+}
+
 function bandLabel(band: 0 | 1): 'A' | 'B' {
   return band === 0 ? 'A' : 'B';
 }
@@ -88,17 +106,52 @@ function vfoBands(count: number): Array<0 | 1> {
   return count > 1 ? [0, 1] : [0];
 }
 
+function activityFromVm(profile: KenwoodCatProfile, fields: string[]): { activity?: string; readOnly: boolean } {
+  const code = lastInteger(fields);
+  const label = profile.vfoModes?.[code];
+
+  if (code === VFO_ACTIVITY_EDITABLE_CODE) {
+    return { ...(label ? { activity: label } : {}), readOnly: false };
+  }
+
+  return {
+    ...(label ? { activity: label } : {}),
+    readOnly: true,
+  };
+}
+
+function assertVfoWritable(status: CatStatus, band: 0 | 1): CatVfo {
+  const vfo = status.vfos.find((item) => item.band === band);
+
+  if (vfo?.readOnly) {
+    throw new Error(`VFO ${vfo.label} is not in VFO mode`);
+  }
+
+  return vfo ?? { band, label: bandLabel(band), frequencyHz: 0, mode: 'FM' };
+}
+
 function minimumReplyFields(command: string, sentFields: Array<string | number>, profile: KenwoodCatProfile): number {
   if (command === 'ID') {
     return 1;
   }
 
   if (profile.bandControl && command === 'BC') {
-    return 2;
+    return 1;
   }
 
   if (profile.vfoChannel && command === profile.frequencyCommands[0] && sentFields.length <= 1) {
     return 13;
+  }
+
+  if (profile.bandIndexed) {
+    const modeCommand = profile.modeCommand ?? 'MD';
+
+    if (
+      (command === profile.frequencyCommands[0] || command === modeCommand || command === 'PC') &&
+      sentFields.length === 1
+    ) {
+      return 2;
+    }
   }
 
   if (profile.powerBandIndex && command === 'PC' && sentFields.length === 1) {
@@ -144,17 +197,12 @@ export class KenwoodCatSession {
 
     const identity = await this.command('ID');
     const radioIdentity = identity.fields.join(' ') || identity.raw.replace(/^ID\s+/i, '') || 'Kenwood';
-    const bandControl = this.profile.bandControl
-      ? this.profile.vfoChannel
-        ? await this.command('BC')
-        : await this.tryCommand('BC')
-      : undefined;
 
     this.selectedBand = 0;
     this.current = {
       radioIdentity,
       dualBand: this.profile.vfoCount > 1,
-      controlBand: bandControl ? asBand(Number.parseInt(bandControl.fields[0] ?? '0', 10)) : 0,
+      controlBand: 0,
       transmitting: false,
       vfos: [],
       modes: [...this.profile.modes],
@@ -166,11 +214,23 @@ export class KenwoodCatSession {
 
   async poll(): Promise<CatStatus> {
     const status = this.requireStatus();
+    let controlBand = status.controlBand;
+
+    if (this.profile.bandControl) {
+      const bandControl = this.profile.vfoChannel
+        ? await this.command('BC')
+        : await this.tryCommand('BC');
+
+      if (bandControl) {
+        controlBand = asBand(Number.parseInt(bandControl.fields[0] ?? '0', 10));
+      }
+    }
+
     const vfos: CatVfo[] = [];
 
     for (const band of vfoBands(this.profile.vfoCount)) {
       try {
-        if (!this.profile.vfoChannel && status.dualBand) {
+        if (!this.profile.vfoChannel && !this.profile.bandIndexed && status.dualBand) {
           await this.selectBand(band);
         }
 
@@ -182,15 +242,17 @@ export class KenwoodCatSession {
       }
     }
 
-    if (!this.profile.vfoChannel && status.dualBand) {
-      await this.selectBand(status.controlBand);
+    if (!this.profile.vfoChannel && !this.profile.bandIndexed && status.dualBand) {
+      await this.selectBand(controlBand);
     }
 
-    this.current = { ...status, dualBand: vfos.length > 1, vfos };
+    this.current = { ...status, controlBand, dualBand: vfos.length > 1, vfos };
     return this.current;
   }
 
   async setFrequency(band: 0 | 1, frequencyHz: number): Promise<CatStatus> {
+    assertVfoWritable(this.requireStatus(), band);
+
     if (this.profile.vfoChannel) {
       const channel = parseKenwoodFoReply(await this.command(this.frequencyCommand, [band]), this.profile.modes);
       await this.command(
@@ -202,7 +264,9 @@ export class KenwoodCatSession {
 
     const formatted = formatKenwoodFrequencyHz(frequencyHz, this.profile.frequencyWidth);
 
-    if (this.requireStatus().dualBand) {
+    if (this.profile.bandIndexed) {
+      await this.command(this.frequencyCommand, [band, formatted]);
+    } else if (this.requireStatus().dualBand) {
       await this.command(this.frequencyCommand, [formatted, band]);
     } else {
       await this.command(this.frequencyCommand, [formatted]);
@@ -212,6 +276,14 @@ export class KenwoodCatSession {
   }
 
   async setMode(band: 0 | 1, mode: string): Promise<CatStatus> {
+    assertVfoWritable(this.requireStatus(), band);
+
+    const selectable = selectableModesForBand(this.profile, band);
+
+    if (lookupCatCode(selectable, mode) === undefined) {
+      throw new Error(`Mode ${mode} is not supported on VFO ${bandLabel(band)}`);
+    }
+
     const code = lookupCatCode(this.profile.modes, mode);
 
     if (code === undefined) {
@@ -228,7 +300,7 @@ export class KenwoodCatSession {
 
     const command = this.profile.modeCommand ?? 'MD';
 
-    if (this.requireStatus().dualBand) {
+    if (this.profile.bandIndexed || this.requireStatus().dualBand) {
       await this.command(command, [band, code]);
     } else {
       await this.command(command, [code]);
@@ -238,6 +310,8 @@ export class KenwoodCatSession {
   }
 
   async setPower(band: 0 | 1, power: string): Promise<CatStatus> {
+    assertVfoWritable(this.requireStatus(), band);
+
     const code = lookupCatCode(this.profile.powers, power);
 
     if (code === undefined) {
@@ -295,6 +369,8 @@ export class KenwoodCatSession {
   }
 
   private async readVfo(band: 0 | 1): Promise<CatVfo> {
+    const selectableModes = [...selectableModesForBand(this.profile, band)];
+
     if (this.profile.vfoChannel) {
       const channel = parseKenwoodFoReply(await this.command(this.frequencyCommand, [band]), this.profile.modes);
       const powerReply = this.profile.powerBandIndex
@@ -307,6 +383,35 @@ export class KenwoodCatSession {
         frequencyHz: channel.frequencyHz,
         mode: channel.mode,
         power: powerReply ? labelAt(this.profile.powers, lastInteger(powerReply.fields)) : undefined,
+        modes: selectableModes,
+      };
+    }
+
+    if (this.profile.bandIndexed) {
+      const frequency = await this.command(this.frequencyCommand, [band]);
+      const frequencyHz = frequencyFromReply(frequency);
+
+      if (frequencyHz === undefined) {
+        throw new Error('Radio did not return a frequency');
+      }
+
+      const modeCommand = this.profile.modeCommand ?? 'MD';
+      const modeReply = await this.command(modeCommand, [band]);
+      const powerReply = this.profile.powerBandIndex ? await this.tryCommand('PC', [band]) : await this.tryCommand('PC');
+      const vmReply = this.profile.vfoModeCommand
+        ? await this.tryCommand(this.profile.vfoModeCommand, [band])
+        : undefined;
+      const vmState = vmReply ? activityFromVm(this.profile, vmReply.fields) : { readOnly: false as const };
+
+      return {
+        band,
+        label: bandLabel(band),
+        frequencyHz,
+        mode: modeLabelFromReply(this.profile, modeReply.fields),
+        power: powerReply ? labelAt(this.profile.powers, lastInteger(powerReply.fields)) : undefined,
+        modes: selectableModes,
+        ...(vmState.activity ? { activity: vmState.activity } : {}),
+        readOnly: vmState.readOnly,
       };
     }
 
@@ -343,8 +448,9 @@ export class KenwoodCatSession {
       band,
       label: bandLabel(band),
       frequencyHz,
-      mode: labelAt(this.profile.modes, lastInteger(modeReply.fields)) ?? this.profile.modes[0] ?? 'FM',
+      mode: modeLabelFromReply(this.profile, modeReply.fields),
       power: powerReply ? labelAt(this.profile.powers, lastInteger(powerReply.fields)) : undefined,
+      modes: selectableModes,
     };
   }
 

@@ -44,4 +44,59 @@ describe('kenwoodCatProfileFromConfig', () => {
   it('should reject a non-Kenwood protocol', () => {
     expect(() => kenwoodCatProfileFromConfig({ protocol: 'icom-ci-v' })).toThrow(/Kenwood CAT/);
   });
+
+  it('should resolve a band-indexed TH-D74 profile from the driver cat block', () => {
+    const profile = kenwoodCatProfileFromConfig({
+      protocol: 'kenwood',
+      vfoCount: 2,
+      frequencyCommands: ['FQ'],
+      frequencyWidth: 10,
+      bandIndexed: true,
+      modes: ['FM', 'DV', 'AM', 'LSB', 'USB', 'CW', 'NFM', 'DR', 'WFM', 'R-CW'],
+      bandModes: [
+        ['FM', 'DV', 'AM', 'NFM', 'DR', 'WFM'],
+        ['FM', 'DV', 'AM', 'LSB', 'USB', 'CW', 'NFM', 'DR', 'WFM', 'R-CW'],
+      ],
+      powers: ['H', 'M', 'L', 'EL'],
+      modeCommand: 'MD',
+      bandControl: true,
+      powerBandIndex: true,
+      vfoModeCommand: 'VM',
+      vfoModes: ['VFO', 'Memory', 'Call', 'DV'],
+    });
+
+    expect(profile.wakeCr).toBe(false);
+    expect(profile.vfoChannel).toBe(false);
+    expect(profile.bandIndexed).toBe(true);
+    expect(profile.frequencyWidth).toBe(10);
+    expect(profile.modes[1]).toBe('DV');
+    expect(profile.modes[6]).toBe('NFM');
+    expect(profile.modes[7]).toBe('DR');
+    expect(profile.modes[9]).toBe('R-CW');
+    expect(profile.vfoModeCommand).toBe('VM');
+  });
+
+  it('should reject dual-band Kenwood CAT without vfoChannel or bandIndexed', () => {
+    expect(() =>
+      kenwoodCatProfileFromConfig({
+        protocol: 'kenwood',
+        vfoCount: 2,
+        modes: ['FM'],
+        powers: ['H'],
+      }),
+    ).toThrow(/vfoChannel or bandIndexed/);
+  });
+
+  it('should reject bandModes entries that are not in modes', () => {
+    expect(() =>
+      kenwoodCatProfileFromConfig({
+        protocol: 'kenwood',
+        vfoCount: 1,
+        bandIndexed: true,
+        modes: ['FM'],
+        powers: ['H'],
+        bandModes: [['USB']],
+      }),
+    ).toThrow(/not in modes/);
+  });
 });

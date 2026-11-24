@@ -36,4 +36,22 @@ The **Debug** tab shows SEND/RECV bytes. Capture is off by default so a long CAT
 
 When more than one session is open, choose the radio (or **Last failed connect**) in the menu. Each frame is hex plus an ASCII preview (`ID\r`, `?\r`). **Save serial log** writes the same JSON shape as Radio read/write logs for the selected session.
 
-A good TM-D710 connect shows `ID\r` → `ID TM-D710\r`, then `BC\r`, `FO 0\r`, and `FO 1\r` with full VFO replies. No reply after `ID` usually means the wrong jack, baud, or serial device. Modules that set `wakeCr` also show a wake CR first.
+A good TM-D710 connect shows `ID\r` → `ID TM-D710\r`, then `BC\r`, `FO 0\r`, and `FO 1\r` with full VFO replies. No reply after `ID` usually means the wrong jack, baud, or serial device. Modules that set `wakeCr` (for example the TH-F6) also show a wake CR first.
+
+## Kenwood TH-D74
+
+The TH-D74 shares one micro-USB CDC port for CAT, clone programming, and packet. Set the radio up before **Connect**:
+
+1. Menu **980** (USB Function) = **COM+AF/IF Output**. Mass Storage hides the COM port. Power-cycle after changing this menu.
+2. Turn **KISS** off: press **[F]**, then **[LIST]** until the display cycles to **OFF** (not APRS or KISS). Menu **983** only chooses USB or Bluetooth for KISS when it is on.
+3. Menu **405** (PC Output) = **Off**. With **405** on and menu **981** set to USB, GPS NMEA sentences share the COM port with CAT. Menu **982** can send APRS text on USB the same way.
+4. Match **9600 8N1** with hardware **RTS/CTS**, as the module’s `serialConfig` declares. Close other programs using that COM port.
+5. Reinstall the Kenwood module after a driver update so the catalog picks up the `bandIndexed` `cat` block.
+
+Disconnect CAT before **Read** or **Write** on the same port. HamBench locks the port while CAT is connected.
+
+On **Connect**, HamBench sends `ID` (no wake CR on the D74), then polls each band with `BC`, `FQ n`, `MD n`, `PC n`, and `VM n`. A good **Debug** trace looks like:
+
+`ID\r` → `ID TH-D74\r`, then `BC\r` → `BC 0\r`, then `FQ 0\r` → `FQ 0,0145470000\r`, and the same pattern for band 1. The session does not send bare `FQ`/`MD`/`PC`, does not use the 21-field `FO` channel, and does not select bands with `BC 0` / `BC 1` during poll.
+
+Band A’s selectable modes omit SSB and CW. A yellow **Memory**, **Call**, or **DV** badge means that VFO card is read-only: frequency, mode, and power editors are disabled, but **Log contact** and **Hold to transmit** still work. **CTRL** still marks the PTT band from `BC`.

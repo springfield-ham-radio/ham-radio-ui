@@ -34,6 +34,7 @@ const powerItems = computed(() =>
 );
 
 const privilegeWarning = computed(() => getTransmitPrivilegeWarning(props.vfo.frequencyHz, props.privilege));
+const editorsDisabled = computed(() => props.disabled || props.vfo.readOnly === true);
 
 watch(
   () => props.vfo.frequencyHz,
@@ -107,6 +108,13 @@ function onPttUp(): void {
           size="sm"
         />
         <UBadge
+          v-if="vfo.activity"
+          :label="vfo.activity"
+          color="warning"
+          variant="subtle"
+          size="sm"
+        />
+        <UBadge
           :label="vfo.mode"
           color="neutral"
           variant="subtle"
@@ -137,7 +145,7 @@ function onPttUp(): void {
           v-model="frequencyDraft"
           inputmode="decimal"
           class="w-full font-mono tabular-nums"
-          :disabled="disabled"
+          :disabled="editorsDisabled"
           @update:model-value="frequencyDirty = true"
           @blur="applyFrequency"
           @keydown.enter="applyFrequency"
@@ -148,7 +156,7 @@ function onPttUp(): void {
         <USelect
           :model-value="vfo.mode"
           :items="modes"
-          :disabled="disabled || modes.length <= 1"
+          :disabled="editorsDisabled || modes.length <= 1"
           class="w-full"
           @update:model-value="onMode"
         />
@@ -159,7 +167,7 @@ function onPttUp(): void {
           :model-value="vfo.power"
           :items="powerItems"
           value-key="value"
-          :disabled="disabled"
+          :disabled="editorsDisabled"
           class="w-full"
           @update:model-value="onPower"
         />
