@@ -193,7 +193,7 @@ export function useMenuCapture() {
       try {
         await saveMenuCaptureBaseline(savedRadioId, image);
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : '';
+        const message = cause instanceof Error ? cause.message : String(cause);
 
         if (!message.includes('already has a baseline')) {
           throw cause;
