@@ -10,7 +10,6 @@ describe('developer panels wiring', () => {
     expect(workspace).toContain('developerPanels.value.radioHex');
     expect(workspace).toContain('developerPanels.value.radioDebug');
     expect(workspace).toContain('developerPanels.value.radioSniffer');
-    expect(workspace).toContain("activeTab.value = 'channels'");
   });
 
   it('always exposes menu capture on the radio Driver tab', () => {

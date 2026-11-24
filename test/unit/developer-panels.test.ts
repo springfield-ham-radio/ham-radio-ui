@@ -71,7 +71,7 @@ describe('developer panels preference', () => {
     }
   });
 
-  it('migrates legacy mode and tools flags once', () => {
+  function withLegacyStorage(run: () => void): void {
     if (typeof localStorage === 'undefined') {
       return;
     }
@@ -82,20 +82,7 @@ describe('developer panels preference', () => {
 
     try {
       localStorage.removeItem(DEVELOPER_PANELS_STORAGE_KEY);
-      localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, '1');
-      localStorage.setItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY, '1');
-
-      expect(readDeveloperPanels()).toEqual({
-        driverDevelopment: true,
-        radioDriver: true,
-        radioHex: false,
-        radioDebug: false,
-        radioSniffer: false,
-      });
-      expect(localStorage.getItem(DEVELOPER_PANELS_STORAGE_KEY)).not.toBeNull();
-
-      localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, '0');
-      expect(readDeveloperPanels().driverDevelopment).toBe(true);
+      run();
     } finally {
       if (previousPanels === null) {
         localStorage.removeItem(DEVELOPER_PANELS_STORAGE_KEY);
@@ -112,6 +99,71 @@ describe('developer panels preference', () => {
       } else {
         localStorage.setItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY, previousTools);
       }
+    }
+  }
+
+  it('migrates legacy mode and tools flags once when both are on', () => {
+    withLegacyStorage(() => {
+      localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, '1');
+      localStorage.setItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY, '1');
+
+      expect(readDeveloperPanels()).toEqual({
+        driverDevelopment: true,
+        radioDriver: true,
+        radioHex: false,
+        radioDebug: false,
+        radioSniffer: false,
+      });
+      expect(localStorage.getItem(DEVELOPER_PANELS_STORAGE_KEY)).not.toBeNull();
+
+      localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, '0');
+      expect(readDeveloperPanels().driverDevelopment).toBe(true);
+    });
+  });
+
+  it('migrates legacy developer mode only to driverDevelopment', () => {
+    withLegacyStorage(() => {
+      localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, '1');
+      localStorage.removeItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY);
+
+      expect(readDeveloperPanels()).toEqual({
+        driverDevelopment: true,
+        radioDriver: false,
+        radioHex: false,
+        radioDebug: false,
+        radioSniffer: false,
+      });
+    });
+  });
+
+  it('migrates legacy developer tools only to radioDriver', () => {
+    withLegacyStorage(() => {
+      localStorage.removeItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY);
+      localStorage.setItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY, '1');
+
+      expect(readDeveloperPanels()).toEqual({
+        driverDevelopment: false,
+        radioDriver: true,
+        radioHex: false,
+        radioDebug: false,
+        radioSniffer: false,
+      });
+    });
+  });
+
+  it('does not enable panels from legacy values other than the string 1', () => {
+    for (const legacyValue of ['0', 'true', null] as const) {
+      withLegacyStorage(() => {
+        if (legacyValue === null) {
+          localStorage.removeItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY);
+          localStorage.removeItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY);
+        } else {
+          localStorage.setItem(LEGACY_DEVELOPER_MODE_STORAGE_KEY, legacyValue);
+          localStorage.setItem(LEGACY_DEVELOPER_TOOLS_STORAGE_KEY, legacyValue);
+        }
+
+        expect(readDeveloperPanels()).toEqual(defaultDeveloperPanels());
+      });
     }
   });
 
