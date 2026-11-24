@@ -181,6 +181,11 @@ export function menuCaptureSessionNeedsPortHold(session: MenuCaptureSessionState
   return !session.completedAt && Boolean(session.serialPort);
 }
 
+/** Exported sessions stay on disk until Done or load; they must not reopen at Export. */
+export function menuCaptureSessionShouldResume(session: MenuCaptureSessionState): boolean {
+  return !session.completedAt;
+}
+
 const HEX_BYTE = (value: number | undefined): string =>
   value === undefined ? '--' : value.toString(16).toUpperCase().padStart(2, '0');
 

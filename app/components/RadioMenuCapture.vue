@@ -33,7 +33,6 @@ const {
   restoreBaseline,
   exportCapture,
   completeExportedSession,
-  releasePortHold,
   discardSession,
   defaultCallsign,
   menuLookup,
@@ -319,8 +318,13 @@ async function onStartNewCapture(): Promise<void> {
   phase.value = 'intro';
 }
 
-function onDone(): void {
-  releasePortHold();
+async function onDone(): Promise<void> {
+  await discardSession();
+  exportSavedPath.value = undefined;
+  exportCompleted.value = false;
+  operatorNotes.value = '';
+  firmware.value = '';
+  phase.value = 'intro';
   emit('close');
 }
 
