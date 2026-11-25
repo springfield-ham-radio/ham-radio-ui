@@ -32,7 +32,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0021](./0021-menu-capture-session.md) | proposed | Guided menu capture on the radio Driver tab |
 | [0022](./0022-kenwood-band-indexed-cat.md) | proposed | Kenwood band-indexed CAT (TH-D74) |
 | [0023](./0023-developer-panels.md) | proposed | Developer panel preferences on radio cards |
-| [0024](./0024-serial-watch-flush.md) | accepted | Serial watch `size: 1` and close sequencing |
+| [0024](./0024-serial-watch-flush.md) | accepted | Serial watch size 261, close sequencing, session log markRaw |
 
 Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0025. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
