@@ -547,17 +547,17 @@ describe('TauriNodeSerialPort watch flush options', () => {
     resetSerialPortReconnectHooks();
   });
 
-  it('requests size 1 and a 1 ms flush on the constructor and watch()', async () => {
+  it('requests size 261 and a 1 ms flush on the constructor and watch()', async () => {
     const { tauri } = await openAdapterPort({ dtr: true, rts: true });
 
-    expect(tauri.options.size).toBe(1);
+    expect(tauri.options.size).toBe(261);
     expect(tauri.options.serialDataFlushIntervalMs).toBe(1);
     expect(tauri.options.timeout).toBeUndefined();
     expect(capturedWatchOptions).toEqual({
       decode: false,
       timeout: 1,
       serialDataFlushIntervalMs: 1,
-      size: 1,
+      size: 261,
     });
   });
 
@@ -577,7 +577,7 @@ describe('TauriNodeSerialPort watch flush options', () => {
       decode: false,
       timeout: 1,
       serialDataFlushIntervalMs: 1,
-      size: 1,
+      size: 261,
     });
   });
 });

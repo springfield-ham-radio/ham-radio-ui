@@ -15,13 +15,27 @@ HamBench already set `serialDataFlushIntervalMs: 1` on `tauri-plugin-serialplugi
 
 ## Decision
 
-1. Set `watch()` and constructor `size: 1` in `TauriNodeSerialPort`, with `serialDataFlushIntervalMs: 1`, so the hub flushes on the first buffered byte and reads one byte per poll when no framer deadline applies.
+1. Set `watch()` and constructor `size: 261` in `TauriNodeSerialPort` (TH-D74 `W` frame size), with `serialDataFlushIntervalMs: 1`, so the hub reads and flushes one clone reply per poll when no framer deadline applies. Shorter CAT/KISS/handshake traffic still flushes on the 1 ms batch timer.
 2. Chain per-path close promises (`trackSerialPathClose` / `waitForSerialPathClose`) so a new open waits for every in-flight `unwatch` / native `close`.
 3. On `onDisconnect`, schedule native teardown on a microtask without deasserting DTR/RTS (CDC drop during reboot); call `SerialPort.forceClose(path)` only when `close()` rejects.
 4. Do not change `radio-module-kenwood`, `ack.timeout`, or the port open `timeout` default.
 
 ## Consequences
 
-- Clone and CAT traffic get one Tauri channel event per received byte until the driver has reassembled a frame; a full `W` is 261 events (~510k per clone). Do not raise `ack.timeout` to mask slow delivery.
-- KISS/APRS/CAT callers must keep reassembling `data` chunks; behavior is unchanged except chunk size.
-- Hardware check: two back-to-back TH-D74 reads in one HamBench process without restart should both finish well under 30 s, with R→W of a few milliseconds in saved serial logs.
+- Clone and CAT traffic arrive in hub chunks up to 261 bytes per watch event until the driver reassembles a frame; CAT/APRS/KISS callers must keep reassembling `data` chunks. Do not raise `ack.timeout` to mask slow delivery.
+- Hardware check: back-to-back TH-D74 reads in one HamBench process should stay near ~20 s with single-digit-ms R→W in saved serial logs (see amendment).
+
+## Amendment (Vue reactivity on session serial logs)
+
+Hardware on a Mac mini showed the **repeat** slow read was not native I/O. Native write, USB, and the radio stayed at 0–3 ms. The ~110 ms per block (growing across imports) was on the main thread from the first native `W` byte to JS `RECV`.
+
+**Root cause:** After a full D74 import, `captureSerialLog` stores `snapshotFromDriverSerialLog` on `useState('radio-card-sessions')`. That path eagerly `JSON.stringify`d the whole driver log (~8.5 MB) and kept `log.entries` (~7,800 frames of `number[]`) in the session object. Vue deep-proxied that tree, so every later serial event and flush paid for it. Retained imports made the stall worse (third read median ~236 ms; read 2 ~241 s before the fix).
+
+**Decision:**
+
+1. `markRaw` the driver log and snapshot; expose `contents` via a non-enumerable lazy getter so JSON is built only when saving to disk, and session `patchSession` shallow merges do not re-stringify on every update.
+2. Build Debug-tab `snifferPacketsFromSerialLog` only while the Debug tab is active.
+3. `markRaw` CAT serial log snapshots stored on `useState` for live radios.
+4. Vendor-patched `serialport` / `serialplugin-core` (read-before-poll, hub join) were tried on hardware and **reverted**; they did not change the slow read.
+
+**Verified outcome (same Mac mini, fresh process, three full reads back-to-back):** 17.0 s, 18.8 s, 20.7 s; median R→W 6–8 ms (before fix: read 2 ~241 s, ~110 ms R→W plateaus). `size: 261` improved the first read (e.g. 16.8 s vs ~21–28 s at `size: 1`) but did not alone fix session 2; reactivity fix did.

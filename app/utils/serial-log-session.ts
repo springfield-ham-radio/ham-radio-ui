@@ -1,5 +1,6 @@
 import type { RadioId } from '@springfield/ham-radio-api';
 import { RadioModelId } from '@springfield/ham-radio-api';
+import { markRaw } from 'vue';
 import {
   defaultSerialLogFileName,
   SERIAL_LOG_FILE_KIND,
@@ -18,6 +19,42 @@ export interface CapturedSerialLogSnapshot {
   log: unknown;
 }
 
+function createCapturedSerialLogSnapshot(input: {
+  fileName: string;
+  entryCount: number;
+  operation: SerialLogOperation;
+  radioId?: RadioId;
+  serialPortPath?: string;
+  log: unknown;
+}): CapturedSerialLogSnapshot {
+  const rawLog = markRaw(input.log);
+  const snapshot = {
+    fileName: input.fileName,
+    entryCount: input.entryCount,
+    operation: input.operation,
+    log: rawLog,
+  } as CapturedSerialLogSnapshot;
+
+  let cachedContents: string | undefined;
+  Object.defineProperty(snapshot, 'contents', {
+    configurable: true,
+    enumerable: false,
+    get(): string {
+      if (cachedContents === undefined) {
+        cachedContents = serializeSerialLogFile({
+          operation: input.operation,
+          radioId: input.radioId,
+          serialPortPath: input.serialPortPath,
+          log: rawLog,
+        });
+      }
+      return cachedContents;
+    },
+  });
+
+  return markRaw(snapshot);
+}
+
 /**
  * Build a session serial log snapshot from a driver log, or undefined when empty.
  */
@@ -33,18 +70,14 @@ export function snapshotFromDriverSerialLog(
     return undefined;
   }
 
-  return {
+  return createCapturedSerialLogSnapshot({
     fileName: defaultSerialLogFileName(operation, radioId),
-    contents: serializeSerialLogFile({
-      operation,
-      radioId,
-      serialPortPath,
-      log,
-    }),
     entryCount,
     operation,
+    radioId,
+    serialPortPath,
     log,
-  };
+  });
 }
 
 /**
@@ -99,17 +132,14 @@ export function serialLogForProgressSave(
     const radioId = document ? radioIdFromSerialLogDocument(document) : undefined;
     const fileName = log.fileName.replace('-import-', '-write-');
 
-    return {
-      ...log,
+    return createCapturedSerialLogSnapshot({
       fileName,
+      entryCount: log.entryCount,
       operation: 'write',
-      contents: serializeSerialLogFile({
-        operation: 'write',
-        radioId,
-        serialPortPath: document?.serialPortPath,
-        log: log.log,
-      }),
-    };
+      radioId,
+      serialPortPath: document?.serialPortPath,
+      log: log.log,
+    });
   }
 
   return log;

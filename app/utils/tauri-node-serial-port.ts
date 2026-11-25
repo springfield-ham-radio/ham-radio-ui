@@ -29,11 +29,11 @@ const SERIAL_LISTENER_FLUSH_MS = 1;
 
 /**
  * `WatchOptions.size` is both the hub read chunk and the flush threshold
- * (`buffer.len() >= read_size`). The plugin default is 1024, so a 261-byte
- * clone reply waits for the next hub poll. `1` flushes on the same `tick` that
- * read the byte.
+ * (`buffer.len() >= read_size`). The plugin default is 1024. Kenwood TH-D74
+ * clone blocks return a 261-byte `W`; match that frame so each block is one
+ * hub read and one Tauri event batch instead of one event per byte.
  */
-const SERIAL_WATCH_READ_SIZE = 1;
+const SERIAL_WATCH_READ_SIZE = 261;
 
 /**
  * Programming cables power the radio interface from DTR/RTS. The first Windows

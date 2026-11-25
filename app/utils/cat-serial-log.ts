@@ -1,3 +1,4 @@
+import { markRaw } from 'vue';
 import {
   DirectionCoalesceBuffer,
   SERIAL_DIRECTION_COALESCE_IDLE_MS,
@@ -141,7 +142,7 @@ export function createCatSerialLog(
         commitOpenGroup();
       }
 
-      return {
+      return markRaw({
         metadata: {
           startTime,
           endTime: new Date().toISOString(),
@@ -149,7 +150,7 @@ export function createCatSerialLog(
           version: '1.0.0',
         },
         entries: entries.map((entry) => ({ ...entry, data: [...entry.data] })),
-      };
+      });
     },
     finalize(): void {
       clearCoalesceIdleTimer(idleTimer);

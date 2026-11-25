@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { isReactive } from 'vue';
 import { asciiPreviewFromBytes, createCatSerialLog } from '../../app/utils/cat-serial-log.ts';
 import { snifferPacketsFromSerialLog } from '../../app/utils/sniffer-capture.ts';
 
@@ -17,6 +18,7 @@ describe('createCatSerialLog', () => {
     log.append('SEND', Uint8Array.from(Buffer.from('ID\r', 'ascii')));
 
     const snapshot = log.snapshot();
+    expect(isReactive(snapshot)).toBe(false);
     expect(snapshot.metadata.totalEntries).toBe(3);
     expect(snapshot.entries[0]).toMatchObject({ direction: 'SEND', description: '\\r' });
     expect(snapshot.entries[1]).toMatchObject({ direction: 'RECV', description: '?\\r' });
