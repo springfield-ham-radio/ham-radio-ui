@@ -58,6 +58,11 @@ jobs:
       - name: Check Rust
         working-directory: src-tauri
         run: cargo check --locked
+      - name: Test vendored serial crates
+        working-directory: src-tauri
+        run: |
+          cargo test --locked -p serialport
+          cargo test --locked -p serialplugin-core --lib
 
   # Release Tauri does not run on pull requests. This job runs the same
   # Windows Corepack install as publish-tauri so the hosted image's Yarn

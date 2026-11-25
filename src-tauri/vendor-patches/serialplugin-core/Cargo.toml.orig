@@ -1,0 +1,84 @@
+[package]
+name = "serialplugin-core"
+version = "0.2.5"
+description = "Serial port core of tauri-plugin-serialplugin without Tauri: RX hub, watch streams with native parsers, AT exchange, CMUX, TCP and BLE transports"
+edition = "2021"
+rust-version = "1.90"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+repository = "https://github.com/s00d/tauri-plugin-serialplugin"
+homepage = "https://github.com/s00d/tauri-plugin-serialplugin/tree/main/crates/serialplugin-core"
+documentation = "https://docs.rs/serialplugin-core"
+authors = ["s00d"]
+keywords = ["serial", "serialport", "at-commands", "cmux", "modem"]
+categories = ["hardware-support", "api-bindings"]
+# They need serialplugin-testing by path, which the package does not have.
+exclude = ["/tests/**"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+features = ["ble"]
+
+[features]
+# Serial over Bluetooth LE (Nordic UART Service): btleplug on desktop + iOS (Linux needs
+# libdbus/BlueZ), the Kotlin GATT bridge on Android (btleplug is not built there).
+ble = ["dep:btleplug", "dep:tokio", "dep:futures", "dep:uuid"]
+# In-memory USB transport for the Android JNI test harness (debug builds only).
+android-test-harness = ["android-usb-serial/fake-transport"]
+# The plugin's 4.0.0 API on core items: Tauri `Channel` variants of the watch / URC
+# helpers (`RxHubShared::attach_watch`, `list_monitor::subscribe`, …), `channel_sink`
+# and, on Android, `From<PluginInvokeError> for Error`. The plugin enables it; plain
+# Rust users leave it off (no Tauri in the dependency tree).
+tauri = ["dep:tauri"]
+# Log through the `log` crate instead of stdout / stderr (Android always does).
+log = ["dep:log"]
+# `mock_serial` in every build (it is already there on desktop and in Android debug
+# builds); `SerialManager::insert_port` takes any `SerialPort`, a fake included.
+test-util = []
+# USB interface number and location in `available_ports_detailed()` (and location
+# changes as re-plugs in the port-list monitor), from serialport's
+# `usbportinfo-interface` / `usbportinfo-location`. Off by default and not enabled by
+# the plugin: those features change `serialport::UsbPortInfo` for every crate in the
+# build, and on Linux without libudev (musl) serialport then drops USB ports whose
+# sysfs location cannot be read, so the 4.x port list would change.
+usb-port-details = ["serialport/usbportinfo-interface", "serialport/usbportinfo-location"]
+
+[dependencies]
+tauri = { version = "2", default-features = false, optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serial-codec = { path = "../serial-codec", version = "0.1.2" }
+log = { version = "0.4", features = ["std"], optional = true }
+# TCP keepalive tuning for tcp:// (std has no API for it); already in the tree via tokio.
+socket2 = { version = "0.6", features = ["all"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+btleplug = { version = "0.13", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"], optional = true }
+futures = { version = "0.3", optional = true }
+uuid = { version = "1", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# Full USB serial numbers for COM ports (serialport truncates them at '-').
+winreg = "0.56"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Stay on 0.21 — 0.22 EnvUnowned / GlobalRef<T> breaks our JNI bridge.
+jni = "0.21"
+# Parses the Kotlin side's port list (JSON over JNI).
+serde_json = "1.0"
+android-usb-serial = { path = "../android-usb-serial", version = "0.1.8" }
+serialport = "4.10.1"
+log = { version = "0.4", features = ["std"] }
+
+# Not on iOS: the crate links IOKit there; src/serialport_ios.rs stands in for it.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+serialport = "4.10.1"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dev-dependencies]
+serialplugin-testing = { path = "../serialplugin-testing" }
+
+[dev-dependencies]
+# Property and model tests (`TestRunner::run` over an action enum and a reference model).
+proptest = "1.10"
+serde_json = "1.0"
+
