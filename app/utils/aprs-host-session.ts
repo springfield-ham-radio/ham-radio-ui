@@ -21,6 +21,13 @@ import {
   type AprsTraceDirection,
   type AprsTraceLine,
 } from '~/utils/aprs-serial-trace';
+import {
+  DirectionCoalesceBuffer,
+  SERIAL_DIRECTION_COALESCE_IDLE_MS,
+  armCoalesceIdleTimer,
+  clearCoalesceIdleTimer,
+  type CoalesceIdleTimer,
+} from '~/utils/serial-direction-coalesce';
 
 const INBOX_CAP = 200;
 const OUTBOX_CAP = 50;
@@ -255,6 +262,9 @@ export function createAprsHostSession(options?: {
   let openingBuffer = false;
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
+  const rxTraceCoalesce = new DirectionCoalesceBuffer(SERIAL_DIRECTION_COALESCE_IDLE_MS, now);
+  const rxTraceIdleTimer: CoalesceIdleTimer = { current: undefined };
+  const rxTraceNotes: string[] = [];
   let identity: Ax25Call | undefined;
   let clock = now();
   let retryTimer: ReturnType<typeof setInterval> | undefined;
@@ -265,7 +275,67 @@ export function createAprsHostSession(options?: {
     }
   }
 
+  function rxTraceNoteLabel(): string {
+    return rxTraceNotes.join(', ');
+  }
+
+  function rememberRxTraceNote(note: string): void {
+    if (!note || rxTraceNotes.includes(note)) {
+      return;
+    }
+
+    rxTraceNotes.push(note);
+  }
+
+  function flushCoalescedRxTrace(): boolean {
+    clearCoalesceIdleTimer(rxTraceIdleTimer);
+    const pending = rxTraceCoalesce.flushPending();
+
+    if (!pending || pending.data.length === 0) {
+      return false;
+    }
+
+    traceDropped += pushTraceLine(
+      trace,
+      makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNoteLabel()),
+    );
+    rxTraceNotes.length = 0;
+    return true;
+  }
+
+  function scheduleRxTraceIdleCommit(): void {
+    if (!rxTraceCoalesce.peekPending()) {
+      clearCoalesceIdleTimer(rxTraceIdleTimer);
+      return;
+    }
+
+    armCoalesceIdleTimer(SERIAL_DIRECTION_COALESCE_IDLE_MS, () => {
+      if (flushCoalescedRxTrace()) {
+        publish();
+      }
+    }, rxTraceIdleTimer);
+  }
+
   function record(direction: AprsTraceDirection, bytes: Uint8Array, note: string): void {
+    if (direction === 'rx' && bytes.length > 0) {
+      const flushed = rxTraceCoalesce.append('RECV', bytes);
+
+      for (const chunk of flushed) {
+        clearCoalesceIdleTimer(rxTraceIdleTimer);
+        traceDropped += pushTraceLine(
+          trace,
+          makeTraceLine(chunk.startedAtMs, 'rx', chunk.data, rxTraceNoteLabel()),
+        );
+        rxTraceNotes.length = 0;
+      }
+
+      rememberRxTraceNote(note);
+
+      scheduleRxTraceIdleCommit();
+      return;
+    }
+
+    flushCoalescedRxTrace();
     traceDropped += pushTraceLine(trace, makeTraceLine(now(), direction, bytes, note));
   }
 
@@ -1454,6 +1524,16 @@ export function createAprsHostSession(options?: {
 
   return {
     snapshot() {
+      const committed = trace.map((line) => ({ ...line }));
+      const pending = rxTraceCoalesce.peekPending();
+
+      if (pending) {
+        committed.push({
+          ...makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNoteLabel()),
+          provisional: true,
+        });
+      }
+
       return {
         connected: port?.isOpen === true,
         path,
@@ -1476,7 +1556,7 @@ export function createAprsHostSession(options?: {
         detectDetail,
         sawMonitorLine,
         hostFlow,
-        trace: trace.map((line) => ({ ...line })),
+        trace: committed,
         traceDropped,
         messages: messages.map((message) => ({ ...message })),
       };
@@ -1541,6 +1621,7 @@ export function createAprsHostSession(options?: {
     },
     async disconnect() {
       generation += 1;
+      flushCoalescedRxTrace();
       const hooks = [...disconnectHooks];
 
       for (const hook of hooks) {
@@ -1750,6 +1831,9 @@ export function createAprsHostSession(options?: {
       return writeEnterStep();
     },
     clearTrace() {
+      clearCoalesceIdleTimer(rxTraceIdleTimer);
+      rxTraceCoalesce.clear();
+      rxTraceNotes.length = 0;
       trace.splice(0, trace.length);
       traceDropped = 0;
       publish();

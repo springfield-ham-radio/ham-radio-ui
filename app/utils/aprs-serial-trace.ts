@@ -24,6 +24,8 @@ export interface AprsTraceLine {
   hex: string;
   text: string;
   note: string;
+  /** Uncommitted coalesced RX shown in snapshot() only. */
+  provisional?: boolean;
 }
 
 export function escapeSerialText(bytes: Uint8Array): string {

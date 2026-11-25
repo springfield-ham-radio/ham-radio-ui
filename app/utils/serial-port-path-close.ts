@@ -2,11 +2,17 @@ const pathCloseInflight = new Map<string, Promise<void>>();
 
 /**
  * Track an in-flight close for a serial path so the next open can wait for it.
+ * Multiple closes on the same path are chained; the waiter does not proceed until
+ * every close that started has settled.
  */
 export function trackSerialPathClose(path: string, promise: Promise<void>): void {
-  pathCloseInflight.set(path, promise);
-  void promise.finally(() => {
-    if (pathCloseInflight.get(path) === promise) {
+  const prior = pathCloseInflight.get(path);
+  const combined = (prior ? prior.catch(() => undefined).then(() => promise) : promise).catch(
+    () => undefined,
+  );
+  pathCloseInflight.set(path, combined);
+  void combined.finally(() => {
+    if (pathCloseInflight.get(path) === combined) {
       pathCloseInflight.delete(path);
     }
   });

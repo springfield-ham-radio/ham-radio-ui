@@ -14,13 +14,29 @@ let openFailUntilAttempt = 0;
 let openAttempt = 0;
 let startupReads: Uint8Array[] = [];
 const portCallOrder: string[] = [];
+let unwatchDelayMs = 0;
+let capturedWatchHandlers:
+  | {
+      onData: (incoming: unknown) => void;
+      onError: (message: string) => void;
+      onDisconnect: (reason: string) => void;
+    }
+  | undefined;
+let capturedWatchOptions: Record<string, unknown> | undefined;
+const forceCloseCalls: string[] = [];
 
 class MockTauriSerialPort {
   isOpen = false;
-  options: { path: string; baudRate: number };
+  options: {
+    path: string;
+    baudRate: number;
+    size?: number;
+    serialDataFlushIntervalMs?: number;
+    timeout?: number;
+  };
 
-  constructor(path = '/dev/test', baudRate = 9600) {
-    this.options = { path, baudRate };
+  constructor(options: { path: string; baudRate: number; size?: number; serialDataFlushIntervalMs?: number; timeout?: number }) {
+    this.options = { ...options };
   }
 
   open = vi.fn(async () => {
@@ -37,9 +53,19 @@ class MockTauriSerialPort {
   });
   writeDataTerminalReady = vi.fn(async () => undefined);
   writeRequestToSend = vi.fn(async () => undefined);
-  watch = vi.fn(async () => {
+  watch = vi.fn(async (handlers: typeof capturedWatchHandlers, options?: Record<string, unknown>) => {
     portCallOrder.push('watch');
-    return { unwatch: vi.fn(async () => undefined) };
+    capturedWatchHandlers = handlers;
+    capturedWatchOptions = options;
+    return {
+      unwatch: vi.fn(async () => {
+        if (unwatchDelayMs > 0) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, unwatchDelayMs);
+          });
+        }
+      }),
+    };
   });
   readBinary = vi.fn(async () => {
     portCallOrder.push('read');
@@ -70,8 +96,14 @@ vi.mock('tauri-plugin-serialplugin-api', () => ({
   Parity: { Odd: 'odd', Even: 'even', None: 'none' },
   StopBits: { One: 1, Two: 2 },
   SerialPort: Object.assign(
-    vi.fn(function MockSerialPort(options: { path: string; baudRate: number }) {
-      const instance = new MockTauriSerialPort(options.path, options.baudRate);
+    vi.fn(function MockSerialPort(options: {
+      path: string;
+      baudRate: number;
+      size?: number;
+      serialDataFlushIntervalMs?: number;
+      timeout?: number;
+    }) {
+      const instance = new MockTauriSerialPort(options);
       tauriInstances.push(instance);
       return instance;
     }),
@@ -79,6 +111,9 @@ vi.mock('tauri-plugin-serialplugin-api', () => ({
       available_ports: vi.fn(async () =>
         Object.fromEntries(listedPorts.map((path) => [path, 'USB Serial'])),
       ),
+      forceClose: vi.fn(async (path: string) => {
+        forceCloseCalls.push(path);
+      }),
     },
   ),
 }));
@@ -128,6 +163,10 @@ describe('TauriNodeSerialPort.update', () => {
     tauriInstances.length = 0;
     openCalls.length = 0;
     closeDelayMs = 0;
+    unwatchDelayMs = 0;
+    capturedWatchHandlers = undefined;
+    capturedWatchOptions = undefined;
+    forceCloseCalls.length = 0;
     resetSerialPathCloseTracking();
     resetSerialPortReconnectHooks();
   });
@@ -179,6 +218,10 @@ describe('ham-radio-driver setBaudRate with TauriNodeSerialPort', () => {
     tauriInstances.length = 0;
     openCalls.length = 0;
     closeDelayMs = 0;
+    unwatchDelayMs = 0;
+    capturedWatchHandlers = undefined;
+    capturedWatchOptions = undefined;
+    forceCloseCalls.length = 0;
     resetSerialPathCloseTracking();
     resetSerialPortReconnectHooks();
   });
@@ -245,6 +288,9 @@ describe('TauriNodeSerialPort path close ordering', () => {
     resetSerialPathCloseTracking();
     resetSerialPortReconnectHooks();
     closeDelayMs = 0;
+    unwatchDelayMs = 0;
+    capturedWatchHandlers = undefined;
+    forceCloseCalls.length = 0;
     listedPorts = ['/dev/cu.usbserial-test'];
     openFailUntilAttempt = 0;
     openAttempt = 0;
@@ -266,6 +312,48 @@ describe('TauriNodeSerialPort path close ordering', () => {
     await vi.advanceTimersByTimeAsync(closeDelayMs + 400);
     await vi.waitFor(() => expect(openCalls).toHaveLength(2));
     await vi.waitFor(() => expect(second.isOpen).toBe(true));
+  });
+
+  it('waits for two overlapping closes before opening the same path again', async () => {
+    const path = '/dev/cu.usbserial-test';
+    listedPorts = [path];
+    unwatchDelayMs = 50;
+
+    const first = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(first.isOpen).toBe(true));
+
+    first.close();
+    first.close();
+    const second = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(openCalls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(unwatchDelayMs + closeDelayMs + 400);
+    await vi.waitFor(() => expect(openCalls).toHaveLength(2));
+    await vi.waitFor(() => expect(second.isOpen).toBe(true));
+  });
+
+  it('waits for disconnect teardown before reopening the path', async () => {
+    const path = '/dev/cu.usbserial-test';
+    listedPorts = [path];
+
+    const first = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(first.isOpen).toBe(true));
+    const tauri = tauriInstances[0];
+    tauri?.writeDataTerminalReady.mockClear();
+
+    capturedWatchHandlers?.onDisconnect('CDC dropped');
+    await Promise.resolve();
+
+    const second = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(openCalls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(closeDelayMs + 200);
+    await vi.waitFor(() => expect(openCalls).toHaveLength(2));
+    expect(tauri?.writeDataTerminalReady).not.toHaveBeenCalled();
   });
 
   it('waits for the port to reappear after a programming read drops the CDC device', async () => {
@@ -446,5 +534,143 @@ describe('TauriNodeSerialPort host startup capture', () => {
     await expect(port.writeCommitted(Uint8Array.of(1, 2, 3, 4))).rejects.toThrow('accepted 3 of 4');
     tauri.writeBinary.mockRejectedValueOnce(new Error('serial port lock timeout after 250 ms'));
     await expect(port.writeCommitted(Uint8Array.of(1))).rejects.toThrow('lock timeout');
+  });
+});
+
+describe('TauriNodeSerialPort watch flush options', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    tauriInstances.length = 0;
+    capturedWatchOptions = undefined;
+    resetSerialPathCloseTracking();
+    resetSerialPortReconnectHooks();
+  });
+
+  it('requests size 261 and a 1 ms flush on the constructor and watch()', async () => {
+    const { tauri } = await openAdapterPort({ dtr: true, rts: true });
+
+    expect(tauri.options.size).toBe(261);
+    expect(tauri.options.serialDataFlushIntervalMs).toBe(1);
+    expect(tauri.options.timeout).toBeUndefined();
+    expect(capturedWatchOptions).toEqual({
+      decode: false,
+      timeout: 1,
+      serialDataFlushIntervalMs: 1,
+      size: 261,
+    });
+  });
+
+  it('passes the same watch options when retainIncoming is true', async () => {
+    tauriInstances.length = 0;
+    listedPorts = ['/dev/cu.pg5g'];
+    const port = new TauriNodeSerialPort({
+      path: '/dev/cu.pg5g',
+      baudRate: 9600,
+      dtr: false,
+      rts: false,
+      retainIncoming: true,
+    });
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+
+    expect(capturedWatchOptions).toEqual({
+      decode: false,
+      timeout: 1,
+      serialDataFlushIntervalMs: 1,
+      size: 261,
+    });
+  });
+});
+
+describe('TauriNodeSerialPort disconnect close tracking', () => {
+  beforeEach(() => {
+    resetSerialPathCloseTracking();
+    resetSerialPortReconnectHooks();
+    vi.useFakeTimers();
+    tauriInstances.length = 0;
+    openCalls.length = 0;
+    openAttempt = 0;
+    listedPorts = ['/dev/cu.usbserial-test'];
+    closeDelayMs = 50;
+    forceCloseCalls.length = 0;
+    capturedWatchHandlers = undefined;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    forceCloseCalls.length = 0;
+    resetSerialPathCloseTracking();
+    resetSerialPortReconnectHooks();
+  });
+
+  it('tracks disconnect close before the error event so a same-turn reopen waits', async () => {
+    const path = '/dev/cu.usbserial-test';
+    const first = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(first.isOpen).toBe(true));
+
+    let openedDuringError = false;
+    first.on('error', () => {
+      openedDuringError = true;
+      void new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    });
+
+    capturedWatchHandlers?.onDisconnect('CDC dropped');
+    expect(openedDuringError).toBe(true);
+    expect(openCalls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(closeDelayMs + 200);
+    await vi.waitFor(() => expect(openCalls).toHaveLength(2));
+    expect(forceCloseCalls).toEqual([]);
+  });
+
+  it('reuses an in-flight disconnect close when error calls close during emit', async () => {
+    const path = '/dev/cu.usbserial-test';
+    const port = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+    const tauri = tauriInstances[0];
+    let closeCallsDuringError = 0;
+
+    port.on('error', () => {
+      closeCallsDuringError += 1;
+      port.close();
+    });
+
+    capturedWatchHandlers?.onDisconnect('device lost');
+    expect(closeCallsDuringError).toBe(1);
+
+    await vi.waitFor(() => expect(tauri?.close).toHaveBeenCalledTimes(1));
+    expect(forceCloseCalls).toEqual([]);
+  });
+});
+
+describe('TauriNodeSerialPort native close fallback', () => {
+  beforeEach(() => {
+    resetSerialPathCloseTracking();
+    resetSerialPortReconnectHooks();
+    vi.useFakeTimers();
+    tauriInstances.length = 0;
+    openCalls.length = 0;
+    openAttempt = 0;
+    listedPorts = ['/dev/test'];
+    closeDelayMs = 0;
+    capturedWatchHandlers = undefined;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    forceCloseCalls.length = 0;
+    resetSerialPathCloseTracking();
+  });
+
+  it('calls forceClose when native close rejects', async () => {
+    const path = '/dev/test';
+    const port = new TauriNodeSerialPort({ path, baudRate: 9600, dtr: true, rts: false });
+    await vi.waitFor(() => expect(port.isOpen).toBe(true));
+
+    const tauri = tauriInstances[0];
+    tauri?.close.mockRejectedValueOnce(new Error('close failed'));
+
+    port.close();
+    await vi.waitFor(() => expect(forceCloseCalls).toEqual([path]));
   });
 });

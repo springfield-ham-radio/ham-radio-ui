@@ -25,7 +25,7 @@ import {
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
 import { channelTableTbodyFromRoot } from '~/utils/channel-table-sortable';
-import { snifferPacketsFromSerialLog } from '~/utils/sniffer-capture';
+import { serialDebugPacketsWhenActive } from '~/utils/serial-debug-packets';
 import { privilegeValue } from '~/utils/license-people';
 import {
   buildRadioPrintDocument,
@@ -1033,7 +1033,9 @@ const hexMemory = computed(() => {
   };
 });
 
-const debugPackets = computed(() => snifferPacketsFromSerialLog(serialLog.value?.log));
+const debugPackets = computed(() =>
+  serialDebugPacketsWhenActive(activeTab.value === 'debug', serialLog.value?.log),
+);
 
 const debugSummary = computed(() => {
   if (!serialLog.value) {
