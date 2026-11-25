@@ -7,7 +7,9 @@ const pathCloseInflight = new Map<string, Promise<void>>();
  */
 export function trackSerialPathClose(path: string, promise: Promise<void>): void {
   const prior = pathCloseInflight.get(path);
-  const combined = prior ? prior.then(() => promise) : promise;
+  const combined = (prior ? prior.catch(() => undefined).then(() => promise) : promise).catch(
+    () => undefined,
+  );
   pathCloseInflight.set(path, combined);
   void combined.finally(() => {
     if (pathCloseInflight.get(path) === combined) {

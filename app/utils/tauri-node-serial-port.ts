@@ -182,6 +182,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   private discardRx = false;
   private readonly retainIncoming: boolean;
   private openGeneration = 0;
+  private closingPromise: Promise<void> | undefined;
 
   constructor(options: {
     path: string;
@@ -300,8 +301,7 @@ export class TauriNodeSerialPort extends EventEmitter {
   }
 
   close(callback?: WriteCallback): void {
-    const closing = this.closePort();
-    trackSerialPathClose(this.path, closing);
+    const closing = this.startClose();
     void closing
       .then(() => callback?.(null))
       .catch((error: unknown) => {
@@ -474,17 +474,25 @@ export class TauriNodeSerialPort extends EventEmitter {
     this.watchHandle = undefined;
     this.unpipe();
 
-    if (!this.isOpen) {
+    if (!this.isOpen && !this.closingPromise) {
       return;
     }
 
     this.isOpen = false;
+    this.startClose({ omitControlLines: true });
     this.emit('error', new Error(reason || 'Serial port disconnected'));
+  }
 
-    queueMicrotask(() => {
-      const closing = this.closePort({ omitControlLines: true });
-      trackSerialPathClose(this.path, closing);
+  private startClose(options?: { omitControlLines?: boolean }): Promise<void> {
+    if (this.closingPromise) {
+      return this.closingPromise;
+    }
+
+    this.closingPromise = this.closePort(options).finally(() => {
+      this.closingPromise = undefined;
     });
+    trackSerialPathClose(this.path, this.closingPromise);
+    return this.closingPromise;
   }
 
   private async closePort(options?: { omitControlLines?: boolean }): Promise<void> {

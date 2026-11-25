@@ -36,4 +36,21 @@ describe('serial-port-path-close', () => {
     await waiter;
     expect(settled).toBe(true);
   });
+
+  it('continues the chain when an earlier close rejects', async () => {
+    resetSerialPathCloseTracking();
+    const path = '/dev/cu.reject';
+
+    trackSerialPathClose(path, Promise.reject(new Error('close failed')));
+
+    let resolveSecond!: () => void;
+    const second = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    trackSerialPathClose(path, second);
+
+    const waiter = waitForSerialPathClose(path);
+    resolveSecond();
+    await expect(waiter).resolves.toBeUndefined();
+  });
 });

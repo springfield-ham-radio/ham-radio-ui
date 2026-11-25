@@ -21,6 +21,10 @@ import {
   type AprsTraceDirection,
   type AprsTraceLine,
 } from '~/utils/aprs-serial-trace';
+import {
+  DirectionCoalesceBuffer,
+  SERIAL_DIRECTION_COALESCE_IDLE_MS,
+} from '~/utils/serial-direction-coalesce';
 
 const INBOX_CAP = 200;
 const OUTBOX_CAP = 50;
@@ -255,6 +259,8 @@ export function createAprsHostSession(options?: {
   let openingBuffer = false;
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
+  const rxTraceCoalesce = new DirectionCoalesceBuffer(SERIAL_DIRECTION_COALESCE_IDLE_MS, now);
+  let rxTraceNote = '';
   let identity: Ax25Call | undefined;
   let clock = now();
   let retryTimer: ReturnType<typeof setInterval> | undefined;
@@ -265,7 +271,37 @@ export function createAprsHostSession(options?: {
     }
   }
 
+  function flushCoalescedRxTrace(): void {
+    const pending = rxTraceCoalesce.flushPending();
+
+    if (!pending || pending.data.length === 0) {
+      return;
+    }
+
+    traceDropped += pushTraceLine(
+      trace,
+      makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNote),
+    );
+    rxTraceNote = '';
+  }
+
   function record(direction: AprsTraceDirection, bytes: Uint8Array, note: string): void {
+    if (direction === 'rx' && bytes.length > 0) {
+      const flushed = rxTraceCoalesce.append('RECV', bytes);
+
+      for (const chunk of flushed) {
+        traceDropped += pushTraceLine(
+          trace,
+          makeTraceLine(chunk.startedAtMs, 'rx', chunk.data, rxTraceNote),
+        );
+        rxTraceNote = '';
+      }
+
+      rxTraceNote = note;
+      return;
+    }
+
+    flushCoalescedRxTrace();
     traceDropped += pushTraceLine(trace, makeTraceLine(now(), direction, bytes, note));
   }
 
@@ -1454,6 +1490,7 @@ export function createAprsHostSession(options?: {
 
   return {
     snapshot() {
+      flushCoalescedRxTrace();
       return {
         connected: port?.isOpen === true,
         path,

@@ -56,6 +56,28 @@ describe('createCatSerialLog', () => {
     expect(log.snapshot().entries[0]?.description).toBe('FO 0\\r');
   });
 
+  it('should coalesce consecutive same-direction chunks before flushing', () => {
+    const flushed: number[] = [];
+    const log = createCatSerialLog(1_000, {
+      onFlushed: () => flushed.push(log.snapshot({ commitPending: false }).metadata.totalEntries),
+    });
+
+    log.append('RECV', Uint8Array.of(0x3f));
+    log.append('RECV', Uint8Array.of(0x0d));
+    expect(flushed).toEqual([]);
+
+    log.append('SEND', Uint8Array.of(0x0d));
+    const snapshot = log.snapshot();
+
+    expect(snapshot.metadata.totalEntries).toBe(2);
+    expect(snapshot.entries[0]).toMatchObject({
+      direction: 'RECV',
+      description: '?\\r',
+      data: [0x3f, 0x0d],
+    });
+    expect(flushed).toEqual([1, 2]);
+  });
+
   it('should drop stored frames when cleared', () => {
     const log = createCatSerialLog();
     log.append('SEND', Uint8Array.from(Buffer.from('ID\r', 'ascii')));

@@ -780,7 +780,8 @@ describe('APRS host session', () => {
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).toContain('FIXTURE, not from the radio');
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).not.toContain('<script>');
 
-    const session = createD710HostSession();
+    let time = 0;
+    const session = createD710HostSession({ now: () => time });
     const chunks = Array.from({ length: APRS_TRACE_CAP + 5 }, (_, index) => Uint8Array.from([index & 0xff]));
     let listener: ((chunk: Uint8Array) => void) | undefined;
     const port = {
@@ -801,6 +802,7 @@ describe('APRS host session', () => {
 
     return session.connect('/dev/cu.pg5g', async () => port).then(() => {
       for (const chunk of chunks) {
+        time += 25;
         listener?.(chunk);
       }
 

@@ -1,3 +1,8 @@
+import {
+  DirectionCoalesceBuffer,
+  SERIAL_DIRECTION_COALESCE_IDLE_MS,
+} from '~/utils/serial-direction-coalesce';
+
 export interface CatSerialLogEntry {
   timestamp: string;
   elapsedMs: number;
@@ -18,10 +23,16 @@ export interface CatSerialLogSnapshot {
 
 export interface CatSerialLog {
   append(direction: 'SEND' | 'RECV', data: Uint8Array): void;
-  snapshot(): CatSerialLogSnapshot;
+  snapshot(options?: { commitPending?: boolean }): CatSerialLogSnapshot;
   setEnabled(enabled: boolean): void;
   isEnabled(): boolean;
   clear(): void;
+}
+
+export interface CreateCatSerialLogOptions {
+  /** Invoked after a coalesced entry is committed (not on every byte). */
+  onFlushed?: () => void;
+  coalesceIdleMs?: number;
 }
 
 /**
@@ -59,10 +70,29 @@ function formatElapsed(elapsedMs: number): string {
  *
  * Capture can be paused so a live CAT session does not grow without bound.
  */
-export function createCatSerialLog(startedAt = Date.now()): CatSerialLog {
+export function createCatSerialLog(
+  startedAt = Date.now(),
+  options?: CreateCatSerialLogOptions,
+): CatSerialLog {
   const startTime = new Date(startedAt).toISOString();
   const entries: CatSerialLogEntry[] = [];
   let enabled = true;
+  const coalesce = new DirectionCoalesceBuffer(
+    options?.coalesceIdleMs ?? SERIAL_DIRECTION_COALESCE_IDLE_MS,
+  );
+
+  function pushEntry(direction: 'SEND' | 'RECV', data: Uint8Array, entryStartedAt: number): void {
+    const bytes = Array.from(data);
+    const elapsedMs = entryStartedAt - startedAt;
+    entries.push({
+      timestamp: formatElapsed(elapsedMs),
+      elapsedMs,
+      direction,
+      data: bytes,
+      description: asciiPreviewFromBytes(bytes),
+    });
+    options?.onFlushed?.();
+  }
 
   return {
     append(direction: 'SEND' | 'RECV', data: Uint8Array): void {
@@ -70,17 +100,20 @@ export function createCatSerialLog(startedAt = Date.now()): CatSerialLog {
         return;
       }
 
-      const bytes = Array.from(data);
-      const elapsedMs = Date.now() - startedAt;
-      entries.push({
-        timestamp: formatElapsed(elapsedMs),
-        elapsedMs,
-        direction,
-        data: bytes,
-        description: asciiPreviewFromBytes(bytes),
-      });
+      const flushed = coalesce.append(direction, data);
+      for (const chunk of flushed) {
+        pushEntry(chunk.direction, chunk.data, chunk.startedAtMs);
+      }
     },
-    snapshot(): CatSerialLogSnapshot {
+    snapshot(options?: { commitPending?: boolean }): CatSerialLogSnapshot {
+      if (options?.commitPending !== false) {
+        const pending = coalesce.flushPending();
+        if (pending) {
+          pushEntry(pending.direction, pending.data, pending.startedAtMs);
+          coalesce.clear();
+        }
+      }
+
       return {
         metadata: {
           startTime,
@@ -99,6 +132,7 @@ export function createCatSerialLog(startedAt = Date.now()): CatSerialLog {
     },
     clear(): void {
       entries.length = 0;
+      coalesce.clear();
     },
   };
 }

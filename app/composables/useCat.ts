@@ -115,7 +115,22 @@ export function useCat() {
     error.value = null;
     failedConnectRadio.value = radio.id;
     failedConnectPort.value = path;
-    const traffic = createCatSerialLog();
+    const publishTraffic = (): void => {
+      if (!traffic.isEnabled()) {
+        return;
+      }
+
+      const snapshot = traffic.snapshot({ commitPending: false });
+      const live = liveRadios.value.find((item) => item.port === path);
+
+      if (live) {
+        patchLiveRadio(path, { serialLog: snapshot });
+      } else {
+        failedConnectLog.value = snapshot;
+      }
+    };
+
+    const traffic = createCatSerialLog(undefined, { onFlushed: publishTraffic });
     failedConnectLog.value = traffic.snapshot();
 
     let transport: CatTransport | undefined;
@@ -129,14 +144,6 @@ export function useCat() {
         }
 
         traffic.append(direction, data);
-        const snapshot = traffic.snapshot();
-        const live = liveRadios.value.find((item) => item.port === path);
-
-        if (live) {
-          patchLiveRadio(path, { serialLog: snapshot });
-        } else {
-          failedConnectLog.value = snapshot;
-        }
       });
       const nextSession = new KenwoodCatSession({
         transport,
