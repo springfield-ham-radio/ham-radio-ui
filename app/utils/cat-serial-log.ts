@@ -1,6 +1,9 @@
 import {
   DirectionCoalesceBuffer,
   SERIAL_DIRECTION_COALESCE_IDLE_MS,
+  armCoalesceIdleTimer,
+  clearCoalesceIdleTimer,
+  type CoalesceIdleTimer,
 } from '~/utils/serial-direction-coalesce';
 
 export interface CatSerialLogEntry {
@@ -24,6 +27,8 @@ export interface CatSerialLogSnapshot {
 export interface CatSerialLog {
   append(direction: 'SEND' | 'RECV', data: Uint8Array): void;
   snapshot(options?: { commitPending?: boolean }): CatSerialLogSnapshot;
+  /** Commit the open direction group and clear idle timers (e.g. on disconnect). */
+  finalize(): void;
   setEnabled(enabled: boolean): void;
   isEnabled(): boolean;
   clear(): void;
@@ -77,9 +82,9 @@ export function createCatSerialLog(
   const startTime = new Date(startedAt).toISOString();
   const entries: CatSerialLogEntry[] = [];
   let enabled = true;
-  const coalesce = new DirectionCoalesceBuffer(
-    options?.coalesceIdleMs ?? SERIAL_DIRECTION_COALESCE_IDLE_MS,
-  );
+  const idleMs = options?.coalesceIdleMs ?? SERIAL_DIRECTION_COALESCE_IDLE_MS;
+  const coalesce = new DirectionCoalesceBuffer(idleMs);
+  const idleTimer: CoalesceIdleTimer = { current: undefined };
 
   function pushEntry(direction: 'SEND' | 'RECV', data: Uint8Array, entryStartedAt: number): void {
     const bytes = Array.from(data);
@@ -94,6 +99,28 @@ export function createCatSerialLog(
     options?.onFlushed?.();
   }
 
+  function commitOpenGroup(): void {
+    const pending = coalesce.flushPending();
+    if (pending) {
+      pushEntry(pending.direction, pending.data, pending.startedAtMs);
+    }
+  }
+
+  function scheduleIdleCommit(): void {
+    if (!coalesce.peekPending()) {
+      clearCoalesceIdleTimer(idleTimer);
+      return;
+    }
+
+    armCoalesceIdleTimer(idleMs, () => {
+      if (!enabled) {
+        return;
+      }
+
+      commitOpenGroup();
+    }, idleTimer);
+  }
+
   return {
     append(direction: 'SEND' | 'RECV', data: Uint8Array): void {
       if (!enabled || data.length === 0) {
@@ -102,16 +129,16 @@ export function createCatSerialLog(
 
       const flushed = coalesce.append(direction, data);
       for (const chunk of flushed) {
+        clearCoalesceIdleTimer(idleTimer);
         pushEntry(chunk.direction, chunk.data, chunk.startedAtMs);
       }
+
+      scheduleIdleCommit();
     },
     snapshot(options?: { commitPending?: boolean }): CatSerialLogSnapshot {
       if (options?.commitPending !== false) {
-        const pending = coalesce.flushPending();
-        if (pending) {
-          pushEntry(pending.direction, pending.data, pending.startedAtMs);
-          coalesce.clear();
-        }
+        clearCoalesceIdleTimer(idleTimer);
+        commitOpenGroup();
       }
 
       return {
@@ -124,13 +151,21 @@ export function createCatSerialLog(
         entries: entries.map((entry) => ({ ...entry, data: [...entry.data] })),
       };
     },
+    finalize(): void {
+      clearCoalesceIdleTimer(idleTimer);
+      commitOpenGroup();
+    },
     setEnabled(nextEnabled: boolean): void {
       enabled = nextEnabled;
+      if (!enabled) {
+        clearCoalesceIdleTimer(idleTimer);
+      }
     },
     isEnabled(): boolean {
       return enabled;
     },
     clear(): void {
+      clearCoalesceIdleTimer(idleTimer);
       entries.length = 0;
       coalesce.clear();
     },

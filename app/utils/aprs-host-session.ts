@@ -24,6 +24,9 @@ import {
 import {
   DirectionCoalesceBuffer,
   SERIAL_DIRECTION_COALESCE_IDLE_MS,
+  armCoalesceIdleTimer,
+  clearCoalesceIdleTimer,
+  type CoalesceIdleTimer,
 } from '~/utils/serial-direction-coalesce';
 
 const INBOX_CAP = 200;
@@ -260,7 +263,8 @@ export function createAprsHostSession(options?: {
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   const rxTraceCoalesce = new DirectionCoalesceBuffer(SERIAL_DIRECTION_COALESCE_IDLE_MS, now);
-  let rxTraceNote = '';
+  const rxTraceIdleTimer: CoalesceIdleTimer = { current: undefined };
+  const rxTraceNotes: string[] = [];
   let identity: Ax25Call | undefined;
   let clock = now();
   let retryTimer: ReturnType<typeof setInterval> | undefined;
@@ -271,18 +275,45 @@ export function createAprsHostSession(options?: {
     }
   }
 
-  function flushCoalescedRxTrace(): void {
+  function rxTraceNoteLabel(): string {
+    return rxTraceNotes.join(', ');
+  }
+
+  function rememberRxTraceNote(note: string): void {
+    if (!note || rxTraceNotes.includes(note)) {
+      return;
+    }
+
+    rxTraceNotes.push(note);
+  }
+
+  function flushCoalescedRxTrace(): boolean {
+    clearCoalesceIdleTimer(rxTraceIdleTimer);
     const pending = rxTraceCoalesce.flushPending();
 
     if (!pending || pending.data.length === 0) {
-      return;
+      return false;
     }
 
     traceDropped += pushTraceLine(
       trace,
-      makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNote),
+      makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNoteLabel()),
     );
-    rxTraceNote = '';
+    rxTraceNotes.length = 0;
+    return true;
+  }
+
+  function scheduleRxTraceIdleCommit(): void {
+    if (!rxTraceCoalesce.peekPending()) {
+      clearCoalesceIdleTimer(rxTraceIdleTimer);
+      return;
+    }
+
+    armCoalesceIdleTimer(SERIAL_DIRECTION_COALESCE_IDLE_MS, () => {
+      if (flushCoalescedRxTrace()) {
+        publish();
+      }
+    }, rxTraceIdleTimer);
   }
 
   function record(direction: AprsTraceDirection, bytes: Uint8Array, note: string): void {
@@ -290,14 +321,17 @@ export function createAprsHostSession(options?: {
       const flushed = rxTraceCoalesce.append('RECV', bytes);
 
       for (const chunk of flushed) {
+        clearCoalesceIdleTimer(rxTraceIdleTimer);
         traceDropped += pushTraceLine(
           trace,
-          makeTraceLine(chunk.startedAtMs, 'rx', chunk.data, rxTraceNote),
+          makeTraceLine(chunk.startedAtMs, 'rx', chunk.data, rxTraceNoteLabel()),
         );
-        rxTraceNote = '';
+        rxTraceNotes.length = 0;
       }
 
-      rxTraceNote = note;
+      rememberRxTraceNote(note);
+
+      scheduleRxTraceIdleCommit();
       return;
     }
 
@@ -1490,7 +1524,16 @@ export function createAprsHostSession(options?: {
 
   return {
     snapshot() {
-      flushCoalescedRxTrace();
+      const committed = trace.map((line) => ({ ...line }));
+      const pending = rxTraceCoalesce.peekPending();
+
+      if (pending) {
+        committed.push({
+          ...makeTraceLine(pending.startedAtMs, 'rx', pending.data, rxTraceNoteLabel()),
+          provisional: true,
+        });
+      }
+
       return {
         connected: port?.isOpen === true,
         path,
@@ -1513,7 +1556,7 @@ export function createAprsHostSession(options?: {
         detectDetail,
         sawMonitorLine,
         hostFlow,
-        trace: trace.map((line) => ({ ...line })),
+        trace: committed,
         traceDropped,
         messages: messages.map((message) => ({ ...message })),
       };
@@ -1578,6 +1621,7 @@ export function createAprsHostSession(options?: {
     },
     async disconnect() {
       generation += 1;
+      flushCoalescedRxTrace();
       const hooks = [...disconnectHooks];
 
       for (const hook of hooks) {
@@ -1787,6 +1831,9 @@ export function createAprsHostSession(options?: {
       return writeEnterStep();
     },
     clearTrace() {
+      clearCoalesceIdleTimer(rxTraceIdleTimer);
+      rxTraceCoalesce.clear();
+      rxTraceNotes.length = 0;
       trace.splice(0, trace.length);
       traceDropped = 0;
       publish();

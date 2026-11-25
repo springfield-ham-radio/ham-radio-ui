@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonicalAx25Call, encodeAx25Ui } from '../../app/utils/aprs-ax25.ts';
 import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
 import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
@@ -69,6 +69,49 @@ async function confirmKiss(session: ReturnType<typeof createAprsHostSession>, fa
 }
 
 describe('APRS host session', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps coalesced rx provisional across snapshots until idle commits', async () => {
+    vi.useFakeTimers();
+    const fake = fakePort();
+    const session = createD710HostSession();
+    await session.connect('/dev/cu.test-coalesce', async () => fake.port);
+
+    fake.push(Uint8Array.of(0x41));
+    fake.push(Uint8Array.of(0x42));
+
+    const beforeIdle = session.snapshot();
+    expect(beforeIdle.trace.filter((line) => line.direction === 'rx' && !line.provisional)).toHaveLength(0);
+    const provisional = beforeIdle.trace.find((line) => line.provisional);
+    expect(provisional?.byteLength).toBe(2);
+
+    const again = session.snapshot();
+    expect(again.trace.filter((line) => line.direction === 'rx' && !line.provisional)).toHaveLength(0);
+    expect(again.trace.filter((line) => line.provisional)).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(20);
+    const afterIdle = session.snapshot();
+    expect(afterIdle.trace.filter((line) => line.direction === 'rx' && !line.provisional)).toHaveLength(1);
+    expect(afterIdle.trace.some((line) => line.provisional)).toBe(false);
+    expect(afterIdle.trace.find((line) => line.direction === 'rx')?.byteLength).toBe(2);
+  });
+
+  it('commits pending rx trace on disconnect', async () => {
+    const fake = fakePort();
+    const session = createD710HostSession();
+    await session.connect('/dev/cu.test-coalesce', async () => fake.port);
+    fake.push(Uint8Array.of(0x55));
+
+    await session.disconnect();
+    const snap = session.snapshot();
+    const rx = snap.trace.filter((line) => line.direction === 'rx' && !line.provisional);
+    expect(rx).toHaveLength(1);
+    expect(rx[0]?.byteLength).toBe(1);
+    expect(snap.trace.some((line) => line.provisional)).toBe(false);
+  });
+
   it('keeps the passive port without flow control and uses software flow for the host', () => {
     expect(aprsHoldPaths({ a: '/dev/monitor' }, { b: '/dev/host' })).toEqual(['/dev/monitor', '/dev/host']);
     expect(aprsSerialOpenOptions('/dev/cu.pg5g', 9600).flowControl).toBe('none');
@@ -780,6 +823,7 @@ describe('APRS host session', () => {
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).toContain('FIXTURE, not from the radio');
     expect(formatTrace(APRS_HOST_TRACE_FIXTURE)).not.toContain('<script>');
 
+    vi.useFakeTimers();
     let time = 0;
     const session = createD710HostSession({ now: () => time });
     const chunks = Array.from({ length: APRS_TRACE_CAP + 5 }, (_, index) => Uint8Array.from([index & 0xff]));
@@ -800,17 +844,22 @@ describe('APRS host session', () => {
       },
     };
 
-    return session.connect('/dev/cu.pg5g', async () => port).then(() => {
-      for (const chunk of chunks) {
-        time += 25;
-        listener?.(chunk);
-      }
+    return session.connect('/dev/cu.pg5g', async () => port).then(async () => {
+      try {
+        for (const chunk of chunks) {
+          time += 25;
+          listener?.(chunk);
+        }
 
-      const snap = session.snapshot();
-      expect(snap.trace.filter((line) => line.direction === 'rx')).toHaveLength(APRS_TRACE_CAP - 1);
-      expect(snap.traceDropped).toBe(8);
-      expect(snap.rxChunks).toBe(APRS_TRACE_CAP + 5);
-      expect(snap.rxBytes).toBe(APRS_TRACE_CAP + 5);
+        await vi.advanceTimersByTimeAsync(20);
+        const snap = session.snapshot();
+        expect(snap.trace.filter((line) => line.direction === 'rx' && !line.provisional)).toHaveLength(APRS_TRACE_CAP - 1);
+        expect(snap.traceDropped).toBe(8);
+        expect(snap.rxChunks).toBe(APRS_TRACE_CAP + 5);
+        expect(snap.rxBytes).toBe(APRS_TRACE_CAP + 5);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

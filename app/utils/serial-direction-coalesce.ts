@@ -50,6 +50,18 @@ export class DirectionCoalesceBuffer {
     return flushed;
   }
 
+  peekPending(): DirectionCoalesceFlush | undefined {
+    if (this.direction === null || this.buffer.length === 0) {
+      return undefined;
+    }
+
+    return {
+      direction: this.direction,
+      data: Uint8Array.from(this.buffer),
+      startedAtMs: this.startedAtMs,
+    };
+  }
+
   flushPending(): DirectionCoalesceFlush | undefined {
     if (this.direction === null || this.buffer.length === 0) {
       return undefined;
@@ -81,5 +93,31 @@ export class DirectionCoalesceBuffer {
     this.startedAtMs = 0;
     this.lastAtMs = 0;
     return result;
+  }
+}
+
+export interface CoalesceIdleTimer {
+  current: ReturnType<typeof setTimeout> | undefined;
+}
+
+export function armCoalesceIdleTimer(
+  idleMs: number,
+  onIdle: () => void,
+  timer: CoalesceIdleTimer,
+): void {
+  if (timer.current !== undefined) {
+    clearTimeout(timer.current);
+  }
+
+  timer.current = setTimeout(() => {
+    timer.current = undefined;
+    onIdle();
+  }, idleMs);
+}
+
+export function clearCoalesceIdleTimer(timer: CoalesceIdleTimer): void {
+  if (timer.current !== undefined) {
+    clearTimeout(timer.current);
+    timer.current = undefined;
   }
 }

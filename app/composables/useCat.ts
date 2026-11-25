@@ -214,6 +214,15 @@ export function useCat() {
     for (const path of ports) {
       stopPolling(path);
       const runtime = runtimes.get(path);
+      const live = liveRadios.value.find((radio) => radio.port === path);
+
+      if (runtime) {
+        runtime.traffic.finalize();
+        if (live) {
+          patchLiveRadio(path, { serialLog: runtime.traffic.snapshot() });
+        }
+      }
+
       runtimes.delete(path);
       liveRadios.value = liveRadios.value.filter((radio) => radio.port !== path);
 

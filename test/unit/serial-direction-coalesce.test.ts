@@ -18,6 +18,14 @@ describe('DirectionCoalesceBuffer', () => {
     });
   });
 
+  it('peeks without flushing', () => {
+    const buffer = new DirectionCoalesceBuffer(20);
+    buffer.append('RECV', Uint8Array.of(1, 2));
+    expect(buffer.peekPending()?.data).toEqual(Uint8Array.of(1, 2));
+    expect(buffer.flushPending()?.data).toEqual(Uint8Array.of(1, 2));
+    expect(buffer.peekPending()).toBeUndefined();
+  });
+
   it('flushes after an idle gap on the next append', () => {
     let clock = 0;
     const buffer = new DirectionCoalesceBuffer(10, () => clock);

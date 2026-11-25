@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { asciiPreviewFromBytes, createCatSerialLog } from '../../app/utils/cat-serial-log.ts';
 import { snifferPacketsFromSerialLog } from '../../app/utils/sniffer-capture.ts';
 
@@ -76,6 +76,35 @@ describe('createCatSerialLog', () => {
       data: [0x3f, 0x0d],
     });
     expect(flushed).toEqual([1, 2]);
+  });
+
+  it('should commit an open group after the idle gap', async () => {
+    vi.useFakeTimers();
+    const flushed: number[] = [];
+    const log = createCatSerialLog(1_000, {
+      coalesceIdleMs: 20,
+      onFlushed: () => flushed.push(1),
+    });
+
+    log.append('RECV', Uint8Array.of(0x3f));
+    log.append('RECV', Uint8Array.of(0x0d));
+    expect(log.snapshot({ commitPending: false }).entries).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(log.snapshot({ commitPending: false }).entries).toHaveLength(1);
+    expect(log.snapshot({ commitPending: false }).entries[0]?.data).toEqual([0x3f, 0x0d]);
+    expect(flushed).toEqual([1]);
+    vi.useRealTimers();
+  });
+
+  it('should commit the tail on finalize', () => {
+    const log = createCatSerialLog(1_000);
+    log.append('SEND', Uint8Array.of(0x49, 0x44));
+    expect(log.snapshot({ commitPending: false }).entries).toHaveLength(0);
+
+    log.finalize();
+    expect(log.snapshot({ commitPending: false }).entries).toHaveLength(1);
+    expect(log.snapshot({ commitPending: false }).entries[0]?.data).toEqual([0x49, 0x44]);
   });
 
   it('should drop stored frames when cleared', () => {
