@@ -1,6 +1,6 @@
 # Hex Dump
 
-The **Radio → Hex Dump** tab shows the loaded memory image next to the radio’s memory map. Use **Read** / **Write** on the Radio page to read or program a radio, or **Open** / **Save** for a memory file. Until a memory is loaded, the tab also offers **Read from Radio** and **Open Memory**.
+Enable **Radio Hex Dump tab** in Preferences → Developer to open **Radio → Hex Dump** on each saved radio. The tab shows the loaded memory image next to the radio’s memory map. Use **Read** / **Write** on the Radio page to read or program a radio, or **Open** / **Save** for a memory file.
 
 ## Layout
 

@@ -8,39 +8,11 @@ mod zoom;
 
 #[cfg(target_os = "macos")]
 use tauri::menu::{AboutMetadata, WINDOW_SUBMENU_ID};
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
+use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 use tauri_plugin_window_state::StateFlags;
-
-fn find_check_in_items<R: tauri::Runtime>(
-    items: &[MenuItemKind<R>],
-    id: &str,
-) -> Option<CheckMenuItem<R>> {
-    for item in items {
-        match item {
-            MenuItemKind::Check(check) if check.id().as_ref() == id => {
-                return Some(check.clone());
-            }
-            MenuItemKind::Submenu(submenu) => {
-                if let Ok(children) = submenu.items() {
-                    if let Some(found) = find_check_in_items(&children, id) {
-                        return Some(found);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    None
-}
-
-fn find_check_item<R: tauri::Runtime>(menu: &Menu<R>, id: &str) -> Option<CheckMenuItem<R>> {
-    let items = menu.items().ok()?;
-    find_check_in_items(&items, id)
-}
 
 fn find_menu_in_items<R: tauri::Runtime>(
     items: &[MenuItemKind<R>],
@@ -68,19 +40,6 @@ fn find_menu_in_items<R: tauri::Runtime>(
 fn find_menu_item<R: tauri::Runtime>(menu: &Menu<R>, id: &str) -> Option<MenuItem<R>> {
     let items = menu.items().ok()?;
     find_menu_in_items(&items, id)
-}
-
-fn emit_developer_mode(app: &tauri::AppHandle) {
-    let checked = app
-        .menu()
-        .as_ref()
-        .and_then(|menu| find_check_item(menu, "developer-mode"))
-        .and_then(|item| item.is_checked().ok())
-        .unwrap_or(false);
-
-    if let Err(error) = app.emit("developer-mode-changed", checked) {
-        log::error!("Failed to emit developer-mode-changed: {error}");
-    }
 }
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -198,25 +157,11 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
     let zoom_out = MenuItem::with_id(app, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
     let zoom_reset =
         MenuItem::with_id(app, "zoom-reset", "Zoom to 100%", true, Some("CmdOrCtrl+0"))?;
-    let developer_mode = CheckMenuItem::with_id(
-        app,
-        "developer-mode",
-        "Developer Mode",
-        true,
-        false,
-        None::<&str>,
-    )?;
     let view_menu = Submenu::with_items(
         app,
         "View",
         true,
-        &[
-            &zoom_in,
-            &zoom_out,
-            &zoom_reset,
-            &PredefinedMenuItem::separator(app)?,
-            &developer_mode,
-        ],
+        &[&zoom_in, &zoom_out, &zoom_reset],
     )?;
 
     #[cfg(target_os = "macos")]
@@ -319,16 +264,6 @@ fn emit_menu_event(app: &tauri::AppHandle, event_name: &str) {
     if let Err(error) = app.emit(event_name, ()) {
         log::error!("Failed to emit {event_name}: {error}");
     }
-}
-
-#[tauri::command]
-fn set_developer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let menu = app
-        .menu()
-        .ok_or_else(|| "Application menu is not available".to_string())?;
-    let item = find_check_item(&menu, "developer-mode")
-        .ok_or_else(|| "Developer Mode menu item is missing".to_string())?;
-    item.set_checked(enabled).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -704,7 +639,6 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
         )
         .manage(zoom::ZoomState::default())
         .invoke_handler(tauri::generate_handler![
-            set_developer_mode,
             set_radio_memory_menu_state,
             zoom::zoom_in_command,
             zoom::zoom_out_command,
@@ -760,7 +694,6 @@ CREATE INDEX idx_saved_channels_pack_channel_id ON saved_channels(pack_channel_i
             "edit-redo" => emit_menu_event(app, "edit-redo"),
             "undo-memory" => emit_menu_event(app, "undo-memory"),
             "redo-memory" => emit_menu_event(app, "redo-memory"),
-            "developer-mode" => emit_developer_mode(app),
             "zoom-in" => {
                 if let Err(error) = zoom::zoom_in(app) {
                     log::error!("Failed to zoom in: {error}");

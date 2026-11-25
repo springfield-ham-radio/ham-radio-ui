@@ -1,11 +1,11 @@
 <script setup lang="ts">
 useHead({ title: 'Driver' });
 
-const { enabled } = useDeveloperMode();
+const { panels } = useDeveloperPanels();
 const router = useRouter();
 
 watch(
-  enabled,
+  () => panels.value.driverDevelopment,
   (on) => {
     if (!on) {
       void router.replace('/');
@@ -16,5 +16,5 @@ watch(
 </script>
 
 <template>
-  <DriverEditor v-if="enabled" />
+  <DriverEditor v-if="panels.driverDevelopment" />
 </template>

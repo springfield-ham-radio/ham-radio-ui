@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDeveloperMode } from '../../app/utils/developer-mode.ts';
+import { parseDeveloperPanelFlag } from '../../app/utils/developer-panels.ts';
 import { compileDriverDraft } from '../../app/utils/driver-compile.ts';
 import { importDriverModule } from '../../app/utils/driver-import.ts';
 import {
@@ -13,12 +13,11 @@ import {
   exampleDriverDraft,
 } from '../../app/utils/driver-draft.ts';
 
-describe('developer mode', () => {
-  it('treats only the stored flag 1 as on', () => {
-    expect(parseDeveloperMode('1')).toBe(true);
-    expect(parseDeveloperMode('0')).toBe(false);
-    expect(parseDeveloperMode(null)).toBe(false);
-    expect(parseDeveloperMode('true')).toBe(false);
+describe('developer panels', () => {
+  it('treats only explicit JSON true as on', () => {
+    expect(parseDeveloperPanelFlag(true)).toBe(true);
+    expect(parseDeveloperPanelFlag(false)).toBe(false);
+    expect(parseDeveloperPanelFlag('1')).toBe(false);
   });
 });
 

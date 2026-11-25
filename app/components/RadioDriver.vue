@@ -9,7 +9,6 @@ const props = defineProps<{
   modelId?: string;
 }>();
 
-const { enabled: developerTools } = useDeveloperTools();
 const { configurations, activeRadioId } = useRadio();
 const toast = useToast();
 
@@ -18,12 +17,6 @@ const hasRadio = computed(() => Boolean(resolvedModelId.value));
 
 const driverTab = ref('read');
 const viewMode = ref<'diagram' | 'json'>('diagram');
-
-watch(developerTools, (on) => {
-  if (!on && driverTab.value === 'menu-capture') {
-    driverTab.value = 'read';
-  }
-});
 const copying = ref(false);
 
 const selectedConfig = computed(() => {
@@ -36,20 +29,13 @@ const selectedConfig = computed(() => {
   return configurations.value.find((config) => String(config.id.model) === modelId);
 });
 
-const driverItems = computed<TabsItem[]>(() => {
-  const tabs: TabsItem[] = [
-    { label: 'Read', icon: 'i-hambench-radio-read', slot: 'read' as const, value: 'read' },
-    { label: 'Write', icon: 'i-hambench-radio-write', slot: 'write' as const, value: 'write' },
-    { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
-    { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
-  ];
-
-  if (developerTools.value) {
-    tabs.push({ label: 'Menu capture', icon: 'i-lucide-waypoints', slot: 'menu-capture' as const, value: 'menu-capture' });
-  }
-
-  return tabs;
-});
+const driverItems = computed<TabsItem[]>(() => [
+  { label: 'Read', icon: 'i-hambench-radio-read', slot: 'read' as const, value: 'read' },
+  { label: 'Write', icon: 'i-hambench-radio-write', slot: 'write' as const, value: 'write' },
+  { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
+  { label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' },
+  { label: 'Menu capture', icon: 'i-lucide-waypoints', slot: 'menu-capture' as const, value: 'menu-capture' },
+]);
 
 const viewItems = computed<TabsItem[]>(() => [
   {
