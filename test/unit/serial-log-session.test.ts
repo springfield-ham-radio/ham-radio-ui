@@ -56,26 +56,27 @@ describe('snapshotFromDriverSerialLog', () => {
     expect(isReactive(session.serialLog!.log)).toBe(false);
   });
 
-  it('defers contents JSON until read and matches eager serialization', () => {
-    const stringifySpy = vi.spyOn(JSON, 'stringify');
-    stringifySpy.mockClear();
-
-    const snapshot = snapshotFromDriverSerialLog('import', radioId, '/dev/cu.test', log);
-    expect(snapshot).toBeDefined();
-
-    const callsBeforeContents = stringifySpy.mock.calls.length;
-    expect(Object.keys(snapshot as object)).not.toContain('contents');
-
+  it('defers contents JSON until read, caches it, and matches eager serialization', () => {
     const expected = serializeSerialLogFile({
       operation: 'import',
       radioId,
       serialPortPath: '/dev/cu.test',
       log,
     });
-    expect(snapshot!.contents).toBe(expected);
-    expect(stringifySpy.mock.calls.length).toBeGreaterThan(callsBeforeContents);
+    const stringifySpy = vi.spyOn(JSON, 'stringify');
+    stringifySpy.mockClear();
+
+    const snapshot = snapshotFromDriverSerialLog('import', radioId, '/dev/cu.test', log);
+    expect(snapshot).toBeDefined();
+    expect(stringifySpy).not.toHaveBeenCalled();
+    expect(Object.keys(snapshot as object)).not.toContain('contents');
 
     expect(snapshot!.contents).toBe(expected);
+    const callsAfterFirstRead = stringifySpy.mock.calls.length;
+    expect(callsAfterFirstRead).toBeGreaterThan(0);
+
+    expect(snapshot!.contents).toBe(expected);
+    expect(stringifySpy.mock.calls.length).toBe(callsAfterFirstRead);
     stringifySpy.mockRestore();
   });
 
@@ -147,14 +148,17 @@ describe('serialLogForProgressSave', () => {
     expect(backup).toBeDefined();
 
     const stringifySpy = vi.spyOn(JSON, 'stringify');
+    stringifySpy.mockClear();
     const forSave = serialLogForProgressSave(backup!, 'write');
     expect(forSave).not.toBe(backup);
     expect(forSave.fileName).toContain('-write-');
+    expect(isReactive(forSave)).toBe(false);
     const callsAfterRename = stringifySpy.mock.calls.length;
-    stringifySpy.mockClear();
     void forSave.contents;
-    expect(stringifySpy.mock.calls.length).toBeGreaterThan(0);
-    expect(stringifySpy.mock.calls.length).toBeGreaterThanOrEqual(callsAfterRename);
+    expect(stringifySpy.mock.calls.length).toBeGreaterThan(callsAfterRename);
+    const callsAfterContents = stringifySpy.mock.calls.length;
+    void forSave.contents;
+    expect(stringifySpy.mock.calls.length).toBe(callsAfterContents);
     stringifySpy.mockRestore();
   });
 });

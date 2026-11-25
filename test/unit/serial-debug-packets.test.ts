@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { serialDebugPacketsWhenActive } from '../../app/utils/serial-debug-packets.ts';
-import * as snifferCapture from '../../app/utils/sniffer-capture.ts';
 
 describe('serialDebugPacketsWhenActive', () => {
   const log = {
@@ -12,10 +11,16 @@ describe('serialDebugPacketsWhenActive', () => {
   };
 
   it('returns an empty list when the Debug tab is inactive', () => {
-    const spy = vi.spyOn(snifferCapture, 'snifferPacketsFromSerialLog');
-    expect(serialDebugPacketsWhenActive(false, log)).toEqual([]);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    let reads = 0;
+    const guarded = new Proxy(log, {
+      get(target, prop, receiver) {
+        reads += 1;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    expect(serialDebugPacketsWhenActive(false, guarded)).toEqual([]);
+    expect(reads).toBe(0);
   });
 
   it('forwards to snifferPacketsFromSerialLog when active', () => {
