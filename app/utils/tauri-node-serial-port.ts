@@ -22,12 +22,18 @@ type PipedDestination = { write: (chunk: Buffer) => unknown };
 type UpdateOptions = { baudRate?: number };
 
 /**
- * `tauri-plugin-serialplugin` coalesces RX into Channel events after this many
- * milliseconds (`watch` `serialDataFlushIntervalMs`). The plugin default is
- * 200 ms, which serializes every clone round-trip. 1 ms is the minimum we
- * request so replies reach the protocol parser as soon as the hub wakes.
+ * Batch coalescing window for `watch` (`serialDataFlushIntervalMs` / `timeout`).
+ * The plugin default is 20 ms; we request 1 ms.
  */
 const SERIAL_LISTENER_FLUSH_MS = 1;
+
+/**
+ * `WatchOptions.size` is both the hub read chunk and the flush threshold
+ * (`buffer.len() >= read_size`). The plugin default is 1024, so a 261-byte
+ * clone reply waits for the next hub poll. `1` flushes on the same `tick` that
+ * read the byte.
+ */
+const SERIAL_WATCH_READ_SIZE = 1;
 
 /**
  * Programming cables power the radio interface from DTR/RTS. The first Windows
@@ -223,6 +229,7 @@ export class TauriNodeSerialPort extends EventEmitter {
             ? FlowControl.Hardware
             : FlowControl.None,
       serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
+      size: SERIAL_WATCH_READ_SIZE,
     };
 
     this.tauriPort = new TauriSerialPort(serialOptions);
@@ -397,6 +404,7 @@ export class TauriNodeSerialPort extends EventEmitter {
           decode: false,
           timeout: SERIAL_LISTENER_FLUSH_MS,
           serialDataFlushIntervalMs: SERIAL_LISTENER_FLUSH_MS,
+          size: SERIAL_WATCH_READ_SIZE,
         },
       );
       if (!this.retainIncoming) {
@@ -472,9 +480,14 @@ export class TauriNodeSerialPort extends EventEmitter {
 
     this.isOpen = false;
     this.emit('error', new Error(reason || 'Serial port disconnected'));
+
+    queueMicrotask(() => {
+      const closing = this.closePort({ omitControlLines: true });
+      trackSerialPathClose(this.path, closing);
+    });
   }
 
-  private async closePort(): Promise<void> {
+  private async closePort(options?: { omitControlLines?: boolean }): Promise<void> {
     this.openGeneration += 1;
     this.discardRx = false;
     this.unpipe();
@@ -485,12 +498,20 @@ export class TauriNodeSerialPort extends EventEmitter {
       await handle.unwatch().catch(() => undefined);
     }
 
-    await this.tauriPort.writeDataTerminalReady(false).catch(() => undefined);
+    if (!options?.omitControlLines) {
+      await this.tauriPort.writeDataTerminalReady(false).catch(() => undefined);
 
-    if (!this.rtsManagedByDriver) {
-      await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+      if (!this.rtsManagedByDriver) {
+        await this.tauriPort.writeRequestToSend(false).catch(() => undefined);
+      }
     }
-    await this.tauriPort.close().catch(() => undefined);
+
+    try {
+      await this.tauriPort.close();
+    } catch {
+      await TauriSerialPort.forceClose(this.path).catch(() => undefined);
+    }
+
     this.isOpen = false;
   }
 }
