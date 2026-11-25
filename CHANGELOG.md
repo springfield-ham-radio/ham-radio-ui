@@ -1,3 +1,9 @@
+## [3.16.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.16.0...v3.16.1) (2026-11-25)
+
+### Bug Fixes
+
+* **serial:** keep clone logs out of Vue reactivity ([#240](https://github.com/springfield-ham-radio/ham-radio-ui/issues/240)) ([c2dc46c](https://github.com/springfield-ham-radio/ham-radio-ui/commit/c2dc46c8c6ff95bcda01a597e8b6acba8cad0940))
+
 ## [3.16.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.15.1...v3.16.0) (2026-11-25)
 
 ### Features
