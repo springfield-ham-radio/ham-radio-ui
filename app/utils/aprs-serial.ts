@@ -1,6 +1,6 @@
 import { TauriNodeSerialPort } from '~/utils/tauri-node-serial-port';
 import type { AprsBytePort } from '~/utils/aprs-session';
-import { aprsHostSerialOpenOptions, type AprsHostFlowControl } from '~/utils/aprs-serial-options';
+import { aprsHostSerialOpenOptions, type AprsHostFlowControl, type AprsHostSerialLines } from '~/utils/aprs-serial-options';
 
 const OPEN_TIMEOUT_MS = 5000;
 
@@ -96,14 +96,16 @@ export async function openAprsReceivePort(
  * Open the COM port for host KISS.
  *
  * The returned object can write. Callers must not write on connect.
- * Software and off keep RTS and DTR low. Hardware leaves RTS to the driver.
+ * Omitted `lines` leave RTS and DTR low. Modules may assert either line via `lines`.
+ * Hardware flow control leaves RTS to the driver.
  */
 export async function openAprsHostPort(
   path: string,
   baudRate: number,
   flowControl: AprsHostFlowControl = 'software',
+  lines?: AprsHostSerialLines,
 ): Promise<AprsBytePort & { write(bytes: Uint8Array): Promise<number> }> {
-  const options = aprsHostSerialOpenOptions(path, baudRate, flowControl);
+  const options = aprsHostSerialOpenOptions(path, baudRate, flowControl, lines);
   const port = new TauriNodeSerialPort({
     path: options.path,
     baudRate: options.baudRate,
@@ -111,8 +113,8 @@ export async function openAprsHostPort(
     stopBits: options.stopBits,
     parity: options.parity,
     flowControl: options.flowControl,
-    rts: false,
-    dtr: false,
+    rts: options.rts,
+    dtr: options.dtr,
     rtsManagedByDriver: options.rtsManagedByDriver,
     retainIncoming: true,
   });

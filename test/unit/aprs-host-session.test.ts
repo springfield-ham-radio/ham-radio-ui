@@ -129,6 +129,12 @@ describe('APRS host session', () => {
     expect(hardware.flowControl).toBe('hardware');
     expect(hardware.dtr).toBe(false);
     expect(hardware.rtsManagedByDriver).toBe(true);
+    expect(aprsHostSerialOpenOptions('/dev/cu.usbmodem0', 9600, 'none', { dtr: true, rts: true })).toMatchObject({
+      flowControl: 'none',
+      dtr: true,
+      rts: true,
+      rtsManagedByDriver: false,
+    });
     expect(aprsOpenKeepsIncoming('monitor')).toBe(false);
     expect(aprsOpenKeepsIncoming('host')).toBe(true);
   });
@@ -885,6 +891,7 @@ describe('APRS host session', () => {
   it('writes the module host procedure and not the TM-D710 enter sequence', async () => {
     const session = createAprsHostSession({
       host: {
+        entry: 'command',
         interrupt: Uint8Array.of(0x15),
         prompt: 'ok>',
         errorReply: 'ERR',
@@ -909,6 +916,7 @@ describe('APRS host session', () => {
 describe('host Connect detection', () => {
   function moduleLink(kissExit?: Uint8Array, promptNudge?: Uint8Array) {
     return {
+      entry: 'command' as const,
       interrupt: Uint8Array.of(0x15),
       prompt: 'ok>',
       errorReply: 'ERR',
@@ -1808,5 +1816,70 @@ describe('host Connect detection', () => {
     expect(recording.port.isOpen).toBe(false);
     expect(failing.snapshot().connected).toBe(false);
     expect(failing.snapshot().trace.some((line) => line.note.includes('KISS exit was not accepted'))).toBe(true);
+  });
+});
+
+describe('manual KISS entry', () => {
+  const exit = Uint8Array.of(0xc0, 0xff, 0xc0);
+
+  function manualLink(): import('../../app/utils/aprs-host-profile.ts').AprsHostLink {
+    return {
+      entry: 'manual',
+      waitMs: 5000,
+      listenMs: 3000,
+      kissExit: exit,
+      enter: [],
+    };
+  }
+
+  it('writes nothing on connect and waits for KISS', async () => {
+    let time = 1_000;
+    const session = createAprsHostSession({ now: () => time, host: manualLink() });
+    const fake = fakePort();
+    await session.connect('/dev/cu.usbmodem0', async () => fake.port, { flowControl: 'none' });
+    time += 12_000;
+    session.poll();
+    expect(fake.writes).toHaveLength(0);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('Nothing was sent');
+    expect(session.snapshot().kissConfirmed).toBe(false);
+  });
+
+  it('confirms KISS on a UI frame without writing on connect', async () => {
+    const session = createAprsHostSession({ host: manualLink() });
+    const fake = fakePort();
+    await session.connect('/dev/cu.usbmodem0', async () => fake.port);
+    expect(fake.writes).toHaveLength(0);
+    await confirmKiss(session, fake);
+    expect(session.snapshot().kissConfirmed).toBe(true);
+    expect(fake.writes).toHaveLength(0);
+  });
+
+  it('sends kissExit on disconnect even with no frame', async () => {
+    const session = createAprsHostSession({ host: manualLink() });
+    const fake = fakePort();
+    await session.connect('/dev/cu.usbmodem0', async () => fake.port);
+    await session.disconnect();
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]).toEqual(exit);
+    expect(fake.port.isOpen).toBe(false);
+  });
+
+  it('sends kissExit on a superseded manual open before closing the orphan port', async () => {
+    const session = createAprsHostSession({ host: manualLink() });
+    let resolveFirst!: (port: AprsHostBytePort) => void;
+    const firstOpen = new Promise<AprsHostBytePort>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const orphan = fakePort();
+    const superseding = fakePort();
+    const firstConnect = session.connect('/dev/orphan', () => firstOpen);
+    await session.connect('/dev/active', async () => superseding.port);
+    resolveFirst(orphan.port);
+    await firstConnect;
+    await settle();
+    expect(orphan.writes).toEqual([exit]);
+    expect(orphan.port.isOpen).toBe(false);
+    expect(superseding.port.isOpen).toBe(true);
   });
 });

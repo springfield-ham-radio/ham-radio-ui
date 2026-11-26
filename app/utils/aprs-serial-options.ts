@@ -65,14 +65,22 @@ export function aprsOpenKeepsIncoming(role: 'monitor' | 'host'): boolean {
   return role === 'host';
 }
 
+export interface AprsHostSerialLines {
+  dtr?: boolean;
+  rts?: boolean;
+}
+
 export function aprsHostSerialOpenOptions(
   path: string,
   baudRate: number,
   flowControl: AprsHostFlowControl = 'software',
+  lines?: AprsHostSerialLines,
 ): AprsHostSerialOpenOptions {
   return {
     ...aprsSerialOpenOptions(path, baudRate),
     flowControl,
+    dtr: lines?.dtr ?? false,
+    rts: lines?.rts ?? false,
     rtsManagedByDriver: flowControl === 'hardware',
   };
 }

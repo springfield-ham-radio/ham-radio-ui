@@ -27,14 +27,70 @@ describe('APRS receive capability', () => {
     });
   });
 
-  it('hides the tab when the module opts out or the block is not monitor-only', () => {
+  const d74KissAprs = {
+    mode: 'kiss',
+    baudRate: 9600,
+    baudRates: [9600],
+    host: {
+      entry: 'manual',
+      kissExit: [0xc0, 0xff, 0xc0],
+      enter: [],
+      flowControl: 'none',
+      dtr: 'asserted',
+      rts: 'asserted',
+      flows: ['none'],
+      defaultFlow: 'none',
+      flowHelp: 'KISS is binary. Flow control is off.',
+      setup: ['Turn KISS on at the radio before Connect.'],
+      recovery: ['Disconnect sends the KISS exit.'],
+    },
+  };
+
+  it('hides the tab when the module opts out or kiss has no host', () => {
     expect(aprsReceiveProfile({ model: 'kenwood-tm-d710a', config: { capabilities: { aprsReceive: false } } })).toBeUndefined();
     expect(
       aprsReceiveProfile({
-        model: 'kenwood-tm-d710a',
+        model: 'kenwood-th-d74',
         config: { capabilities: { aprsReceive: true }, aprs: { mode: 'kiss', baudRate: 9600, baudRates: [9600] } },
       }),
     ).toBeUndefined();
+    expect(
+      aprsReceiveProfile({
+        model: 'kenwood-th-d74',
+        config: {
+          capabilities: { aprsReceive: true },
+          aprs: { ...d74KissAprs, host: { ...d74KissAprs.host, flowControl: 'software' } },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      aprsReceiveProfile({
+        model: 'kenwood-th-d74',
+        config: {
+          capabilities: { aprsReceive: true },
+          aprs: { ...d74KissAprs, host: { entry: 'manual', kissExit: [0xc0, 0xff, 0xc0], interrupt: [3], setup: ['x'], recovery: ['y'] } },
+        },
+      })?.host,
+    ).toBeUndefined();
+  });
+
+  it('accepts kiss-only APRS with a manual host profile', () => {
+    const profile = aprsReceiveProfile({
+      model: 'kenwood-th-d74',
+      config: { capabilities: { aprsReceive: true }, aprs: d74KissAprs },
+    });
+
+    expect(profile).toMatchObject({
+      source: 'driver',
+      passive: false,
+      baudRate: 9600,
+    });
+    expect(profile?.host?.link.entry).toBe('manual');
+    expect(profile?.host?.link.kissExit).toEqual(Uint8Array.of(0xc0, 0xff, 0xc0));
+    expect(profile?.host?.flowControl).toBe('none');
+    expect(profile?.host?.dtr).toBe(true);
+    expect(profile?.host?.rts).toBe(true);
+    expect(profile?.host?.link.enter).toEqual([]);
   });
 
   it('falls back to a TM-D710 model until the module publishes the flag', () => {
@@ -43,6 +99,8 @@ describe('APRS receive capability', () => {
     expect(fallback?.help).toContain('929');
     expect(fallback?.monitorNote).toContain('604');
     expect(new TextDecoder().decode(fallback?.host?.link.interrupt ?? new Uint8Array())).toBe('\u0003\u0003\u0003');
+    expect(fallback?.host?.link.entry).toBe('command');
+    expect(fallback?.passive).toBe(true);
     expect(fallback?.host?.link.enter.map((step) => step.text)).toEqual(['KISS ON\r', 'RESTART\r']);
     expect(fallback?.host?.link.kissExit).toBeUndefined();
     expect(fallback?.host?.link.promptNudge).toBeUndefined();

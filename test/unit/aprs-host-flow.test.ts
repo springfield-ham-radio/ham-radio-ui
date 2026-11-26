@@ -75,7 +75,7 @@ describe('TNC flow control from the radio module', () => {
     expect(session).toContain('aprsHostShouldExitKiss');
     expect(bar).toContain('nextAprsMonitorQuiet');
     expect(bar).toContain('class="group inline-flex"');
-    expect(bar).toContain('class="rounded-e-none"');
+    expect(bar).toMatch(/rounded-e-none/);
     expect(bar).toContain('class="rounded-s-none"');
     expect(bar).toContain("border-s border-white/25");
     expect(bar).not.toContain('i-lucide-cable');

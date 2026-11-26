@@ -2,7 +2,7 @@ import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~
 import { containsAprsMonitorLine } from '~/utils/aprs-decode';
 import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
 import { aprsHostShouldExitKiss } from '~/utils/aprs-connection';
-import type { AprsHostLink } from '~/utils/aprs-host-profile';
+import { isAprsHostCommandLink, type AprsHostLink } from '~/utils/aprs-host-profile';
 import { createKissDecoderState, encodeKissData, pushKissBytes } from '~/utils/aprs-kiss';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
@@ -435,7 +435,7 @@ export function createAprsHostSession(options?: {
   }
 
   function promptSeen(bytes: Uint8Array): boolean {
-    return hostLink !== undefined && hasCommandPrompt(bytes, hostLink.prompt);
+    return isAprsHostCommandLink(hostLink) && hasCommandPrompt(bytes, hostLink.prompt);
   }
 
   function detectionOwnsWait(): boolean {
@@ -523,6 +523,16 @@ export function createAprsHostSession(options?: {
     clearMonitorLine();
     detectRx = rxBytes;
     detectStep = 'listen';
+
+    if (hostLink.entry === 'manual') {
+      detectPhase = 'waiting-traffic';
+      detectDetail = 'Listening for KISS frames. Nothing was sent.';
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+      record('note', new Uint8Array(), detectDetail);
+      publish();
+      return;
+    }
 
     if (!kissConfirmed && frames === 0 && promptSeen(sessionBytes)) {
       detectPhase = 'awaiting-prompt';
@@ -689,7 +699,7 @@ export function createAprsHostSession(options?: {
    * banner before that runs the same enter steps as a prompt in the open buffer.
    */
   function resumeUnconfirmedCommand(): void {
-    if (!hostLink || kissConfirmed || detectPhase === 'entering' || enterInFlight) {
+    if (!hostLink || hostLink.entry === 'manual' || kissConfirmed || detectPhase === 'entering' || enterInFlight) {
       return;
     }
 
@@ -720,6 +730,10 @@ export function createAprsHostSession(options?: {
   }
 
   function maybeStartEnter(): void {
+    if (!isAprsHostCommandLink(hostLink)) {
+      return;
+    }
+
     if (hostEnterRequested || commandPhase === 'restart-sent' || commandPhase === 'waiting-accept') {
       return;
     }
@@ -735,7 +749,7 @@ export function createAprsHostSession(options?: {
   }
 
   async function writeDetectInterrupt(): Promise<void> {
-    if (interruptTried || !hostLink) {
+    if (interruptTried || !isAprsHostCommandLink(hostLink)) {
       return;
     }
 
@@ -839,7 +853,7 @@ export function createAprsHostSession(options?: {
   async function expireDetect(): Promise<void> {
     releaseKissHold();
 
-    if (detectBusy || !hostLink || !port?.isOpen || !detectionOwnsWait()) {
+    if (detectBusy || !hostLink || hostLink.entry === 'manual' || !port?.isOpen || !detectionOwnsWait()) {
       return;
     }
 
@@ -1486,6 +1500,19 @@ export function createAprsHostSession(options?: {
     publish();
   };
 
+  /** Best-effort KISS exit on a port handle that is not yet (or no longer) the session port. */
+  async function writeManualKissExitOnHandle(handle: AprsHostBytePort, exit: Uint8Array): Promise<void> {
+    if (!handle.isOpen || !handle.write) {
+      return;
+    }
+
+    try {
+      await handle.write(exit);
+    } catch {
+      // Superseded opens still close when exit is rejected.
+    }
+  }
+
   /**
    * One declared KISS exit before the handle closes. Best effort: a missing
    * port or a rejected write is logged and does not stop the close.
@@ -1589,6 +1616,10 @@ export function createAprsHostSession(options?: {
         const opened = await openPort();
 
         if (current !== generation) {
+          if (hostLink?.entry === 'manual' && hostLink.kissExit) {
+            await writeManualKissExitOnHandle(opened, hostLink.kissExit);
+          }
+
           await opened.close();
           return;
         }
@@ -1728,7 +1759,7 @@ export function createAprsHostSession(options?: {
         return 'Listen is not open. Nothing was sent.';
       }
 
-      if (!hostLink) {
+      if (!isAprsHostCommandLink(hostLink)) {
         return 'This radio has no host command procedure. Nothing was sent.';
       }
 
@@ -1790,6 +1821,12 @@ export function createAprsHostSession(options?: {
         return 'This radio has no host command procedure. Nothing was sent.';
       }
 
+      if (hostLink.entry === 'manual') {
+        beginDetect();
+        publish();
+        return undefined;
+      }
+
       if (detectionOwnsWait() || commandActive || enterInFlight) {
         return 'Detection is already running. Nothing more was sent.';
       }
@@ -1819,7 +1856,7 @@ export function createAprsHostSession(options?: {
         return 'Listen is not open. Nothing was sent.';
       }
 
-      if (!hostLink) {
+      if (!isAprsHostCommandLink(hostLink)) {
         return 'This radio has no host command procedure. Nothing was sent.';
       }
 

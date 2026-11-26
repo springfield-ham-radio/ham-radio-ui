@@ -48,7 +48,9 @@ The TH-D74 shares one micro-USB CDC port for CAT, clone programming, and packet.
 4. Match **9600 8N1** with hardware **RTS/CTS**, as the module’s `serialConfig` declares. Close other programs using that COM port.
 5. Reinstall the Kenwood module after a driver update so the catalog picks up the `bandIndexed` `cat` block.
 
-Disconnect CAT before **Read** or **Write** on the same port. HamBench locks the port while CAT is connected.
+Disconnect CAT before **Read** or **Write** on the same port. HamBench locks the port while CAT is connected and while an APRS host session holds it.
+
+If **Connect** times out waiting for `ID`, or **Read** / **Write** hang after the clone handshake, the radio may still be in KISS mode (PC commands are ignored). Turn KISS off on the radio, or open the APRS tab, **Connect (Host)**, then **Disconnect** so HamBench sends the module KISS exit once.
 
 On **Connect**, HamBench sends `ID` (no wake CR on the D74), then polls each band with `BC`, `FQ n`, `MD n`, `PC n`, and `VM n`. A good **Debug** trace looks like:
 

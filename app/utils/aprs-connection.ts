@@ -1,4 +1,6 @@
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '~/utils/aprs-d710-host';
+import type { AprsHostEntry } from '~/utils/aprs-host-profile';
 
 /**
  * One APRS COM connection for Stations, Map, Messages, Packet, and Raw log.
@@ -423,6 +425,59 @@ export function aprsStatusBadge(input: {
       : 'warning';
 
   return { label, color, tooltip };
+}
+
+/** Appended to CAT or clone handshake failures on kiss-only radios. */
+export const APRS_KISS_STILL_ON_HINT =
+  'The radio may still be in KISS mode. PC commands are not accepted until KISS is off. Turn KISS off on the radio, or Connect and Disconnect on the APRS tab to send the KISS exit once.';
+
+export function aprsConnectionModeMenuVisible(passive: boolean | undefined): boolean {
+  return passive !== false;
+}
+
+export function aprsHostRetryDetectionVisible(entry: AprsHostEntry | undefined): boolean {
+  return entry !== 'manual';
+}
+
+export function aprsHostEntryGuidance(input: {
+  entryHint?: string;
+  setup?: readonly string[];
+}): string | undefined {
+  if (input.entryHint) {
+    return input.entryHint;
+  }
+
+  if (input.setup && input.setup.length > 0) {
+    return input.setup.join(' ');
+  }
+
+  return undefined;
+}
+
+/**
+ * Extra sentence for handshake timeouts when the module declares kiss-only APRS.
+ */
+export function aprsKissOnHandshakeSupplement(config: unknown, cause: unknown): string | undefined {
+  const profile = aprsReceiveProfile({ config });
+
+  if (profile?.passive !== false) {
+    return undefined;
+  }
+
+  const message = cause instanceof Error ? cause.message : String(cause);
+
+  if (!/timed out|timeout|not reply/i.test(message)) {
+    return undefined;
+  }
+
+  return APRS_KISS_STILL_ON_HINT;
+}
+
+/** Merges {@link aprsKissOnHandshakeSupplement} into a radio read/write failure summary when config is set. */
+export function appendAprsKissHandshakeSupplement(summary: string, config: unknown, cause: unknown): string {
+  const supplement = aprsKissOnHandshakeSupplement(config, cause);
+
+  return supplement ? `${summary} ${supplement}` : summary;
 }
 
 export function aprsDisconnectAction(input: { passiveOpen: boolean; hostOpen: boolean }): AprsPortAction {
