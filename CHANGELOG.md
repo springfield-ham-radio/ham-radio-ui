@@ -1,3 +1,9 @@
+## [3.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.17.0...v3.18.0) (2026-11-26)
+
+### Features
+
+* **aprs:** default KISS-only APRS port to the CAT port ([#242](https://github.com/springfield-ham-radio/ham-radio-ui/issues/242)) ([2ae0818](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2ae0818332843a0d8534945286f75613829b7b2d))
+
 ## [3.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.16.1...v3.17.0) (2026-11-26)
 
 ### Features
