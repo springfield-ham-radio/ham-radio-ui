@@ -1,3 +1,9 @@
+## [3.17.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.16.1...v3.17.0) (2026-11-26)
+
+### Features
+
+* **aprs:** KISS-only host profile for keypad-entered KISS radios ([95675af](https://github.com/springfield-ham-radio/ham-radio-ui/commit/95675af03b3066c30f43cdea88002787b7ef8683))
+
 ## [3.16.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.16.0...v3.16.1) (2026-11-25)
 
 ### Bug Fixes
