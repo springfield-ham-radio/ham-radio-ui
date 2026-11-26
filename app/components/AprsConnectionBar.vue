@@ -8,6 +8,7 @@ import {
   aprsConnectLabel,
   aprsConnectionModeMenuVisible,
   aprsConnectionView,
+  effectiveAprsSerialPort,
   aprsDisconnectAction,
   aprsHostAprsModeHint,
   aprsHostEntryGuidance,
@@ -154,9 +155,19 @@ const statusBadge = computed(() => aprsStatusBadge({
   tnc: tncInput.value,
 }));
 
-const aprsPort = computed(() => savedRadio.value?.aprsSerialPort);
+const aprsSerialPort = computed(() => effectiveAprsSerialPort({
+  profile: profile.value,
+  aprsSerialPort: savedRadio.value?.aprsSerialPort,
+  catSerialPort: savedRadio.value?.serialPort,
+}));
+const aprsPort = computed(() => aprsSerialPort.value.path);
 const aprsBaud = computed(() => savedRadio.value?.aprsBaudRate ?? profile.value?.baudRate ?? 9600);
 const portLabel = computed(() => (aprsPort.value ? serialPortLabel(aprsPort.value, readSerialPortSettings().portAliases) : undefined));
+const aprsPortDefaultNote = computed(() => (
+  aprsSerialPort.value.source === 'cat' && !kissListening.value && !isConnected.value
+    ? ' Uses the saved memory/CAT port.'
+    : ''
+));
 const portBusy = computed(() => {
   const path = aprsPort.value;
   const cardId = props.cardId;
@@ -238,7 +249,7 @@ const statusLine = computed(() => {
     ? ` ${serialEventHeadline(hostSnapshot.value.detectDetail)}`
     : '';
 
-  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${flow}${detection}`;
+  return `${connection.value.detail} ${where} at ${aprsBaud.value} baud.${aprsPortDefaultNote.value}${flow}${detection}`;
 });
 
 if (props.cardId) {

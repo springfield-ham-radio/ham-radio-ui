@@ -5,6 +5,8 @@ import {
   aprsConnectAction,
   aprsConnectDisabledReason,
   aprsConnectLabel,
+  effectiveAprsSerialPort,
+  isKissOnlyAprsProfile,
   APRS_KISS_STILL_ON_HINT,
   aprsConnectionModeMenuVisible,
   aprsConnectionView,
@@ -22,6 +24,8 @@ import {
   packetNeedsHostNotice,
   type AprsTncModeInput,
 } from '~/utils/aprs-connection';
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '~/utils/aprs-d710-host';
 
 describe('APRS COM connection', () => {
@@ -449,6 +453,124 @@ describe('APRS TNC mode badge', () => {
       aprsTncModeBadge(host({ detectPhase: 'failed' })).color,
     ];
     expect(new Set(colors).size).toBe(colors.length);
+  });
+});
+
+describe('kiss-only APRS profile predicate', () => {
+  const kissConfig = {
+    capabilities: { aprsReceive: true },
+    aprs: {
+      mode: 'kiss',
+      baudRate: 9600,
+      baudRates: [9600],
+      host: {
+        entry: 'manual',
+        kissExit: [0xc0, 0xff, 0xc0],
+        enter: [],
+        flowControl: 'none',
+        setup: ['KISS on at radio.'],
+        recovery: ['Disconnect exits KISS.'],
+      },
+    },
+  };
+
+  it('matches kiss mode and manual host entry, not monitor fallbacks', () => {
+    expect(isKissOnlyAprsProfile(undefined)).toBe(false);
+    expect(isKissOnlyAprsProfile(aprsReceiveProfile({ config: kissConfig }))).toBe(true);
+    expect(isKissOnlyAprsProfile(aprsReceiveProfile({ model: 'kenwood-tm-d710a', name: 'TM-D710A' }))).toBe(false);
+    expect(isKissOnlyAprsProfile({
+      source: 'driver',
+      baudRate: 9600,
+      baudRates: [9600],
+      help: '',
+      monitorNote: '',
+      passive: true,
+      host: { link: { entry: 'manual', waitMs: 5000, listenMs: 3000, enter: [] } },
+    } as import('../../app/utils/aprs-capability').AprsReceiveProfile)).toBe(true);
+  });
+});
+
+describe('effective APRS serial port', () => {
+  const kissConfig = {
+    capabilities: { aprsReceive: true },
+    aprs: {
+      mode: 'kiss',
+      baudRate: 9600,
+      baudRates: [9600],
+      host: {
+        entry: 'manual',
+        kissExit: [0xc0, 0xff, 0xc0],
+        enter: [],
+        flowControl: 'none',
+        setup: ['KISS on at radio.'],
+        recovery: ['Disconnect exits KISS.'],
+      },
+    },
+  };
+  const catPort = '/dev/cu.usbmodem31101';
+  const overridePort = '/dev/cu.aprs-override';
+
+  it('defaults kiss-only radios to the memory/CAT port when APRS port is unset', () => {
+    const profile = aprsReceiveProfile({ config: kissConfig });
+
+    expect(effectiveAprsSerialPort({
+      profile,
+      catSerialPort: catPort,
+    })).toEqual({ path: catPort, source: 'cat' });
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: false,
+      hostAvailable: Boolean(profile?.host),
+      mode: 'host',
+    })).toBeUndefined();
+  });
+
+  it('keeps an explicit APRS port override on kiss-only radios', () => {
+    const profile = aprsReceiveProfile({ config: kissConfig });
+
+    expect(effectiveAprsSerialPort({
+      profile,
+      aprsSerialPort: overridePort,
+      catSerialPort: catPort,
+    })).toEqual({ path: overridePort, source: 'saved' });
+    expect(effectiveAprsSerialPort({
+      profile,
+      aprsSerialPort: '   ',
+      catSerialPort: catPort,
+    })).toEqual({ path: catPort, source: 'cat' });
+  });
+
+  it('does not default the D710 monitor profile to the CAT port', () => {
+    const profile = aprsReceiveProfile({ model: 'kenwood-tm-d710a', name: 'TM-D710A' });
+
+    expect(profile?.passive).toBe(true);
+    expect(effectiveAprsSerialPort({
+      profile,
+      catSerialPort: catPort,
+    })).toEqual({ path: undefined, source: 'none' });
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: false,
+      portBusy: false,
+      hostAvailable: Boolean(profile?.host),
+      mode: 'host',
+    })).toBe('Choose an APRS serial port in Preferences.');
+  });
+
+  it('refuses Connect when the effective port is already open on another session', () => {
+    const profile = aprsReceiveProfile({ config: kissConfig });
+    const path = effectiveAprsSerialPort({ profile, catSerialPort: catPort }).path!;
+
+    expect(aprsConnectBlocked([path], path, undefined)).toBe(true);
+    expect(aprsConnectDisabledReason({
+      hasRadio: true,
+      hasPort: true,
+      portBusy: true,
+      hostAvailable: true,
+      mode: 'host',
+    })).toMatch(/already open/);
+    expect(aprsConnectBlocked([path], path, path)).toBe(false);
   });
 });
 

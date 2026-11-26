@@ -1,4 +1,4 @@
-import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { aprsReceiveProfile, type AprsReceiveProfile } from '~/utils/aprs-capability';
 import { D710_APRS_MODE_HINT, D710_APRS_MODE_LIKELY_HINT } from '~/utils/aprs-d710-host';
 import type { AprsHostEntry } from '~/utils/aprs-host-profile';
 
@@ -123,6 +123,40 @@ export function aprsConnectDisabledReason(input: {
   }
 
   return undefined;
+}
+
+export type EffectiveAprsSerialPortSource = 'saved' | 'cat' | 'none';
+
+export function isKissOnlyAprsProfile(profile: AprsReceiveProfile | undefined): boolean {
+  if (!profile) {
+    return false;
+  }
+
+  return profile.passive === false || profile.host?.link.entry === 'manual';
+}
+
+/**
+ * Port Connect opens for APRS. Saved `aprsSerialPort` wins. Kiss-only radios
+ * without one use the memory/CAT `serialPort`. The default is not persisted.
+ */
+export function effectiveAprsSerialPort(input: {
+  profile: AprsReceiveProfile | undefined;
+  aprsSerialPort?: string;
+  catSerialPort?: string;
+}): { path: string | undefined; source: EffectiveAprsSerialPortSource } {
+  const saved = input.aprsSerialPort?.trim() ?? '';
+
+  if (saved.length > 0) {
+    return { path: saved, source: 'saved' };
+  }
+
+  const cat = input.catSerialPort?.trim() ?? '';
+
+  if (isKissOnlyAprsProfile(input.profile) && cat.length > 0) {
+    return { path: cat, source: 'cat' };
+  }
+
+  return { path: undefined, source: 'none' };
 }
 
 /** Quiet time on the passive monitor before the Menu 604 hint. */
