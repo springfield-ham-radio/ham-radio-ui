@@ -68,6 +68,7 @@ describe('AX.25 link', () => {
 
     expect(left.tick(60_000).frames).toEqual([]);
     const sabm = left.connect({ call: call('W1AW-1'), path: [] });
+    expect(sabm.notices.map((notice) => notice.text).join(' ')).toMatch(/Calling W1AW-1, attempt 1 of 3/u);
     expect(parsed(sabm.frames[0] ?? new Uint8Array()).uType).toBe('SABM');
     expect(parsed(sabm.frames[0] ?? new Uint8Array()).pf).toBe(true);
     expect(parsed(sabm.frames[0] ?? new Uint8Array()).cr).toBe('command');
@@ -92,13 +93,14 @@ describe('AX.25 link', () => {
     expect(first.frames).toHaveLength(1);
 
     time.set(1000);
-    expect(left.tick(1000).frames).toHaveLength(1);
+    expect(left.tick(1000).notices.map((notice) => notice.text).join(' ')).toMatch(/attempt 2 of 3/u);
     time.set(2000);
-    expect(left.tick(2000).frames).toHaveLength(1);
+    expect(left.tick(2000).notices.map((notice) => notice.text).join(' ')).toMatch(/attempt 3 of 3/u);
     time.set(3000);
     const failed = left.tick(3000);
     expect(failed.frames).toEqual([]);
-    expect(failed.notices.map((notice) => notice.text).join(' ')).toMatch(/failed after 3/);
+    expect(failed.notices.map((notice) => notice.text).join(' ')).toMatch(/failed after 3/u);
+    expect(left.snapshot().noAnswer).toBe('No answer from W1AW.');
     expect(left.snapshot().phase).toBe('disconnected');
     expect(left.snapshot().t1).toBe(false);
     expect(left.tick(20_000).frames).toEqual([]);

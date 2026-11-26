@@ -17,6 +17,10 @@ export interface PacketTerminalInput {
   phase: PacketLinkPhase | 'none';
   myCall?: string;
   peer?: string;
+  connectAttempt?: number;
+  n2?: number;
+  noAnswer?: string;
+  detectDetail?: string;
 }
 
 export interface PacketTerminalView {
@@ -36,6 +40,33 @@ const LABELS: Record<PacketLinkPhase | 'none', string> = {
   disconnecting: 'Disconnecting',
 };
 
+export function packetLinkBadgeLabel(input: {
+  phase: PacketLinkPhase | 'none';
+  peer?: string;
+  connectAttempt?: number;
+  n2?: number;
+  noAnswer?: string;
+}): string {
+  if (input.noAnswer && input.phase === 'disconnected') {
+    return input.noAnswer;
+  }
+
+  if (input.phase === 'connecting' && input.peer && input.connectAttempt && input.n2) {
+    return `Calling ${input.peer}, attempt ${input.connectAttempt} of ${input.n2}`;
+  }
+
+  if (input.phase === 'connected' && input.peer) {
+    return `Connected to ${input.peer}`;
+  }
+
+  return LABELS[input.phase];
+}
+
+export function packetCallTransmitNote(t1Ms: number, n2: number): string {
+  const seconds = Math.round(t1Ms / 1000);
+  return `Call station transmits. The radio is keyed about every ${seconds} s, up to ${n2} times, until the station answers.`;
+}
+
 /**
  * Why Call station is disabled. Undefined when the button is enabled,
  * so the tooltip stays hidden.
@@ -48,6 +79,7 @@ export function packetCallStationTooltip(input: {
   hardwareTransmit: boolean;
   myCall?: string;
   station: string;
+  detectDetail?: string;
 }): string | undefined {
   if (!input.portOpen) {
     return 'Connect (Host) first';
@@ -74,6 +106,24 @@ export function packetCallStationTooltip(input: {
   }
 
   if (input.detectPhase === 'failed') {
+    const detail = input.detectDetail ?? '';
+
+    if (detail.includes('command mode (echoing)')) {
+      return 'TNC is in command mode (echoing)';
+    }
+
+    if (detail.includes('rejected KISS ON')) {
+      return 'TNC rejected KISS ON';
+    }
+
+    if (detail.includes('stayed in command mode')) {
+      return 'TNC stayed in command mode after RESTART';
+    }
+
+    if (detail.includes('rebooted during KISS entry')) {
+      return 'The TNC rebooted during KISS entry';
+    }
+
     return 'KISS detection did not finish';
   }
 
@@ -104,13 +154,20 @@ export function packetTerminalView(input: PacketTerminalInput): PacketTerminalVi
     detectPhase: input.detectPhase,
     kissConfirmed: input.kissConfirmed,
     hardwareTransmit: input.hardwareTransmit,
+    detectDetail: input.detectDetail,
   });
   const phase = input.phase;
   const open = phase === 'connecting' || phase === 'connected' || phase === 'timer-recovery' || phase === 'disconnecting';
   const call = input.myCall ? undefined : 'Set a callsign in Preferences. Nothing will be sent.';
 
   return {
-    linkLabel: phase === 'connected' && input.peer ? `Connected to ${input.peer}` : LABELS[phase],
+    linkLabel: packetLinkBadgeLabel({
+      phase,
+      peer: input.peer,
+      connectAttempt: input.connectAttempt,
+      n2: input.n2,
+      noAnswer: input.noAnswer,
+    }),
     canConnect: !open && !block && !call,
     canSend: phase === 'connected' && !block,
     canDisconnect: open,

@@ -28,6 +28,10 @@ export interface SavedRadio {
   aprsSerialPort?: string;
   /** Baud for `aprsSerialPort`. Not the programming `baudRate`. */
   aprsBaudRate?: number;
+  /** Packet terminal SSID when the operator callsign has no -ssid. */
+  packetSsid?: number;
+  /** Packet tab Accept incoming connections for this radio. */
+  packetAcceptIncoming?: boolean;
 }
 
 export interface SavedRadioDraft {
@@ -176,6 +180,16 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     }
   }
 
+  if (typeof value.packetSsid === 'number' && Number.isInteger(value.packetSsid)) {
+    radio.packetSsid = Math.min(15, Math.max(0, value.packetSsid));
+  }
+
+  if (value.packetAcceptIncoming === true) {
+    radio.packetAcceptIncoming = true;
+  } else if (value.packetAcceptIncoming === false) {
+    radio.packetAcceptIncoming = false;
+  }
+
   return radio;
 }
 
@@ -251,13 +265,25 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
         }
       }
 
+      if (radio.packetSsid !== undefined) {
+        stored.packetSsid = radio.packetSsid;
+      }
+
+      if (radio.packetAcceptIncoming !== undefined) {
+        stored.packetAcceptIncoming = radio.packetAcceptIncoming;
+      }
+
       return stored;
     }),
   });
 }
 
+function savedRadioStorageAvailable(): boolean {
+  return import.meta.client || typeof localStorage !== 'undefined';
+}
+
 export function readSavedRadioStore(): SavedRadioStore {
-  if (!import.meta.client) {
+  if (!savedRadioStorageAvailable()) {
     return emptySavedRadioStore();
   }
 
@@ -269,7 +295,7 @@ export function readSavedRadioStore(): SavedRadioStore {
 }
 
 export function writeSavedRadioStore(store: SavedRadioStore): void {
-  if (!import.meta.client) {
+  if (!savedRadioStorageAvailable()) {
     return;
   }
 
@@ -374,7 +400,28 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
     radio.aprsBaudRate = draft.aprsBaudRate;
   }
 
+  radio.packetSsid = 0;
+  radio.packetAcceptIncoming = false;
+
   return radio;
+}
+
+export function patchSavedRadioPacketFields(
+  radio: SavedRadio,
+  fields: { packetSsid?: number; packetAcceptIncoming?: boolean },
+  now = Date.now(),
+): SavedRadio {
+  const next: SavedRadio = { ...radio, updatedAt: now };
+
+  if (fields.packetSsid !== undefined) {
+    next.packetSsid = Math.min(15, Math.max(0, fields.packetSsid));
+  }
+
+  if (fields.packetAcceptIncoming !== undefined) {
+    next.packetAcceptIncoming = fields.packetAcceptIncoming;
+  }
+
+  return next;
 }
 
 export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, now = Date.now()): SavedRadio {

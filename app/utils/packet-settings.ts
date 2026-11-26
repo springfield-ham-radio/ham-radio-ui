@@ -1,7 +1,9 @@
 import { canonicalAx25Call, formatAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
 import type { Ax25Modulo } from '~/utils/packet-ax25';
+import type { SavedRadio } from '~/utils/saved-radios';
 
 export const PACKET_SETTINGS_KEY = 'hbench.packet.settings';
+export const PACKET_RADIO_IDENTITY_MIGRATED_KEY = 'hbench.packet.radioIdentityMigrated';
 
 export interface PacketSettings {
   ssid: number;
@@ -110,4 +112,127 @@ export function packetMyCall(base: string | undefined, ssid: number): Ax25Call |
 export function packetMyCallLabel(base: string | undefined, ssid: number): string | undefined {
   const call = packetMyCall(base, ssid);
   return call ? formatAx25Call(call) : undefined;
+}
+
+export function isPacketRadioIdentityMigrationDone(storage: PacketSettingsStorage): boolean {
+  try {
+    return storage.getItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markPacketRadioIdentityMigrationDone(storage: PacketSettingsStorage): void {
+  storage.setItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY, '1');
+}
+
+export function packetIdentityFromRadio(
+  radio: Pick<SavedRadio, 'packetSsid' | 'packetAcceptIncoming'> | undefined,
+  storage: PacketSettingsStorage,
+): Pick<PacketSettings, 'ssid' | 'acceptIncoming'> {
+  if (radio?.packetSsid !== undefined) {
+    return {
+      ssid: Math.min(15, Math.max(0, radio.packetSsid)),
+      acceptIncoming: radio.packetAcceptIncoming === true,
+    };
+  }
+
+  if (radio && isPacketRadioIdentityMigrationDone(storage)) {
+    return {
+      ssid: 0,
+      acceptIncoming: false,
+    };
+  }
+
+  const global = readPacketSettings(storage);
+
+  return {
+    ssid: global.ssid,
+    acceptIncoming: global.acceptIncoming,
+  };
+}
+
+/** Copy global Packet SSID and accept once for radios saved before per-radio fields. */
+export function migratePacketRadioIdentity(
+  radio: SavedRadio,
+  storage: PacketSettingsStorage,
+): SavedRadio {
+  if (radio.packetSsid !== undefined) {
+    return radio;
+  }
+
+  if (isPacketRadioIdentityMigrationDone(storage)) {
+    return {
+      ...radio,
+      packetSsid: 0,
+      packetAcceptIncoming: false,
+    };
+  }
+
+  const global = readPacketSettings(storage);
+
+  return {
+    ...radio,
+    packetSsid: global.ssid,
+    packetAcceptIncoming: global.acceptIncoming,
+  };
+}
+
+export function packetSettingsForCard(
+  radio: SavedRadio | undefined,
+  storage: PacketSettingsStorage,
+): PacketSettings {
+  const global = readPacketSettings(storage);
+  const identity = packetIdentityFromRadio(radio, storage);
+
+  return normalizePacketSettings({
+    ...global,
+    ssid: identity.ssid,
+    acceptIncoming: identity.acceptIncoming,
+  });
+}
+
+export function samePacketSettings(left: PacketSettings, right: PacketSettings): boolean {
+  return left.ssid === right.ssid
+    && left.acceptIncoming === right.acceptIncoming
+    && left.modulo === right.modulo
+    && left.paclen === right.paclen
+    && left.maxframe === right.maxframe
+    && left.t1Ms === right.t1Ms
+    && left.t3Ms === right.t3Ms
+    && left.n2 === right.n2;
+}
+
+/**
+ * Copy global Packet SSID and accept onto radios saved before those fields existed.
+ *
+ * One pass. Radios that already have both fields are left as stored. Calling this
+ * again after the migration flag is set returns the same list and writes nothing.
+ */
+export function applyPacketRadioIdentityMigration(
+  radios: readonly SavedRadio[],
+  storage: PacketSettingsStorage,
+  now = Date.now(),
+): { radios: SavedRadio[]; changed: boolean } {
+  if (isPacketRadioIdentityMigrationDone(storage)) {
+    return { radios: radios.slice(), changed: false };
+  }
+
+  const global = readPacketSettings(storage);
+  let changed = false;
+  const next = radios.map((entry) => {
+    if (entry.packetSsid !== undefined && entry.packetAcceptIncoming !== undefined) {
+      return entry;
+    }
+
+    changed = true;
+    return {
+      ...entry,
+      packetSsid: entry.packetSsid ?? global.ssid,
+      packetAcceptIncoming: entry.packetAcceptIncoming ?? global.acceptIncoming,
+      updatedAt: now,
+    };
+  });
+
+  return { radios: next, changed };
 }

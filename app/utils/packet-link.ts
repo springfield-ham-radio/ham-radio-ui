@@ -59,6 +59,9 @@ export interface PacketLinkSnapshot {
   modulo: Ax25Modulo;
   t1: boolean;
   t3: boolean;
+  n2: number;
+  connectAttempt: number;
+  noAnswer?: string;
 }
 
 interface Outstanding {
@@ -101,6 +104,7 @@ export function createPacketLink(options: PacketLinkOptions) {
   const unacked: Outstanding[] = [];
   const queued: Uint8Array[] = [];
   let attempts = 0;
+  let noAnswer: string | undefined;
 
   function touch(explicit?: number): void {
     const reported = explicit ?? options.now?.() ?? time;
@@ -150,6 +154,10 @@ export function createPacketLink(options: PacketLinkOptions) {
     phase = 'disconnected';
     clearQueues();
     clearTimers();
+  }
+
+  function callingNotice(peerCall: Ax25Call | undefined, attempt: number): string {
+    return `Calling ${label(peerCall)}, attempt ${attempt} of ${n2}.`;
   }
 
   function goConnected(nextPeer: Ax25Call, nextRoute: readonly Ax25Call[]): void {
@@ -326,6 +334,8 @@ export function createPacketLink(options: PacketLinkOptions) {
   }
 
   function snapshot(): PacketLinkSnapshot {
+    const connectAttempt = phase === 'connecting' ? attempts + retries : 0;
+
     return {
       phase,
       peer: peer ? formatAx25Call(peer) : undefined,
@@ -339,6 +349,9 @@ export function createPacketLink(options: PacketLinkOptions) {
       modulo,
       t1: t1At !== undefined,
       t3: t3At !== undefined,
+      n2,
+      connectAttempt: connectAttempt > 0 ? connectAttempt : 0,
+      noAnswer,
     };
   }
 
@@ -354,11 +367,12 @@ export function createPacketLink(options: PacketLinkOptions) {
     phase = 'connecting';
     clearQueues();
     attempts = 1;
+    noAnswer = undefined;
     armT1();
     const frame = sabm();
     return {
       frames: frame ? [frame] : [],
-      notices: [{ kind: 'status', text: `${modulo === 128 ? 'SABME' : 'SABM'} sent to ${label(peer)}.` }],
+      notices: [{ kind: 'status', text: callingNotice(peer, 1) }],
     };
   }
 
@@ -650,9 +664,14 @@ export function createPacketLink(options: PacketLinkOptions) {
 
     if (attempts + retries > n2) {
       const notices: PacketLinkNotice[] = [];
-      giveUp(notices, phase === 'connecting'
-        ? `Connect to ${label(peer)} failed after ${n2} attempts. Nothing more was sent.`
-        : `Retry limit (${n2}). The link was cleared and nothing more was sent.`);
+
+      if (phase === 'connecting') {
+        noAnswer = `No answer from ${label(peer)}.`;
+        giveUp(notices, `Connect to ${label(peer)} failed after ${n2} attempts. Nothing more was sent.`);
+      } else {
+        giveUp(notices, `Retry limit (${n2}). The link was cleared and nothing more was sent.`);
+      }
+
       return { frames: [], notices };
     }
 
@@ -661,7 +680,11 @@ export function createPacketLink(options: PacketLinkOptions) {
     if (phase === 'connecting') {
       pushFrame(frames, sabm());
       armT1();
-      return { frames, notices: [] };
+      const attempt = attempts + retries;
+      return {
+        frames,
+        notices: attempt > 1 ? [{ kind: 'status', text: callingNotice(peer, attempt) }] : [],
+      };
     }
 
     if (phase === 'disconnecting') {

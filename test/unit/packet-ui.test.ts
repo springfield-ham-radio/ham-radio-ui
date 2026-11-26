@@ -16,8 +16,27 @@ import {
   pushPacketMonitor,
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
-import { normalizePacketSettings, packetMyCall, readPacketSettings, PACKET_DEFAULT_SETTINGS } from '~/utils/packet-settings';
-import { packetCallStationTooltip, packetLinePayload, packetScrollText, packetTerminalView } from '~/utils/packet-terminal';
+import {
+  isPacketRadioIdentityMigrationDone,
+  markPacketRadioIdentityMigrationDone,
+  migratePacketRadioIdentity,
+  PACKET_RADIO_IDENTITY_MIGRATED_KEY,
+  normalizePacketSettings,
+  packetMyCall,
+  packetSettingsForCard,
+  readPacketSettings,
+  PACKET_DEFAULT_SETTINGS,
+  PACKET_SETTINGS_KEY,
+} from '~/utils/packet-settings';
+import {
+  packetCallStationTooltip,
+  packetCallTransmitNote,
+  packetLinePayload,
+  packetLinkBadgeLabel,
+  packetScrollText,
+  packetTerminalView,
+} from '~/utils/packet-terminal';
+import type { SavedRadio } from '~/utils/saved-radios';
 
 function fakePort(): { port: AprsHostBytePort; writes: Uint8Array[]; push: (chunk: Uint8Array) => void } {
   const writes: Uint8Array[] = [];
@@ -196,9 +215,96 @@ describe('Packet monitor and terminal', () => {
     expect(packetCallStationTooltip({ ...ready, phase: 'disconnecting' })).toBe('The link is closing');
     expect(packetCallStationTooltip({ ...ready, detectPhase: 'listening' })).toBe('Wait until KISS detection finishes');
     expect(packetCallStationTooltip({ ...ready, detectPhase: 'failed' })).toBe('KISS detection did not finish');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'failed',
+      detectDetail: 'TNC rejected KISS ON.',
+    })).toBe('TNC rejected KISS ON');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'failed',
+      detectDetail: 'TNC is in command mode (echoing).',
+    })).toBe('TNC is in command mode (echoing)');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'waiting-traffic',
+      detectDetail: 'KISS on, waiting for traffic.',
+    })).toBeUndefined();
     expect(packetCallStationTooltip({ ...ready, hardwareTransmit: false })).toBe('Transmit is off for this session');
     expect(packetCallStationTooltip({ ...ready, myCall: undefined })).toBe('Set a callsign in Preferences');
     expect(packetCallStationTooltip(ready)).toBeUndefined();
+  });
+
+  it('shows calling progress, no-answer, and the transmit note', () => {
+    expect(packetLinkBadgeLabel({
+      phase: 'connecting',
+      peer: 'KF5UFJ-8',
+      connectAttempt: 2,
+      n2: 10,
+    })).toBe('Calling KF5UFJ-8, attempt 2 of 10');
+
+    expect(packetLinkBadgeLabel({
+      phase: 'disconnected',
+      noAnswer: 'No answer from KF5UFJ-8.',
+    })).toBe('No answer from KF5UFJ-8.');
+
+    expect(packetCallTransmitNote(3000, 10)).toMatch(/every 3 s.*10 times/u);
+  });
+
+  it('migrates per-radio SSID once from global settings', () => {
+    const storage = {
+      values: new Map<string, string>(),
+      getItem(key: string) {
+        return this.values.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        this.values.set(key, value);
+      },
+    };
+    storage.setItem(PACKET_SETTINGS_KEY, JSON.stringify({ ssid: 7, acceptIncoming: true, modulo: 8, n2: 10 }));
+    const radio: SavedRadio = {
+      id: 'r1',
+      name: 'Mobile',
+      manufacturer: 'Kenwood',
+      model: 'TM-D710A',
+      serialPort: '/dev/cu.test',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const migrated = migratePacketRadioIdentity(radio, storage);
+    expect(migrated.packetSsid).toBe(7);
+    expect(migrated.packetAcceptIncoming).toBe(true);
+    expect(packetSettingsForCard(migrated, storage).ssid).toBe(7);
+    expect(migratePacketRadioIdentity({ ...migrated, packetSsid: 3 }, storage).packetSsid).toBe(3);
+    expect(packetSettingsForCard({ id: 'r2', name: 'Base', manufacturer: 'K', model: 'M', serialPort: '/dev/x', createdAt: 1, updatedAt: 1, packetSsid: 1 }, storage).ssid).toBe(1);
+  });
+
+  it('does not copy global SSID onto new radios after migration is marked done', () => {
+    const storage = {
+      values: new Map<string, string>(),
+      getItem(key: string) {
+        return this.values.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        this.values.set(key, value);
+      },
+    };
+    storage.setItem(PACKET_SETTINGS_KEY, JSON.stringify({ ssid: 7, acceptIncoming: true, modulo: 8, n2: 10 }));
+    markPacketRadioIdentityMigrationDone(storage);
+    const legacy: SavedRadio = {
+      id: 'r-old',
+      name: 'Legacy',
+      manufacturer: 'Kenwood',
+      model: 'M',
+      serialPort: '/dev/cu',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const migrated = migratePacketRadioIdentity(legacy, storage);
+    expect(migrated.packetSsid).toBe(0);
+    expect(migrated.packetAcceptIncoming).toBe(false);
+    expect(isPacketRadioIdentityMigrationDone(storage)).toBe(true);
+    expect(storage.getItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY)).toBe('1');
   });
 });
 

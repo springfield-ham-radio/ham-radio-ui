@@ -12,6 +12,7 @@ export function packetLinkBlockReason(input: {
   detectPhase: PacketDetectPhase;
   kissConfirmed: boolean;
   hardwareTransmit: boolean;
+  detectDetail?: string;
 }): string | undefined {
   if (!input.connected) {
     return 'The KISS port is closed. Nothing was sent.';
@@ -26,6 +27,24 @@ export function packetLinkBlockReason(input: {
   }
 
   if (input.detectPhase === 'failed') {
+    const detail = input.detectDetail ?? '';
+
+    if (detail.includes('command mode (echoing)')) {
+      return 'TNC is in command mode (echoing). Nothing was sent.';
+    }
+
+    if (detail.includes('rejected KISS ON')) {
+      return 'TNC rejected KISS ON. Nothing was sent.';
+    }
+
+    if (detail.includes('stayed in command mode')) {
+      return 'TNC stayed in command mode after RESTART. Nothing was sent.';
+    }
+
+    if (detail.includes('rebooted during KISS entry')) {
+      return 'The TNC rebooted during KISS entry. Nothing was sent.';
+    }
+
     return 'KISS detection did not finish. Nothing was sent.';
   }
 
