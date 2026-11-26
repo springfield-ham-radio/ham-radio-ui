@@ -32,6 +32,19 @@ export function hasCommandPrompt(bytes: Uint8Array, prompt: string): boolean {
   return prompt.length > 0 && indexOfBytes(bytes, new TextEncoder().encode(prompt)) >= 0;
 }
 
+/** Prompt bytes at or after `offset`. Earlier bytes do not count. */
+export function hasCommandPromptAfter(bytes: Uint8Array, prompt: string, offset: number): boolean {
+  if (offset < 0) {
+    offset = 0;
+  }
+
+  if (offset >= bytes.length) {
+    return false;
+  }
+
+  return hasCommandPrompt(bytes.subarray(offset), prompt);
+}
+
 export function hasTncError(bytes: Uint8Array, errorReply: string): boolean {
   return errorReply.length > 0 && indexOfBytes(bytes, new TextEncoder().encode(errorReply)) >= 0;
 }

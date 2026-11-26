@@ -1,7 +1,8 @@
 import { formatAx25Call, canonicalAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
 import type { AprsHostSnapshot } from '~/utils/aprs-host-session';
 import type { PacketLinkPhase } from '~/utils/packet-link';
-import { createPacketMux, type PacketMux } from '~/utils/packet-link';
+import { type PacketMux } from '~/utils/packet-link';
+import { createPacketCardMux } from '~/utils/packet-card-session';
 import {
   clearPacketMonitor,
   createPacketMonitor,
@@ -15,14 +16,23 @@ import {
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
+  migratePacketRadioIdentity,
   normalizePacketSettings,
   packetMyCall,
+  packetSettingsForCard,
   readPacketSettings,
   writePacketSettings,
   type PacketSettings,
   type PacketSettingsStorage,
 } from '~/utils/packet-settings';
 import { packetLinePayload, packetPeerPath, packetScrollText } from '~/utils/packet-terminal';
+import {
+  readSavedRadioStore,
+  upsertSavedRadio,
+  writeSavedRadioStore,
+  patchSavedRadioPacketFields,
+  type SavedRadio,
+} from '~/utils/saved-radios';
 
 export interface PacketCardState {
   rows: PacketMonitorRow[];
@@ -38,6 +48,9 @@ export interface PacketCardState {
   error?: string;
   sessionId?: string;
   sessionCount: number;
+  connectAttempt: number;
+  n2: number;
+  noAnswer?: string;
 }
 
 interface Runtime {
@@ -72,10 +85,37 @@ function browserStorage(): PacketSettingsStorage {
   };
 }
 
+function savedRadio(cardId: string): SavedRadio | undefined {
+  return readSavedRadioStore().radios.find((radio) => radio.id === cardId);
+}
+
+function ensureRadioPacketMigration(cardId: string): SavedRadio | undefined {
+  const radio = savedRadio(cardId);
+
+  if (!radio) {
+    return undefined;
+  }
+
+  const migrated = migratePacketRadioIdentity(radio, browserStorage());
+
+  if (migrated.packetSsid === radio.packetSsid && migrated.packetAcceptIncoming === radio.packetAcceptIncoming) {
+    return migrated;
+  }
+
+  const store = readSavedRadioStore();
+  writeSavedRadioStore(upsertSavedRadio(store, migrated));
+  return migrated;
+}
+
 function activePhase(runtime: Runtime): PacketLinkPhase | 'none' {
   const phases = runtime.mux?.snapshots() ?? [];
   const live = phases.find((item) => item.phase !== 'disconnected');
   return live?.phase ?? (phases.length > 0 ? 'disconnected' : 'none');
+}
+
+function linkIdle(runtime: Runtime): boolean {
+  const phase = activePhase(runtime);
+  return phase === 'disconnected' || phase === 'none';
 }
 
 /**
@@ -88,16 +128,22 @@ export function usePacket() {
   const host = useAprsHost();
   const states = useState<Record<string, PacketCardState>>('packet-card-state', () => ({}));
 
+  function loadSettings(cardId: string): PacketSettings {
+    const radio = ensureRadioPacketMigration(cardId);
+    return packetSettingsForCard(radio, browserStorage());
+  }
+
   function runtimeFor(cardId: string): Runtime {
     const existing = runtimes.get(cardId);
 
     if (existing) {
+      existing.settings = loadSettings(cardId);
       return existing;
     }
 
     const created: Runtime = {
       monitor: createPacketMonitor(),
-      settings: readPacketSettings(browserStorage()),
+      settings: loadSettings(cardId),
       scrollback: '',
       filterCall: '',
       filterType: 'all',
@@ -134,6 +180,9 @@ export function usePacket() {
         error: runtime.error,
         sessionId: runtime.sessionId,
         sessionCount: runtime.mux?.snapshots().length ?? 0,
+        connectAttempt: live?.connectAttempt ?? 0,
+        n2: live?.n2 ?? runtime.settings.n2,
+        noAnswer: live?.noAnswer,
       },
     };
   }
@@ -143,6 +192,12 @@ export function usePacket() {
 
     if (step.notices.some((notice) => notice.kind === 'status' && notice.text.startsWith('Ignored'))) {
       runtime.error = undefined;
+    }
+
+    const failed = step.notices.find((notice) => notice.kind === 'status' && notice.text.includes('failed after'));
+
+    if (failed) {
+      runtime.error = failed.text;
     }
   }
 
@@ -220,26 +275,40 @@ export function usePacket() {
     const runtime = runtimeFor(cardId);
     const live = activePhase(runtime);
 
-    if (runtime.mux && runtime.me && formatAx25Call(runtime.me) === formatAx25Call(me) && live !== 'none') {
-      return;
-    }
-
     if (live === 'connecting' || live === 'connected' || live === 'timer-recovery' || live === 'disconnecting') {
       return;
     }
 
+    if (
+      runtime.mux
+      && runtime.me
+      && formatAx25Call(runtime.me) === formatAx25Call(me)
+      && runtime.settings.acceptIncoming === (runtime.mux.snapshots()[0]?.acceptIncoming === true)
+    ) {
+      return;
+    }
+
     runtime.me = me;
-    runtime.mux = createPacketMux({
-      me,
-      modulo: runtime.settings.modulo,
-      paclen: runtime.settings.paclen,
-      maxframe: runtime.settings.maxframe,
-      t1Ms: runtime.settings.t1Ms,
-      t3Ms: runtime.settings.t3Ms,
-      n2: runtime.settings.n2,
-      acceptIncoming: runtime.settings.acceptIncoming,
-      now: () => Date.now(),
-    });
+    runtime.mux = createPacketCardMux(me, runtime.settings);
+  }
+
+  function syncStation(cardId: string, baseCall: string | undefined): void {
+    const runtime = runtimeFor(cardId);
+    const me = packetMyCall(baseCall, runtime.settings.ssid);
+
+    if (!me) {
+      if (linkIdle(runtime)) {
+        runtime.mux = undefined;
+        runtime.sessionId = undefined;
+        runtime.me = undefined;
+      }
+
+      publish(cardId);
+      return;
+    }
+
+    ensureMux(cardId, me);
+    publish(cardId);
   }
 
   function attach(cardId: string): void {
@@ -370,6 +439,7 @@ export function usePacket() {
     }
 
     ensureMux(cardId, me);
+    runtime.error = undefined;
     const step = runtime.mux?.connect({ call: peer, path: path.path });
 
     if (!step) {
@@ -382,7 +452,6 @@ export function usePacket() {
       return;
     }
 
-    runtime.error = undefined;
     runtime.sessionId = step.id;
     apply(runtime, step);
     runtime.queue.push(...step.frames);
@@ -477,13 +546,36 @@ export function usePacket() {
 
   function updateSettings(cardId: string, patch: Partial<PacketSettings>): void {
     const runtime = runtimeFor(cardId);
-    runtime.settings = normalizePacketSettings({ ...runtime.settings, ...patch });
-    writePacketSettings(browserStorage(), runtime.settings);
+    const store = readSavedRadioStore();
+    const radio = store.radios.find((entry) => entry.id === cardId);
+    const global = readPacketSettings(browserStorage());
+    const { ssid, acceptIncoming, ...rest } = patch;
+    const globalPatch = { ...rest } as Partial<PacketSettings>;
+
+    if (Object.keys(globalPatch).length > 0) {
+      writePacketSettings(browserStorage(), normalizePacketSettings({ ...global, ...globalPatch }));
+    }
+
+    if (radio && (ssid !== undefined || acceptIncoming !== undefined)) {
+      const updated = patchSavedRadioPacketFields(radio, {
+        ...(ssid !== undefined ? { packetSsid: ssid } : {}),
+        ...(acceptIncoming !== undefined ? { packetAcceptIncoming: acceptIncoming } : {}),
+      });
+      writeSavedRadioStore(upsertSavedRadio(store, updated));
+    } else if (!radio && (ssid !== undefined || acceptIncoming !== undefined)) {
+      writePacketSettings(browserStorage(), normalizePacketSettings({
+        ...global,
+        ...globalPatch,
+        ...(ssid !== undefined ? { ssid } : {}),
+        ...(acceptIncoming !== undefined ? { acceptIncoming } : {}),
+      }));
+    }
+
+    runtime.settings = loadSettings(cardId);
     runtime.mux?.setAcceptIncoming(runtime.settings.acceptIncoming);
 
-    if (activePhase(runtime) === 'disconnected' || activePhase(runtime) === 'none') {
-      runtime.mux = undefined;
-      runtime.sessionId = undefined;
+    if (linkIdle(runtime) && runtime.me) {
+      runtime.mux = createPacketCardMux(runtime.me, runtime.settings);
     }
 
     publish(cardId);
@@ -502,6 +594,7 @@ export function usePacket() {
   return {
     states,
     attach,
+    syncStation,
     endLink,
     closeCard,
     notePort,

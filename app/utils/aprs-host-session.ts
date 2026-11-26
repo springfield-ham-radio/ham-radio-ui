@@ -1,6 +1,7 @@
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
 import { containsAprsMonitorLine } from '~/utils/aprs-decode';
-import { appendCommandBytes, hasCommandPrompt, hasTncError } from '~/utils/aprs-command';
+import { appendCommandBytes, hasCommandPrompt, hasCommandPromptAfter, hasTncError } from '~/utils/aprs-command';
+import { APRS_HOST_BOOT_QUIET_MS, endsWithBareCommandPrompt, textShowsTncBoot } from '~/utils/aprs-host-boot';
 import { aprsHostShouldExitKiss } from '~/utils/aprs-connection';
 import { isAprsHostCommandLink, type AprsHostLink } from '~/utils/aprs-host-profile';
 import { createKissDecoderState, encodeKissData, pushKissBytes } from '~/utils/aprs-kiss';
@@ -260,6 +261,9 @@ export function createAprsHostSession(options?: {
   let hostFlow: AprsHostFlowControl = 'software';
   /** True only while connect() attaches the data listener, so a sync open buffer is visible. */
   let openingBuffer = false;
+  let enterPromptWatermark = 0;
+  let sawBootOutput = false;
+  let bootQuietAfter = 0;
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   const rxTraceCoalesce = new DirectionCoalesceBuffer(SERIAL_DIRECTION_COALESCE_IDLE_MS, now);
@@ -438,6 +442,44 @@ export function createAprsHostSession(options?: {
     return isAprsHostCommandLink(hostLink) && hasCommandPrompt(bytes, hostLink.prompt);
   }
 
+  function noteBootChunk(bytes: Uint8Array): void {
+    if (bytes.length === 0) {
+      return;
+    }
+
+    if (textShowsTncBoot(new TextDecoder().decode(bytes))) {
+      sawBootOutput = true;
+      bootQuietAfter = now() + APRS_HOST_BOOT_QUIET_MS;
+    }
+  }
+
+  function freshSessionPrompt(): boolean {
+    return isAprsHostCommandLink(hostLink)
+      && hasCommandPromptAfter(sessionBytes, hostLink.prompt, enterPromptWatermark);
+  }
+
+  function freshCommandPrompt(): boolean {
+    return isAprsHostCommandLink(hostLink)
+      && hasCommandPromptAfter(sessionBytes, hostLink.prompt, enterPromptWatermark)
+      && endsWithBareCommandPrompt(sessionBytes, hostLink.prompt);
+  }
+
+  function enterPromptReady(): boolean {
+    if (!isAprsHostCommandLink(hostLink) || !freshSessionPrompt()) {
+      return false;
+    }
+
+    if (!endsWithBareCommandPrompt(sessionBytes, hostLink.prompt)) {
+      return false;
+    }
+
+    if (!sawBootOutput) {
+      return true;
+    }
+
+    return now() >= bootQuietAfter;
+  }
+
   function detectionOwnsWait(): boolean {
     return detectPhase === 'listening' || detectPhase === 'awaiting-prompt' || detectPhase === 'entering';
   }
@@ -534,7 +576,10 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (!kissConfirmed && frames === 0 && promptSeen(sessionBytes)) {
+    enterPromptWatermark = 0;
+    sawBootOutput = false;
+    bootQuietAfter = 0;
+    if (!kissConfirmed && frames === 0 && enterPromptReady()) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
       detectDeadline = Number.POSITIVE_INFINITY;
@@ -542,6 +587,18 @@ export function createAprsHostSession(options?: {
       detectDetail = `${hostLink.prompt} was already on this connection. Entering host KISS.`;
       record('note', new Uint8Array(), detectDetail);
       maybeStartEnter();
+      return;
+    }
+
+    if (!kissConfirmed && frames === 0 && promptSeen(sessionBytes)) {
+      detectPhase = 'awaiting-prompt';
+      detectStep = 'after-text';
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+      detectDetail = sawBootOutput
+        ? `Command text seen. Waiting for a bare ${hostLink.prompt} after startup output.`
+        : `${hostLink.prompt} was already on this connection. Waiting to enter host KISS.`;
+      record('note', new Uint8Array(), detectDetail);
       return;
     }
 
@@ -738,7 +795,7 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (detectPhase !== 'awaiting-prompt' || !promptSeen(sessionBytes) || enterInFlight) {
+    if (detectPhase !== 'awaiting-prompt' || !enterPromptReady() || enterInFlight) {
       return;
     }
 
@@ -1033,7 +1090,7 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (!promptSeen(commandBytes)) {
+    if (!freshCommandPrompt()) {
       return;
     }
 
@@ -1070,6 +1127,7 @@ export function createAprsHostSession(options?: {
     enterInFlight = true;
     const bytes = new TextEncoder().encode(step.text);
     const following = hostLink.enter[enterIndex + 1];
+    const sessionMark = sessionBytes.length;
 
     if (following) {
       enterIndex += 1;
@@ -1081,6 +1139,10 @@ export function createAprsHostSession(options?: {
 
     const wrote = await writeBytes(bytes);
     enterInFlight = false;
+
+    if (wrote.ok) {
+      enterPromptWatermark = sessionMark;
+    }
 
     if (automatic && detectPhase !== 'entering') {
       return undefined;
@@ -1133,7 +1195,7 @@ export function createAprsHostSession(options?: {
         clearDetectClock();
       }
       record('note', new Uint8Array(), commandDetail);
-    } else if (promptSeen(commandBytes)) {
+    } else if (freshCommandPrompt()) {
       commandActive = false;
       void writeEnterStep();
     }
@@ -1436,6 +1498,7 @@ export function createAprsHostSession(options?: {
     }
 
     sessionBytes = appendCommandBytes(sessionBytes, chunk);
+    noteBootChunk(chunk);
     if (stripped.echoed) {
       noteCommandEcho();
     }
@@ -1449,12 +1512,15 @@ export function createAprsHostSession(options?: {
       && !kissConfirmed
       && frames === 0
       && promptSeen(sessionBytes)
+      && detectPhase === 'listening'
     ) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
       detectDeadline = Number.POSITIVE_INFINITY;
       clearDetectClock();
-      detectDetail = `${hostLink.prompt} was already on this connection. Entering host KISS.`;
+      detectDetail = sawBootOutput
+        ? `Command text seen. Waiting for a bare ${hostLink.prompt} after startup output.`
+        : `${hostLink.prompt} was already on this connection. Waiting to enter host KISS.`;
       record('note', new Uint8Array(), detectDetail);
     }
 
@@ -1608,6 +1674,9 @@ export function createAprsHostSession(options?: {
       commandDetail = 'No command requested on this connection.';
       commandBytes = new Uint8Array();
       sessionBytes = new Uint8Array();
+      enterPromptWatermark = 0;
+      sawBootOutput = false;
+      bootQuietAfter = 0;
       commandActive = false;
       hostEnterRequested = false;
       hostFlow = capture?.flowControl ?? 'software';
@@ -1810,6 +1879,10 @@ export function createAprsHostSession(options?: {
       void expireDetect();
       if (!owned) {
         expireCommand();
+      }
+
+      if (sawBootOutput && now() >= bootQuietAfter && detectPhase === 'awaiting-prompt') {
+        maybeStartEnter();
       }
     },
     retryDetection() {

@@ -16,8 +16,24 @@ import {
   pushPacketMonitor,
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
-import { normalizePacketSettings, packetMyCall, readPacketSettings, PACKET_DEFAULT_SETTINGS } from '~/utils/packet-settings';
-import { packetCallStationTooltip, packetLinePayload, packetScrollText, packetTerminalView } from '~/utils/packet-terminal';
+import {
+  migratePacketRadioIdentity,
+  normalizePacketSettings,
+  packetMyCall,
+  packetSettingsForCard,
+  readPacketSettings,
+  PACKET_DEFAULT_SETTINGS,
+  PACKET_SETTINGS_KEY,
+} from '~/utils/packet-settings';
+import {
+  packetCallStationTooltip,
+  packetCallTransmitNote,
+  packetLinePayload,
+  packetLinkBadgeLabel,
+  packetScrollText,
+  packetTerminalView,
+} from '~/utils/packet-terminal';
+import type { SavedRadio } from '~/utils/saved-radios';
 
 function fakePort(): { port: AprsHostBytePort; writes: Uint8Array[]; push: (chunk: Uint8Array) => void } {
   const writes: Uint8Array[] = [];
@@ -199,6 +215,50 @@ describe('Packet monitor and terminal', () => {
     expect(packetCallStationTooltip({ ...ready, hardwareTransmit: false })).toBe('Transmit is off for this session');
     expect(packetCallStationTooltip({ ...ready, myCall: undefined })).toBe('Set a callsign in Preferences');
     expect(packetCallStationTooltip(ready)).toBeUndefined();
+  });
+
+  it('shows calling progress, no-answer, and the transmit note', () => {
+    expect(packetLinkBadgeLabel({
+      phase: 'connecting',
+      peer: 'KF5UFJ-8',
+      connectAttempt: 2,
+      n2: 10,
+    })).toBe('Calling KF5UFJ-8, attempt 2 of 10');
+
+    expect(packetLinkBadgeLabel({
+      phase: 'disconnected',
+      noAnswer: 'No answer from KF5UFJ-8.',
+    })).toBe('No answer from KF5UFJ-8.');
+
+    expect(packetCallTransmitNote(3000, 10)).toMatch(/every 3 s.*10 times/u);
+  });
+
+  it('migrates per-radio SSID once from global settings', () => {
+    const storage = {
+      values: new Map<string, string>(),
+      getItem(key: string) {
+        return this.values.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        this.values.set(key, value);
+      },
+    };
+    storage.setItem(PACKET_SETTINGS_KEY, JSON.stringify({ ssid: 7, acceptIncoming: true, modulo: 8, n2: 10 }));
+    const radio: SavedRadio = {
+      id: 'r1',
+      name: 'Mobile',
+      manufacturer: 'Kenwood',
+      model: 'TM-D710A',
+      serialPort: '/dev/cu.test',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const migrated = migratePacketRadioIdentity(radio, storage);
+    expect(migrated.packetSsid).toBe(7);
+    expect(migrated.packetAcceptIncoming).toBe(true);
+    expect(packetSettingsForCard(migrated, storage).ssid).toBe(7);
+    expect(migratePacketRadioIdentity({ ...migrated, packetSsid: 3 }, storage).packetSsid).toBe(3);
+    expect(packetSettingsForCard({ id: 'r2', name: 'Base', manufacturer: 'K', model: 'M', serialPort: '/dev/x', createdAt: 1, updatedAt: 1, packetSsid: 1 }, storage).ssid).toBe(1);
   });
 });
 

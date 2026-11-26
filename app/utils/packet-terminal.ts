@@ -17,6 +17,9 @@ export interface PacketTerminalInput {
   phase: PacketLinkPhase | 'none';
   myCall?: string;
   peer?: string;
+  connectAttempt?: number;
+  n2?: number;
+  noAnswer?: string;
 }
 
 export interface PacketTerminalView {
@@ -35,6 +38,33 @@ const LABELS: Record<PacketLinkPhase | 'none', string> = {
   'timer-recovery': 'Retrying',
   disconnecting: 'Disconnecting',
 };
+
+export function packetLinkBadgeLabel(input: {
+  phase: PacketLinkPhase | 'none';
+  peer?: string;
+  connectAttempt?: number;
+  n2?: number;
+  noAnswer?: string;
+}): string {
+  if (input.noAnswer && input.phase === 'disconnected') {
+    return input.noAnswer;
+  }
+
+  if (input.phase === 'connecting' && input.peer && input.connectAttempt && input.n2) {
+    return `Calling ${input.peer}, attempt ${input.connectAttempt} of ${input.n2}`;
+  }
+
+  if (input.phase === 'connected' && input.peer) {
+    return `Connected to ${input.peer}`;
+  }
+
+  return LABELS[input.phase];
+}
+
+export function packetCallTransmitNote(t1Ms: number, n2: number): string {
+  const seconds = Math.round(t1Ms / 1000);
+  return `Call station transmits. The radio is keyed about every ${seconds} s, up to ${n2} times, until the station answers.`;
+}
 
 /**
  * Why Call station is disabled. Undefined when the button is enabled,
@@ -110,7 +140,13 @@ export function packetTerminalView(input: PacketTerminalInput): PacketTerminalVi
   const call = input.myCall ? undefined : 'Set a callsign in Preferences. Nothing will be sent.';
 
   return {
-    linkLabel: phase === 'connected' && input.peer ? `Connected to ${input.peer}` : LABELS[phase],
+    linkLabel: packetLinkBadgeLabel({
+      phase,
+      peer: input.peer,
+      connectAttempt: input.connectAttempt,
+      n2: input.n2,
+      noAnswer: input.noAnswer,
+    }),
     canConnect: !open && !block && !call,
     canSend: phase === 'connected' && !block,
     canDisconnect: open,

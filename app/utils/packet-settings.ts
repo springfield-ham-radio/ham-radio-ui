@@ -1,5 +1,6 @@
 import { canonicalAx25Call, formatAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
 import type { Ax25Modulo } from '~/utils/packet-ax25';
+import type { SavedRadio } from '~/utils/saved-radios';
 
 export const PACKET_SETTINGS_KEY = 'hbench.packet.settings';
 
@@ -110,4 +111,55 @@ export function packetMyCall(base: string | undefined, ssid: number): Ax25Call |
 export function packetMyCallLabel(base: string | undefined, ssid: number): string | undefined {
   const call = packetMyCall(base, ssid);
   return call ? formatAx25Call(call) : undefined;
+}
+
+export function packetIdentityFromRadio(
+  radio: Pick<SavedRadio, 'packetSsid' | 'packetAcceptIncoming'> | undefined,
+  storage: PacketSettingsStorage,
+): Pick<PacketSettings, 'ssid' | 'acceptIncoming'> {
+  if (radio?.packetSsid !== undefined) {
+    return {
+      ssid: Math.min(15, Math.max(0, radio.packetSsid)),
+      acceptIncoming: radio.packetAcceptIncoming === true,
+    };
+  }
+
+  const global = readPacketSettings(storage);
+
+  return {
+    ssid: global.ssid,
+    acceptIncoming: global.acceptIncoming,
+  };
+}
+
+/** Copy global Packet SSID and accept once, then persist on the saved radio. */
+export function migratePacketRadioIdentity(
+  radio: SavedRadio,
+  storage: PacketSettingsStorage,
+): SavedRadio {
+  if (radio.packetSsid !== undefined) {
+    return radio;
+  }
+
+  const global = readPacketSettings(storage);
+
+  return {
+    ...radio,
+    packetSsid: global.ssid,
+    packetAcceptIncoming: global.acceptIncoming,
+  };
+}
+
+export function packetSettingsForCard(
+  radio: SavedRadio | undefined,
+  storage: PacketSettingsStorage,
+): PacketSettings {
+  const global = readPacketSettings(storage);
+  const identity = packetIdentityFromRadio(radio, storage);
+
+  return normalizePacketSettings({
+    ...global,
+    ssid: identity.ssid,
+    acceptIncoming: identity.acceptIncoming,
+  });
 }

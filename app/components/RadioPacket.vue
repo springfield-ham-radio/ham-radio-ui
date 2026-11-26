@@ -5,7 +5,7 @@ import { packetNeedsHostNotice } from '~/utils/aprs-connection';
 import { formatPacketTime, packetFixturePayloads } from '~/utils/packet-monitor';
 import type { PacketTypeFilter } from '~/utils/packet-monitor';
 import { packetMyCallLabel } from '~/utils/packet-settings';
-import { packetCallStationTooltip, packetTerminalView } from '~/utils/packet-terminal';
+import { packetCallStationTooltip, packetCallTransmitNote, packetTerminalView } from '~/utils/packet-terminal';
 
 const props = defineProps<{
   cardId?: string;
@@ -44,8 +44,14 @@ const terminal = computed(() => packetTerminalView({
   hardwareTransmit: hostSnapshot.value?.hardwareTransmit !== false,
   phase: state.value?.phase ?? 'none',
   myCall: myCall.value,
-  peer: state.value?.peer,
+  peer: state.value?.peer ?? (peer.value.trim() || undefined),
+  connectAttempt: state.value?.connectAttempt,
+  n2: state.value?.n2,
+  noAnswer: state.value?.noAnswer,
 }));
+const callTransmitNote = computed(() =>
+  packetCallTransmitNote(state.value?.settings.t1Ms ?? 3000, state.value?.settings.n2 ?? 10),
+);
 const packetPanes = [
   { label: 'Monitor', value: 'monitor', slot: 'monitor' },
   { label: 'Terminal', value: 'terminal', slot: 'terminal' },
@@ -96,6 +102,18 @@ watch(
 
     host.setHostLink(props.cardId, profile.value?.host?.link);
     packet.attach(props.cardId);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [props.cardId, baseCall.value, state.value?.settings.ssid, state.value?.settings.acceptIncoming] as const,
+  () => {
+    if (!props.cardId) {
+      return;
+    }
+
+    packet.syncStation(props.cardId, baseCall.value);
   },
   { immediate: true },
 );
@@ -319,7 +337,11 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
       <template #terminal>
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       <div class="flex shrink-0 flex-wrap items-end gap-2">
-        <UBadge :label="terminal.linkLabel" :color="state?.phase === 'connected' ? 'success' : 'neutral'" variant="subtle" />
+        <UBadge
+          :label="terminal.linkLabel"
+          :color="state?.phase === 'connected' ? 'success' : (state?.noAnswer ? 'warning' : 'neutral')"
+          variant="subtle"
+        />
         <UFormField label="Station" class="w-36" :error="peer.length > 0 && !peerReady ? 'Enter a callsign' : undefined">
           <UInput v-model="peer" placeholder="W1AW-1" class="w-full font-mono" :disabled="terminal.canDisconnect" />
         </UFormField>
@@ -342,6 +364,7 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
         <UButton size="sm" color="neutral" variant="outline" label="Disconnect" :disabled="!terminal.canDisconnect" @click="onLinkDisconnect" />
         <p v-if="portOpen && terminal.connectBlocked && !terminal.canDisconnect" class="pb-1.5 text-xs text-muted">{{ terminal.connectBlocked }}</p>
         <p v-else-if="state?.error" class="pb-1.5 text-xs text-error">{{ state.error }}</p>
+        <p class="w-full basis-full text-xs text-muted">{{ callTransmitNote }}</p>
       </div>
       <div class="flex shrink-0 flex-wrap items-end gap-2">
         <UFormField label="Modulo" class="w-40">
@@ -366,7 +389,7 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
         />
       </div>
       <p class="shrink-0 text-xs text-muted">
-        Defaults are paclen 128, maxframe 4, T1 3 s, T3 3 min, N2 10, modulo 8. An unsolicited SABM is ignored while Accept incoming connections is off, so the radio stays silent. Settings other than that switch apply on the next link. Leaving this tab sends DISC and stops the timers.
+        Defaults are paclen 128, maxframe 4, T1 3 s, T3 3 min, N2 10, modulo 8. An unsolicited SABM is ignored while Accept incoming connections is off, so the radio stays silent. SSID and Accept incoming are saved on this radio. Other settings apply on the next link. Leaving this tab sends DISC and stops the timers.
       </p>
       <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-xl bg-default p-3 font-mono text-sm shadow-sm ring-1 ring-default">{{ state?.scrollback || ' ' }}</pre>
       <form class="flex shrink-0 gap-2" @submit.prevent="onSend">

@@ -7,6 +7,7 @@ import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
 import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
 import { aprsHoldPaths } from '../../app/utils/aprs-session.ts';
+import { APRS_HOST_BOOT_QUIET_MS } from '../../app/utils/aprs-host-boot.ts';
 
 function fakePort(): { port: AprsHostBytePort; writes: Uint8Array[]; push: (chunk: Uint8Array) => void } {
   const writes: Uint8Array[] = [];
@@ -736,7 +737,8 @@ describe('APRS host session', () => {
   });
 
   it('treats the 24-byte HBAUD reply as this connection prompt and does not send Ctrl+C', async () => {
-    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
+    let time = 1_700_000_000_000;
+    const session = createD710HostSession({ now: () => time });
     const reply = Uint8Array.from([
       0x3a, 0x48, 0x42, 0x41, 0x55, 0x44, 0x20, 0x20, 0x20, 0x20, 0x77, 0x61, 0x73, 0x20, 0x31, 0x32, 0x30, 0x30,
       0x0d, 0x0a, 0x63, 0x6d, 0x64, 0x3a,
@@ -747,6 +749,11 @@ describe('APRS host session', () => {
 
     expect(new TextDecoder().decode(reply)).toBe(':HBAUD    was 1200\r\ncmd:');
     expect(session.snapshot().rxBytes).toBe(24);
+    expect(fake.writes).toHaveLength(0);
+
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
     expect(session.snapshot().commandPhase).toBe('waiting-accept');
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     expect(fake.writes.some((frame) => frame.includes(0x03))).toBe(false);
@@ -775,7 +782,8 @@ describe('APRS host session', () => {
   it('keeps a 28-byte DA/HB tail without a colon idle, and logs KISS ON only after the plugin accepts 8 bytes', async () => {
     const tail = new TextEncoder().encode('A 110101000000\r\nHB 1200\r\ncmd');
     expect(tail).toHaveLength(28);
-    const session = createD710HostSession({ now: () => 1_700_000_000_000 });
+    let time = 1_700_000_000_000;
+    const session = createD710HostSession({ now: () => time });
     const fake = fakePort();
     let release: (count: number) => void = () => undefined;
     fake.port.write = (bytes) =>
@@ -789,6 +797,10 @@ describe('APRS host session', () => {
     expect(session.snapshot().rxBytes).toBe(28);
 
     fake.push(new TextEncoder().encode('HBAUD    was 1200\r\ncmd:'));
+    expect(fake.writes).toHaveLength(0);
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
     expect(session.snapshot().commandPhase).toBe('waiting-accept');
     expect(session.snapshot().trace.some((line) => line.direction === 'tx-command')).toBe(false);
     release(8);
@@ -1222,8 +1234,9 @@ describe('host Connect detection', () => {
     expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
   });
 
-  it('enters immediately when cmd: is already in the open buffer', async () => {
-    const session = createD710HostSession({ allowHardwareTransmit: true });
+  it('enters when cmd: is already in the open buffer after startup output quiets', async () => {
+    let time = 1_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
     const fake = fakePort();
     const banner = 'DA 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
     const attach = fake.port.on.bind(fake.port);
@@ -1237,12 +1250,15 @@ describe('host Connect detection', () => {
     await settle();
     expect(session.snapshot().frames).toBe(0);
     expect(session.snapshot().commandTextBytes).toBe(banner.length);
-    expect(session.snapshot().trace.some((line) => line.note.includes('already on this connection'))).toBe(true);
-    expect(session.snapshot().sawMonitorLine).toBe(false);
-    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
-    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes).toHaveLength(0);
 
-    fake.push(new TextEncoder().encode('cmd:'));
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
     await settle();
     expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
     fake.push(kissUi());
@@ -1256,7 +1272,8 @@ describe('host Connect detection', () => {
   });
 
   it('writes KISS ON and RESTART once for the startup banner, then waits', async () => {
-    const session = createD710HostSession({ allowHardwareTransmit: true });
+    let time = 1_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
     const fake = fakePort();
     const banner = 'A 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
     expect(new TextEncoder().encode(banner)).toHaveLength(52);
@@ -1268,6 +1285,11 @@ describe('host Connect detection', () => {
       }
     };
     await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await settle();
+    expect(fake.writes).toHaveLength(0);
+
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
     await settle();
     expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([APRS_KISS_ON_COMMAND]);
 
@@ -1290,8 +1312,7 @@ describe('host Connect detection', () => {
     expect(session.snapshot().commandPhase).not.toBe('waiting-accept');
     expect(session.snapshot().frames).toBe(0);
     expect(session.snapshot().kissConfirmed).toBe(false);
-    const already = session.snapshot().trace.filter((line) => line.note.includes('was already on this connection'));
-    expect(already).toHaveLength(1);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
   });
 
   it('does not treat an echoed KISS return as a received frame, then enters on cmd:', async () => {
@@ -1371,7 +1392,8 @@ describe('host Connect detection', () => {
   });
 
   it('enters KISS again when a power cycle prints cmd: after a UI frame', async () => {
-    const session = createD710HostSession({ allowHardwareTransmit: true });
+    let time = 2_000_000_000_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/ttyUSB0', async () => fake.port);
     const frameA = hexBytes(
@@ -1392,18 +1414,18 @@ describe('host Connect detection', () => {
     expect(lost.kissConfirmed).toBe(false);
     expect(lost.incompleteBytes).toBe(0);
     expect(lost.commandTextBytes).toBe(banner.length);
-    expect(lost.detectPhase).toBe('entering');
-    expect(lost.trace.some((line) => line.note.includes('command-text'))).toBe(true);
-    expect(lost.trace.some((line) => line.note.includes('KISS is not confirmed'))).toBe(true);
-    expect(lost.trace.some((line) => /incomplete, \d+ held/u.test(line.note))).toBe(false);
+    expect(fake.writes).toHaveLength(0);
+
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('entering');
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     expect(fake.writes).toHaveLength(1);
 
     const rest = 'DA 110101000000\r\ncmd:HB 1200\r\nHBAUD    was 1200\r\ncmd:N4822C>APT311,WIDE2-1:/171242h3037.37N/09737.96W>\r\n';
-    fake.push(new TextEncoder().encode(rest));
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
     await settle();
-    expect(session.snapshot().incompleteBytes).toBe(0);
-    expect(session.snapshot().commandTextBytes).toBe(banner.length + rest.length);
     expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
 
     fake.push(frameA);
@@ -1489,8 +1511,33 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectDetail).not.toContain('not answering');
   });
 
+  it('does not send RESTART on a setup cmd: that was already in the session buffer', async () => {
+    let time = 1_000;
+    const session = createD710HostSession({ now: () => time, allowHardwareTransmit: true });
+    const fake = fakePort();
+    const banner = 'DA 110101000000\r\nHB 1200\r\ncmd:HBAUD    was 1200\r\ncmd:';
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode(banner));
+    await settle();
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    fake.push(new TextEncoder().encode('cmd:HB 1200\r\n'));
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([
+      APRS_KISS_ON_COMMAND,
+      APRS_RESTART_COMMAND,
+    ]);
+  });
+
   it('enters KISS when cmd: follows an unframed AX.25 leftover', async () => {
+    let time = 1_000;
     const session = createAprsHostSession({
+      now: () => time,
       allowHardwareTransmit: true,
       host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
     });
@@ -1525,10 +1572,15 @@ describe('host Connect detection', () => {
     await settle();
     expect(session.snapshot().kissConfirmed).toBe(false);
     expect(session.snapshot().frames).toBe(0);
+    expect(fake.writes).toHaveLength(0);
+
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     expect(fake.writes).toHaveLength(1);
 
-    fake.push(new TextEncoder().encode('cmd:'));
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
     await settle();
     expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
     expect(fake.writes.some((frame) => frame.includes(0xc0))).toBe(false);
@@ -1536,7 +1588,9 @@ describe('host Connect detection', () => {
   });
 
   it('does not treat a monitor fragment with ESC and FEND as KISS, then enters on the banner', async () => {
+    let time = 1_000;
     const session = createAprsHostSession({
+      now: () => time,
       allowHardwareTransmit: true,
       host: { ...d710AprsHostLink(), kissExit: Uint8Array.of(0xc0, 0xff, 0xc0) },
     });
@@ -1572,10 +1626,15 @@ describe('host Connect detection', () => {
     await settle();
     expect(session.snapshot().kissConfirmed).toBe(false);
     expect(session.snapshot().frames).toBe(0);
+    expect(fake.writes).toHaveLength(0);
+
+    time += APRS_HOST_BOOT_QUIET_MS + 1;
+    session.poll();
+    await settle();
     expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     expect(fake.writes).toHaveLength(1);
 
-    fake.push(new TextEncoder().encode('cmd:'));
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
     await settle();
     expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
     const written = fake.writes.map((frame) => new TextDecoder().decode(frame)).join('\n');

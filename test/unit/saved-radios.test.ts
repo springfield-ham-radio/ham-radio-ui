@@ -141,6 +141,9 @@ describe('saved radios', () => {
 
     expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withAprs] })).radios[0]).toEqual(withAprs);
 
+    const packetized = { ...withAprs, packetSsid: 7, packetAcceptIncoming: true };
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [packetized] })).radios[0]).toEqual(packetized);
+
     const memory = rememberSavedRadioSerialPort(withAprs, '/dev/cu.other', 30);
     expect(memory.serialPort).toBe('/dev/cu.other');
     expect(memory.aprsSerialPort).toBe('/dev/cu.pg5g');
