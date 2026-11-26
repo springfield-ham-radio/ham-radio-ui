@@ -20,6 +20,7 @@ export interface PacketTerminalInput {
   connectAttempt?: number;
   n2?: number;
   noAnswer?: string;
+  detectDetail?: string;
 }
 
 export interface PacketTerminalView {
@@ -78,6 +79,7 @@ export function packetCallStationTooltip(input: {
   hardwareTransmit: boolean;
   myCall?: string;
   station: string;
+  detectDetail?: string;
 }): string | undefined {
   if (!input.portOpen) {
     return 'Connect (Host) first';
@@ -104,6 +106,24 @@ export function packetCallStationTooltip(input: {
   }
 
   if (input.detectPhase === 'failed') {
+    const detail = input.detectDetail ?? '';
+
+    if (detail.includes('command mode (echoing)')) {
+      return 'TNC is in command mode (echoing)';
+    }
+
+    if (detail.includes('rejected KISS ON')) {
+      return 'TNC rejected KISS ON';
+    }
+
+    if (detail.includes('stayed in command mode')) {
+      return 'TNC stayed in command mode after RESTART';
+    }
+
+    if (detail.includes('rebooted during KISS entry')) {
+      return 'The TNC rebooted during KISS entry';
+    }
+
     return 'KISS detection did not finish';
   }
 
@@ -134,6 +154,7 @@ export function packetTerminalView(input: PacketTerminalInput): PacketTerminalVi
     detectPhase: input.detectPhase,
     kissConfirmed: input.kissConfirmed,
     hardwareTransmit: input.hardwareTransmit,
+    detectDetail: input.detectDetail,
   });
   const phase = input.phase;
   const open = phase === 'connecting' || phase === 'connected' || phase === 'timer-recovery' || phase === 'disconnecting';

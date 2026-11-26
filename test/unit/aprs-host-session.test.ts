@@ -1547,7 +1547,7 @@ describe('host Connect detection', () => {
     expect(session.snapshot().detectDetail).not.toContain('not answering');
   });
 
-  it('does not send RESTART on a setup cmd: that was already in the session buffer', async () => {
+  it('re-runs KISS ON when setup text arrives after KISS ON and before RESTART', async () => {
     const clock = { t: 1_000 };
     const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
     const fake = fakePort();
@@ -1560,9 +1560,18 @@ describe('host Connect detection', () => {
     fake.push(new TextEncoder().encode('cmd:HB 1200\r\n'));
     await settle();
     expect(fake.writes).toHaveLength(1);
+    await advanceHostRetryClock(session, clock, APRS_HOST_BOOT_QUIET_MS + 1);
+    expect(fake.writes).toHaveLength(1);
     fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
     await settle();
     expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([
+      APRS_KISS_ON_COMMAND,
+      APRS_KISS_ON_COMMAND,
+    ]);
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    expect(fake.writes.map((frame) => new TextDecoder().decode(frame))).toEqual([
+      APRS_KISS_ON_COMMAND,
       APRS_KISS_ON_COMMAND,
       APRS_RESTART_COMMAND,
     ]);
@@ -2100,6 +2109,151 @@ describe('host Connect detection', () => {
     await settle();
     expect(fake.writes).toHaveLength(2);
     expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+  });
+
+  it('replays the D710 Home trace: no RESTART after ?, KISS ON after the reboot, echoed SABM is not KISS', async () => {
+    const pollSpy = vi.spyOn(globalThis, 'setInterval');
+    const clock = { t: 0 };
+    const session = createD710HostSession({
+      useRetryClock: true,
+      now: () => clock.t,
+      allowHardwareTransmit: true,
+      host: { ...d710AprsHostLink(), promptNudge: Uint8Array.of(0x0d) },
+    });
+    const fake = fakePort();
+    const kissPayloads: Uint8Array[] = [];
+    session.addKissDataListener((payload) => {
+      kissPayloads.push(payload);
+    });
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+
+    await fireDetectPollInterval(pollSpy, clock, 3_250);
+    expect(fake.writes[0]).toEqual(APRS_COMMAND_INTERRUPT);
+    await fireDetectPollInterval(pollSpy, clock, 5_000);
+    expect(fake.writes[1]).toEqual(Uint8Array.of(0x0d));
+
+    const questioned = clock.t;
+    fake.push(new TextEncoder().encode('?\r'));
+    await settle();
+    clock.t = questioned + (10_145 - 8_060);
+    fake.push(new TextEncoder().encode('KWXIMON  was 0\rcmd:'));
+    await settle();
+    clock.t = questioned + (10_221 - 8_060);
+    fake.push(new TextEncoder().encode('UNPROTO  was APK102\rcmd:'));
+    await settle();
+    clock.t = questioned + (10_368 - 8_060);
+    fake.push(new TextEncoder().encode('cmd:'));
+    await settle();
+
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    const wrote = () => fake.writes.map((frame) => new TextDecoder().decode(frame));
+    expect(wrote().filter((text) => text === APRS_KISS_ON_COMMAND)).toHaveLength(1);
+    expect(wrote()).not.toContain(APRS_RESTART_COMMAND);
+    const kissAt = clock.t;
+
+    clock.t = kissAt + 44;
+    fake.push(new TextEncoder().encode('?\r'));
+    await settle();
+    expect(wrote()).not.toContain(APRS_RESTART_COMMAND);
+    expect(session.snapshot().detectDetail).toContain('TNC rejected KISS ON');
+
+    clock.t = kissAt + 2_605;
+    fake.push(new TextEncoder().encode(
+      '\r\n\r\n\r\nKenwood Radio Modem\r\nAX.25 Level 2 Version 2.0\r\nRelease 09/Mar/11 3Chip ver 1.02\r\nChecksum $1859\r\ncmd:',
+    ));
+    await settle();
+    clock.t = kissAt + 2_724;
+    session.runDetectClock();
+    await settle();
+    expect(wrote()).not.toContain(APRS_RESTART_COMMAND);
+
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    expect(wrote().filter((text) => text === APRS_KISS_ON_COMMAND)).toHaveLength(2);
+    expect(wrote()).not.toContain(APRS_RESTART_COMMAND);
+
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    expect(wrote().at(-1)).toBe(APRS_RESTART_COMMAND);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('KISS on, waiting for traffic');
+    expect(session.packetSendBlock()).toBeUndefined();
+
+    const sabm = hexBytes('c0 00 96 8c 6a aa 8c 94 f0 96 8c 6a aa 8c 94 6f 3f c0');
+    const payload = sabm.subarray(2, sabm.length - 1);
+    expect(encodeKissData(payload)).toEqual(sabm);
+    expect(await session.writeKissData(payload)).toBeUndefined();
+    const echoAt = clock.t;
+    clock.t = echoAt + 8;
+    fake.push(sabm.subarray(0, 6));
+    clock.t = echoAt + 16;
+    fake.push(sabm.subarray(6, 12));
+    clock.t = echoAt + 25;
+    fake.push(sabm.subarray(12));
+    await settle();
+
+    expect(session.snapshot().frames).toBe(0);
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(kissPayloads).toEqual([]);
+    expect(session.snapshot().detectDetail).toContain('TNC is in command mode (echoing)');
+    expect(session.snapshot().trace.some((line) => line.note?.includes('1 KISS'))).toBe(false);
+    expect(session.packetSendBlock()).toMatch(/command mode \(echoing\)/);
+    expect(await session.writeKissData(payload)).toMatch(/command mode \(echoing\)/);
+    expect(fake.writes.filter((frame) => frame.length === sabm.length)).toHaveLength(1);
+    pollSpy.mockRestore();
+  });
+
+  it('keeps KISS when RESTART is followed by a banner and silence', async () => {
+    const pollSpy = vi.spyOn(globalThis, 'setInterval');
+    const clock = { t: 5_000 };
+    const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('Kenwood Radio Modem\r\nChecksum $1859\r\ncmd:'));
+    await settle();
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    expect(new TextDecoder().decode(fake.writes.at(-1) ?? new Uint8Array())).toBe(APRS_RESTART_COMMAND);
+    const writes = fake.writes.length;
+    fake.push(new TextEncoder().encode('\r\nKenwood Radio Modem\r\nChecksum $1859\r\ncmd:'));
+    await settle();
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    expect(fake.writes).toHaveLength(writes);
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+    expect(session.snapshot().detectDetail).toContain('KISS on, waiting for traffic');
+    expect(session.packetSendBlock()).toBeUndefined();
+    pollSpy.mockRestore();
+  });
+
+  it('re-runs entry once when RESTART comes back in command mode, then fails', async () => {
+    const pollSpy = vi.spyOn(globalThis, 'setInterval');
+    const clock = { t: 9_000 };
+    const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    fake.push(new TextEncoder().encode('Kenwood Radio Modem\r\ncmd:'));
+    await settle();
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    fake.push(new TextEncoder().encode('KISS     was OFF\r\ncmd:'));
+    await settle();
+    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+
+    fake.push(new TextEncoder().encode(
+      'RESTART\r\n\r\nKenwood Radio Modem\r\nChecksum $1859\r\ncmd:110101000000\r\n?EH\r\ncmd:HBAUD    was 1200\r\ncmd:',
+    ));
+    await settle();
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    const texts = fake.writes.map((frame) => new TextDecoder().decode(frame));
+    expect(texts.filter((text) => text === APRS_KISS_ON_COMMAND).length).toBeGreaterThanOrEqual(2);
+    expect(session.snapshot().detectDetail).not.toBe('KISS on, waiting for traffic.');
+
+    fake.push(new TextEncoder().encode('cmd:HBAUD    was 1200\r\n?EH\r\ncmd:'));
+    await settle();
+    await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+    expect(session.snapshot().detectPhase).toBe('failed');
+    expect(session.snapshot().detectDetail).toMatch(/command mode|rebooted during KISS entry|rejected KISS ON/);
+    expect(session.packetSendBlock()).toBeTruthy();
+    pollSpy.mockRestore();
   });
 });
 

@@ -146,6 +146,22 @@ export function serialEventHeadline(note: string): string {
     return 'Asked for a prompt';
   }
 
+  if (note.includes('TNC is in command mode (echoing)')) {
+    return 'TNC is in command mode (echoing)';
+  }
+
+  if (note.includes('TNC rejected KISS ON')) {
+    return 'TNC rejected KISS ON';
+  }
+
+  if (note.includes('TNC stayed in command mode')) {
+    return 'TNC stayed in command mode after RESTART';
+  }
+
+  if (note.includes('rebooted during KISS entry')) {
+    return 'The TNC rebooted during KISS entry';
+  }
+
   if (note.includes('Prompt nudge written')) {
     return 'Prompt nudge';
   }

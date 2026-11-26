@@ -48,6 +48,7 @@ const terminal = computed(() => packetTerminalView({
   connectAttempt: state.value?.connectAttempt,
   n2: state.value?.n2,
   noAnswer: state.value?.noAnswer,
+  detectDetail: hostSnapshot.value?.detectDetail,
 }));
 const callTransmitNote = computed(() =>
   packetCallTransmitNote(state.value?.settings.t1Ms ?? 3000, state.value?.settings.n2 ?? 10),
@@ -227,6 +228,7 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
   hardwareTransmit: hostSnapshot.value?.hardwareTransmit !== false,
   myCall: myCall.value,
   station: peer.value,
+  detectDetail: hostSnapshot.value?.detectDetail,
 }));
 </script>
 

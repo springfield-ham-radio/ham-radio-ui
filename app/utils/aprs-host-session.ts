@@ -36,6 +36,49 @@ const OUTBOX_CAP = 50;
 const DETECT_TRAFFIC = 'KISS on, waiting for traffic.';
 const DETECT_UI = 'AX.25 UI seen.';
 const DETECT_SILENCE = 'The TNC is not answering. The radio may not be in PACKET mode. Nothing more was written.';
+const REJECTED_KISS = 'TNC rejected KISS ON.';
+const REBOOTED_ENTRY = 'The TNC rebooted during KISS entry. Entry was not repeated.';
+const COMMAND_MODE_ECHO = 'TNC is in command mode (echoing).';
+const COMMAND_MODE_RESTART = 'TNC stayed in command mode after RESTART.';
+const COMMAND_ECHO_MS = 200;
+const MAX_ENTRY_PASSES = 2;
+
+/** A line that is only `?`, which is a Kenwood command rejection. `?EH` is separate. */
+function bareQuestionRejection(text: string): boolean {
+  return /(^|[\r\n])\?[ \t]*(?:[\r\n]|$)/u.test(text);
+}
+
+/**
+ * Text after RESTART that is still the TNC command prompt, not the silent
+ * reboot that means KISS took.
+ */
+function restartLooksLikeCommand(text: string): boolean {
+  const body = text.replace(/^\s*RESTART\r?\n?/u, '');
+
+  if (!/\S/u.test(body)) {
+    return false;
+  }
+
+  if (bareQuestionRejection(body)) {
+    return true;
+  }
+
+  const prompt = 'cmd:';
+  const last = body.lastIndexOf(prompt);
+
+  if (last < 0) {
+    return /\?EH|HBAUD|UNPROTO|KWXIMON|Kenwood Radio Modem|(?:^|[\r\n])(?:DA |HB )/u.test(body);
+  }
+
+  const tail = body.slice(last + prompt.length);
+
+  if (!/^[\r\n\s]*$/u.test(tail)) {
+    return true;
+  }
+
+  const head = body.slice(0, last);
+  return /\?EH|HBAUD|UNPROTO|KWXIMON|cmd:\S|(?:^|[\r\n])(?:cmd:)?(?:DA |HB )/u.test(head);
+}
 
 function detectTextWithoutPrompt(prompt: string): string {
   return `Command-mode text was seen, but ${prompt} did not arrive after the prompt request. Nothing more was written.`;
@@ -270,6 +313,24 @@ export function createAprsHostSession(options?: {
   /** Overall cap for an awaiting-prompt hold. Zero means the hold has not started. */
   let promptWaitUntil = 0;
   let promptWaitLogged = false;
+  /** Full KISS ON … RESTART passes started on this connection. */
+  let entryPasses = 0;
+  /** Bare `?` answers to KISS ON. One retry, then fail. */
+  let kissOnRejects = 0;
+  /** After a rejected KISS ON or a mid-entry reboot, wait for quiet and a bare prompt. */
+  let reentryHold = false;
+  let reentryReason: 'reject' | 'reboot' = 'reject';
+  /** The TNC echoed a KISS frame while KISS was still unconfirmed. */
+  let commandModeEcho = false;
+  /** RESTART was written. Later command text means it did not stick. */
+  let restartWatch = false;
+  let restartText = '';
+  let restartQuietUntil = 0;
+  let restartRetried = false;
+  /** Last KISS frame written, so a split command-mode echo can be recognized. */
+  let kissTxFrame: Uint8Array | undefined;
+  let kissTxAt = 0;
+  let kissTxMatched = 0;
   const trace: AprsTraceLine[] = [];
   let traceDropped = 0;
   const rxTraceCoalesce = new DirectionCoalesceBuffer(SERIAL_DIRECTION_COALESCE_IDLE_MS, now);
@@ -398,7 +459,73 @@ export function createAprsHostSession(options?: {
 
     bytesWritten += bytes.length;
     echoBytes = Uint8Array.from(bytes);
+
+    if (bytes.length >= 3 && bytes[0] === 0xc0 && bytes[1] === 0x00 && bytes[bytes.length - 1] === 0xc0) {
+      kissTxFrame = Uint8Array.from(bytes);
+      kissTxAt = now();
+      kissTxMatched = 0;
+    }
+
     return { ok: true, accepted, plugin };
+  }
+
+  /**
+   * Bytes that continue the last KISS frame within the echo window.
+   * A command-mode TNC sends the frame back in pieces. Those bytes are not traffic.
+   */
+  function takeCommandEcho(chunk: Uint8Array): { data: Uint8Array; echo: boolean } {
+    if (commandModeEcho || kissConfirmed || !kissTxFrame || kissTxFrame.length === 0 || chunk.length === 0) {
+      return { data: chunk, echo: false };
+    }
+
+    if (now() - kissTxAt > COMMAND_ECHO_MS) {
+      kissTxMatched = 0;
+      return { data: chunk, echo: false };
+    }
+
+    let index = 0;
+
+    while (
+      index < chunk.length
+      && kissTxMatched + index < kissTxFrame.length
+      && chunk[index] === kissTxFrame[kissTxMatched + index]
+    ) {
+      index += 1;
+    }
+
+    if (index === 0) {
+      kissTxMatched = 0;
+      return { data: chunk, echo: false };
+    }
+
+    kissTxMatched += index;
+    const rest = chunk.subarray(index);
+
+    if (kissTxMatched >= kissTxFrame.length) {
+      kissTxFrame = undefined;
+      kissTxMatched = 0;
+      noteCommandModeEcho();
+    }
+
+    return { data: rest, echo: true };
+  }
+
+  function noteCommandModeEcho(): void {
+    if (commandModeEcho) {
+      return;
+    }
+
+    commandModeEcho = true;
+    reentryHold = false;
+    restartWatch = false;
+    commandActive = false;
+    hostEnterRequested = false;
+    commandPhase = 'rejected';
+    detectPhase = 'failed';
+    detectDetail = COMMAND_MODE_ECHO;
+    detectDeadline = Number.POSITIVE_INFINITY;
+    clearDetectClock();
+    record('note', new Uint8Array(), COMMAND_MODE_ECHO);
   }
 
   /** Drop one copy of the last write. ECHO defaults to ON, so the TNC sends those bytes back. */
@@ -461,8 +588,65 @@ export function createAprsHostSession(options?: {
     if (textShowsTncBoot(new TextDecoder().decode(bytes))) {
       sawBootOutput = true;
       bootQuietAfter = now() + APRS_HOST_BOOT_QUIET_MS;
+
+      if (reentryHold) {
+        promptWaitUntil = Math.max(promptWaitUntil, now() + (hostLink?.waitMs ?? 5000));
+        detectDeadline = bootQuietAfter;
+        armDetectClock();
+      }
+
       scheduleBootQuietPoll();
     }
+  }
+
+  function resetEntryGuards(): void {
+    entryPasses = 0;
+    kissOnRejects = 0;
+    reentryHold = false;
+    commandModeEcho = false;
+    restartWatch = false;
+    restartText = '';
+    restartQuietUntil = 0;
+    restartRetried = false;
+    kissTxFrame = undefined;
+    kissTxMatched = 0;
+  }
+
+  function beginReentry(reason: 'reject' | 'reboot'): void {
+    const rejectAgain = reason === 'reject' && (kissOnRejects >= 1 || restartRetried);
+    const rebootAgain = reason === 'reboot' && entryPasses >= MAX_ENTRY_PASSES;
+
+    if (rejectAgain || rebootAgain) {
+      reentryHold = false;
+      commandActive = false;
+      commandPhase = 'rejected';
+      hostEnterRequested = false;
+      failDetect(rejectAgain ? REJECTED_KISS : (restartRetried ? COMMAND_MODE_RESTART : REBOOTED_ENTRY));
+      return;
+    }
+
+    if (reason === 'reject') {
+      kissOnRejects += 1;
+      bootQuietAfter = Math.max(bootQuietAfter, now() + APRS_HOST_BOOT_QUIET_MS);
+    }
+
+    reentryHold = true;
+    reentryReason = reason;
+    enterIndex = 0;
+    hostEnterRequested = false;
+    commandActive = false;
+    commandPhase = 'idle';
+    commandBytes = new Uint8Array();
+    detectPhase = 'awaiting-prompt';
+    detectStep = 'after-text';
+    beginPromptBudget();
+    detectDeadline = Math.max(now(), bootQuietAfter);
+    detectDetail = reason === 'reject'
+      ? 'TNC rejected KISS ON. Waiting for a fresh prompt to try once more.'
+      : 'The TNC rebooted during KISS entry. Waiting for startup to finish, then trying again.';
+    record('note', new Uint8Array(), detectDetail);
+    armDetectClock();
+    publish();
   }
 
   function sessionTailNote(message: string): string {
@@ -564,6 +748,14 @@ export function createAprsHostSession(options?: {
       return;
     }
 
+    if (entryPasses >= MAX_ENTRY_PASSES) {
+      commandPhase = 'rejected';
+      failDetect(REBOOTED_ENTRY);
+      return;
+    }
+
+    entryPasses += 1;
+    reentryHold = false;
     detectPhase = 'entering';
     enterIndex = 0;
     detectDeadline = Number.POSITIVE_INFINITY;
@@ -702,6 +894,7 @@ export function createAprsHostSession(options?: {
     bootQuietAfter = 0;
     promptWaitUntil = 0;
     promptWaitLogged = false;
+    resetEntryGuards();
     if (!kissConfirmed && frames === 0 && enterPromptReady()) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
@@ -880,7 +1073,15 @@ export function createAprsHostSession(options?: {
    * banner before that runs the same enter steps as a prompt in the open buffer.
    */
   function resumeUnconfirmedCommand(): void {
-    if (!hostLink || hostLink.entry === 'manual' || kissConfirmed || detectPhase === 'entering' || enterInFlight) {
+    if (
+      !hostLink
+      || hostLink.entry === 'manual'
+      || kissConfirmed
+      || detectPhase === 'entering'
+      || enterInFlight
+      || commandModeEcho
+      || reentryHold
+    ) {
       return;
     }
 
@@ -914,6 +1115,10 @@ export function createAprsHostSession(options?: {
   }
 
   function tickDetectClock(): void {
+    if (restartWatch && restartQuietUntil > 0 && now() >= restartQuietUntil && !kissConfirmed && !commandModeEcho) {
+      settleRestartWatch();
+    }
+
     const owned = detectionOwnsWait();
     void expireDetect();
 
@@ -927,7 +1132,17 @@ export function createAprsHostSession(options?: {
   }
 
   function maybeStartEnter(): void {
-    if (!isAprsHostCommandLink(hostLink)) {
+    if (!isAprsHostCommandLink(hostLink) || commandModeEcho) {
+      return;
+    }
+
+    if (reentryHold) {
+      if (now() < bootQuietAfter || !enterPromptReady() || enterInFlight) {
+        return;
+      }
+
+      reentryHold = false;
+      startHostEnter();
       return;
     }
 
@@ -1050,7 +1265,80 @@ export function createAprsHostSession(options?: {
     publish();
   }
 
+  function settleRestartWatch(): void {
+    if (!restartWatch) {
+      return;
+    }
+
+    const text = restartText;
+    const questionOnly = bareQuestionRejection(text) && !textShowsTncBoot(text) && !/\?EH|HBAUD|UNPROTO|KWXIMON/u.test(text);
+    restartQuietUntil = 0;
+    restartText = '';
+
+    if (!restartLooksLikeCommand(text)) {
+      restartWatch = false;
+      clearDetectClock();
+      return;
+    }
+
+    if (restartRetried) {
+      restartWatch = false;
+      commandActive = false;
+      commandPhase = 'rejected';
+      hostEnterRequested = false;
+      failDetect(COMMAND_MODE_RESTART);
+      return;
+    }
+
+    restartRetried = true;
+    restartWatch = false;
+    entryPasses = 1;
+    beginReentry(questionOnly ? 'reject' : 'reboot');
+  }
+
+  function noteRestartResult(bytes: Uint8Array): void {
+    if (!restartWatch || kissConfirmed || commandModeEcho || bytes.length === 0) {
+      return;
+    }
+
+    const text = new TextDecoder().decode(bytes);
+
+    if (!/\S/u.test(text)) {
+      return;
+    }
+
+    restartText += text;
+
+    if (textShowsTncBoot(text) || text.includes('cmd:') || bareQuestionRejection(text) || text.includes('?EH')) {
+      restartQuietUntil = now() + APRS_HOST_BOOT_QUIET_MS;
+      detectDeadline = restartQuietUntil;
+      armDetectClock();
+    }
+  }
+
   async function expireDetect(): Promise<void> {
+    if (reentryHold && detectPhase === 'awaiting-prompt' && !enterInFlight && !detectBusy) {
+      if (now() >= bootQuietAfter && enterPromptReady()) {
+        maybeStartEnter();
+        return;
+      }
+
+      const overallDue = promptWaitUntil > 0 && now() >= promptWaitUntil;
+
+      if (!overallDue) {
+        detectDeadline = now() < bootQuietAfter ? bootQuietAfter : promptWaitUntil;
+        armDetectClock();
+        return;
+      }
+
+      reentryHold = false;
+      commandActive = false;
+      commandPhase = 'rejected';
+      hostEnterRequested = false;
+      failDetect(reentryReason === 'reject' ? REJECTED_KISS : REBOOTED_ENTRY);
+      return;
+    }
+
     if (
       !detectBusy
       && isAprsHostCommandLink(hostLink)
@@ -1109,10 +1397,11 @@ export function createAprsHostSession(options?: {
         }
 
         const overallDue = promptWaitUntil > 0 && now() >= promptWaitUntil;
-        const quietPending = sawBootOutput && !interruptTried && now() < bootQuietAfter;
+        const quietPending = sawBootOutput && now() < bootQuietAfter;
 
         if (quietPending && !overallDue) {
-          armPromptDeadline();
+          detectDeadline = bootQuietAfter;
+          armDetectClock();
           return;
         }
 
@@ -1293,6 +1582,20 @@ export function createAprsHostSession(options?: {
       return;
     }
 
+    if (commandPhase === 'waiting-accept' && detectPhase === 'entering') {
+      const reply = new TextDecoder().decode(commandBytes);
+
+      if (bareQuestionRejection(reply)) {
+        beginReentry('reject');
+        return;
+      }
+
+      if (textShowsTncBoot(reply)) {
+        beginReentry('reboot');
+        return;
+      }
+    }
+
     if (!freshCommandPrompt()) {
       return;
     }
@@ -1376,6 +1679,9 @@ export function createAprsHostSession(options?: {
         detectDetail = DETECT_TRAFFIC;
         detectDeadline = Number.POSITIVE_INFINITY;
         clearDetectClock();
+        restartWatch = true;
+        restartText = '';
+        restartQuietUntil = 0;
         commandDetail = `${commandDetail} ${DETECT_TRAFFIC}`;
       }
       record('tx-command', bytes, commandDetail);
@@ -1589,7 +1895,20 @@ export function createAprsHostSession(options?: {
   const onData = (chunk: Uint8Array): void => {
     const current = generation;
     const stripped = stripEcho(chunk);
-    const decoded = readKiss(stripped.data);
+    let commandEcho = stripped.echoed
+      && !kissConfirmed
+      && chunk.length >= 3
+      && chunk[0] === 0xc0
+      && chunk[1] === 0x00
+      && chunk[chunk.length - 1] === 0xc0;
+
+    if (commandEcho) {
+      noteCommandModeEcho();
+    }
+
+    const splitEcho = takeCommandEcho(stripped.data);
+    commandEcho = commandEcho || splitEcho.echo;
+    const decoded = readKiss(splitEcho.data);
     const dataFrames = decoded.frames.filter((frame) => !isKissReturn(frame));
     const kissReturns = decoded.frames.length - dataFrames.length;
     const quiet = chunk.length === 0 && decoded.ignored === 0 && dataFrames.length === 0 && kissReturns === 0 && decoded.overflow === 0 && decoded.invalid === 0;
@@ -1611,7 +1930,7 @@ export function createAprsHostSession(options?: {
     frames += dataFrames.length;
     const notes: string[] = [];
 
-    if (stripped.echoed) {
+    if (stripped.echoed || commandEcho) {
       notes.push('echo of the last write, not a KISS frame');
     }
 
@@ -1676,6 +1995,7 @@ export function createAprsHostSession(options?: {
 
     if (decoded.ignoredBytes.length > 0 && !openLeftover) {
       commandText = appendCommandBytes(commandText, decoded.ignoredBytes);
+      noteRestartResult(decoded.ignoredBytes);
     }
 
     record('rx', chunk, notes.join(', ') || 'empty');
@@ -2282,6 +2602,7 @@ export function createAprsHostSession(options?: {
         detectPhase,
         kissConfirmed,
         hardwareTransmit: allowHardwareTransmit,
+        detectDetail,
       });
     },
     async writeKissData(payload) {

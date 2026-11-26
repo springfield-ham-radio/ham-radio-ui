@@ -215,6 +215,21 @@ describe('Packet monitor and terminal', () => {
     expect(packetCallStationTooltip({ ...ready, phase: 'disconnecting' })).toBe('The link is closing');
     expect(packetCallStationTooltip({ ...ready, detectPhase: 'listening' })).toBe('Wait until KISS detection finishes');
     expect(packetCallStationTooltip({ ...ready, detectPhase: 'failed' })).toBe('KISS detection did not finish');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'failed',
+      detectDetail: 'TNC rejected KISS ON.',
+    })).toBe('TNC rejected KISS ON');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'failed',
+      detectDetail: 'TNC is in command mode (echoing).',
+    })).toBe('TNC is in command mode (echoing)');
+    expect(packetCallStationTooltip({
+      ...ready,
+      detectPhase: 'waiting-traffic',
+      detectDetail: 'KISS on, waiting for traffic.',
+    })).toBeUndefined();
     expect(packetCallStationTooltip({ ...ready, hardwareTransmit: false })).toBe('Transmit is off for this session');
     expect(packetCallStationTooltip({ ...ready, myCall: undefined })).toBe('Set a callsign in Preferences');
     expect(packetCallStationTooltip(ready)).toBeUndefined();

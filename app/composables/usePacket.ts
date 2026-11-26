@@ -295,6 +295,21 @@ export function usePacket() {
     }
 
     runtime.timer = setInterval(() => {
+      const block = host.packetSendBlock(cardId);
+
+      if (block) {
+        runtime.error = block;
+        const stopped = runtime.mux?.stopAll();
+
+        if (stopped) {
+          apply(runtime, stopped);
+        }
+
+        stopTimer(runtime);
+        publish(cardId);
+        return;
+      }
+
       const step = runtime.mux?.tick(Date.now());
 
       if (!step || (step.frames.length === 0 && step.notices.length === 0)) {
@@ -459,6 +474,7 @@ export function usePacket() {
       detectPhase: snapshot.detectPhase,
       kissConfirmed: snapshot.kissConfirmed,
       hardwareTransmit: snapshot.hardwareTransmit,
+      detectDetail: snapshot.detectDetail,
     });
     const phase = activePhase(runtime);
 
