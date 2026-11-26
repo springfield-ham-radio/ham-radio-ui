@@ -1,3 +1,9 @@
+## [3.18.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.18.0...v3.18.1) (2026-11-26)
+
+### Bug Fixes
+
+* **packet:** answer incoming calls, show call attempts, safe KISS entry timing, per-radio SSID ([#243](https://github.com/springfield-ham-radio/ham-radio-ui/issues/243)) ([8d35387](https://github.com/springfield-ham-radio/ham-radio-ui/commit/8d3538744fc33b87cf007047d362d895c6c1fd4c))
+
 ## [3.18.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.17.0...v3.18.0) (2026-11-26)
 
 ### Features
