@@ -6,6 +6,7 @@ import {
   aprsConnectDisabledReason,
   aprsConnectLabel,
   effectiveAprsSerialPort,
+  isKissOnlyAprsProfile,
   APRS_KISS_STILL_ON_HINT,
   aprsConnectionModeMenuVisible,
   aprsConnectionView,
@@ -452,6 +453,40 @@ describe('APRS TNC mode badge', () => {
       aprsTncModeBadge(host({ detectPhase: 'failed' })).color,
     ];
     expect(new Set(colors).size).toBe(colors.length);
+  });
+});
+
+describe('kiss-only APRS profile predicate', () => {
+  const kissConfig = {
+    capabilities: { aprsReceive: true },
+    aprs: {
+      mode: 'kiss',
+      baudRate: 9600,
+      baudRates: [9600],
+      host: {
+        entry: 'manual',
+        kissExit: [0xc0, 0xff, 0xc0],
+        enter: [],
+        flowControl: 'none',
+        setup: ['KISS on at radio.'],
+        recovery: ['Disconnect exits KISS.'],
+      },
+    },
+  };
+
+  it('matches kiss mode and manual host entry, not monitor fallbacks', () => {
+    expect(isKissOnlyAprsProfile(undefined)).toBe(false);
+    expect(isKissOnlyAprsProfile(aprsReceiveProfile({ config: kissConfig }))).toBe(true);
+    expect(isKissOnlyAprsProfile(aprsReceiveProfile({ model: 'kenwood-tm-d710a', name: 'TM-D710A' }))).toBe(false);
+    expect(isKissOnlyAprsProfile({
+      source: 'driver',
+      baudRate: 9600,
+      baudRates: [9600],
+      help: '',
+      monitorNote: '',
+      passive: true,
+      host: { link: { entry: 'manual', waitMs: 5000, listenMs: 3000, enter: [] } },
+    } as import('../../app/utils/aprs-capability').AprsReceiveProfile)).toBe(true);
   });
 });
 

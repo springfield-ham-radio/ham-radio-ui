@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
-import { effectiveAprsSerialPort } from '~/utils/aprs-connection';
+import { isKissOnlyAprsProfile } from '~/utils/aprs-connection';
 import { aprsSerialPortMenuItems } from '~/utils/aprs-port-select';
 import {
   defaultProgrammingBaudRate,
@@ -96,14 +96,8 @@ const aprsProfile = computed(() =>
 
 const aprsBaudItems = computed(() => (aprsProfile.value?.baudRates ?? []).map((rate) => ({ label: `${rate} baud`, value: rate })));
 
-const aprsPortResolution = computed(() => effectiveAprsSerialPort({
-  profile: aprsProfile.value,
-  aprsSerialPort: aprsSerialPort.value,
-  catSerialPort: serialPort.value,
-}));
-
 const aprsPortFieldDescription = computed(() => {
-  if (aprsProfile.value?.passive === false) {
+  if (isKissOnlyAprsProfile(aprsProfile.value)) {
     return 'KISS-only radios use the memory/CAT USB port. Leave this empty to use that default, or pick another adapter. A saved port that is unplugged stays in the list.';
   }
 
@@ -115,10 +109,10 @@ const aprsPortPlaceholder = computed(() => {
     return 'No APRS port';
   }
 
-  const defaultPath = aprsPortResolution.value.source === 'cat' ? aprsPortResolution.value.path : undefined;
+  const catDefault = serialPort.value?.trim();
 
-  if (defaultPath) {
-    return `${serialPortLabel(defaultPath, readSerialPortSettings().portAliases)} (memory/CAT default)`;
+  if (isKissOnlyAprsProfile(aprsProfile.value) && catDefault) {
+    return `${serialPortLabel(catDefault, readSerialPortSettings().portAliases)} (memory/CAT default)`;
   }
 
   return 'No APRS port';

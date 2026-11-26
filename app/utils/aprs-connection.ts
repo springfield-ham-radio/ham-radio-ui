@@ -127,7 +127,7 @@ export function aprsConnectDisabledReason(input: {
 
 export type EffectiveAprsSerialPortSource = 'saved' | 'cat' | 'none';
 
-function isKissOnlyAprsProfile(profile: AprsReceiveProfile | undefined): boolean {
+export function isKissOnlyAprsProfile(profile: AprsReceiveProfile | undefined): boolean {
   if (!profile) {
     return false;
   }
