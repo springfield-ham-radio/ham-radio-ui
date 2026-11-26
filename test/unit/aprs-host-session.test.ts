@@ -1100,7 +1100,9 @@ describe('host Connect detection', () => {
     expect(session.snapshot().frames).toBe(0);
     expect(session.snapshot().incompleteBytes).toBe(0);
     expect(session.snapshot().commandTextBytes).toBe(monitor.length);
-    expect(session.snapshot().detectDetail).toBe('Command text seen. Waiting for cmd:.');
+    expect(session.snapshot().detectDetail).toContain('Command text seen. Waiting for cmd:.');
+    expect(session.snapshot().detectDetail).toContain('Last ');
+    expect(session.snapshot().detectDetail).toContain('No Windoze');
     expect(fake.writes).toEqual([]);
 
     time += 4_999;
@@ -2003,6 +2005,62 @@ describe('host Connect detection', () => {
 
       await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
       expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+
+    it('solicits a prompt when boot text goes quiet without a trailing bare cmd:', async () => {
+      const clock = { t: 8_000 };
+      const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+      const fake = fakePort();
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      const boot = '\r\nKenwood Radio Modem\r\ncmd:UNPROTO APRS\r\ncmd:HB 1200\r\n';
+      fake.push(new TextEncoder().encode(boot));
+      await settle();
+      expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+      expect(fake.writes).toHaveLength(0);
+      expect(session.snapshot().detectDetail).toContain('Waiting for a bare cmd:');
+      expect(session.snapshot().detectDetail).toContain('cmd:HB 1200');
+      expect(session.snapshot().trace.some((line) => line.note.includes('Last ') && line.note.includes('cmd:UNPROTO'))).toBe(true);
+
+      await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+      expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+      expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+      fake.push(new TextEncoder().encode('cmd:'));
+      await settle();
+      expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+
+    it('solicits a prompt when boot text ends on cmd:HB 1200', async () => {
+      const clock = { t: 3_000 };
+      const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+      const fake = fakePort();
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      fake.push(new TextEncoder().encode('DA 110101000000\r\ncmd:HB 1200'));
+      await settle();
+      expect(fake.writes).toHaveLength(0);
+      expect(session.snapshot().detectDetail).toContain('cmd:HB 1200');
+
+      await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+      expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+
+      fake.push(new TextEncoder().encode('\r\ncmd:'));
+      await settle();
+      expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+
+    it('enters after the overall wait when a boot script never prints a fresh prompt', async () => {
+      const clock = { t: 2_000 };
+      const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+      const fake = fakePort();
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      fake.push(new TextEncoder().encode('Kenwood Radio Modem\r\ncmd:HB 1200\r\n'));
+      await settle();
+
+      await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+      expect(fake.writes).toEqual([APRS_COMMAND_INTERRUPT]);
+
+      await fireDetectPollInterval(pollSpy, clock, 5_000);
+      expect(new TextDecoder().decode(fake.writes[1] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
     });
   });
 
