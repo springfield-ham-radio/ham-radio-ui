@@ -8,7 +8,7 @@ Memory protocol is separate: TH-F6 programs memories with live CAT (`catRead` / 
 
 ## Open the page
 
-On the Radio page, open the **CAT** tab (between Channels and Settings).
+On the Radio page, open the **CAT** tab (after Channels and Settings).
 
 ## Connect
 

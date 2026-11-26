@@ -7,7 +7,8 @@ describe('menu capture developer placement', () => {
     const driver = readFileSync('app/components/RadioDriver.vue', 'utf8');
 
     expect(workspace).not.toContain('RadioMenuCapture');
-    expect(workspace).toContain('developerPanels.value.radioDriver');
+    expect(workspace).toContain('developerPanels.value');
+    expect(readFileSync('app/utils/radio-workspace-tabs.ts', 'utf8')).toContain('input.panels.radioDriver');
     expect(driver).toContain('RadioMenuCapture');
     expect(driver).toContain("driverTab === 'menu-capture'");
     expect(driver).toContain('menu-capture');

@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest';
 describe('developer panels wiring', () => {
   it('gates radio card developer tabs and falls back when hidden', () => {
     const workspace = readFileSync('app/components/RadioWorkspace.vue', 'utf8');
+    const workspaceTabs = readFileSync('app/utils/radio-workspace-tabs.ts', 'utf8');
 
     expect(workspace).toContain('useDeveloperPanels');
-    expect(workspace).toContain('developerPanels.value.radioDriver');
-    expect(workspace).toContain('developerPanels.value.radioHex');
-    expect(workspace).toContain('developerPanels.value.radioDebug');
-    expect(workspace).toContain('developerPanels.value.radioSniffer');
+    expect(workspace).toContain('developerPanels.value');
+    expect(workspace).toContain('radioWorkspaceTabs');
+    expect(workspaceTabs).toContain('input.panels.radioDriver');
+    expect(workspaceTabs).toContain('input.panels.radioHex');
+    expect(workspaceTabs).toContain('input.panels.radioDebug');
+    expect(workspaceTabs).toContain('input.panels.radioSniffer');
   });
 
   it('always exposes menu capture on the radio Driver tab', () => {

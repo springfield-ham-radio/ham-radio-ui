@@ -38,6 +38,7 @@ import {
 import { bandNameForFrequency } from '~/utils/transmit-privileges';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { radioWorkspaceTabs } from '~/utils/radio-workspace-tabs';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 import {
   diffPendingRadioState,
@@ -145,40 +146,13 @@ const anyOpenCardSupportsCat = computed(() =>
 
 const { panels: developerPanels } = useDeveloperPanels();
 
-const items = computed<TabsItem[]>(() => {
-  const tabs: TabsItem[] = [
-    { label: 'Channels', icon: 'i-lucide-list', slot: 'channels' as const, value: 'channels' },
-  ];
-
-  if (supportsCat.value) {
-    tabs.push({ label: 'CAT', icon: 'i-lucide-antenna', slot: 'cat' as const, value: 'cat' });
-  }
-
-  if (supportsAprs.value) {
-    tabs.push({ label: 'APRS', icon: 'i-lucide-radio', slot: 'aprs' as const, value: 'aprs' });
-    tabs.push({ label: 'Packet', icon: 'i-lucide-waypoints', slot: 'packet' as const, value: 'packet' });
-  }
-
-  tabs.push({ label: 'Settings', icon: 'i-lucide-sliders-horizontal', slot: 'settings' as const, value: 'settings' });
-
-  if (developerPanels.value.radioDriver) {
-    tabs.push({ label: 'Driver', icon: 'i-lucide-cable', slot: 'driver' as const, value: 'driver' });
-  }
-
-  if (developerPanels.value.radioHex) {
-    tabs.push({ label: 'Hex Dump', icon: 'i-lucide-binary', slot: 'hex' as const, value: 'hex' });
-  }
-
-  if (developerPanels.value.radioDebug) {
-    tabs.push({ label: 'Debug', icon: 'i-lucide-bug', slot: 'debug' as const, value: 'debug' });
-  }
-
-  if (developerPanels.value.radioSniffer) {
-    tabs.push({ label: 'Sniffer', icon: 'i-lucide-audio-lines', slot: 'sniffer' as const, value: 'sniffer' });
-  }
-
-  return tabs;
-});
+const items = computed<TabsItem[]>(() =>
+  radioWorkspaceTabs({
+    supportsCat: supportsCat.value,
+    supportsAprs: supportsAprs.value,
+    panels: developerPanels.value,
+  }),
+);
 
 const route = useRoute();
 const router = useRouter();
