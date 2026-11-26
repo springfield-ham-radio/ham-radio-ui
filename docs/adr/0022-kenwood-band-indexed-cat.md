@@ -1,8 +1,8 @@
 # Kenwood band-indexed CAT (TH-D74)
 
-**Status:** proposed  
+**Status:** accepted  
 **Date:** 2026-11-24  
-**Related:** [CAT user guide](../cat.md)
+**Related:** [CAT user guide](../cat.md), [ham-radio-registry ADR 0001](https://github.com/springfield-ham-radio/ham-radio-registry/blob/v2.2.0/docs/adr/0001-band-indexed-cat-fields.md) (`@springfield/ham-radio-registry` 2.2.0)
 
 ## Context
 
@@ -12,7 +12,7 @@ Dual-band profiles that omitted both `vfoChannel` and an explicit band dialect m
 
 ## Decision
 
-- Add optional `bandIndexed`, `bandModes`, `vfoModeCommand`, and `vfoModes` on `RadioCatConfig`. Hydrated JSON may carry these keys before `@springfield/ham-radio-registry` publishes the same type; HamBench mirrors the shape in `cat-capability.ts`.
+- The four optional band-indexed CAT fields (`bandIndexed`, `bandModes`, `vfoModeCommand`, `vfoModes`) are part of registry `RadioCatConfig` in `@springfield/ham-radio-registry` 2.2.0 ([registry ADR 0001](https://github.com/springfield-ham-radio/ham-radio-registry/blob/v2.2.0/docs/adr/0001-band-indexed-cat-fields.md)). HamBench imports that type from the registry; Kenwood semantic validation stays in `kenwoodCatProfileFromConfig`.
 - `kenwoodCatProfileFromConfig` requires dual-band Kenwood modules to set either `vfoChannel` or `bandIndexed`. It rejects both flags together and validates `bandModes` names against `modes`.
 - When `bandIndexed` is true, poll and set use `FQ b`, `MD b`, and `PC b` (frequency set `FQ b,<width>`). The session does not send `BC b` to select a band during poll. `BC` with no arguments returns the control band; one field is a complete reply (TM-D710’s `BC 0,0` still works).
 - `VM` is read-only state. Code `0` is editable VFO; other codes set a display label from `vfoModes` and disable frequency/mode/power editors. The session does not write `VM`.
@@ -24,3 +24,4 @@ Dual-band profiles that omitted both `vfoChannel` and an explicit band dialect m
 - radio-module-kenwood must ship an updated `kenwood-th-d74.json` `cat` block with `bandIndexed`, corrected `modes`, `frequencyCommands: ["FQ"]`, and `frequencyWidth: 10`. HamBench fails closed at profile resolution until that module is installed.
 - Hold to transmit and station-log fill remain available on read-only VFO cards; only editors are disabled.
 - Future dual-band Kenwood handhelds can declare `bandIndexed` without Vue or session model checks.
+- HamBench depends on `@springfield/ham-radio-registry` 2.2.0 and no longer declares a local `RadioCatConfig` mirror.

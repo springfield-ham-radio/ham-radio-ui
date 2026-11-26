@@ -30,7 +30,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0019](./0019-settings-coordinate-composite.md) | accepted | Settings coordinate `ui.composite` parts |
 | [0020](./0020-short-option-toggle-group.md) | accepted | ToggleGroup vs USelect for short option pickers |
 | [0021](./0021-menu-capture-session.md) | proposed | Guided menu capture on the radio Driver tab |
-| [0022](./0022-kenwood-band-indexed-cat.md) | proposed | Kenwood band-indexed CAT (TH-D74) |
+| [0022](./0022-kenwood-band-indexed-cat.md) | accepted | Kenwood band-indexed CAT (TH-D74) |
 | [0023](./0023-developer-panels.md) | proposed | Developer panel preferences on radio cards |
 | [0024](./0024-serial-watch-flush.md) | accepted | Serial watch size 261, close sequencing, session log markRaw |
 | [0025](./0025-aprs-kiss-only-host.md) | accepted | Kiss-only APRS: manual keypad KISS, no monitor face |

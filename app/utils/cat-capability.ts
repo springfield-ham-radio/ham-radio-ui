@@ -1,29 +1,5 @@
 import type { RadioProtocolStep } from '@springfield/ham-radio-api';
-
-/**
- * Driver-declared live PC-port control. Matches ham-radio-registry `RadioCatConfig`.
- */
-export interface RadioCatConfig {
-  protocol: string;
-  wakeCr?: boolean;
-  vfoCount?: number;
-  frequencyCommands?: string[];
-  frequencyWidth?: number;
-  vfoChannel?: boolean;
-  /** When true, `FQ`/`MD`/`PC` take the band index first; omit bare reads and `BC n` polling. */
-  bandIndexed?: boolean;
-  /** Selectable mode names per band index. CAT codes stay the index in `modes`. */
-  bandModes?: string[][];
-  /** Band activity command, for example `VM` (read-only). */
-  vfoModeCommand?: string;
-  /** Activity labels in command code order (VFO, Memory, Call, DV). */
-  vfoModes?: string[];
-  modes?: string[];
-  powers?: string[];
-  modeCommand?: string;
-  powerBandIndex?: boolean;
-  bandControl?: boolean;
-}
+import type { RadioCatConfig } from '@springfield/ham-radio-registry';
 
 export interface RadioCatCapability {
   id?: {

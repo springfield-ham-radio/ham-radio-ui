@@ -1,4 +1,4 @@
-import type { RadioCatConfig } from '~/utils/cat-capability';
+import type { RadioCatConfig } from '@springfield/ham-radio-registry';
 
 /**
  * Resolved Kenwood CAT profile. Built from the radio module `cat` block.

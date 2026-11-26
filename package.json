@@ -36,7 +36,7 @@
     "@nuxt/ui": "4.13.0",
     "@springfield/ham-radio-api": "18.5.0",
     "@springfield/ham-radio-driver": "^3.8.0",
-    "@springfield/ham-radio-registry": "2.1.1",
+    "@springfield/ham-radio-registry": "2.2.0",
     "@springfield/ham-radio-utils": "^4.19.0",
     "@tanstack/vue-virtual": "^3.13.52",
     "@tauri-apps/api": "^2.12.5",

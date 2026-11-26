@@ -3471,14 +3471,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-registry@npm:2.1.1":
-  version: 2.1.1
-  resolution: "@springfield/ham-radio-registry@npm:2.1.1"
+"@springfield/ham-radio-registry@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@springfield/ham-radio-registry@npm:2.2.0"
   dependencies:
-    "@springfield/ham-radio-api": "npm:^18.3.0"
-    "@springfield/ham-radio-utils": "npm:^4.17.0"
+    "@springfield/ham-radio-api": "npm:^18.5.0"
+    "@springfield/ham-radio-utils": "npm:^4.19.0"
     loglayer: "npm:^9.4.0"
-  checksum: 10c0/6133372956cb22aecd92e9da2a28c056aeb6d2293006bae2bd6e2bb8bdd5dfcec65c836df26ed46f39ca24e96c292246c5279f08259b250f00f0be3ab6c4f05f
+  checksum: 10c0/c41704dbf00d2fe9f1ef984432c1e4db684ca3119f0520e7be3d82f6636d75ef363f3efe7c4d87428b9ab6a346846c4053fed6377bab89750066fed60684b9f7
   languageName: node
   linkType: hard
 
@@ -3495,7 +3495,7 @@ __metadata:
     "@semantic-release/npm": "npm:13.2.0"
     "@springfield/ham-radio-api": "npm:18.5.0"
     "@springfield/ham-radio-driver": "npm:^3.8.0"
-    "@springfield/ham-radio-registry": "npm:2.1.1"
+    "@springfield/ham-radio-registry": "npm:2.2.0"
     "@springfield/ham-radio-utils": "npm:^4.19.0"
     "@springfield/radio-module-baofeng": "npm:^3.1.0"
     "@tanstack/vue-virtual": "npm:^3.13.52"
@@ -3547,7 +3547,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@springfield/ham-radio-utils@npm:^4.17.0, @springfield/ham-radio-utils@npm:^4.19.0":
+"@springfield/ham-radio-utils@npm:^4.19.0":
   version: 4.19.0
   resolution: "@springfield/ham-radio-utils@npm:4.19.0"
   dependencies:
