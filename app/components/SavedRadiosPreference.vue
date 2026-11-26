@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { effectiveAprsSerialPort } from '~/utils/aprs-connection';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { formatEquipmentBands, radioBandsFromConfig } from '~/utils/radio-bands';
@@ -91,9 +93,21 @@ function radioDetail(radio: SavedRadio): string {
     parts.push(`${radio.txPowerWatts} W`);
   }
 
-  if (radio.aprsSerialPort) {
-    const aprsBaud = radio.aprsBaudRate !== undefined ? ` ${radio.aprsBaudRate}` : '';
-    parts.push(`APRS ${serialPortLabel(radio.aprsSerialPort, readSerialPortSettings().portAliases)}${aprsBaud}`);
+  const aliases = readSerialPortSettings().portAliases;
+  const config = configurations.value.find((entry) => String(entry.id.model) === radio.model);
+  const profile = aprsReceiveProfile({ config, model: radio.model, name: radio.name });
+  const aprsPort = effectiveAprsSerialPort({
+    profile,
+    aprsSerialPort: radio.aprsSerialPort,
+    catSerialPort: radio.serialPort,
+  });
+
+  if (aprsPort.path) {
+    const aprsBaud = radio.aprsBaudRate ?? profile?.baudRate;
+    const baud = aprsBaud !== undefined ? ` ${aprsBaud}` : '';
+    const portLabel = serialPortLabel(aprsPort.path, aliases);
+    const suffix = aprsPort.source === 'cat' ? ' (CAT default)' : '';
+    parts.push(`APRS ${portLabel}${suffix}${baud}`);
   }
 
   return parts.join(' · ');

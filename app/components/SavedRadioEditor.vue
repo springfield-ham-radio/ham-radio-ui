@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SerialPort } from 'tauri-plugin-serialplugin-api';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
+import { effectiveAprsSerialPort } from '~/utils/aprs-connection';
 import { aprsSerialPortMenuItems } from '~/utils/aprs-port-select';
 import {
   defaultProgrammingBaudRate,
@@ -8,7 +9,7 @@ import {
   programmingBaudRateSelectItems,
   shouldSelectProgrammingBaudRate,
 } from '~/utils/radio-baud-rate';
-import { serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
+import { serialPortLabel, serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import {
   draftFromSavedRadio,
@@ -94,6 +95,34 @@ const aprsProfile = computed(() =>
 );
 
 const aprsBaudItems = computed(() => (aprsProfile.value?.baudRates ?? []).map((rate) => ({ label: `${rate} baud`, value: rate })));
+
+const aprsPortResolution = computed(() => effectiveAprsSerialPort({
+  profile: aprsProfile.value,
+  aprsSerialPort: aprsSerialPort.value,
+  catSerialPort: serialPort.value,
+}));
+
+const aprsPortFieldDescription = computed(() => {
+  if (aprsProfile.value?.passive === false) {
+    return 'KISS-only radios use the memory/CAT USB port. Leave this empty to use that default, or pick another adapter. A saved port that is unplugged stays in the list.';
+  }
+
+  return 'USB adapter on the control-head COM cable. The same adapter can be saved here and for memory. A saved port that is unplugged stays in the list.';
+});
+
+const aprsPortPlaceholder = computed(() => {
+  if (aprsSerialPort.value?.trim()) {
+    return 'No APRS port';
+  }
+
+  const defaultPath = aprsPortResolution.value.source === 'cat' ? aprsPortResolution.value.path : undefined;
+
+  if (defaultPath) {
+    return `${serialPortLabel(defaultPath, readSerialPortSettings().portAliases)} (memory/CAT default)`;
+  }
+
+  return 'No APRS port';
+});
 
 const showBaudRate = computed(() => {
   if (!selectedConfig.value) {
@@ -389,7 +418,7 @@ function save(): void {
 
           <UFormField
             label="APRS serial port"
-            description="USB adapter on the control-head COM cable. The same adapter can be saved here and for memory. A saved port that is unplugged stays in the list."
+            :description="aprsPortFieldDescription"
             :error="aprsPortError"
           >
             <div class="flex gap-2">
@@ -397,7 +426,7 @@ function save(): void {
                 v-model="aprsSerialPort"
                 :items="aprsPortItems"
                 value-key="value"
-                placeholder="No APRS port"
+                :placeholder="aprsPortPlaceholder"
                 class="w-full"
                 :loading="loadingPorts"
                 @blur="onAprsFieldBlur"

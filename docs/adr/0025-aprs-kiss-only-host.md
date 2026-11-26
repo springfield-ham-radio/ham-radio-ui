@@ -17,6 +17,7 @@ ADR 0017 assumes Host Connect may write interrupt, enter steps, and optional `ki
 - Optional `aprs.host.dtr` and `aprs.host.rts` (`asserted` or `low`) apply on host open. Omitted means the previous default (both low). Hardware RTS/CTS still does not ioctl RTS.
 - Disconnect uses the existing host path: when the session badge is KISS waiting or KISS confirmed, HamBench writes `kissExit` once, then closes the port and drops the hold so CAT and Read may open the adapter.
 - CAT and clone handshake failures on kiss-only profiles append one sentence: the radio may still be in KISS; use APRS Disconnect or turn KISS off on the radio.
+- When `aprs.mode` is `kiss` (or the resolved profile is kiss-only) and `aprsSerialPort` is unset, Connect uses the saved memory/CAT `serialPort` and the profile `baudRate`, not the programming `baudRate`. An explicit `aprsSerialPort` wins. HamBench does not write that default onto the saved radio. Monitor profiles, including the TM-D710, still require a saved APRS port.
 
 TM-D710 behavior is unchanged: `aprs.mode` monitor or omitted, command `aprs.host`, model-id fallback, and no `kissExit` on the fallback.
 
