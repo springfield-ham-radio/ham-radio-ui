@@ -13,6 +13,7 @@ import {
   aprsHostModeHintText,
   aprsHostRetryDetectionVisible,
   aprsHostShouldExitKiss,
+  appendAprsKissHandshakeSupplement,
   aprsKissOnHandshakeSupplement,
   aprsMonitorSilenceHint,
   aprsStatusBadge,
@@ -485,5 +486,31 @@ describe('kiss-only APRS helpers', () => {
     expect(aprsKissOnHandshakeSupplement(kissConfig, new Error('CAT reply timed out'))).toBe(APRS_KISS_STILL_ON_HINT);
     expect(aprsKissOnHandshakeSupplement(monitorConfig, new Error('CAT reply timed out'))).toBeUndefined();
     expect(aprsKissOnHandshakeSupplement(kissConfig, new Error('Radio rejected ID'))).toBeUndefined();
+  });
+
+  it('appends the kiss hint to write failure summaries when config is kiss-only', () => {
+    const kissConfig = {
+      capabilities: { aprsReceive: true },
+      aprs: {
+        mode: 'kiss',
+        baudRate: 9600,
+        baudRates: [9600],
+        host: {
+          entry: 'manual',
+          kissExit: [0xc0, 0xff, 0xc0],
+          enter: [],
+          flowControl: 'none',
+          setup: ['KISS on at radio.'],
+          recovery: ['Disconnect exits KISS.'],
+        },
+      },
+    };
+    const summary = appendAprsKissHandshakeSupplement(
+      'Failed to write radio',
+      kissConfig,
+      new Error('Timeout waiting for response'),
+    );
+    expect(summary).toContain(APRS_KISS_STILL_ON_HINT);
+    expect(summary.startsWith('Failed to write radio')).toBe(true);
   });
 });

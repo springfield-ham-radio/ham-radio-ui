@@ -96,7 +96,8 @@ export async function openAprsReceivePort(
  * Open the COM port for host KISS.
  *
  * The returned object can write. Callers must not write on connect.
- * Software and off keep RTS and DTR low. Hardware leaves RTS to the driver.
+ * Omitted `lines` leave RTS and DTR low. Modules may assert either line via `lines`.
+ * Hardware flow control leaves RTS to the driver.
  */
 export async function openAprsHostPort(
   path: string,

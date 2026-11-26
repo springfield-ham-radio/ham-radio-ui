@@ -1500,6 +1500,19 @@ export function createAprsHostSession(options?: {
     publish();
   };
 
+  /** Best-effort KISS exit on a port handle that is not yet (or no longer) the session port. */
+  async function writeManualKissExitOnHandle(handle: AprsHostBytePort, exit: Uint8Array): Promise<void> {
+    if (!handle.isOpen || !handle.write) {
+      return;
+    }
+
+    try {
+      await handle.write(exit);
+    } catch {
+      // Superseded opens still close when exit is rejected.
+    }
+  }
+
   /**
    * One declared KISS exit before the handle closes. Best effort: a missing
    * port or a rejected write is logged and does not stop the close.
@@ -1603,6 +1616,10 @@ export function createAprsHostSession(options?: {
         const opened = await openPort();
 
         if (current !== generation) {
+          if (hostLink?.entry === 'manual' && hostLink.kissExit) {
+            await writeManualKissExitOnHandle(opened, hostLink.kissExit);
+          }
+
           await opened.close();
           return;
         }

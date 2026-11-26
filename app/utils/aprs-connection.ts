@@ -473,6 +473,13 @@ export function aprsKissOnHandshakeSupplement(config: unknown, cause: unknown): 
   return APRS_KISS_STILL_ON_HINT;
 }
 
+/** Merges {@link aprsKissOnHandshakeSupplement} into a radio read/write failure summary when config is set. */
+export function appendAprsKissHandshakeSupplement(summary: string, config: unknown, cause: unknown): string {
+  const supplement = aprsKissOnHandshakeSupplement(config, cause);
+
+  return supplement ? `${summary} ${supplement}` : summary;
+}
+
 export function aprsDisconnectAction(input: { passiveOpen: boolean; hostOpen: boolean }): AprsPortAction {
   if (input.passiveOpen && input.hostOpen) {
     return { kind: 'close-both' };

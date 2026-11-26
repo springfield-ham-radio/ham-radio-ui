@@ -1864,4 +1864,22 @@ describe('manual KISS entry', () => {
     expect(fake.writes[0]).toEqual(exit);
     expect(fake.port.isOpen).toBe(false);
   });
+
+  it('sends kissExit on a superseded manual open before closing the orphan port', async () => {
+    const session = createAprsHostSession({ host: manualLink() });
+    let resolveFirst!: (port: AprsHostBytePort) => void;
+    const firstOpen = new Promise<AprsHostBytePort>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const orphan = fakePort();
+    const superseding = fakePort();
+    const firstConnect = session.connect('/dev/orphan', () => firstOpen);
+    await session.connect('/dev/active', async () => superseding.port);
+    resolveFirst(orphan.port);
+    await firstConnect;
+    await settle();
+    expect(orphan.writes).toEqual([exit]);
+    expect(orphan.port.isOpen).toBe(false);
+    expect(superseding.port.isOpen).toBe(true);
+  });
 });
