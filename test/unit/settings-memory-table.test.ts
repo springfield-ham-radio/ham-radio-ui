@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { computed, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,7 +100,7 @@ describe('TH-D74 DTMF memory table layout', () => {
 });
 
 describe('TM-D710 menu 301 layout', () => {
-  const map = loadMap('tm-d710a-settings.json');
+  const map = loadMap('tm-d710a-dtmf-memory-table.json');
   const memoryFields = collectMemoryMapUiFields(map).filter((field) => field.ui.subgroup === 'memories');
 
   it('should fold DTMF codes and names with Name before Code', () => {
@@ -165,7 +164,7 @@ describe('SettingsFieldGrid memory table', () => {
   });
 
   it('should render channel rows and Name/Code headers', () => {
-    const map = loadMap('tm-d710a-settings.json');
+    const map = loadMap('tm-d710a-dtmf-memory-table.json');
     const memoryFields = collectMemoryMapUiFields(map).filter((field) => field.ui.subgroup === 'memories');
     const cells = layoutPlainSettingsFields(memoryFields);
     const settings = {
@@ -188,8 +187,9 @@ describe('SettingsFieldGrid memory table', () => {
             template: '<div class="u-form-field"><slot name="label" /><slot name="hint" /><slot /></div>',
           },
           UInput: {
-            props: ['modelValue'],
-            template: '<input class="u-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+            props: ['modelValue', 'color', 'highlight', 'disabled'],
+            template:
+              '<input class="u-input" :value="modelValue" :color="color" :highlight="highlight === true ? \'true\' : undefined" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
           },
           USelect: true,
           USwitch: true,
@@ -212,104 +212,13 @@ describe('SettingsFieldGrid memory table', () => {
     expect(inputs.length).toBe(20);
     expect(wrapper.html()).not.toContain('maxlength');
 
-    const changedBindings = inputs.filter((input) => input.attributes('color') === 'warning');
-    expect(changedBindings.length).toBeGreaterThanOrEqual(0);
-  });
-
-  it('writes snapshot HTML for PR review', () => {
-    const artifactDir = '/opt/cursor/artifacts';
-    mkdirSync(artifactDir, { recursive: true });
-    const styles = `
-      body { font-family: system-ui, sans-serif; background: #111827; color: #f9fafb; padding: 24px; }
-      .settings-fields-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 960px; }
-      .col-span-full { grid-column: 1 / -1; }
-      .settings-memory-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-      .settings-memory-table th, .settings-memory-table td { border: 1px solid #374151; padding: 6px 8px; }
-      .settings-memory-table tbody tr:nth-child(odd) { background: #1f2937; }
-      .settings-memory-table tbody tr:nth-child(even) { background: #111827; }
-      .u-input { width: 100%; background: #030712; color: #f9fafb; border: 1px solid #4b5563; border-radius: 6px; padding: 6px 8px; }
-      h1 { font-size: 1.125rem; margin: 0 0 16px; font-weight: 600; }
-      .text-muted { color: #9ca3af; font-size: 12px; font-family: ui-monospace, monospace; }
-    `;
-
-    function writeSnapshot(filename: string, title: string, cells: ReturnType<typeof layoutPlainSettingsFields>, settings: Record<string, unknown>, changedPaths: string[]) {
-      const wrapper = mount(SettingsFieldGrid, {
-        props: { cells, settings, changedPaths, helpByPath: new Map() },
-        global: {
-          stubs: {
-            UFormField: { template: '<div class="field"><div class="label"><slot name="label" /></div><slot /></div>' },
-            UInput: {
-              props: ['modelValue', 'disabled'],
-              template: '<input class="u-input" :value="modelValue" :disabled="disabled" />',
-            },
-            USelect: true,
-            USwitch: true,
-            UInputNumber: true,
-            UBadge: true,
-            UTooltip: true,
-            HelpTooltip: true,
-          },
-        },
-      });
-
-      writeFileSync(
-        join(artifactDir, filename),
-        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${styles}</style></head><body><h1>${title}</h1>${wrapper.html()}</body></html>`,
-      );
-    }
-
-    const d710Map = loadMap('tm-d710a-settings.json');
-    const d710Fields = collectMemoryMapUiFields(d710Map).filter((field) => field.ui.subgroup === 'memories');
-    writeSnapshot(
-      'tm-d710-menu-301-memory-table.html',
-      'TM-D710 · DTMF Settings · Memories (menu 301)',
-      layoutPlainSettingsFields(d710Fields),
-      {
-        dtmfCodes: Array.from({ length: 10 }, (_, index) => ({ code: index === 3 ? '123' : '' })),
-        dtmfNames: Array.from({ length: 10 }, (_, index) => ({ name: index === 0 ? 'HOME' : '' })),
-      },
-      ['dtmfNames.0.name', 'dtmfCodes.3.code'],
+    const changedInputs = inputs.filter(
+      (input) => input.attributes('color') === 'warning' && input.attributes('highlight') === 'true',
     );
+    expect(changedInputs).toHaveLength(2);
 
-    const d74Map = loadMap('th-d74-dtmf-memory-table.json');
-    const d74Fields = collectMemoryMapUiFields(d74Map).filter((field) => field.ui.subgroup === 'dtmf');
-    const d74Wrapper = mount(SettingsFieldGrid, {
-      props: {
-        cells: layoutSettingsSection(d74Fields),
-        settings: {
-          dtmfTxHold: { hold: false },
-          dtmfMemoryCodes: Array.from({ length: 10 }, (_, index) => ({ code: index === 0 ? '123' : '' })),
-          dtmfMemoryNames: Array.from({ length: 10 }, (_, index) => ({ name: index === 0 ? 'TEST' : '' })),
-          echoLinkMemoryCodes: Array.from({ length: 10 }, (_, index) => ({ code: index === 0 ? '999999' : '' })),
-          echoLinkMemoryNames: Array.from({ length: 10 }, (_, index) => ({ name: index === 0 ? 'HBEL164' : '' })),
-        },
-        changedPaths: ['dtmfMemoryNames.0.name', 'echoLinkMemoryCodes.0.code'],
-        helpByPath: new Map(),
-      },
-      global: {
-        stubs: {
-          UFormField: { template: '<div class="field"><slot name="label" /><slot /></div>' },
-          UInput: {
-            props: ['modelValue'],
-            template: '<input class="u-input" :value="modelValue" />',
-          },
-          USelect: true,
-          USwitch: { props: ['modelValue'], template: '<input type="checkbox" :checked="modelValue" />' },
-          UInputNumber: true,
-          UBadge: true,
-          UTooltip: true,
-          HelpTooltip: true,
-        },
-      },
-    });
-
-    writeFileSync(
-      join(artifactDir, 'th-d74-dtmf-echolink-memory-tables.html'),
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>TH-D74 fixture · TX/RX DTMF</title><style>${styles}</style></head><body><h1>TH-D74 fixture · TX/RX → DTMF (menus 162–164)</h1>${d74Wrapper.html()}</body></html>`,
-    );
-
-    expect(readFileSync(join(artifactDir, 'tm-d710-menu-301-memory-table.html'), 'utf8')).toContain('301');
-    expect(readFileSync(join(artifactDir, 'th-d74-dtmf-echolink-memory-tables.html'), 'utf8')).toContain('163 DTMF Memory');
+    const unchangedInputs = inputs.filter((input) => input.attributes('color') === undefined);
+    expect(unchangedInputs).toHaveLength(18);
   });
 });
 

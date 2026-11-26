@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "groups": [
+    {
+      "id": "dtmf",
+      "label": "DTMF Settings",
+      "icon": "i-lucide-hash",
+      "groups": [
+        {
+          "id": "options",
+          "label": "Options"
+        },
+        {
+          "id": "memories",
+          "label": "Memories"
+        }
+      ]
+    }
+  ],
+  "channelBindings": {
+    "records": "channels",
+    "names": "names",
+    "nameField": "name",
+    "extras": "flags",
+    "receiveFrequency": "freq",
+    "transmitFrequency": "offset",
+    "receiveTone": "ctone",
+    "transmitTone": "rtone"
+  },
+  "structs": [
+    {
+      "id": "dtmfCodes",
+      "seek": "0x0030",
+      "count": 10,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "code",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 16,
+            "pad": 255
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "DTMF code",
+            "widget": "text",
+            "subgroup": "memories",
+            "menu": {
+              "number": 301,
+              "code": "DTMF MEM"
+            },
+            "description": "DTMF digits stored in this memory. The microphone can send the whole string."
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfNames",
+      "seek": "0x00d0",
+      "count": 10,
+      "stride": 8,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": {
+            "kind": "ascii",
+            "length": 8,
+            "pad": 255
+          },
+          "ui": {
+            "group": "dtmf",
+            "label": "DTMF name",
+            "widget": "text",
+            "subgroup": "memories",
+            "menu": {
+              "number": 301,
+              "code": "DTMF MEM"
+            },
+            "description": "Name shown for this DTMF memory."
+          }
+        }
+      ]
+    }
+  ]
+}
