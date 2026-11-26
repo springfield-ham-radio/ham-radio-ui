@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canonicalAx25Call, encodeAx25Ui } from '../../app/utils/aprs-ax25.ts';
 import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
 import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
@@ -65,6 +65,37 @@ async function advanceHostRetryClock(
   time.t += ms;
   session.runDetectClock();
   await settle();
+}
+
+/** Fire the 250 ms detect poll callback the session registered via armDetectPoll. */
+async function fireDetectPollInterval(
+  pollSpy: ReturnType<typeof vi.spyOn<typeof globalThis, 'setInterval'>>,
+  time: { t: number },
+  ms: number,
+): Promise<void> {
+  const ticks = Math.max(1, Math.ceil(ms / DETECT_POLL_MS));
+  const callback = pollSpy.mock.calls
+    .map((call) => call[0])
+    .findLast((fn): fn is () => void => typeof fn === 'function' && callIntervalMs(pollSpy, fn) === DETECT_POLL_MS);
+
+  if (!callback) {
+    throw new Error('Detect poll interval was not armed.');
+  }
+
+  for (let tick = 0; tick < ticks; tick += 1) {
+    time.t += DETECT_POLL_MS;
+    callback();
+    await settle();
+  }
+}
+
+function callIntervalMs(
+  pollSpy: ReturnType<typeof vi.spyOn<typeof globalThis, 'setInterval'>>,
+  fn: () => void,
+): number | undefined {
+  const index = pollSpy.mock.calls.findIndex((call) => call[0] === fn);
+  const ms = pollSpy.mock.calls[index]?.[1];
+  return typeof ms === 'number' ? ms : undefined;
 }
 
 async function confirmKiss(session: ReturnType<typeof createAprsHostSession>, fake: ReturnType<typeof fakePort>): Promise<void> {
@@ -1876,6 +1907,105 @@ describe('host Connect detection', () => {
     expect(failing.snapshot().trace.some((line) => line.note.includes('KISS exit was not accepted'))).toBe(true);
   });
 
+  describe('boot quiet on the detect poll interval', () => {
+    let pollSpy: ReturnType<typeof vi.spyOn<typeof globalThis, 'setInterval'>>;
+
+    beforeEach(() => {
+      pollSpy = vi.spyOn(globalThis, 'setInterval');
+    });
+
+    afterEach(() => {
+      pollSpy.mockRestore();
+    });
+
+    it('enters KISS after a banner on waiting-traffic', async () => {
+      const clock = { t: 2_000_000_000_000 };
+      const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+      const fake = fakePort();
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      const frameA = hexBytes(
+          'c0 00 82 a0 a8 66 62 62 60 9c 68 70 64 64 86 60 ae 92 88 8a 64 40 63 03 f0 2f 31 36 32 37 34 30 68 33 30 33 34 2e 30 30 4e 2f 30 39 37 33 37 2e 39 36 57 27 32 33 37 2f 31 32 34 2f 41 3d 30 30 31 37 34 35 c0',
+        );
+        fake.push(frameA);
+        await settle();
+        expect(session.snapshot().kissConfirmed).toBe(true);
+        expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+
+        const banner = '\r\nKenwood Radio Modem\r\nAX.25 Level 2\r\ncmd:';
+        fake.push(new TextEncoder().encode(banner));
+        await settle();
+        expect(session.snapshot().kissConfirmed).toBe(false);
+        expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+        expect(fake.writes).toHaveLength(0);
+
+        await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+        expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+
+    it('enters KISS after a banner following a failed detect pass', async () => {
+      const clock = { t: 4_000 };
+      const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
+      const fake = fakePort();
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      fake.push(new TextEncoder().encode('operator typed this\r\nbut no prompt yet\r\n'));
+      await settle();
+      expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+      await fireDetectPollInterval(pollSpy, clock, 12_000);
+      await settle();
+      expect(session.snapshot().detectPhase).toBe('failed');
+
+        const banner = '\r\nKenwood Radio Modem\r\nDA 110101\r\ncmd:';
+        fake.push(new TextEncoder().encode(banner));
+        await settle();
+        expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+        await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+        expect(new TextDecoder().decode(fake.writes.find((frame) => new TextDecoder().decode(frame) === APRS_KISS_ON_COMMAND) ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+
+    it('enters KISS after an unframed open leftover and a banner', async () => {
+      const clock = { t: 6_000 };
+      const session = createAprsHostSession({
+        useRetryClock: true,
+        now: () => clock.t,
+        allowHardwareTransmit: true,
+        host: d710AprsHostLink(),
+      });
+      const fake = fakePort();
+      const source = canonicalAx25Call('K5KTF-9');
+      const ax25 = source ? encodeAx25Ui(source, 'APTT4') : undefined;
+
+      if (!ax25) {
+        throw new Error('frame');
+      }
+
+      const unframed = new Uint8Array(ax25.length + 1);
+      unframed[0] = 0x00;
+      unframed.set(ax25, 1);
+      const attach = fake.port.on.bind(fake.port);
+      fake.port.on = (event, handler) => {
+        attach(event, handler);
+        if (event === 'data') {
+          (handler as (chunk: Uint8Array) => void)(unframed);
+        }
+      };
+
+      await session.connect('/dev/ttyUSB0', async () => fake.port);
+      await settle();
+      expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+      expect(fake.writes).toHaveLength(0);
+
+      const banner = '\r\nKenwood Radio Modem\r\nAX.25 Level 2\r\ncmd:';
+      fake.push(new TextEncoder().encode(banner));
+      await settle();
+      expect(session.snapshot().detectPhase).toBe('awaiting-prompt');
+
+      await fireDetectPollInterval(pollSpy, clock, APRS_HOST_BOOT_QUIET_MS + DETECT_POLL_MS);
+      expect(new TextDecoder().decode(fake.writes[0] ?? new Uint8Array())).toBe(APRS_KISS_ON_COMMAND);
+    });
+  });
+
   it('starts KISS ON from runDetectClock after boot quiet', async () => {
     const clock = { t: 0 };
     const session = createD710HostSession({ useRetryClock: true, now: () => clock.t, allowHardwareTransmit: true });
@@ -1929,16 +2059,21 @@ describe('manual KISS entry', () => {
   }
 
   it('writes nothing on connect and waits for KISS', async () => {
-    let time = 1_000;
-    const session = createAprsHostSession({ now: () => time, host: manualLink() });
-    const fake = fakePort();
-    await session.connect('/dev/cu.usbmodem0', async () => fake.port, { flowControl: 'none' });
-    time += 12_000;
-    session.poll();
-    expect(fake.writes).toHaveLength(0);
-    expect(session.snapshot().detectPhase).toBe('waiting-traffic');
-    expect(session.snapshot().detectDetail).toContain('Nothing was sent');
-    expect(session.snapshot().kissConfirmed).toBe(false);
+    const pollSpy = vi.spyOn(globalThis, 'setInterval');
+    try {
+      const session = createAprsHostSession({ useRetryClock: true, host: manualLink() });
+      const fake = fakePort();
+      await session.connect('/dev/cu.usbmodem0', async () => fake.port, { flowControl: 'none' });
+      expect(fake.writes).toHaveLength(0);
+      expect(session.snapshot().detectPhase).toBe('waiting-traffic');
+      expect(session.snapshot().detectDetail).toContain('Nothing was sent');
+      expect(session.snapshot().kissConfirmed).toBe(false);
+      expect(
+        pollSpy.mock.calls.some((call) => call[1] === DETECT_POLL_MS),
+      ).toBe(false);
+    } finally {
+      pollSpy.mockRestore();
+    }
   });
 
   it('confirms KISS on a UI frame without writing on connect', async () => {

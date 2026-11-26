@@ -452,7 +452,22 @@ export function createAprsHostSession(options?: {
     if (textShowsTncBoot(new TextDecoder().decode(bytes))) {
       sawBootOutput = true;
       bootQuietAfter = now() + APRS_HOST_BOOT_QUIET_MS;
+      scheduleBootQuietPoll();
     }
+  }
+
+  /** Keep the detect poll alive through a boot-quiet hold while awaiting a bare prompt. */
+  function scheduleBootQuietPoll(): void {
+    if (!options?.useRetryClock || hostLink?.entry === 'manual' || !sawBootOutput) {
+      return;
+    }
+
+    if (detectPhase !== 'awaiting-prompt') {
+      return;
+    }
+
+    detectDeadline = bootQuietAfter;
+    armDetectPoll();
   }
 
   function freshSessionPrompt(): boolean {
@@ -783,7 +798,10 @@ export function createAprsHostSession(options?: {
       return;
     }
 
-    if (commandPhase === 'waiting-prompt' || commandPhase === 'restart-sent' || hostEnterRequested) {
+    if (
+      detectPhase !== 'failed'
+      && (commandPhase === 'waiting-prompt' || commandPhase === 'restart-sent' || hostEnterRequested)
+    ) {
       return;
     }
 
@@ -794,13 +812,24 @@ export function createAprsHostSession(options?: {
       return;
     }
 
+    const fromFailed = detectPhase === 'failed';
     detectPhase = 'awaiting-prompt';
     detectStep = 'after-text';
-    detectDeadline = Number.POSITIVE_INFINITY;
-    clearDetectClock();
     commandActive = false;
+    if (fromFailed || commandPhase === 'waiting-prompt' || commandPhase === 'timed-out') {
+      commandPhase = 'idle';
+    }
+    if (sawBootOutput) {
+      detectDeadline = bootQuietAfter;
+      armDetectClock();
+    } else {
+      detectDeadline = Number.POSITIVE_INFINITY;
+      clearDetectClock();
+    }
     detectDetail = prompt
-      ? `${hostLink.prompt} was already on this connection. Entering host KISS.`
+      ? sawBootOutput
+        ? `Command text seen. Waiting for a bare ${hostLink.prompt} after startup output.`
+        : `${hostLink.prompt} was already on this connection. Entering host KISS.`
       : 'Kenwood banner seen before KISS was confirmed. Waiting for the prompt. Nothing was sent.';
     record('note', new Uint8Array(), detectDetail);
   }
@@ -1581,8 +1610,14 @@ export function createAprsHostSession(options?: {
     ) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
-      detectDeadline = Number.POSITIVE_INFINITY;
-      clearDetectClock();
+      detectDeadline = sawBootOutput
+        ? bootQuietAfter
+        : (endsWithBareCommandPrompt(sessionBytes, hostLink.prompt) ? now() : Number.POSITIVE_INFINITY);
+      if (Number.isFinite(detectDeadline)) {
+        armDetectClock();
+      } else {
+        clearDetectClock();
+      }
       detectDetail = sawBootOutput
         ? `Command text seen. Waiting for a bare ${hostLink.prompt} after startup output.`
         : `${hostLink.prompt} was already on this connection. Waiting to enter host KISS.`;
@@ -1763,7 +1798,9 @@ export function createAprsHostSession(options?: {
         ackOptIn = false;
         record('note', new Uint8Array(), hostListenNote(hostFlow));
         beginDetect();
-        armDetectPoll();
+        if (hostLink?.entry !== 'manual') {
+          armDetectPoll();
+        }
         openingBuffer = true;
 
         try {
