@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
 import { encodeAx25Frame, parseAx25Frame } from '~/utils/packet-ax25';
-import { createPacketCardMux, receiveOnPacketCardMux } from '~/utils/packet-card-session';
+import {
+  createPacketCardMux,
+  packetMuxBuildParams,
+  receiveOnPacketCardMux,
+  samePacketMuxBuild,
+} from '~/utils/packet-card-session';
 import { PACKET_DEFAULT_SETTINGS } from '~/utils/packet-settings';
 
 function call(text: string): Ax25Call {
@@ -54,5 +59,17 @@ describe('packet card mux without connectLink', () => {
     const ignored = receiveOnPacketCardMux(off, right ?? new Uint8Array());
     expect(ignored.frames).toEqual([]);
     expect(ignored.notices.map((notice) => notice.text).join(' ')).toMatch(/Accept incoming connections is off/u);
+  });
+});
+
+describe('packet mux build fingerprint', () => {
+  it('detects timer and modulo changes', () => {
+    const me = call('N0TST-0');
+    const base = packetMuxBuildParams(me, PACKET_DEFAULT_SETTINGS);
+    const slower = packetMuxBuildParams(me, { ...PACKET_DEFAULT_SETTINGS, t1Ms: 4000 });
+    const modulo128 = packetMuxBuildParams(me, { ...PACKET_DEFAULT_SETTINGS, modulo: 128 });
+    expect(samePacketMuxBuild(base, base)).toBe(true);
+    expect(samePacketMuxBuild(base, slower)).toBe(false);
+    expect(samePacketMuxBuild(base, modulo128)).toBe(false);
   });
 });

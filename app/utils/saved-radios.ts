@@ -396,6 +396,9 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
     radio.aprsBaudRate = draft.aprsBaudRate;
   }
 
+  radio.packetSsid = 0;
+  radio.packetAcceptIncoming = false;
+
   return radio;
 }
 

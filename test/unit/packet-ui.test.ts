@@ -17,7 +17,10 @@ import {
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
+  isPacketRadioIdentityMigrationDone,
+  markPacketRadioIdentityMigrationDone,
   migratePacketRadioIdentity,
+  PACKET_RADIO_IDENTITY_MIGRATED_KEY,
   normalizePacketSettings,
   packetMyCall,
   packetSettingsForCard,
@@ -259,6 +262,34 @@ describe('Packet monitor and terminal', () => {
     expect(packetSettingsForCard(migrated, storage).ssid).toBe(7);
     expect(migratePacketRadioIdentity({ ...migrated, packetSsid: 3 }, storage).packetSsid).toBe(3);
     expect(packetSettingsForCard({ id: 'r2', name: 'Base', manufacturer: 'K', model: 'M', serialPort: '/dev/x', createdAt: 1, updatedAt: 1, packetSsid: 1 }, storage).ssid).toBe(1);
+  });
+
+  it('does not copy global SSID onto new radios after migration is marked done', () => {
+    const storage = {
+      values: new Map<string, string>(),
+      getItem(key: string) {
+        return this.values.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        this.values.set(key, value);
+      },
+    };
+    storage.setItem(PACKET_SETTINGS_KEY, JSON.stringify({ ssid: 7, acceptIncoming: true, modulo: 8, n2: 10 }));
+    markPacketRadioIdentityMigrationDone(storage);
+    const legacy: SavedRadio = {
+      id: 'r-old',
+      name: 'Legacy',
+      manufacturer: 'Kenwood',
+      model: 'M',
+      serialPort: '/dev/cu',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const migrated = migratePacketRadioIdentity(legacy, storage);
+    expect(migrated.packetSsid).toBe(0);
+    expect(migrated.packetAcceptIncoming).toBe(false);
+    expect(isPacketRadioIdentityMigrationDone(storage)).toBe(true);
+    expect(storage.getItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY)).toBe('1');
   });
 });
 

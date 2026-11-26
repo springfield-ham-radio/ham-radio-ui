@@ -65,6 +65,17 @@ describe('saved radios', () => {
     expect(store.radios.map((radio) => radio.id)).toEqual([mobile.id, base.id]);
   });
 
+  it('should default new radios to SSID 0 and accept off', () => {
+    const radio = createSavedRadio({
+      name: 'Fresh',
+      manufacturer: 'Kenwood',
+      model: 'kenwood-tm-d710a',
+      serialPort: '/dev/cu.new',
+    });
+    expect(radio.packetSsid).toBe(0);
+    expect(radio.packetAcceptIncoming).toBe(false);
+  });
+
   it('should round-trip radios through serialize and parse', () => {
     const store = { radios: [mobile, base] };
 

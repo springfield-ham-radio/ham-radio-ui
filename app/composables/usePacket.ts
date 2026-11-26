@@ -2,7 +2,12 @@ import { formatAx25Call, canonicalAx25Call, type Ax25Call } from '~/utils/aprs-a
 import type { AprsHostSnapshot } from '~/utils/aprs-host-session';
 import type { PacketLinkPhase } from '~/utils/packet-link';
 import { type PacketMux } from '~/utils/packet-link';
-import { createPacketCardMux } from '~/utils/packet-card-session';
+import {
+  createPacketCardMux,
+  packetMuxBuildParams,
+  samePacketMuxBuild,
+  type PacketMuxBuildParams,
+} from '~/utils/packet-card-session';
 import {
   clearPacketMonitor,
   createPacketMonitor,
@@ -16,6 +21,8 @@ import {
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
+  isPacketRadioIdentityMigrationDone,
+  markPacketRadioIdentityMigrationDone,
   migratePacketRadioIdentity,
   normalizePacketSettings,
   packetMyCall,
@@ -56,6 +63,7 @@ export interface PacketCardState {
 interface Runtime {
   monitor: PacketMonitor;
   mux?: PacketMux;
+  muxBuild?: PacketMuxBuildParams;
   settings: PacketSettings;
   scrollback: string;
   filterCall: string;
@@ -90,13 +98,40 @@ function savedRadio(cardId: string): SavedRadio | undefined {
 }
 
 function ensureRadioPacketMigration(cardId: string): SavedRadio | undefined {
+  const storage = browserStorage();
+
+  if (!isPacketRadioIdentityMigrationDone(storage)) {
+    const store = readSavedRadioStore();
+    const global = readPacketSettings(storage);
+    let changed = false;
+    const radios = store.radios.map((entry) => {
+      if (entry.packetSsid !== undefined) {
+        return entry;
+      }
+
+      changed = true;
+      return {
+        ...entry,
+        packetSsid: global.ssid,
+        packetAcceptIncoming: global.acceptIncoming,
+        updatedAt: Date.now(),
+      };
+    });
+
+    if (changed) {
+      writeSavedRadioStore({ radios });
+    }
+
+    markPacketRadioIdentityMigrationDone(storage);
+  }
+
   const radio = savedRadio(cardId);
 
   if (!radio) {
     return undefined;
   }
 
-  const migrated = migratePacketRadioIdentity(radio, browserStorage());
+  const migrated = migratePacketRadioIdentity(radio, storage);
 
   if (migrated.packetSsid === radio.packetSsid && migrated.packetAcceptIncoming === radio.packetAcceptIncoming) {
     return migrated;
@@ -279,17 +314,15 @@ export function usePacket() {
       return;
     }
 
-    if (
-      runtime.mux
-      && runtime.me
-      && formatAx25Call(runtime.me) === formatAx25Call(me)
-      && runtime.settings.acceptIncoming === (runtime.mux.snapshots()[0]?.acceptIncoming === true)
-    ) {
+    const build = packetMuxBuildParams(me, runtime.settings);
+
+    if (runtime.mux && runtime.me && formatAx25Call(runtime.me) === formatAx25Call(me) && samePacketMuxBuild(runtime.muxBuild, build)) {
       return;
     }
 
     runtime.me = me;
     runtime.mux = createPacketCardMux(me, runtime.settings);
+    runtime.muxBuild = build;
   }
 
   function syncStation(cardId: string, baseCall: string | undefined): void {
@@ -576,6 +609,7 @@ export function usePacket() {
 
     if (linkIdle(runtime) && runtime.me) {
       runtime.mux = createPacketCardMux(runtime.me, runtime.settings);
+      runtime.muxBuild = packetMuxBuildParams(runtime.me, runtime.settings);
     }
 
     publish(cardId);

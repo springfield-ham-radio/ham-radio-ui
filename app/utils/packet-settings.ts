@@ -3,6 +3,7 @@ import type { Ax25Modulo } from '~/utils/packet-ax25';
 import type { SavedRadio } from '~/utils/saved-radios';
 
 export const PACKET_SETTINGS_KEY = 'hbench.packet.settings';
+export const PACKET_RADIO_IDENTITY_MIGRATED_KEY = 'hbench.packet.radioIdentityMigrated';
 
 export interface PacketSettings {
   ssid: number;
@@ -113,6 +114,18 @@ export function packetMyCallLabel(base: string | undefined, ssid: number): strin
   return call ? formatAx25Call(call) : undefined;
 }
 
+export function isPacketRadioIdentityMigrationDone(storage: PacketSettingsStorage): boolean {
+  try {
+    return storage.getItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markPacketRadioIdentityMigrationDone(storage: PacketSettingsStorage): void {
+  storage.setItem(PACKET_RADIO_IDENTITY_MIGRATED_KEY, '1');
+}
+
 export function packetIdentityFromRadio(
   radio: Pick<SavedRadio, 'packetSsid' | 'packetAcceptIncoming'> | undefined,
   storage: PacketSettingsStorage,
@@ -124,6 +137,13 @@ export function packetIdentityFromRadio(
     };
   }
 
+  if (radio && isPacketRadioIdentityMigrationDone(storage)) {
+    return {
+      ssid: 0,
+      acceptIncoming: false,
+    };
+  }
+
   const global = readPacketSettings(storage);
 
   return {
@@ -132,13 +152,21 @@ export function packetIdentityFromRadio(
   };
 }
 
-/** Copy global Packet SSID and accept once, then persist on the saved radio. */
+/** Copy global Packet SSID and accept once for radios saved before per-radio fields. */
 export function migratePacketRadioIdentity(
   radio: SavedRadio,
   storage: PacketSettingsStorage,
 ): SavedRadio {
   if (radio.packetSsid !== undefined) {
     return radio;
+  }
+
+  if (isPacketRadioIdentityMigrationDone(storage)) {
+    return {
+      ...radio,
+      packetSsid: 0,
+      packetAcceptIncoming: false,
+    };
   }
 
   const global = readPacketSettings(storage);

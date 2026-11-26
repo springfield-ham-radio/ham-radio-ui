@@ -122,6 +122,8 @@ export interface AprsHostSession {
   cancelCommand(): void;
   /** Check a detection or command timeout against now(). */
   poll(): void;
+  /** Same work as the detect poll interval while detection or command waits are active. */
+  runDetectClock(): void;
   /** Run Connect detection again. Listens first and does not loop. */
   retryDetection(): string | undefined;
   /** Writes the module's enter steps, each only after a fresh prompt on this connection. */
@@ -509,14 +511,18 @@ export function createAprsHostSession(options?: {
     }
   }
 
-  function armDetectClock(): void {
+  function armDetectPoll(): void {
     if (!options?.useRetryClock || detectTimer) {
       return;
     }
 
     detectTimer = setInterval(() => {
-      void expireDetect();
+      tickDetectClock();
     }, 250);
+  }
+
+  function armDetectClock(): void {
+    armDetectPoll();
   }
 
   function failDetect(detail: string): void {
@@ -593,8 +599,14 @@ export function createAprsHostSession(options?: {
     if (!kissConfirmed && frames === 0 && promptSeen(sessionBytes)) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
-      detectDeadline = Number.POSITIVE_INFINITY;
-      clearDetectClock();
+      detectDeadline = sawBootOutput
+        ? bootQuietAfter
+        : (endsWithBareCommandPrompt(sessionBytes, hostLink.prompt) ? now() : Number.POSITIVE_INFINITY);
+      if (Number.isFinite(detectDeadline)) {
+        armDetectClock();
+      } else {
+        clearDetectClock();
+      }
       detectDetail = sawBootOutput
         ? `Command text seen. Waiting for a bare ${hostLink.prompt} after startup output.`
         : `${hostLink.prompt} was already on this connection. Waiting to enter host KISS.`;
@@ -743,7 +755,14 @@ export function createAprsHostSession(options?: {
     if (detectPhase === 'listening' && sawText) {
       detectPhase = 'awaiting-prompt';
       detectStep = 'after-text';
-      detectDeadline = now() + hostLink.waitMs;
+      if (sawBootOutput) {
+        detectDeadline = bootQuietAfter;
+      } else if (endsWithBareCommandPrompt(sessionBytes, hostLink.prompt)) {
+        detectDeadline = now();
+      } else {
+        detectDeadline = now() + hostLink.waitMs;
+      }
+      armDetectClock();
       detectDetail = `Command text seen. Waiting for ${hostLink.prompt}.`;
       record('note', new Uint8Array(), detectDetail);
     }
@@ -784,6 +803,19 @@ export function createAprsHostSession(options?: {
       ? `${hostLink.prompt} was already on this connection. Entering host KISS.`
       : 'Kenwood banner seen before KISS was confirmed. Waiting for the prompt. Nothing was sent.';
     record('note', new Uint8Array(), detectDetail);
+  }
+
+  function tickDetectClock(): void {
+    const owned = detectionOwnsWait();
+    void expireDetect();
+
+    if (!owned) {
+      expireCommand();
+    }
+
+    if (sawBootOutput && now() >= bootQuietAfter && detectPhase === 'awaiting-prompt') {
+      maybeStartEnter();
+    }
   }
 
   function maybeStartEnter(): void {
@@ -908,6 +940,19 @@ export function createAprsHostSession(options?: {
   }
 
   async function expireDetect(): Promise<void> {
+    if (
+      !detectBusy
+      && isAprsHostCommandLink(hostLink)
+      && port?.isOpen
+      && detectPhase === 'awaiting-prompt'
+      && !enterInFlight
+    ) {
+      if (enterPromptReady()) {
+        maybeStartEnter();
+        return;
+      }
+    }
+
     releaseKissHold();
 
     if (detectBusy || !hostLink || hostLink.entry === 'manual' || !port?.isOpen || !detectionOwnsWait()) {
@@ -946,6 +991,28 @@ export function createAprsHostSession(options?: {
     detectDeadline = Number.POSITIVE_INFINITY;
 
     try {
+      if (detectPhase === 'awaiting-prompt') {
+        if (enterPromptReady()) {
+          maybeStartEnter();
+          return;
+        }
+
+        if (endsWithBareCommandPrompt(sessionBytes, hostLink.prompt) || promptSeen(sessionBytes)) {
+          if (sawBootOutput && now() < bootQuietAfter) {
+            detectDeadline = bootQuietAfter;
+            return;
+          }
+
+          maybeStartEnter();
+          return;
+        }
+
+        if (!interruptTried && (detectStep === 'after-text' || sawText) && !promptSeen(sessionBytes)) {
+          await writeDetectInterrupt();
+          return;
+        }
+      }
+
       if (detectPhase === 'listening') {
         if (sawText) {
           await writeDetectInterrupt();
@@ -981,7 +1048,7 @@ export function createAprsHostSession(options?: {
         return;
       }
 
-      if (!interruptTried && (detectStep === 'after-text' || sawText)) {
+      if (!interruptTried && (detectStep === 'after-text' || sawText) && !promptSeen(sessionBytes)) {
         await writeDetectInterrupt();
         return;
       }
@@ -1127,8 +1194,6 @@ export function createAprsHostSession(options?: {
     enterInFlight = true;
     const bytes = new TextEncoder().encode(step.text);
     const following = hostLink.enter[enterIndex + 1];
-    const sessionMark = sessionBytes.length;
-
     if (following) {
       enterIndex += 1;
       commandBytes = new Uint8Array();
@@ -1141,7 +1206,7 @@ export function createAprsHostSession(options?: {
     enterInFlight = false;
 
     if (wrote.ok) {
-      enterPromptWatermark = sessionMark;
+      enterPromptWatermark = sessionBytes.length;
     }
 
     if (automatic && detectPhase !== 'entering') {
@@ -1698,6 +1763,7 @@ export function createAprsHostSession(options?: {
         ackOptIn = false;
         record('note', new Uint8Array(), hostListenNote(hostFlow));
         beginDetect();
+        armDetectPoll();
         openingBuffer = true;
 
         try {
@@ -1875,15 +1941,10 @@ export function createAprsHostSession(options?: {
       publish();
     },
     poll() {
-      const owned = detectionOwnsWait();
-      void expireDetect();
-      if (!owned) {
-        expireCommand();
-      }
-
-      if (sawBootOutput && now() >= bootQuietAfter && detectPhase === 'awaiting-prompt') {
-        maybeStartEnter();
-      }
+      tickDetectClock();
+    },
+    runDetectClock() {
+      tickDetectClock();
     },
     retryDetection() {
       if (!port?.isOpen) {
