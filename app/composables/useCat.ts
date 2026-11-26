@@ -2,6 +2,7 @@ import type { RadioId } from '@springfield/ham-radio-api';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import { radioSupportsLiveCat } from '~/utils/cat-capability';
 import { createCatSerialLog, type CatSerialLogSnapshot } from '~/utils/cat-serial-log';
+import { aprsKissOnHandshakeSupplement } from '~/utils/aprs-connection';
 import { kenwoodCatProfileFromConfig } from '~/utils/kenwood-cat-profile';
 import { openKenwoodCatSerialTransport } from '~/utils/kenwood-cat-serial';
 import {
@@ -187,7 +188,7 @@ export function useCat() {
 
       const message = cause instanceof Error ? cause.message : 'Failed to open CAT session';
       error.value = message;
-      const report = await createRadioErrorReport(
+      let report = await createRadioErrorReport(
         radioErrorContextFromRadio('cat', 'connect', {
           radioId: radio.id,
           config: radio,
@@ -195,6 +196,12 @@ export function useCat() {
         }),
         cause,
       );
+      const supplement = aprsKissOnHandshakeSupplement(radio, cause);
+
+      if (supplement) {
+        report = { ...report, summary: `${report.summary} ${supplement}` };
+      }
+
       showRadioErrorToast(toast, logger, {
         title: 'Could not connect CAT',
         report,

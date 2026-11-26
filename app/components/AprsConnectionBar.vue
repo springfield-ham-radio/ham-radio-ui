@@ -6,10 +6,13 @@ import {
   aprsConnectAction,
   aprsConnectDisabledReason,
   aprsConnectLabel,
+  aprsConnectionModeMenuVisible,
   aprsConnectionView,
   aprsDisconnectAction,
   aprsHostAprsModeHint,
+  aprsHostEntryGuidance,
   aprsHostModeHintText,
+  aprsHostRetryDetectionVisible,
   aprsMonitorSilenceHint,
   aprsStatusBadge,
   nextAprsMonitorQuiet,
@@ -66,6 +69,10 @@ const hostConnecting = computed(() => (props.cardId ? host.connecting.value[prop
 const connecting = computed(() => (isConnecting.value || hostConnecting.value) && !tncPreview.value);
 
 const selectedMode = computed<AprsConnectionMode>(() => {
+  if (profile.value?.passive === false) {
+    return 'host';
+  }
+
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
 
   if (chosen) {
@@ -73,6 +80,30 @@ const selectedMode = computed<AprsConnectionMode>(() => {
   }
 
   return profile.value?.host ? 'host' : 'passive';
+});
+const modeMenuVisible = computed(() => aprsConnectionModeMenuVisible(profile.value?.passive));
+const hostSerialLines = computed(() => {
+  const hostProfile = profile.value?.host;
+
+  if (!hostProfile) {
+    return undefined;
+  }
+
+  return {
+    dtr: hostProfile.dtr,
+    rts: hostProfile.rts,
+  };
+});
+const entryGuidance = computed(() => aprsHostEntryGuidance({
+  entryHint: profile.value?.host?.entryHint,
+  setup: profile.value?.host?.setup,
+}));
+const showEntryGuidance = computed(() => {
+  if (!entryGuidance.value || profile.value?.host?.link.entry !== 'manual') {
+    return false;
+  }
+
+  return !connection.value.open || (kissListening.value && hostSnapshot.value?.detectPhase === 'waiting-traffic' && !hostSnapshot.value?.kissConfirmed);
 });
 const activeMode = computed<AprsConnectionMode>(() => {
   if (kissListening.value) {
@@ -304,7 +335,7 @@ watch(passiveMonitorOpen, (open) => {
 onUnmounted(stopSilenceTimer);
 
 function chooseMode(mode: AprsConnectionMode): void {
-  if (!props.cardId || connection.value.open || connecting.value) {
+  if (!props.cardId || connection.value.open || connecting.value || !modeMenuVisible.value) {
     return;
   }
 
@@ -347,7 +378,7 @@ async function onConnect(): Promise<void> {
   const flow = tncFlow(selectedMode.value);
 
   if (action.kind === 'open-host') {
-    await host.connect(cardId, path, aprsBaud.value, flow);
+    await host.connect(cardId, path, aprsBaud.value, flow, hostSerialLines.value);
     return;
   }
 
@@ -403,14 +434,14 @@ function onRetryDetection(): void {
               color="primary"
               size="sm"
               :label="connectLabel"
-              class="rounded-e-none"
+              :class="modeMenuVisible ? 'rounded-e-none' : undefined"
               :loading="connecting"
               :disabled="Boolean(connectTooltip)"
               @click="onConnect"
             />
           </span>
         </UTooltip>
-        <UDropdownMenu :items="modeMenu" :content="{ align: 'end' }" :disabled="connecting">
+        <UDropdownMenu v-if="modeMenuVisible" :items="modeMenu" :content="{ align: 'end' }" :disabled="connecting">
           <span class="group inline-flex">
             <UButton
               color="primary"
@@ -427,7 +458,7 @@ function onRetryDetection(): void {
       </UFieldGroup>
       <template v-else>
         <UButton
-          v-if="kissListening"
+          v-if="kissListening && aprsHostRetryDetectionVisible(profile?.host?.link.entry)"
           color="neutral"
           variant="ghost"
           size="sm"
@@ -447,7 +478,8 @@ function onRetryDetection(): void {
       </template>
     </div>
     </div>
-    <p v-if="silenceHint" class="mt-1 max-w-3xl text-xs text-muted">{{ silenceHint }}</p>
+    <p v-if="showEntryGuidance" class="mt-1 max-w-3xl text-xs text-muted">{{ entryGuidance }}</p>
+    <p v-else-if="silenceHint" class="mt-1 max-w-3xl text-xs text-muted">{{ silenceHint }}</p>
     <p v-else-if="modeHint" class="mt-1 max-w-3xl text-xs text-muted">{{ modeHint }}</p>
   </div>
 </template>

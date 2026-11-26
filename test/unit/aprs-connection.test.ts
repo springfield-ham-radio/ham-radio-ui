@@ -5,11 +5,15 @@ import {
   aprsConnectAction,
   aprsConnectDisabledReason,
   aprsConnectLabel,
+  APRS_KISS_STILL_ON_HINT,
+  aprsConnectionModeMenuVisible,
   aprsConnectionView,
   aprsDisconnectAction,
   aprsHostAprsModeHint,
   aprsHostModeHintText,
+  aprsHostRetryDetectionVisible,
   aprsHostShouldExitKiss,
+  aprsKissOnHandshakeSupplement,
   aprsMonitorSilenceHint,
   aprsStatusBadge,
   aprsTncModeBadge,
@@ -444,5 +448,42 @@ describe('APRS TNC mode badge', () => {
       aprsTncModeBadge(host({ detectPhase: 'failed' })).color,
     ];
     expect(new Set(colors).size).toBe(colors.length);
+  });
+});
+
+describe('kiss-only APRS helpers', () => {
+  it('hides the monitor caret and retry for manual entry', () => {
+    expect(aprsConnectionModeMenuVisible(true)).toBe(true);
+    expect(aprsConnectionModeMenuVisible(false)).toBe(false);
+    expect(aprsConnectionModeMenuVisible(undefined)).toBe(true);
+    expect(aprsHostRetryDetectionVisible('command')).toBe(true);
+    expect(aprsHostRetryDetectionVisible('manual')).toBe(false);
+    expect(aprsHostRetryDetectionVisible(undefined)).toBe(true);
+  });
+
+  it('appends a handshake hint only for kiss-only modules on timeout', () => {
+    const kissConfig = {
+      capabilities: { aprsReceive: true },
+      aprs: {
+        mode: 'kiss',
+        baudRate: 9600,
+        baudRates: [9600],
+        host: {
+          entry: 'manual',
+          kissExit: [0xc0, 0xff, 0xc0],
+          enter: [],
+          flowControl: 'none',
+          setup: ['KISS on at radio.'],
+          recovery: ['Disconnect exits KISS.'],
+        },
+      },
+    };
+    const monitorConfig = {
+      capabilities: { aprsReceive: true },
+      aprs: { mode: 'monitor', baudRate: 9600, baudRates: [9600] },
+    };
+    expect(aprsKissOnHandshakeSupplement(kissConfig, new Error('CAT reply timed out'))).toBe(APRS_KISS_STILL_ON_HINT);
+    expect(aprsKissOnHandshakeSupplement(monitorConfig, new Error('CAT reply timed out'))).toBeUndefined();
+    expect(aprsKissOnHandshakeSupplement(kissConfig, new Error('Radio rejected ID'))).toBeUndefined();
   });
 });

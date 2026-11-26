@@ -9,21 +9,25 @@ import type { AprsHostFlowControl } from '~/utils/aprs-serial-options';
  * runs the detection sequence from this block. A prompt is not proof of
  * packet mode. `kissExit` is optional and is not invented here.
  */
+export type AprsHostEntry = 'command' | 'manual';
+
 export interface AprsHostEnterStep {
   text: string;
   label: string;
 }
 
 export interface AprsHostLink {
-  interrupt: Uint8Array;
-  prompt: string;
+  entry: AprsHostEntry;
+  interrupt?: Uint8Array;
+  prompt?: string;
   errorReply?: string;
   waitMs: number;
   /** How long Connect listens before the prompt request. Default 3000. */
   listenMs: number;
   /**
    * Optional KISS-exit bytes, sent once only when Connect hears silence
-   * after the prompt request. Omitted means that step is skipped.
+   * after the prompt request. Required for manual entry. Omitted on command
+   * modules means that step is skipped.
    */
   kissExit?: Uint8Array;
   /**
@@ -46,6 +50,15 @@ export interface AprsHostProfile {
    * open the port.
    */
   flowControl?: AprsHostFlowControl;
+  /**
+   * Optional DTR line after open. Omitted means deasserted (low).
+   */
+  dtr?: boolean;
+  /**
+   * Optional RTS line after open when flow is not hardware. Omitted means low.
+   * Hardware RTS/CTS does not ioctl RTS.
+   */
+  rts?: boolean;
   flows: readonly AprsHostFlowControl[];
   defaultFlow: AprsHostFlowControl;
   flowHelp: string;
@@ -62,6 +75,11 @@ export interface AprsHostProfile {
    * weaker sentence. It is not transmitted.
    */
   aprsModeLikelyHint?: string;
+  /**
+   * Shown on the connection bar while disconnected or waiting for manual KISS.
+   * Not transmitted.
+   */
+  entryHint?: string;
 }
 
 const FLOWS: readonly AprsHostFlowControl[] = ['software', 'none', 'hardware'];
@@ -115,12 +133,131 @@ function lines(value: unknown, max: number): string[] | undefined {
   return copy.slice(0, max);
 }
 
-/**
- * Parse `aprs.host` from a module config. An unusable block is ignored.
- * The caller then offers the passive monitor only.
- */
-export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefined {
-  if (!isRecord(value)) {
+function lineState(value: unknown): boolean | undefined | null {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === 'asserted') {
+    return true;
+  }
+
+  if (value === 'low') {
+    return false;
+  }
+
+  return null;
+}
+
+function parseManualHost(value: Record<string, unknown>): AprsHostProfile | undefined {
+  if (value.entry !== 'manual') {
+    return undefined;
+  }
+
+  if (value.interrupt !== undefined || value.prompt !== undefined || value.promptNudge !== undefined || value.errorReply !== undefined) {
+    return undefined;
+  }
+
+  const kissExit = byteList(value.kissExit, 1, 16);
+
+  if (!kissExit) {
+    return undefined;
+  }
+
+  if (value.enter !== undefined && (!Array.isArray(value.enter) || value.enter.length !== 0)) {
+    return undefined;
+  }
+
+  let flowControl: AprsHostFlowControl | undefined;
+
+  if (value.flowControl === undefined) {
+    flowControl = 'none';
+  } else if (value.flowControl === 'software') {
+    return undefined;
+  } else if (!isAprsHostFlow(value.flowControl) || value.flowControl === 'software') {
+    return undefined;
+  } else {
+    flowControl = value.flowControl;
+  }
+
+  const dtr = lineState(value.dtr);
+
+  if (dtr === null) {
+    return undefined;
+  }
+
+  const rts = lineState(value.rts);
+
+  if (rts === null) {
+    return undefined;
+  }
+
+  const waitMs = value.waitMs === undefined ? 5000 : value.waitMs;
+
+  if (typeof waitMs !== 'number' || !Number.isInteger(waitMs) || waitMs < 1000 || waitMs > 60_000) {
+    return undefined;
+  }
+
+  const listenMs = value.listenMs === undefined ? 3000 : value.listenMs;
+
+  if (typeof listenMs !== 'number' || !Number.isInteger(listenMs) || listenMs < 500 || listenMs > 15_000) {
+    return undefined;
+  }
+
+  const listed = Array.isArray(value.flows)
+    ? value.flows.filter((flow): flow is AprsHostFlowControl => typeof flow === 'string' && FLOWS.includes(flow as AprsHostFlowControl))
+    : [...FLOWS];
+  const flows = listed.length > 0 ? [...new Set(listed)] : [...FLOWS];
+  const defaultFlow = typeof value.defaultFlow === 'string' && flows.includes(value.defaultFlow as AprsHostFlowControl)
+    ? value.defaultFlow as AprsHostFlowControl
+    : flows[0]!;
+  const setup = lines(value.setup, 8);
+  const recovery = lines(value.recovery, 8);
+
+  if (!setup || !recovery) {
+    return undefined;
+  }
+
+  const flowHelp = typeof value.flowHelp === 'string' && value.flowHelp.trim().length > 0
+    ? value.flowHelp.trim()
+    : 'Flow control comes from the module.';
+  const entryHint = optionalHint(value.entryHint);
+
+  if (entryHint === null) {
+    return undefined;
+  }
+
+  const aprsModeHint = optionalHint(value.aprsModeHint);
+  const aprsModeLikelyHint = optionalHint(value.aprsModeLikelyHint);
+
+  if (aprsModeHint === null || aprsModeLikelyHint === null) {
+    return undefined;
+  }
+
+  return {
+    link: {
+      entry: 'manual',
+      waitMs,
+      listenMs,
+      kissExit,
+      enter: [],
+    },
+    flowControl,
+    dtr,
+    rts,
+    flows,
+    defaultFlow,
+    flowHelp,
+    setup,
+    recovery,
+    entryHint,
+    aprsModeHint,
+    aprsModeLikelyHint,
+  };
+}
+
+function parseCommandHost(value: Record<string, unknown>): AprsHostProfile | undefined {
+  if (value.entry !== undefined && value.entry !== 'command') {
     return undefined;
   }
 
@@ -204,6 +341,18 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     flowControl = value.flowControl;
   }
 
+  const dtr = lineState(value.dtr);
+
+  if (dtr === null) {
+    return undefined;
+  }
+
+  const rts = lineState(value.rts);
+
+  if (rts === null) {
+    return undefined;
+  }
+
   const listed = Array.isArray(value.flows)
     ? value.flows.filter((flow): flow is AprsHostFlowControl => typeof flow === 'string' && FLOWS.includes(flow as AprsHostFlowControl))
     : [...FLOWS];
@@ -223,14 +372,27 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     : 'Flow control comes from the module.';
   const aprsModeHint = optionalHint(value.aprsModeHint);
   const aprsModeLikelyHint = optionalHint(value.aprsModeLikelyHint);
+  const entryHint = optionalHint(value.entryHint);
 
-  if (aprsModeHint === null || aprsModeLikelyHint === null) {
+  if (aprsModeHint === null || aprsModeLikelyHint === null || entryHint === null) {
     return undefined;
   }
 
   return {
-    link: { interrupt, prompt: value.prompt, errorReply, waitMs, listenMs, kissExit, promptNudge, enter },
+    link: {
+      entry: 'command',
+      interrupt,
+      prompt: value.prompt,
+      errorReply,
+      waitMs,
+      listenMs,
+      kissExit,
+      promptNudge,
+      enter,
+    },
     flowControl,
+    dtr,
+    rts,
     flows,
     defaultFlow,
     flowHelp,
@@ -238,7 +400,24 @@ export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefine
     recovery,
     aprsModeHint,
     aprsModeLikelyHint,
+    entryHint,
   };
+}
+
+/**
+ * Parse `aprs.host` from a module config. An unusable block is ignored.
+ * The caller then offers the passive monitor only, or hides kiss-only APRS.
+ */
+export function parseAprsHostProfile(value: unknown): AprsHostProfile | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (value.entry === 'manual') {
+    return parseManualHost(value);
+  }
+
+  return parseCommandHost(value);
 }
 
 /** A display sentence. Undefined when omitted, null when present but unusable. */
@@ -262,4 +441,11 @@ function optionalHint(value: unknown): string | undefined | null {
   }
 
   return trimmed;
+}
+
+export function isAprsHostCommandLink(link: AprsHostLink | undefined): link is AprsHostLink & { entry: 'command'; interrupt: Uint8Array; prompt: string } {
+  return link !== undefined
+    && link.entry !== 'manual'
+    && link.interrupt !== undefined
+    && link.prompt !== undefined;
 }

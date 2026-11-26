@@ -33,6 +33,8 @@ export interface AprsReceiveProfile {
   help: string;
   /** Shown with the passive monitor. Not a command. */
   monitorNote: string;
+  /** False for `aprs.mode` kiss: no Monitor only face on the connection bar. */
+  passive: boolean;
   /** Present only when this radio's module, or the D710 compatibility fallback, supplies one. */
   host?: AprsHostProfile;
 }
@@ -81,16 +83,27 @@ export function aprsReceiveProfile(input: { config?: unknown; model?: string; na
   if (declared === true) {
     const block = config?.aprs;
 
-    if (isRecord(block) && block.mode !== undefined && block.mode !== 'monitor') {
+    if (isRecord(block) && block.mode !== undefined && block.mode !== 'monitor' && block.mode !== 'kiss') {
       return undefined;
     }
 
-    return profileFromDriver(block) ?? {
+    const profile = profileFromDriver(block);
+
+    if (profile) {
+      return profile;
+    }
+
+    if (isRecord(block) && block.mode === 'kiss') {
+      return undefined;
+    }
+
+    return {
       source: 'driver',
       baudRate: 9600,
       baudRates: [...APRS_COM_BAUD_RATES],
       help: DRIVER_HELP,
       monitorNote: DRIVER_MONITOR,
+      passive: true,
     };
   }
 
@@ -108,6 +121,7 @@ export function aprsReceiveProfile(input: { config?: unknown; model?: string; na
     baudRates: [...APRS_COM_BAUD_RATES],
     help: d710AprsPreferenceHelp(family),
     monitorNote: `Menu 604 OUTPUT must be ON before this port copies heard packets. COM baud is menu ${menus}. HamBench does not change those menus.`,
+    passive: true,
     host: d710AprsHostProfile(),
   };
 }
@@ -117,7 +131,9 @@ function profileFromDriver(value: unknown): AprsReceiveProfile | undefined {
     return undefined;
   }
 
-  if (value.mode !== undefined && value.mode !== 'monitor') {
+  const kissOnly = value.mode === 'kiss';
+
+  if (value.mode !== undefined && value.mode !== 'monitor' && !kissOnly) {
     return undefined;
   }
 
@@ -129,6 +145,12 @@ function profileFromDriver(value: unknown): AprsReceiveProfile | undefined {
     return undefined;
   }
 
+  const host = parseAprsHostProfile(value.host);
+
+  if (kissOnly && !host) {
+    return undefined;
+  }
+
   const help = typeof value.help === 'string' && value.help.trim().length > 0 ? value.help.trim() : DRIVER_HELP;
 
   return {
@@ -137,6 +159,7 @@ function profileFromDriver(value: unknown): AprsReceiveProfile | undefined {
     baudRates: rates,
     help,
     monitorNote: typeof value.monitorNote === 'string' && value.monitorNote.trim().length > 0 ? value.monitorNote.trim() : DRIVER_MONITOR,
-    host: parseAprsHostProfile(value.host),
+    passive: !kissOnly,
+    host,
   };
 }

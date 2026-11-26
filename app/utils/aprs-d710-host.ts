@@ -24,6 +24,7 @@ export const D710_APRS_MODE_LIKELY_HINT =
 
 export function d710AprsHostLink(): AprsHostLink {
   return {
+    entry: 'command',
     interrupt: APRS_COMMAND_INTERRUPT,
     prompt: 'cmd:',
     errorReply: '?EH',

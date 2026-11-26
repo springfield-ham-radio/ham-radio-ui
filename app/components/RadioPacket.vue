@@ -78,7 +78,9 @@ const moduloItems = [
 const hostNotice = computed(() => packetNeedsHostNotice({
   hostOpen: portOpen.value,
   passiveOpen: props.cardId ? monitor.snapshots.value[props.cardId]?.connected === true : false,
-  selected: (props.cardId ? requestedModes.value[props.cardId] : undefined) ?? (profile.value?.host ? 'host' : 'passive'),
+  selected: profile.value?.passive === false
+    ? 'host'
+    : (props.cardId ? requestedModes.value[props.cardId] : undefined) ?? (profile.value?.host ? 'host' : 'passive'),
 }));
 
 if (props.cardId) {

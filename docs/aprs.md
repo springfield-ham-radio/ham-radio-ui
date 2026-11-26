@@ -85,3 +85,7 @@ The TM-D710A/E service manual, panel MPU table on printed pages 6–7, names pin
 `HBAUD    was 1200` is the TNC’s own parameter reply. The command list’s name is `HBAUD` / `HB`, default 1200. A D710 power-on transcript runs `HB 1200` and then prints that line and `cmd:`. HamBench never sends `HB` or `HBAUD`. The 17-byte enter string was `\\rKISS ON\\rRESTART\\r`. Plugin `open` writes no payload. `ECHO` defaults to ON, so a command the TNC accepted is echoed. `KISS ON` is a parameter; the A/E text enters KISS on the next power cycle, and the G text enters it on `RESTART`. Neither says the TNC goes silent at `KISS ON` itself.
 
 The TNC has 4 kB of KISS buffer. A partial frame longer than that is dropped. Message text is at most 67 characters. See [ADR 0015](adr/0015-aprs-host-messaging.md).
+
+## Kiss-only host (for example Kenwood TH-D74)
+
+Some radios declare `aprs.mode` `kiss` and `aprs.host.entry` `manual`. They use the same USB port as clone and CAT, not a separate COM jack. Turn KISS on at the radio before **Connect (Host)**. HamBench writes nothing on Connect; KISS is confirmed when an AX.25 UI frame arrives. **Monitor only** is not offered. **Disconnect** writes the module `kissExit` once (for the D74, `C0 FF C0`) and releases the port so CAT and Read can open it again. Set the APRS serial port in Preferences to the same adapter as memory. See [ADR 0025](adr/0025-aprs-kiss-only-host.md).

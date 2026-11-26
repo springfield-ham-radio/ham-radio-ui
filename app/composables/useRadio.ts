@@ -43,6 +43,7 @@ import {
   isCatMemoryTransferBlocked,
   memoryTransferBlockedMessage,
 } from '~/utils/cat-memory-transfer';
+import { aprsKissOnHandshakeSupplement } from '~/utils/aprs-connection';
 import {
   type LoadedRadioConfig,
   listRadioCatalogRecords,
@@ -736,11 +737,18 @@ export function useRadio() {
     context: ReturnType<typeof radioErrorContextFromRadio>,
     cause: unknown,
     logMessage: string,
+    config?: unknown,
   ): Promise<void> {
-    const report = await createRadioErrorReport(
+    let report = await createRadioErrorReport(
       context,
       cause instanceof Error ? cause : new Error(String(cause)),
     );
+    const supplement = config ? aprsKissOnHandshakeSupplement(config, cause) : undefined;
+
+    if (supplement) {
+      report = { ...report, summary: `${report.summary} ${supplement}` };
+    }
+
     transfers.value = setRadioTransferError(transfers.value, cardId, report);
     logger.withError(cause).error(logMessage);
     logRadioErrorReport(logger, report, logMessage);
@@ -961,6 +969,7 @@ export function useRadio() {
           }),
           cause,
           'Failed to read radio',
+          config,
         );
       }
     } finally {
