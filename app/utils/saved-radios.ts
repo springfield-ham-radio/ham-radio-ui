@@ -278,8 +278,12 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
   });
 }
 
+function savedRadioStorageAvailable(): boolean {
+  return import.meta.client || typeof localStorage !== 'undefined';
+}
+
 export function readSavedRadioStore(): SavedRadioStore {
-  if (!import.meta.client) {
+  if (!savedRadioStorageAvailable()) {
     return emptySavedRadioStore();
   }
 
@@ -291,7 +295,7 @@ export function readSavedRadioStore(): SavedRadioStore {
 }
 
 export function writeSavedRadioStore(store: SavedRadioStore): void {
-  if (!import.meta.client) {
+  if (!savedRadioStorageAvailable()) {
     return;
   }
 

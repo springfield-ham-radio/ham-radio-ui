@@ -191,3 +191,48 @@ export function packetSettingsForCard(
     acceptIncoming: identity.acceptIncoming,
   });
 }
+
+export function samePacketSettings(left: PacketSettings, right: PacketSettings): boolean {
+  return left.ssid === right.ssid
+    && left.acceptIncoming === right.acceptIncoming
+    && left.modulo === right.modulo
+    && left.paclen === right.paclen
+    && left.maxframe === right.maxframe
+    && left.t1Ms === right.t1Ms
+    && left.t3Ms === right.t3Ms
+    && left.n2 === right.n2;
+}
+
+/**
+ * Copy global Packet SSID and accept onto radios saved before those fields existed.
+ *
+ * One pass. Radios that already have both fields are left as stored. Calling this
+ * again after the migration flag is set returns the same list and writes nothing.
+ */
+export function applyPacketRadioIdentityMigration(
+  radios: readonly SavedRadio[],
+  storage: PacketSettingsStorage,
+  now = Date.now(),
+): { radios: SavedRadio[]; changed: boolean } {
+  if (isPacketRadioIdentityMigrationDone(storage)) {
+    return { radios: radios.slice(), changed: false };
+  }
+
+  const global = readPacketSettings(storage);
+  let changed = false;
+  const next = radios.map((entry) => {
+    if (entry.packetSsid !== undefined && entry.packetAcceptIncoming !== undefined) {
+      return entry;
+    }
+
+    changed = true;
+    return {
+      ...entry,
+      packetSsid: entry.packetSsid ?? global.ssid,
+      packetAcceptIncoming: entry.packetAcceptIncoming ?? global.acceptIncoming,
+      updatedAt: now,
+    };
+  });
+
+  return { radios: next, changed };
+}

@@ -1,3 +1,4 @@
+import { watch } from 'vue';
 import { formatAx25Call, canonicalAx25Call, type Ax25Call } from '~/utils/aprs-ax25';
 import type { AprsHostSnapshot } from '~/utils/aprs-host-session';
 import type { PacketLinkPhase } from '~/utils/packet-link';
@@ -21,13 +22,14 @@ import {
 } from '~/utils/packet-monitor';
 import { packetLinkBlockReason } from '~/utils/packet-port';
 import {
+  applyPacketRadioIdentityMigration,
   isPacketRadioIdentityMigrationDone,
   markPacketRadioIdentityMigrationDone,
-  migratePacketRadioIdentity,
   normalizePacketSettings,
   packetMyCall,
   packetSettingsForCard,
   readPacketSettings,
+  samePacketSettings,
   writePacketSettings,
   type PacketSettings,
   type PacketSettingsStorage,
@@ -39,6 +41,7 @@ import {
   writeSavedRadioStore,
   patchSavedRadioPacketFields,
   type SavedRadio,
+  type SavedRadioStore,
 } from '~/utils/saved-radios';
 
 export interface PacketCardState {
@@ -79,9 +82,14 @@ interface Runtime {
 }
 
 const runtimes = new Map<string, Runtime>();
+let packetRadioMigrationStarted = false;
+
+function packetStorageReady(): boolean {
+  return import.meta.client || typeof localStorage !== 'undefined';
+}
 
 function browserStorage(): PacketSettingsStorage {
-  if (import.meta.client) {
+  if (packetStorageReady()) {
     return localStorage;
   }
 
@@ -97,49 +105,43 @@ function savedRadio(cardId: string): SavedRadio | undefined {
   return readSavedRadioStore().radios.find((radio) => radio.id === cardId);
 }
 
-function ensureRadioPacketMigration(cardId: string): SavedRadio | undefined {
+function commitSavedRadioStore(next: SavedRadioStore): void {
+  writeSavedRadioStore(next);
+
+  if (!packetStorageReady()) {
+    return;
+  }
+
+  const saved = useState<SavedRadioStore>('saved-radios', () => next);
+  saved.value = next;
+}
+
+/**
+ * Copy global Packet SSID onto radios that predate per-radio fields.
+ *
+ * Runs once per page load, from composable setup, before the Packet tab watch.
+ * Later reads only load what was stored.
+ */
+function migratePacketRadiosOnce(): void {
+  if (packetRadioMigrationStarted || !packetStorageReady()) {
+    return;
+  }
+
+  packetRadioMigrationStarted = true;
   const storage = browserStorage();
 
-  if (!isPacketRadioIdentityMigrationDone(storage)) {
-    const store = readSavedRadioStore();
-    const global = readPacketSettings(storage);
-    let changed = false;
-    const radios = store.radios.map((entry) => {
-      if (entry.packetSsid !== undefined) {
-        return entry;
-      }
-
-      changed = true;
-      return {
-        ...entry,
-        packetSsid: global.ssid,
-        packetAcceptIncoming: global.acceptIncoming,
-        updatedAt: Date.now(),
-      };
-    });
-
-    if (changed) {
-      writeSavedRadioStore({ radios });
-    }
-
-    markPacketRadioIdentityMigrationDone(storage);
+  if (isPacketRadioIdentityMigrationDone(storage)) {
+    return;
   }
 
-  const radio = savedRadio(cardId);
+  const current = readSavedRadioStore();
+  const migrated = applyPacketRadioIdentityMigration(current.radios, storage);
 
-  if (!radio) {
-    return undefined;
+  if (migrated.changed) {
+    commitSavedRadioStore({ radios: migrated.radios });
   }
 
-  const migrated = migratePacketRadioIdentity(radio, storage);
-
-  if (migrated.packetSsid === radio.packetSsid && migrated.packetAcceptIncoming === radio.packetAcceptIncoming) {
-    return migrated;
-  }
-
-  const store = readSavedRadioStore();
-  writeSavedRadioStore(upsertSavedRadio(store, migrated));
-  return migrated;
+  markPacketRadioIdentityMigrationDone(storage);
 }
 
 function activePhase(runtime: Runtime): PacketLinkPhase | 'none' {
@@ -162,23 +164,27 @@ function linkIdle(runtime: Runtime): boolean {
 export function usePacket() {
   const host = useAprsHost();
   const states = useState<Record<string, PacketCardState>>('packet-card-state', () => ({}));
+  migratePacketRadiosOnce();
 
   function loadSettings(cardId: string): PacketSettings {
-    const radio = ensureRadioPacketMigration(cardId);
-    return packetSettingsForCard(radio, browserStorage());
+    return packetSettingsForCard(savedRadio(cardId), browserStorage());
   }
 
   function runtimeFor(cardId: string): Runtime {
     const existing = runtimes.get(cardId);
+    const settings = loadSettings(cardId);
 
     if (existing) {
-      existing.settings = loadSettings(cardId);
+      if (!samePacketSettings(existing.settings, settings)) {
+        existing.settings = settings;
+      }
+
       return existing;
     }
 
     const created: Runtime = {
       monitor: createPacketMonitor(),
-      settings: loadSettings(cardId),
+      settings,
       scrollback: '',
       filterCall: '',
       filterType: 'all',
@@ -307,7 +313,12 @@ export function usePacket() {
   }
 
   function ensureMux(cardId: string, me: Ax25Call): void {
-    const runtime = runtimeFor(cardId);
+    const runtime = runtimes.get(cardId);
+
+    if (!runtime) {
+      return;
+    }
+
     const live = activePhase(runtime);
 
     if (live === 'connecting' || live === 'connected' || live === 'timer-recovery' || live === 'disconnecting') {
@@ -328,15 +339,33 @@ export function usePacket() {
   function syncStation(cardId: string, baseCall: string | undefined): void {
     const runtime = runtimeFor(cardId);
     const me = packetMyCall(baseCall, runtime.settings.ssid);
+    const published = states.value[cardId];
 
     if (!me) {
-      if (linkIdle(runtime)) {
+      const needsClear = runtime.mux !== undefined || runtime.me !== undefined || runtime.sessionId !== undefined;
+
+      if (linkIdle(runtime) && needsClear) {
         runtime.mux = undefined;
+        runtime.muxBuild = undefined;
         runtime.sessionId = undefined;
         runtime.me = undefined;
       }
 
-      publish(cardId);
+      if (!published || needsClear) {
+        publish(cardId);
+      }
+
+      return;
+    }
+
+    const build = packetMuxBuildParams(me, runtime.settings);
+    const callMatches = runtime.me !== undefined && formatAx25Call(runtime.me) === formatAx25Call(me);
+    const muxMatches = runtime.mux !== undefined && callMatches && samePacketMuxBuild(runtime.muxBuild, build);
+    const stateMatches = published !== undefined
+      && published.settings.ssid === runtime.settings.ssid
+      && published.settings.acceptIncoming === runtime.settings.acceptIncoming;
+
+    if (muxMatches && stateMatches) {
       return;
     }
 
@@ -579,6 +608,12 @@ export function usePacket() {
 
   function updateSettings(cardId: string, patch: Partial<PacketSettings>): void {
     const runtime = runtimeFor(cardId);
+    const next = normalizePacketSettings({ ...runtime.settings, ...patch });
+
+    if (samePacketSettings(runtime.settings, next)) {
+      return;
+    }
+
     const store = readSavedRadioStore();
     const radio = store.radios.find((entry) => entry.id === cardId);
     const global = readPacketSettings(browserStorage());
@@ -590,11 +625,16 @@ export function usePacket() {
     }
 
     if (radio && (ssid !== undefined || acceptIncoming !== undefined)) {
-      const updated = patchSavedRadioPacketFields(radio, {
-        ...(ssid !== undefined ? { packetSsid: ssid } : {}),
-        ...(acceptIncoming !== undefined ? { packetAcceptIncoming: acceptIncoming } : {}),
-      });
-      writeSavedRadioStore(upsertSavedRadio(store, updated));
+      const packetSsid = ssid !== undefined ? Math.min(15, Math.max(0, ssid)) : radio.packetSsid;
+      const packetAcceptIncoming = acceptIncoming !== undefined ? acceptIncoming : radio.packetAcceptIncoming;
+
+      if (radio.packetSsid !== packetSsid || radio.packetAcceptIncoming !== packetAcceptIncoming) {
+        const updated = patchSavedRadioPacketFields(radio, {
+          ...(ssid !== undefined ? { packetSsid: ssid } : {}),
+          ...(acceptIncoming !== undefined ? { packetAcceptIncoming: acceptIncoming } : {}),
+        });
+        commitSavedRadioStore(upsertSavedRadio(store, updated));
+      }
     } else if (!radio && (ssid !== undefined || acceptIncoming !== undefined)) {
       writePacketSettings(browserStorage(), normalizePacketSettings({
         ...global,
@@ -604,12 +644,21 @@ export function usePacket() {
       }));
     }
 
-    runtime.settings = loadSettings(cardId);
+    const loaded = loadSettings(cardId);
+
+    if (!samePacketSettings(runtime.settings, loaded)) {
+      runtime.settings = loaded;
+    }
+
     runtime.mux?.setAcceptIncoming(runtime.settings.acceptIncoming);
 
     if (linkIdle(runtime) && runtime.me) {
-      runtime.mux = createPacketCardMux(runtime.me, runtime.settings);
-      runtime.muxBuild = packetMuxBuildParams(runtime.me, runtime.settings);
+      const build = packetMuxBuildParams(runtime.me, runtime.settings);
+
+      if (!runtime.mux || !samePacketMuxBuild(runtime.muxBuild, build)) {
+        runtime.mux = createPacketCardMux(runtime.me, runtime.settings);
+        runtime.muxBuild = build;
+      }
     }
 
     publish(cardId);
@@ -643,4 +692,52 @@ export function usePacket() {
     updateSettings,
     showFixture,
   };
+}
+
+/**
+ * Keep the Packet mux aligned with the operator callsign and this radio's SSID.
+ *
+ * Sources are compared as values. A publish that leaves those values the same
+ * does not call syncStation again, and syncStation itself returns without
+ * writing when the station is already current.
+ */
+export function watchPacketStation(
+  cardId: () => string | undefined,
+  baseCall: () => string | undefined,
+  packet: Pick<ReturnType<typeof usePacket>, 'states' | 'syncStation'>,
+): void {
+  watch(
+    [
+      cardId,
+      baseCall,
+      () => {
+        const id = cardId();
+        return id ? packet.states.value[id]?.settings.ssid : undefined;
+      },
+      () => {
+        const id = cardId();
+        return id ? packet.states.value[id]?.settings.acceptIncoming : undefined;
+      },
+    ],
+    (next, previous) => {
+      const id = next[0];
+
+      if (!id) {
+        return;
+      }
+
+      if (
+        previous
+        && next[0] === previous[0]
+        && next[1] === previous[1]
+        && next[2] === previous[2]
+        && next[3] === previous[3]
+      ) {
+        return;
+      }
+
+      packet.syncStation(id, next[1]);
+    },
+    { immediate: true },
+  );
 }

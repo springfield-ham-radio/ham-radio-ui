@@ -106,16 +106,10 @@ watch(
   { immediate: true },
 );
 
-watch(
-  () => [props.cardId, baseCall.value, state.value?.settings.ssid, state.value?.settings.acceptIncoming] as const,
-  () => {
-    if (!props.cardId) {
-      return;
-    }
-
-    packet.syncStation(props.cardId, baseCall.value);
-  },
-  { immediate: true },
+watchPacketStation(
+  () => props.cardId,
+  () => baseCall.value,
+  packet,
 );
 
 watch(hostSnapshot, (snapshot) => {
