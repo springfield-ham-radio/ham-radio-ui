@@ -2,7 +2,7 @@ import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { fieldComposite, type SettingsCoordinateAxis, type SettingsCoordinatePart } from './settings-coordinate';
 import { fieldRecord } from './settings-record';
 import { settingsFieldMenuNumber } from './settings-field-help';
-import { layoutSettingsFields, type SettingsFieldCell } from './settings-switch-groups';
+import { layoutPlainSettingsFields, type SettingsFieldCell, type SettingsPlainFieldCell } from './settings-switch-groups';
 
 export interface SettingsCoordinateCell {
   kind: 'coordinate';
@@ -37,7 +37,11 @@ export interface SettingsRecordCell {
 }
 
 /** One grid cell after record tabs, coordinate inputs, and switch groups are folded. */
-export type SettingsLayoutCell = SettingsFieldCell | SettingsCoordinateCell | SettingsCoordinatePairCell | SettingsRecordCell;
+export type SettingsLayoutCell =
+  | SettingsPlainFieldCell
+  | SettingsCoordinateCell
+  | SettingsCoordinatePairCell
+  | SettingsRecordCell;
 
 function fieldUiOrder(field: RadioMemoryMapUiField): number | undefined {
   const order = field.ui.order;
@@ -115,7 +119,7 @@ function layoutPlain(fields: readonly RadioMemoryMapUiField[]): Array<SettingsFi
       return;
     }
 
-    cells.push(...layoutSettingsFields(plain));
+    cells.push(...layoutPlainSettingsFields(plain));
     plain = [];
   }
 
@@ -295,6 +299,10 @@ export function layoutCellPaths(cell: SettingsLayoutCell): string[] {
 
   if (cell.kind === 'coordinatePair') {
     return [...layoutCellPaths(cell.latitude), ...layoutCellPaths(cell.longitude)];
+  }
+
+  if (cell.kind === 'memoryTable') {
+    return cell.columns.flatMap((column) => [...column.fieldsByIndex.values()].map((field) => field.path));
   }
 
   return cell.tabs.flatMap((tab) => tab.cells.flatMap((entry) => layoutCellPaths(entry)));

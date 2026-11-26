@@ -1,0 +1,129 @@
+{
+  "version": "1.13.0",
+  "groups": [
+    {
+      "id": "tx-rx",
+      "label": "TX/RX",
+      "groups": [{ "id": "dtmf", "label": "DTMF" }]
+    }
+  ],
+  "channelBindings": {
+    "records": "channels",
+    "names": "names",
+    "nameField": "name",
+    "receiveFrequency": "freq",
+    "transmitFrequency": "offset",
+    "receiveTone": "ctone",
+    "transmitTone": "rtone"
+  },
+  "structs": [
+    {
+      "id": "dtmfTxHold",
+      "seek": "0x1021",
+      "fields": [
+        {
+          "id": "hold",
+          "type": "u8",
+          "value": { "kind": "boolean" },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "DTMF TX Hold",
+            "widget": "switch",
+            "menu": { "number": 162, "code": "DTMF TX Hold" },
+            "section": "TX/RX",
+            "order": 16200
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfMemoryCodes",
+      "seek": "0x0040",
+      "count": 10,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "code",
+          "type": "u8",
+          "value": { "kind": "ascii", "length": 16, "pad": 0 },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "DTMF memory code",
+            "widget": "text",
+            "menu": { "number": 163, "code": "DTMF Memory" },
+            "section": "TX/RX",
+            "order": 16300
+          }
+        }
+      ]
+    },
+    {
+      "id": "dtmfMemoryNames",
+      "seek": "0x0100",
+      "count": 10,
+      "stride": 16,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": { "kind": "ascii", "length": 16, "pad": 0 },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "DTMF memory name",
+            "widget": "text",
+            "menu": { "number": 163, "code": "DTMF Memory" },
+            "section": "TX/RX",
+            "order": 16310
+          }
+        }
+      ]
+    },
+    {
+      "id": "echoLinkMemoryCodes",
+      "seek": "0x0200",
+      "count": 10,
+      "stride": 8,
+      "fields": [
+        {
+          "id": "code",
+          "type": "u8",
+          "value": { "kind": "ascii", "length": 8, "pad": 0 },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "EchoLink memory code",
+            "widget": "text",
+            "menu": { "number": 164, "code": "EchoLink Memory" },
+            "section": "TX/RX",
+            "order": 16400
+          }
+        }
+      ]
+    },
+    {
+      "id": "echoLinkMemoryNames",
+      "seek": "0x0250",
+      "count": 10,
+      "stride": 8,
+      "fields": [
+        {
+          "id": "name",
+          "type": "u8",
+          "value": { "kind": "ascii", "length": 8, "pad": 0 },
+          "ui": {
+            "group": "tx-rx",
+            "subgroup": "dtmf",
+            "label": "EchoLink memory name",
+            "widget": "text",
+            "menu": { "number": 164, "code": "EchoLink Memory" },
+            "section": "TX/RX",
+            "order": 16410
+          }
+        }
+      ]
+    }
+  ]
+}

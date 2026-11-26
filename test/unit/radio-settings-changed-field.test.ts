@@ -40,7 +40,7 @@ describe('changed settings fields', () => {
 
       for (const match of matches) {
         expect(match[0]).toMatch(
-          /changed(?:ControlBindings\((?:cell\.)?(?:field\.path|coordinateHemispherePart\(cell\)!\.field\.path)\)|CoordinateBindings\(cell\))/,
+          /changed(?:ControlBindings\((?:cell\.)?(?:field\.path|coordinateHemispherePart\(cell\)!\.field\.path|memoryTableFieldAt\(cell, channelIndex, column\)!\.path)\)|CoordinateBindings\(cell\))/,
         );
       }
     }

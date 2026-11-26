@@ -34,8 +34,9 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0023](./0023-developer-panels.md) | proposed | Developer panel preferences on radio cards |
 | [0024](./0024-serial-watch-flush.md) | accepted | Serial watch size 261, close sequencing, session log markRaw |
 | [0025](./0025-aprs-kiss-only-host.md) | accepted | Kiss-only APRS: manual keypad KISS, no monitor face |
+| [0026](./0026-settings-memory-table.md) | accepted | Repeated menu text lists as channel tables |
 
-Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0026. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
+Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0027. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
 ## Status
 
