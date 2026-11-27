@@ -1,3 +1,9 @@
+## [3.19.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.19.1...v3.19.2) (2026-11-27)
+
+### Bug Fixes
+
+* **aprs:** show map station card only when a station is clicked ([#249](https://github.com/springfield-ham-radio/ham-radio-ui/issues/249)) ([0e9f76a](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0e9f76ad0150d25db325b2a17692a75de2738d35))
+
 ## [3.19.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.19.0...v3.19.1) (2026-11-27)
 
 ### Bug Fixes
