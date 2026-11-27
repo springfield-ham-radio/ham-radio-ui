@@ -25,5 +25,5 @@ Radio cards exposed Driver, Hex Dump, Debug, and Sniffer tabs to every operator.
 ## Consequences
 
 - Upgraded profiles lose visible developer card tabs unless they enable switches in Preferences (legacy flags migrate only mode → development and tools → radio Driver).
-- Driver authors enable the panels they need; typical operators see Channels, CAT (when supported), Settings, and optional APRS/Packet.
+- Driver authors enable the panels they need; typical operators see Channels, Settings, CAT (when supported), and optional APRS/Packet.
 - Browser sessions use Preferences only; there is no native menu shortcut for Driver development.
