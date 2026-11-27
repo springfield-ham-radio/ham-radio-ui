@@ -198,6 +198,22 @@ function syncPopup(instance: MapLibreMap): void {
   instance.once('idle', reanchor);
 }
 
+function syncPopupWhenDetailsChange(instance: MapLibreMap): void {
+  const attempt = (): void => {
+    try {
+      syncPopup(instance);
+    } catch {
+      instance.once('idle', attempt);
+    }
+  };
+
+  attempt();
+
+  if (instance.isStyleLoaded() === false) {
+    instance.once('idle', attempt);
+  }
+}
+
 function onMoveStart(event: MapLibreEvent): void {
   if (event.originalEvent) {
     userMoved = true;
@@ -339,11 +355,11 @@ watch(collection, () => {
 watch(popupKey, () => {
   const instance = mapInstance();
 
-  if (!instance?.isStyleLoaded()) {
+  if (!instance) {
     return;
   }
 
-  syncPopup(instance);
+  syncPopupWhenDetailsChange(instance);
 });
 
 watch(
@@ -351,11 +367,11 @@ watch(
   () => {
     const instance = mapInstance();
 
-    if (!instance?.isStyleLoaded()) {
+    if (!instance) {
       return;
     }
 
-    syncPopup(instance);
+    syncPopupWhenDetailsChange(instance);
   },
 );
 

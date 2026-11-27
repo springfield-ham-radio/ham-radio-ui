@@ -159,4 +159,63 @@ describe('APRS map click-only details wiring', () => {
 
     expect(source).toContain("'text-field': ['get', 'callsign']");
   });
+
+  it('syncs the details popup while the style is still settling', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const popupWatchSource = aprsMap.match(/watch\(popupKey[\s\S]*?^watch\(/m)?.[0] ?? '';
+    const detailsCallWatchSource =
+      aprsMap.match(/watch\(\s*\n?\s*\(\) => props\.detailsCall[\s\S]*?^\);/m)?.[0] ?? '';
+
+    expect(popupWatchSource.length).toBeGreaterThan(0);
+    expect(detailsCallWatchSource.length).toBeGreaterThan(0);
+    expect(popupWatchSource).toContain('syncPopupWhenDetailsChange(instance)');
+    expect(detailsCallWatchSource).toContain('syncPopupWhenDetailsChange(instance)');
+    expect(popupWatchSource).not.toContain('isStyleLoaded');
+    expect(detailsCallWatchSource).not.toContain('isStyleLoaded');
+  });
+
+  it('keeps isStyleLoaded on the collection watcher only', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const collectionWatchSource = aprsMap.match(/watch\(collection[\s\S]*?^watch\(/m)?.[0] ?? '';
+
+    expect(collectionWatchSource.length).toBeGreaterThan(0);
+    expect(collectionWatchSource).toContain('isStyleLoaded');
+    expect(collectionWatchSource).toContain('setData(instance)');
+  });
+
+  it('does not dismiss details when easeTo starts from focus', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const onMoveStartSource = aprsMap.match(/function onMoveStart\([\s\S]*?^}/m)?.[0] ?? '';
+
+    expect(onMoveStartSource.length).toBeGreaterThan(0);
+    expect(onMoveStartSource).not.toContain("emit('dismiss')");
+    expect(onMoveStartSource).toContain('originalEvent');
+  });
+
+  it('retries popup sync on idle when style is not loaded yet', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const syncWhenDetailsSource =
+      aprsMap.match(/function syncPopupWhenDetailsChange\([\s\S]*?^}/m)?.[0] ?? '';
+
+    expect(syncWhenDetailsSource.length).toBeGreaterThan(0);
+    expect(syncWhenDetailsSource).toContain("instance.once('idle', attempt)");
+    expect(syncWhenDetailsSource).toContain('syncPopup(instance)');
+  });
+});
+
+describe('APRS map details open while map already mounted', () => {
+  it('keeps detailsCall through choose then retain in one session', () => {
+    let open = aprsMapDetailsCall(undefined, { type: 'choose', callsign: 'N0CALL' });
+
+    expect(open).toBe('N0CALL');
+
+    open = aprsMapDetailsCall(open, { type: 'retain', callsigns: ['N0CALL', 'W5XYZ'] });
+    expect(open).toBe('N0CALL');
+
+    open = aprsMapDetailsCall(open, { type: 'dismiss' });
+    expect(open).toBeUndefined();
+
+    open = aprsMapDetailsCall(open, { type: 'choose', callsign: 'N0CALL' });
+    expect(open).toBe('N0CALL');
+  });
 });
