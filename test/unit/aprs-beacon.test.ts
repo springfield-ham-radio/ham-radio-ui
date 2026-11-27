@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { APRS_AX25_DESTINATION, canonicalAx25Call, formatAx25Call, parseAx25Ui } from '~/utils/aprs-ax25';
 import {
   APRS_BEACON_TOCALL,
+  aprsBeaconSettingsError,
   encodeAprsBeaconFrame,
   formatAprsBeaconPositionBody,
+  parseBeaconAltitudeFeet,
   parseBeaconDecimalDegrees,
   parseSavedRadioAprsBeacon,
 } from '~/utils/aprs-beacon';
@@ -140,6 +142,14 @@ describe('APRS position beacon encode', () => {
 
   it('clamps interval minutes when parsing storage', () => {
     expect(parseSavedRadioAprsBeacon({ ...beacon, intervalMinutes: 5 })?.intervalMinutes).toBe(10);
+  });
+
+  it('rejects non-numeric altitude text instead of dropping it', () => {
+    expect(parseBeaconAltitudeFeet('abc')).toEqual({ error: 'Enter altitude in feet from 0 to 999999' });
+    expect(parseBeaconAltitudeFeet('1180')).toEqual({ feet: 1180 });
+    expect(parseBeaconAltitudeFeet('')).toEqual({});
+    expect(parseBeaconAltitudeFeet('12.5').error).toBeDefined();
+    expect(aprsBeaconSettingsError(beacon)).toBeUndefined();
   });
 
   it('treats blank decimal-degree text as invalid coordinates', () => {

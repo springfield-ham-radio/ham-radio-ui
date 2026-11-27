@@ -10,6 +10,7 @@ import {
   beaconPathError,
   clampBeaconIntervalMinutes,
   defaultSavedRadioAprsBeacon,
+  parseBeaconAltitudeFeet,
   parseBeaconDecimalDegrees,
   type SavedRadioAprsBeacon,
 } from '~/utils/aprs-beacon';
@@ -102,18 +103,27 @@ const draftFromForm = computed((): SavedRadioAprsBeacon | undefined => {
     return undefined;
   }
 
-  const altitudeTrim = altitudeText.value.trim();
-  const altitudeFt = altitudeTrim.length > 0 ? Number(altitudeTrim) : undefined;
+  const altitude = parseBeaconAltitudeFeet(altitudeText.value);
+
+  if (altitude.error) {
+    return undefined;
+  }
 
   return {
     ...settings.value,
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
-    altitudeFt: altitudeFt !== undefined && Number.isFinite(altitudeFt) ? altitudeFt : undefined,
+  ...(altitude.feet !== undefined ? { altitudeFt: altitude.feet } : {}),
   };
 });
 
 const formError = computed(() => {
+  const altitude = parseBeaconAltitudeFeet(altitudeText.value);
+
+  if (altitude.error) {
+    return altitude.error;
+  }
+
   if (!draftFromForm.value) {
     if (latitudeText.value.trim().length === 0 || longitudeText.value.trim().length === 0) {
       return 'Enter latitude and longitude in decimal degrees (WGS84).';

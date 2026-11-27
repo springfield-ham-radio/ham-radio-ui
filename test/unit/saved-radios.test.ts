@@ -15,6 +15,7 @@ import {
   txPowerWattsFieldError,
   txPowerWattsFromText,
   rememberSavedRadioSerialPort,
+  rememberSavedRadioAprsCall,
   updateSavedRadio,
   upsertSavedRadio,
   type SavedRadio,
@@ -75,6 +76,7 @@ describe('saved radios', () => {
     });
     expect(radio.packetSsid).toBe(0);
     expect(radio.packetAcceptIncoming).toBe(false);
+    expect(radio.aprsMyCall).toBeUndefined();
   });
 
   it('should round-trip radios through serialize and parse', () => {
@@ -140,6 +142,31 @@ describe('saved radios', () => {
     const store = upsertSavedRadio(upsertSavedRadio({ radios: [] }, created), base);
 
     expect(removeSavedRadio(store, created.id).radios).toEqual([base]);
+  });
+
+  it('round-trips and validates aprsMyCall on saved radios', () => {
+    const withCall: SavedRadio = { ...base, aprsMyCall: 'KF5UFJ-1' };
+    const cleared: SavedRadio = { ...mobile, aprsMyCall: '' };
+
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withCall] })).radios[0]).toEqual(withCall);
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [cleared] })).radios[0]).toEqual(cleared);
+
+    expect(parseSavedRadio({ ...base, aprsMyCall: '1BAD' })?.aprsMyCall).toBeUndefined();
+    expect(parseSavedRadio({ ...base, aprsMyCall: 'KF5UFJ-99' })?.aprsMyCall).toBeUndefined();
+    expect(parseSavedRadio({ ...base, aprsMyCall: 'kf5ufj-0' })?.aprsMyCall).toBe('KF5UFJ');
+
+    const edited = updateSavedRadio(withCall, draftFromSavedRadio(withCall), 50);
+    expect(edited.aprsMyCall).toBe('KF5UFJ-1');
+
+    const wrote = rememberSavedRadioAprsCall(base, 'kf5ufj-1', 60);
+    expect(wrote.aprsMyCall).toBe('KF5UFJ-1');
+    expect(wrote.updatedAt).toBe(60);
+    expect(rememberSavedRadioAprsCall(wrote, 'KF5UFJ-1', 61)).toBe(wrote);
+    expect(rememberSavedRadioAprsCall(wrote, 'KF', 62)).toBe(wrote);
+
+    const blank = rememberSavedRadioAprsCall(wrote, '', 63);
+    expect(blank.aprsMyCall).toBe('');
+    expect(blank.updatedAt).toBe(63);
   });
 
   it('keeps the APRS port independent of the memory port', () => {
@@ -277,5 +304,30 @@ describe('saved radios', () => {
       withBeacon.aprsBeacon,
     );
     expect(patchSavedRadioAprsBeacon(withBeacon, undefined).aprsBeacon).toBeUndefined();
+  });
+
+  it('round-trips aprsMyCall and aprsBeacon on the same saved radio', () => {
+    const beacon = {
+      latitude: 30.5187,
+      longitude: -97.879,
+      symbolTable: '/',
+      symbolCode: '-',
+      comment: 'Home',
+      path: 'WIDE1-1,WIDE2-1',
+      intervalMinutes: 30,
+    };
+    const both = patchSavedRadioAprsBeacon(
+      rememberSavedRadioAprsCall({ ...mobile, packetSsid: 3 }, 'KF5UFJ-7'),
+      beacon,
+    );
+
+    expect(both.aprsMyCall).toBe('KF5UFJ-7');
+    expect(both.aprsBeacon?.comment).toBe('Home');
+
+    const roundTrip = parseSavedRadioStore(serializeSavedRadioStore({ radios: [both] })).radios[0];
+
+    expect(roundTrip?.aprsMyCall).toBe('KF5UFJ-7');
+    expect(roundTrip?.aprsBeacon).toEqual(both.aprsBeacon);
+    expect(roundTrip?.packetSsid).toBe(3);
   });
 });

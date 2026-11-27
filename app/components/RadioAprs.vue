@@ -4,12 +4,13 @@ import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
 import { APRS_PANEL_TABS } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
-import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
+import { aprsMapDetailsCall, aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { callsignError } from '~/utils/aprs-message';
 import type { AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
+import { aprsMyCallField } from '~/utils/aprs-my-call';
 
 const props = defineProps<{
   cardId?: string;
@@ -20,8 +21,9 @@ const props = defineProps<{
 const { snapshots, watchCard, receiveText, ingestAx25Ui, clear } = useAprs();
 const host = useAprsHost();
 const { requestedModes } = useAprsTncMode();
-const { radioById } = useSavedRadios();
+const { radioById, rememberAprsMyCall } = useSavedRadios();
 const { configurations } = useRadio();
+const { choiceForRadio, identityFor } = useOperatorLicense();
 const route = useRoute();
 const examplePackets = computed(() => import.meta.dev && route.query.fixture === 'aprs-map');
 const kissFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-kiss-feed');
@@ -36,6 +38,7 @@ const tncPreview = computed(() => {
 const activeTab = ref('stations');
 const aprsMap = useTemplateRef('aprsMap');
 const selectedCall = ref<string | undefined>();
+const detailsCall = ref<string | undefined>();
 const stationScroller = useTemplateRef<HTMLElement>('stationScroller');
 const logScroller = useTemplateRef<HTMLElement>('logScroller');
 
@@ -77,8 +80,13 @@ const transcript = computed(() => serialTranscript(traceLines.value));
 const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true || tncPreview.value === 'monitor');
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
-const mine = ref('');
+const operatorCall = computed(() => identityFor(choiceForRadio(savedRadio.value)).callSign);
+const mine = ref(aprsMyCallField(savedRadio.value?.aprsMyCall, operatorCall.value));
 const mineError = computed(() => callsignError(mine.value));
+
+if (props.cardId) {
+  host.setIdentity(props.cardId, mine.value);
+}
 const mineInput = useTemplateRef<{ inputRef?: HTMLInputElement }>('mineInput');
 const selectedMode = computed<AprsConnectionMode>(() => {
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
@@ -150,6 +158,11 @@ watch(
 );
 
 watch(stations, (rows) => {
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, {
+    type: 'retain',
+    callsigns: rows.map((station) => station.callsign),
+  });
+
   if (selectedCall.value && rows.some((station) => station.callsign === selectedCall.value)) {
     return;
   }
@@ -175,13 +188,15 @@ const ackDetail = computed(() => {
 });
 
 function onMine(value: string | number): void {
-  mine.value = String(value);
+  const text = String(value);
+  mine.value = text;
 
   if (!props.cardId) {
     return;
   }
 
-  host.setIdentity(props.cardId, value);
+  host.setIdentity(props.cardId, text);
+  rememberAprsMyCall(props.cardId, text);
 }
 
 function focusMineCallsign(): void {
@@ -208,7 +223,12 @@ function selectStation(callsign: string | undefined): void {
   }
 
   selectedCall.value = callsign;
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, { type: 'choose', callsign });
   aprsMap.value?.focus(callsign);
+}
+
+function dismissMapDetails(): void {
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, { type: 'dismiss' });
 }
 
 async function onCopyTrace(): Promise<void> {
@@ -236,6 +256,7 @@ function onClear(): void {
 
   clear(props.cardId);
   selectedCall.value = undefined;
+  detailsCall.value = undefined;
 }
 </script>
 
@@ -449,7 +470,9 @@ function onClear(): void {
             class="min-h-64 flex-1"
             :stations="stations"
             :selected-call="selected?.callsign"
+            :details-call="detailsCall"
             @select="selectStation"
+            @dismiss="dismissMapDetails"
           />
           <p v-if="plottedCount === 0" class="shrink-0 text-sm text-muted">
             No decoded positions yet. Stations without a position stay in the list.

@@ -8,6 +8,7 @@ import {
   savedRadioDraftIssues,
   patchSavedRadioAprsBeacon,
   rememberSavedRadioSerialPort,
+  rememberSavedRadioAprsCall,
   updateSavedRadio,
   upsertSavedRadio,
   applyRadioPrivilege,
@@ -93,6 +94,26 @@ export function useSavedRadios() {
     return radio;
   }
 
+  function rememberAprsMyCall(id: string | undefined, text: string): void {
+    if (!id) {
+      return;
+    }
+
+    const current = radioById(id);
+
+    if (!current) {
+      return;
+    }
+
+    const next = rememberSavedRadioAprsCall(current, text);
+
+    if (next === current) {
+      return;
+    }
+
+    persist(upsertSavedRadio(store.value, next));
+  }
+
   function rememberSavedRadioAprsBeacon(id: string | undefined, beacon: import('~/utils/aprs-beacon').SavedRadioAprsBeacon | undefined): void {
     if (!id) {
       return;
@@ -161,6 +182,7 @@ export function useSavedRadios() {
     addRadio,
     saveRadio,
     rememberSavedRadioPort,
+    rememberAprsMyCall,
     rememberSavedRadioAprsBeacon,
     deleteRadio,
     assignPrivilege,

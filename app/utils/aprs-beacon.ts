@@ -286,6 +286,25 @@ export function formatAprsBeaconPositionBody(settings: SavedRadioAprsBeacon): st
 /**
  * Parse decimal-degree text for the beacon form. Blank or whitespace is invalid (not 0,0).
  */
+/**
+ * Optional altitude from form text. Non-empty invalid text returns an error instead of dropping the field.
+ */
+export function parseBeaconAltitudeFeet(altitudeText: string): { feet?: number; error?: string } {
+  const trimmed = altitudeText.trim();
+
+  if (trimmed.length === 0) {
+    return {};
+  }
+
+  const error = beaconAltitudeError(altitudeText);
+
+  if (error) {
+    return { error };
+  }
+
+  return { feet: Number(trimmed) };
+}
+
 export function parseBeaconDecimalDegrees(latText: string, lonText: string): { latitude: number; longitude: number } | undefined {
   const latTrim = latText.trim();
   const lonTrim = lonText.trim();
