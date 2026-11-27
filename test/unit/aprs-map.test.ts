@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodeAprsMonitorLine } from '../../app/utils/aprs-decode.ts';
 import { APRS_MAP_EXAMPLE_TEXT } from '../../app/utils/aprs-map-example.ts';
 import { formatAprsHeardAt } from '../../app/utils/aprs-display.ts';
-import { aprsMapBounds, aprsMapFeatures, aprsMapPopupLines, aprsMapUnlocatedCount, isPlottableAprsPosition } from '../../app/utils/aprs-map.ts';
+import {
+  aprsMapBounds,
+  aprsMapDetailsCall,
+  aprsMapFeatures,
+  aprsMapPopupLines,
+  aprsMapUnlocatedCount,
+  isPlottableAprsPosition,
+} from '../../app/utils/aprs-map.ts';
 import { createAprsFoldState, foldAprsLine, type AprsStation } from '../../app/utils/aprs-stations.ts';
 
 function stationsFrom(text: string): AprsStation[] {
@@ -77,5 +85,137 @@ describe('APRS map points', () => {
       `Last heard ${formatAprsHeardAt('2026-11-07T18:00:00.000Z')}`,
     ]);
     expect(aprsMapPopupLines(station!)).toContain('K5KTF TX/RX-iGate');
+  });
+});
+
+describe('APRS map details card state', () => {
+  it('opens and switches on choose', () => {
+    expect(aprsMapDetailsCall(undefined, { type: 'choose', callsign: 'N0CALL' })).toBe('N0CALL');
+    expect(aprsMapDetailsCall('N0CALL', { type: 'choose', callsign: 'W5XYZ' })).toBe('W5XYZ');
+  });
+
+  it('re-chooses the same callsign for reopen after dismiss', () => {
+    expect(aprsMapDetailsCall('N0CALL', { type: 'choose', callsign: 'N0CALL' })).toBe('N0CALL');
+  });
+
+  it('dismisses', () => {
+    expect(aprsMapDetailsCall('N0CALL', { type: 'dismiss' })).toBeUndefined();
+  });
+
+  it('retains an open callsign while it stays in the list', () => {
+    expect(
+      aprsMapDetailsCall('K5KTF-4', { type: 'retain', callsigns: ['K5KTF-4', 'W5XYZ'] }),
+    ).toBe('K5KTF-4');
+  });
+
+  it('clears when the open callsign is gone', () => {
+    expect(aprsMapDetailsCall('N0CALL', { type: 'retain', callsigns: ['W5XYZ'] })).toBeUndefined();
+  });
+
+  it('does not open the first row through retain alone', () => {
+    expect(aprsMapDetailsCall(undefined, { type: 'retain', callsigns: ['W5XYZ'] })).toBeUndefined();
+  });
+
+  it('retains detailsCall when the callsign stays in the list without a plottable position', () => {
+    expect(aprsMapDetailsCall('N0MSG', { type: 'retain', callsigns: ['N0MSG', 'W5XYZ'] })).toBe('N0MSG');
+  });
+});
+
+describe('APRS map click-only details wiring', () => {
+  it('uses detailsCall, dismiss, and no hover popup in AprsMap', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+
+    expect(aprsMap).toContain('detailsCall');
+    expect(aprsMap).toContain("emit('dismiss')");
+    expect(aprsMap).toContain("event.key !== 'Escape'");
+    expect(aprsMap).toContain('queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] })');
+    expect(aprsMap).toContain('suppressPopupCloseEmit');
+    expect(aprsMap).toMatch(/function closePopup\(\)[\s\S]*suppressPopupCloseEmit = true[\s\S]*popup\.remove/);
+    expect(aprsMap).toMatch(/popup\.on\('close'[\s\S]*if \(suppressPopupCloseEmit\)/);
+    const closePopupSource = aprsMap.match(/function closePopup\(\)[\s\S]*?^}/m)?.[0] ?? '';
+    expect(closePopupSource.length).toBeGreaterThan(0);
+    expect(closePopupSource).not.toContain("emit('dismiss')");
+    expect(aprsMap).toContain("removeEventListener('keydown', onWindowKeydown)");
+    expect(aprsMap).toContain('instance.off(');
+    expect(aprsMap).toContain('onPointerEnter');
+    expect(aprsMap).toContain("instance.off('click', onMapClick)");
+    expect(aprsMap).not.toContain('onLayerClick');
+    expect(aprsMap).not.toContain('mousemove');
+    expect(aprsMap).not.toMatch(/mouseenter[\s\S]*aprsMapPopupLines/);
+    expect(aprsMap).toMatch(/if \(!station \|\| !feature/);
+  });
+
+  it('passes detailsCall and listens for dismiss in RadioAprs', () => {
+    const radioAprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
+
+    expect(radioAprs).toContain(':details-call="detailsCall"');
+    expect(radioAprs).toContain('@dismiss="dismissMapDetails"');
+    expect(radioAprs).toContain('aprsMapDetailsCall');
+    expect(radioAprs).toMatch(/detailsCall\.value = aprsMapDetailsCall[\s\S]*type: 'retain'/);
+  });
+
+  it('keeps callsign labels on the symbol layer', () => {
+    const source = readFileSync(new URL('../../app/utils/aprs-map.ts', import.meta.url), 'utf8');
+
+    expect(source).toContain("'text-field': ['get', 'callsign']");
+  });
+
+  it('syncs the details popup while the style is still settling', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const popupWatchSource = aprsMap.match(/watch\(popupKey[\s\S]*?^watch\(/m)?.[0] ?? '';
+    const detailsCallWatchSource =
+      aprsMap.match(/watch\(\s*\n?\s*\(\) => props\.detailsCall[\s\S]*?^\);/m)?.[0] ?? '';
+
+    expect(popupWatchSource.length).toBeGreaterThan(0);
+    expect(detailsCallWatchSource.length).toBeGreaterThan(0);
+    expect(popupWatchSource).toContain('syncPopupWhenDetailsChange(instance)');
+    expect(detailsCallWatchSource).toContain('syncPopupWhenDetailsChange(instance)');
+    expect(popupWatchSource).not.toContain('isStyleLoaded');
+    expect(detailsCallWatchSource).not.toContain('isStyleLoaded');
+  });
+
+  it('keeps isStyleLoaded on the collection watcher only', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const collectionWatchSource = aprsMap.match(/watch\(collection[\s\S]*?^watch\(/m)?.[0] ?? '';
+
+    expect(collectionWatchSource.length).toBeGreaterThan(0);
+    expect(collectionWatchSource).toContain('isStyleLoaded');
+    expect(collectionWatchSource).toContain('setData(instance)');
+  });
+
+  it('does not dismiss details when easeTo starts from focus', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const onMoveStartSource = aprsMap.match(/function onMoveStart\([\s\S]*?^}/m)?.[0] ?? '';
+
+    expect(onMoveStartSource.length).toBeGreaterThan(0);
+    expect(onMoveStartSource).not.toContain("emit('dismiss')");
+    expect(onMoveStartSource).toContain('originalEvent');
+  });
+
+  it('retries popup sync on idle when style is not loaded yet', () => {
+    const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
+    const syncWhenDetailsSource =
+      aprsMap.match(/function syncPopupWhenDetailsChange\([\s\S]*?^}/m)?.[0] ?? '';
+
+    expect(syncWhenDetailsSource.length).toBeGreaterThan(0);
+    expect(syncWhenDetailsSource).toContain("instance.once('idle', attempt)");
+    expect(syncWhenDetailsSource).toContain('syncPopup(instance)');
+  });
+});
+
+describe('APRS map details open while map already mounted', () => {
+  it('keeps detailsCall through choose then retain in one session', () => {
+    let open = aprsMapDetailsCall(undefined, { type: 'choose', callsign: 'N0CALL' });
+
+    expect(open).toBe('N0CALL');
+
+    open = aprsMapDetailsCall(open, { type: 'retain', callsigns: ['N0CALL', 'W5XYZ'] });
+    expect(open).toBe('N0CALL');
+
+    open = aprsMapDetailsCall(open, { type: 'dismiss' });
+    expect(open).toBeUndefined();
+
+    open = aprsMapDetailsCall(open, { type: 'choose', callsign: 'N0CALL' });
+    expect(open).toBe('N0CALL');
   });
 });

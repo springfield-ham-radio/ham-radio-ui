@@ -4,7 +4,7 @@ import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
 import { APRS_PANEL_TABS } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
-import { aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
+import { aprsMapDetailsCall, aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { callsignError } from '~/utils/aprs-message';
@@ -38,6 +38,7 @@ const tncPreview = computed(() => {
 const activeTab = ref('stations');
 const aprsMap = useTemplateRef('aprsMap');
 const selectedCall = ref<string | undefined>();
+const detailsCall = ref<string | undefined>();
 const stationScroller = useTemplateRef<HTMLElement>('stationScroller');
 const logScroller = useTemplateRef<HTMLElement>('logScroller');
 
@@ -157,6 +158,11 @@ watch(
 );
 
 watch(stations, (rows) => {
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, {
+    type: 'retain',
+    callsigns: rows.map((station) => station.callsign),
+  });
+
   if (selectedCall.value && rows.some((station) => station.callsign === selectedCall.value)) {
     return;
   }
@@ -217,7 +223,12 @@ function selectStation(callsign: string | undefined): void {
   }
 
   selectedCall.value = callsign;
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, { type: 'choose', callsign });
   aprsMap.value?.focus(callsign);
+}
+
+function dismissMapDetails(): void {
+  detailsCall.value = aprsMapDetailsCall(detailsCall.value, { type: 'dismiss' });
 }
 
 async function onCopyTrace(): Promise<void> {
@@ -245,6 +256,7 @@ function onClear(): void {
 
   clear(props.cardId);
   selectedCall.value = undefined;
+  detailsCall.value = undefined;
 }
 </script>
 
@@ -457,7 +469,9 @@ function onClear(): void {
             class="min-h-64 flex-1"
             :stations="stations"
             :selected-call="selected?.callsign"
+            :details-call="detailsCall"
             @select="selectStation"
+            @dismiss="dismissMapDetails"
           />
           <p v-if="plottedCount === 0" class="shrink-0 text-sm text-muted">
             No decoded positions yet. Stations without a position stay in the list.
