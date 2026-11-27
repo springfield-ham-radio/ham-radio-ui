@@ -24,6 +24,18 @@ describe('developer panels wiring', () => {
     expect(driver).toContain("driverTab === 'menu-capture'");
   });
 
+  it('gates the APRS Raw log sub-tab from Developer panels', () => {
+    const aprs = readFileSync('app/components/RadioAprs.vue', 'utf8');
+    const packet = readFileSync('app/components/RadioPacket.vue', 'utf8');
+
+    expect(aprs).toContain('useDeveloperPanels');
+    expect(aprs).toContain('aprsPanelTabs');
+    expect(aprs).toContain('developerPanels.value.aprsRawLog');
+    expect(aprs).toContain("activeTab.value === 'log'");
+    expect(aprs).toContain("activeTab.value = 'stations'");
+    expect(packet).not.toContain('aprsRawLog');
+  });
+
   it('gates the main Driver editor from Developer panels', () => {
     const header = readFileSync('app/components/AppHeader.vue', 'utf8');
     const driverPage = readFileSync('app/pages/driver.vue', 'utf8');

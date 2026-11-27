@@ -19,6 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const route = useRoute();
+const { panels: developerPanels } = useDeveloperPanels();
 const example = computed(() => import.meta.dev && (route.query.fixture === 'aprs-messages' || route.query.fixture === 'aprs-host-trace'));
 const host = useAprsHost();
 const { send, cancel } = host;
@@ -152,7 +153,7 @@ function onCancel(key: string): void {
   <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-auto py-2">
     <div class="@container flex min-h-0 flex-1 flex-col gap-3">
       <p class="text-xs text-muted">
-        Messages on this connection. Nothing here is saved, and the radio’s stored messages are not read. The byte log is on Raw log.
+        Messages on this connection. Nothing here is saved, and the radio’s stored messages are not read.<template v-if="developerPanels.aprsRawLog"> The byte log is on Raw log.</template>
         <template v-if="example"> The KF5UFJ lines are sample text.</template>
       </p>
 
