@@ -559,7 +559,7 @@ function submitCreate(): void {
         </UFormField>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Receive (MHz)" :error="receiveError">
+          <UFormField label="Receive (MHz)" :error="receiveError" required>
             <UInput
               v-model="receiveMHz"
               inputmode="decimal"
@@ -569,7 +569,7 @@ function submitCreate(): void {
             />
           </UFormField>
 
-          <UFormField label="Transmit (MHz)" :error="transmitError">
+          <UFormField label="Transmit (MHz)" :error="transmitError" required>
             <UInput
               v-model="transmitMHz"
               inputmode="decimal"

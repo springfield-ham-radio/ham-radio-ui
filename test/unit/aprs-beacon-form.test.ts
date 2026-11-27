@@ -255,6 +255,8 @@ describe('AprsBeacon layout', () => {
     expect(fieldShowsRequired(wrapper, 'Longitude')).toBe(true);
     expect(fieldShowsRequired(wrapper, 'Altitude (feet)')).toBe(false);
     expect(fieldShowsRequired(wrapper, 'Symbol')).toBe(false);
+    expect(fieldShowsRequired(wrapper, 'Digipeater path')).toBe(false);
+    expect(fieldShowsRequired(wrapper, 'Comment')).toBe(false);
     expect(wrapper.text()).toContain('Empty = direct.');
 
     const altitudeField = formFields(wrapper).find((element) => element.text().includes('Altitude (feet)'));

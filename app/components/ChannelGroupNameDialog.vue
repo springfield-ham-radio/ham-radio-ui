@@ -45,7 +45,7 @@ function submit(): void {
   <UModal v-model:open="open" :title="title" :description="description" :ui="{ footer: 'justify-end' }">
     <template #body>
       <form id="channel-group-name-form" @submit.prevent="submit">
-        <UFormField label="Name" :error="nameError">
+        <UFormField label="Name" :error="nameError" required>
           <UInput
             v-model="name"
             autofocus

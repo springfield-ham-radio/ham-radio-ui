@@ -166,7 +166,7 @@ function removeSkip(id: string): void {
           @update:model-value="patch({ timeout: String($event ?? '') })"
         />
       </UFormField>
-      <UFormField v-if="step.kind === 'read' || step.kind === 'write'" label="Segments" :error="errorAt('segments')">
+      <UFormField v-if="step.kind === 'read' || step.kind === 'write'" label="Segments" required :error="errorAt('segments')">
         <template #hint>
           <HelpTooltip text="Address ranges from the Setup tab." />
         </template>
