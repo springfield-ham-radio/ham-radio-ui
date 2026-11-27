@@ -342,7 +342,7 @@ const callStationTooltip = computed(() => packetCallStationTooltip({
           <UInput v-model="peer" placeholder="W1AW-1" class="w-full font-mono" :disabled="terminal.canDisconnect" />
         </UFormField>
         <UFormField label="Path" class="w-48">
-          <UInput v-model="path" placeholder="Optional digipeaters" class="w-full font-mono" :disabled="terminal.canDisconnect" />
+          <UInput v-model="path" class="w-full font-mono" :disabled="terminal.canDisconnect" />
         </UFormField>
         <UTooltip :text="callStationTooltip ?? ''" :disabled="!callStationTooltip">
           <span class="inline-flex">

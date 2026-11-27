@@ -157,7 +157,6 @@ function removeSkip(id: string): void {
       <UFormField
         v-if="step.kind !== 'catRead' && step.kind !== 'catWrite'"
         label="Timeout (ms)"
-        hint="Optional"
         :error="errorAt('timeout')"
       >
         <UInput
@@ -186,7 +185,7 @@ function removeSkip(id: string): void {
 
     <template v-if="step.kind === 'catRead' || step.kind === 'catWrite'">
       <div class="grid gap-3 sm:grid-cols-2">
-        <UFormField label="Segment" :error="errorAt('catSegment')">
+        <UFormField label="Segment" required :error="errorAt('catSegment')">
           <USelect
             :model-value="step.catSegment"
             :items="segmentNames.map((name) => ({ label: name, value: name }))"
@@ -202,7 +201,7 @@ function removeSkip(id: string): void {
           </template>
           <UInput :model-value="step.catPack" class="w-full font-mono" disabled />
         </UFormField>
-        <UFormField label="Channel count" :error="errorAt('catCount')">
+        <UFormField label="Channel count" required :error="errorAt('catCount')">
           <UInput
             :model-value="step.catCount"
             class="w-full font-mono"
@@ -210,7 +209,7 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ catCount: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField label="Bytes per channel" :error="errorAt('catRecordSize')">
+        <UFormField label="Bytes per channel" required :error="errorAt('catRecordSize')">
           <UInput
             :model-value="step.catRecordSize"
             class="w-full font-mono"
@@ -218,7 +217,7 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ catRecordSize: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField label="Index width" hint="Optional" :error="errorAt('catIndexWidth')">
+        <UFormField label="Index width" :error="errorAt('catIndexWidth')">
           <UInput
             :model-value="step.catIndexWidth"
             class="w-full font-mono"
@@ -226,7 +225,7 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ catIndexWidth: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField label="Empty byte" hint="Optional" :error="errorAt('catEmptyByte')">
+        <UFormField label="Empty byte" :error="errorAt('catEmptyByte')">
           <UInput
             :model-value="step.catEmptyByte"
             class="w-full font-mono"
@@ -261,7 +260,7 @@ function removeSkip(id: string): void {
         />
       </DriverExchangeSection>
       <DriverFormSection title="Timing">
-        <UFormField label="Delay (ms)" hint="Optional" :error="errorAt('delay')">
+        <UFormField label="Delay (ms)" :error="errorAt('delay')">
           <UInput
             :model-value="step.delay"
             class="w-full font-mono"
@@ -269,7 +268,7 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ delay: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField v-if="step.kind === 'exchange'" label="Switch baud" hint="Optional" :error="errorAt('setBaudRate')">
+        <UFormField v-if="step.kind === 'exchange'" label="Switch baud" :error="errorAt('setBaudRate')">
           <UInput
             :model-value="step.setBaudRate"
             class="w-full font-mono"
@@ -278,7 +277,7 @@ function removeSkip(id: string): void {
             @update:model-value="patch({ setBaudRate: String($event ?? '') })"
           />
         </UFormField>
-        <UFormField v-if="step.kind === 'write'" label="Chunk size override" hint="Optional" :error="errorAt('chunkSize')">
+        <UFormField v-if="step.kind === 'write'" label="Chunk size override" :error="errorAt('chunkSize')">
           <UInput
             :model-value="step.chunkSize"
             class="w-full font-mono"

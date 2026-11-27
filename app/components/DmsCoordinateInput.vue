@@ -9,8 +9,9 @@ const props = withDefaults(defineProps<{
   name: string;
   error?: string;
   hint?: string;
+  required?: boolean;
 }>(), {
-  hint: 'Optional',
+  required: false,
 });
 
 const emit = defineEmits<{
@@ -56,7 +57,7 @@ function onHemisphere(value: string | number): void {
 </script>
 
 <template>
-  <UFormField :name="name" :label="label" :hint="hint" :error="error">
+  <UFormField :name="name" :label="label" :hint="hint" :error="error" :required="required">
     <div class="grid grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-1.5">
       <div>
         <p class="mb-1 text-[11px] leading-none text-muted">{{ axis === 'latitude' ? 'N / S' : 'E / W' }}</p>

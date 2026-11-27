@@ -63,7 +63,7 @@
           </UFormField>
         </div>
 
-        <UFormField label="Submode" description="Optional, e.g. USB or LSB for SSB.">
+        <UFormField label="Submode" description="For example, USB or LSB for SSB.">
           <UInput v-model="submode" class="w-full uppercase" placeholder="USB" />
         </UFormField>
 

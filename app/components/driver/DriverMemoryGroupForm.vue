@@ -194,7 +194,7 @@ function addSetting(subgroupId: string): void {
       </UFormField>
       <UFormField label="Warning title" :error="errorAt('warningTitle')">
         <template #hint>
-          <HelpTooltip text="Optional banner at the top of this group. A service group can warn that the values are calibration." />
+          <HelpTooltip text="Banner at the top of this group. A service group can warn that the values are calibration." />
         </template>
         <UInput
           :model-value="group.warningTitle"

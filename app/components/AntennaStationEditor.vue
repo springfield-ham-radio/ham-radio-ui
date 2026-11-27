@@ -204,16 +204,16 @@ function save(): void {
           />
         </UFormField>
 
-        <UFormField label="Nickname" hint="Optional">
+        <UFormField label="Nickname">
           <UInput v-model="nickname" class="w-full" placeholder="Backyard Yagi" />
         </UFormField>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Manufacturer" hint="Optional">
+          <UFormField label="Manufacturer">
             <UInput v-model="manufacturer" class="w-full" placeholder="Nagoya" />
           </UFormField>
 
-          <UFormField label="Model" hint="Optional">
+          <UFormField label="Model">
             <UInput v-model="model" class="w-full" placeholder="NA-771" />
           </UFormField>
         </div>

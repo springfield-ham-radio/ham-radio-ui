@@ -104,19 +104,13 @@ function setFlag(
     <div class="grid gap-3">
       <UFormField label="Channel schema path" :error="errorAt('schemas.channel')">
         <template #hint>
-          <span class="inline-flex items-center gap-1.5">
-            Optional
-            <HelpTooltip text="Path to the file edited on the Channel tab, for example ../src/shared/schemas/channel-schema.json" />
-          </span>
+          <HelpTooltip text="Path to the file edited on the Channel tab, for example ../src/shared/schemas/channel-schema.json" />
         </template>
         <UInput v-model="channelSchemaPath" class="w-full font-mono" />
       </UFormField>
       <UFormField label="Memory map path" :error="errorAt('schemas.memoryMap')">
         <template #hint>
-          <span class="inline-flex items-center gap-1.5">
-            Optional
-            <HelpTooltip text="Path to the file edited on the Memory tab, for example ../src/shared/memory-maps/uv5r-settings.json" />
-          </span>
+          <HelpTooltip text="Path to the file edited on the Memory tab, for example ../src/shared/memory-maps/uv5r-settings.json" />
         </template>
         <UInput v-model="memoryMapPath" class="w-full font-mono" />
       </UFormField>

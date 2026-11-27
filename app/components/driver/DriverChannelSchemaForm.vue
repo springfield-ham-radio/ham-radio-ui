@@ -56,7 +56,7 @@ const tonesIncluded = computed(() => draft.value.channelSchema.includeReceiveTon
 
 <template>
   <div class="flex w-full flex-col gap-4">
-    <DriverFormSection title="Name" help="Optional label stored with the channel. Leave it out when the radio has no name field.">
+    <DriverFormSection title="Name" help="Label stored with the channel. Leave it out when the radio has no name field.">
       <div class="flex items-center gap-1">
         <UCheckbox
           :model-value="draft.channelSchema.includeName"

@@ -10,7 +10,7 @@ import {
   replaceStationInStore,
   updateRadioStation,
 } from '../../app/utils/antenna-station.ts';
-import { dmsInputFromDecimal } from '../../app/utils/location-format.ts';
+import { dmsInputFromDecimal, emptyDmsInput } from '../../app/utils/location-format.ts';
 import { readSavedRadioStore, SAVED_RADIOS_STORAGE_KEY } from '../../app/utils/saved-radios.ts';
 import { useAprsHost } from '../../app/composables/useAprsHost.ts';
 import { useSavedRadios } from '../../app/composables/useSavedRadios.ts';
@@ -101,8 +101,8 @@ const stubs = {
     },
   }),
   UFormField: defineComponent({
-    props: ['label', 'error', 'hint'],
-    template: '<label class="u-form-field"><span class="field-label">{{ label }}</span><span v-if="hint" class="field-hint">{{ hint }}</span><span v-if="error" class="field-error">{{ error }}</span><slot /></label>',
+    props: ['label', 'error', 'hint', 'required', 'name'],
+    template: '<label class="u-form-field"><span class="field-label">{{ label }}<span v-if="required" class="field-required">*</span></span><span v-if="hint" class="field-hint">{{ hint }}</span><span v-if="error" class="field-error">{{ error }}</span><slot /></label>',
   }),
   UInput: defineComponent({
     props: ['modelValue', 'maxlength'],
@@ -183,6 +183,15 @@ function findCommentInput(wrapper: ReturnType<typeof mountBeacon>) {
   })!;
 }
 
+function formFields(wrapper: ReturnType<typeof mountBeacon>) {
+  return wrapper.findAll('.u-form-field');
+}
+
+function fieldShowsRequired(wrapper: ReturnType<typeof mountBeacon>, label: string): boolean {
+  const field = formFields(wrapper).find((element) => element.find('.field-label').text().startsWith(label));
+  return field?.find('.field-required').exists() ?? false;
+}
+
 describe('AprsBeacon layout', () => {
   beforeEach(() => {
     stateStore.clear();
@@ -234,6 +243,33 @@ describe('AprsBeacon layout', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('marks required beacon fields, drops bare Optional, and pairs altitude with symbol', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+
+    expect(wrapper.text()).not.toContain('Optional');
+    expect(fieldShowsRequired(wrapper, 'Latitude')).toBe(true);
+    expect(fieldShowsRequired(wrapper, 'Longitude')).toBe(true);
+    expect(fieldShowsRequired(wrapper, 'Altitude (feet)')).toBe(false);
+    expect(fieldShowsRequired(wrapper, 'Symbol')).toBe(false);
+    expect(wrapper.text()).toContain('Empty = direct.');
+
+    const altitudeField = formFields(wrapper).find((element) => element.text().includes('Altitude (feet)'));
+    const symbolField = formFields(wrapper).find((element) => element.text().includes('Symbol'));
+    expect(altitudeField).toBeDefined();
+    expect(symbolField).toBeDefined();
+
+    const row = altitudeField!.element.parentElement;
+    expect(row).toBe(symbolField!.element.parentElement);
+    expect(row?.className).toMatch(/grid-cols-1/);
+    expect(row?.className).toMatch(/sm:grid-cols-2/);
+
+    const ordered = Array.from(row!.querySelectorAll('.u-form-field'));
+    expect(ordered[0]?.textContent).toContain('Altitude');
+    expect(ordered[1]?.textContent).toContain('Symbol');
   });
 
   it('prefills DMS in memory with a From label and opens the modal on Edit beacon', async () => {
@@ -447,5 +483,38 @@ describe('AprsBeacon layout', () => {
 
     const disarmCalls = hostStub.setBeaconInterval.mock.calls.filter((call) => call[1]?.armed === false);
     expect(disarmCalls).toHaveLength(0);
+  });
+});
+
+describe('DmsCoordinateInput', () => {
+  beforeEach(() => {
+    vi.stubGlobal('computed', computed);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('omits the default Optional hint and forwards required to UFormField', () => {
+    const wrapper = mount(DmsCoordinateInput, {
+      props: {
+        axis: 'latitude',
+        modelValue: emptyDmsInput('latitude'),
+        label: 'Latitude',
+        name: 'latitude',
+        required: true,
+      },
+      global: {
+        stubs: {
+          UFormField: stubs.UFormField,
+          USelect: stubs.USelect,
+          UInput: stubs.UInput,
+        },
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('Optional');
+    expect(wrapper.find('.field-required').exists()).toBe(true);
+    expect(wrapper.find('.field-hint').exists()).toBe(false);
   });
 });

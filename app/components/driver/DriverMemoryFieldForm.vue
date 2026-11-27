@@ -337,10 +337,7 @@ function removeField(): void {
         </UFormField>
         <UFormField label="Section" :error="errorAt('uiSubgroup')">
           <template #hint>
-            <span class="inline-flex items-center gap-1.5">
-              Optional
-              <HelpTooltip text="Headed section inside the group. Leave blank to keep the field at the top of the panel." />
-            </span>
+            <HelpTooltip text="Headed section inside the group. Leave blank to keep the field at the top of the panel." />
           </template>
           <USelect
             v-if="subgroupItems.length > 1"

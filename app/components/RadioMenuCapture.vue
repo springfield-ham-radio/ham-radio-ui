@@ -504,7 +504,7 @@ async function onConfirmDiscardSession(): Promise<void> {
           <UFormField label="Callsign">
             <UInput v-model="callsign" class="w-full uppercase" />
           </UFormField>
-          <UFormField label="Firmware (optional)">
+          <UFormField label="Firmware">
             <UInput v-model="firmware" class="w-full font-mono" placeholder="If you know it" />
           </UFormField>
         </div>

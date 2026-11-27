@@ -266,7 +266,7 @@ async function save(): Promise<void> {
         />
 
         <UFormField label="Name">
-          <UInput v-model="name" class="w-full" placeholder="Optional label" />
+          <UInput v-model="name" class="w-full" />
         </UFormField>
 
         <UFormField v-if="isRepeater" label="Call sign" description="Repeater call sign. Not written to the radio name.">
@@ -274,11 +274,11 @@ async function save(): Promise<void> {
         </UFormField>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <UFormField label="Receive (MHz)" :error="receiveError">
+          <UFormField label="Receive (MHz)" :error="receiveError" required>
             <UInput v-model="receiveMHz" inputmode="decimal" class="w-full tabular-nums" />
           </UFormField>
 
-          <UFormField label="Transmit (MHz)" :error="transmitError">
+          <UFormField label="Transmit (MHz)" :error="transmitError" required>
             <UInput v-model="transmitMHz" inputmode="decimal" class="w-full tabular-nums" />
           </UFormField>
         </div>
@@ -293,7 +293,7 @@ async function save(): Promise<void> {
           </UFormField>
         </div>
 
-        <UFormField label="Notes" description="Optional. Not written to radios.">
+        <UFormField label="Notes" description="Not written to radios.">
           <UTextarea v-model="notes" :rows="3" class="w-full" autoresize />
         </UFormField>
 
