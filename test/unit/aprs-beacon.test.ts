@@ -4,6 +4,7 @@ import {
   APRS_BEACON_TOCALL,
   encodeAprsBeaconFrame,
   formatAprsBeaconPositionBody,
+  parseBeaconDecimalDegrees,
   parseSavedRadioAprsBeacon,
 } from '~/utils/aprs-beacon';
 import { decodeAx25UiAprs } from '~/utils/aprs-decode';
@@ -28,12 +29,60 @@ describe('APRS position beacon encode', () => {
     expect(formatAprsBeaconPositionBody(beacon)).toBe('=3031.12N/09752.74W-HamBench /A=001180');
   });
 
+  it('formats southern and eastern hemispheres', () => {
+    const southEast = {
+      ...beacon,
+      latitude: -33.8688,
+      longitude: 151.2093,
+      comment: 'Sydney',
+      altitudeFt: undefined,
+    };
+    expect(formatAprsBeaconPositionBody(southEast)).toBe('=3352.13S/15112.56E-Sydney');
+    const packet = decodeAx25UiAprs({
+      destination: { call: 'APRS', ssid: 0 },
+      source: { call: 'N0CALL', ssid: 0 },
+      path: [],
+      info: formatAprsBeaconPositionBody(southEast)!,
+    });
+    expect(packet.position?.label).toContain('S');
+    expect(packet.position?.label).toContain('E');
+  });
+
+  it('places alternate symbol table between lat and lon and code after longitude', () => {
+    const radio = { ...beacon, symbolTable: '\\', symbolCode: 'Y', comment: 'Alt', altitudeFt: undefined };
+    const smallCircle = { ...beacon, symbolTable: '\\', symbolCode: 'o', comment: undefined, altitudeFt: undefined };
+    expect(formatAprsBeaconPositionBody(radio)).toBe('=3031.12N\\09752.74WYAlt');
+    expect(formatAprsBeaconPositionBody(smallCircle)).toBe('=3031.12N\\09752.74Wo');
+    for (const body of [formatAprsBeaconPositionBody(radio)!, formatAprsBeaconPositionBody(smallCircle)!]) {
+      const packet = decodeAx25UiAprs({
+        destination: { call: 'APRS', ssid: 0 },
+        source: { call: 'N0CALL', ssid: 0 },
+        path: [],
+        info: body,
+      });
+      expect(packet.kind).toBe('position');
+      expect(packet.position?.symbolTable).toBe('\\');
+    }
+    expect(decodeAx25UiAprs({
+      destination: { call: 'APRS', ssid: 0 },
+      source: { call: 'N0CALL', ssid: 0 },
+      path: [],
+      info: formatAprsBeaconPositionBody(radio)!,
+    }).position?.symbolCode).toBe('Y');
+    expect(decodeAx25UiAprs({
+      destination: { call: 'APRS', ssid: 0 },
+      source: { call: 'N0CALL', ssid: 0 },
+      path: [],
+      info: formatAprsBeaconPositionBody(smallCircle)!,
+    }).position?.symbolCode).toBe('o');
+  });
+
   it('omits altitude when blank', () => {
     const { altitudeFt: _altitudeFt, ...rest } = beacon;
     expect(formatAprsBeaconPositionBody(rest)).toBe('=3031.12N/09752.74W-HamBench');
   });
 
-  it('builds AX.25 with APZHMB and digipeater path', () => {
+  it('builds AX.25 with APZHMB and digipeater path without the H bit on digipeaters', () => {
     expect(kf5ufj).toBeDefined();
     const frame = kf5ufj ? encodeAprsBeaconFrame(kf5ufj, beacon) : undefined;
     expect(frame).toBeDefined();
@@ -41,6 +90,11 @@ describe('APRS position beacon encode', () => {
     expect(ui?.destination.call).toBe('APZHMB');
     expect(formatAx25Call(ui!.destination)).toBe(APRS_BEACON_TOCALL);
     expect(ui?.path.map((hop) => formatAx25Call(hop))).toEqual(['WIDE1-1', 'WIDE2-1']);
+    expect(ui?.path.every((hop) => hop.repeated !== true)).toBe(true);
+    for (let index = 0; index < ui!.path.length; index += 1) {
+      const ssidByte = frame![(2 + index) * 7 + 6];
+      expect(ssidByte! & 0x80).toBe(0);
+    }
   });
 
   it('round-trips through the decoder', () => {
@@ -86,5 +140,12 @@ describe('APRS position beacon encode', () => {
 
   it('clamps interval minutes when parsing storage', () => {
     expect(parseSavedRadioAprsBeacon({ ...beacon, intervalMinutes: 5 })?.intervalMinutes).toBe(10);
+  });
+
+  it('treats blank decimal-degree text as invalid coordinates', () => {
+    expect(parseBeaconDecimalDegrees('', '-97')).toBeUndefined();
+    expect(parseBeaconDecimalDegrees('30.5', '   ')).toBeUndefined();
+    expect(parseBeaconDecimalDegrees('  ', '0')).toBeUndefined();
+    expect(parseBeaconDecimalDegrees('30.5187', '-97.879')).toEqual({ latitude: 30.5187, longitude: -97.879 });
   });
 });

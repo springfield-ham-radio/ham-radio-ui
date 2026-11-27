@@ -10,6 +10,7 @@ import {
   beaconPathError,
   clampBeaconIntervalMinutes,
   defaultSavedRadioAprsBeacon,
+  parseBeaconDecimalDegrees,
   type SavedRadioAprsBeacon,
 } from '~/utils/aprs-beacon';
 import { canonicalAx25Call } from '~/utils/aprs-ax25';
@@ -63,6 +64,10 @@ const symbolItems = APRS_BEACON_SYMBOLS.map((entry) => ({
 }));
 
 const latitudeError = computed(() => {
+  if (latitudeText.value.trim().length === 0) {
+    return 'Enter latitude between -90 and 90';
+  }
+
   const value = Number(latitudeText.value);
 
   if (!Number.isFinite(value) || !isValidLatitude(value)) {
@@ -73,6 +78,10 @@ const latitudeError = computed(() => {
 });
 
 const longitudeError = computed(() => {
+  if (longitudeText.value.trim().length === 0) {
+    return 'Enter longitude between -180 and 180';
+  }
+
   const value = Number(longitudeText.value);
 
   if (!Number.isFinite(value) || !isValidLongitude(value)) {
@@ -86,38 +95,45 @@ const commentError = computed(() => beaconCommentError(settings.value.comment ??
 const altitudeError = computed(() => beaconAltitudeError(altitudeText.value));
 const pathError = computed(() => beaconPathError(settings.value.path));
 
-function buildSettings(): SavedRadioAprsBeacon | undefined {
-  const lat = Number(latitudeText.value);
-  const lon = Number(longitudeText.value);
+const draftFromForm = computed((): SavedRadioAprsBeacon | undefined => {
+  const coordinates = parseBeaconDecimalDegrees(latitudeText.value, longitudeText.value);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+  if (!coordinates) {
     return undefined;
   }
 
-  const draft: SavedRadioAprsBeacon = {
-    ...settings.value,
-    latitude: lat,
-    longitude: lon,
-    altitudeFt: altitudeText.value.trim().length > 0 ? Number(altitudeText.value) : undefined,
-  };
+  const altitudeTrim = altitudeText.value.trim();
+  const altitudeFt = altitudeTrim.length > 0 ? Number(altitudeTrim) : undefined;
 
-  return aprsBeaconSettingsError(draft) ? undefined : draft;
-}
+  return {
+    ...settings.value,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
+    altitudeFt: altitudeFt !== undefined && Number.isFinite(altitudeFt) ? altitudeFt : undefined,
+  };
+});
 
 const formError = computed(() => {
-  const lat = Number(latitudeText.value);
-  const lon = Number(longitudeText.value);
+  if (!draftFromForm.value) {
+    if (latitudeText.value.trim().length === 0 || longitudeText.value.trim().length === 0) {
+      return 'Enter latitude and longitude in decimal degrees (WGS84).';
+    }
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return 'Enter latitude and longitude in decimal degrees (WGS84).';
+    return 'Enter a valid latitude and longitude';
   }
 
-  settings.value.latitude = lat;
-  settings.value.longitude = lon;
-  settings.value.altitudeFt = altitudeText.value.trim().length > 0 ? Number(altitudeText.value) : undefined;
-
-  return aprsBeaconSettingsError(settings.value);
+  return aprsBeaconSettingsError(draftFromForm.value);
 });
+
+function buildSettings(): SavedRadioAprsBeacon | undefined {
+  const draft = draftFromForm.value;
+
+  if (!draft || aprsBeaconSettingsError(draft)) {
+    return undefined;
+  }
+
+  return draft;
+}
 
 const mineReady = computed(() => canonicalAx25Call(props.mine) !== undefined);
 const mineBlock = computed(() => (mineReady.value ? undefined : callsignError(props.mine) ?? 'Set My callsign to beacon'));
@@ -139,6 +155,8 @@ const kissBlock = computed(() => {
 });
 
 const sendBlock = computed(() => mineBlock.value ?? formError.value ?? kissBlock.value);
+
+const intervalBlocked = computed(() => Boolean(sendBlock.value || kissBlock.value));
 
 const beaconStatus = computed(() => {
   const detail = snapshot.value?.lastBeaconDetail;
@@ -205,22 +223,40 @@ async function onBeaconNow(): Promise<void> {
     return;
   }
 
+  const draft = buildSettings();
+
+  if (!draft) {
+    return;
+  }
+
+  settings.value = draft;
   persistSettings();
-  await host.sendBeacon(props.cardId, { mine: props.mine, settings: { ...settings.value } });
+  await host.sendBeacon(props.cardId, { mine: props.mine, settings: draft });
 }
 
 function onInterval(armed: boolean): void {
-  if (!props.cardId) {
+  if (!props.cardId || intervalBlocked.value) {
+    return;
+  }
+
+  const draft = buildSettings();
+
+  if (Boolean(armed) && !draft) {
     return;
   }
 
   intervalArmed.value = Boolean(armed);
-  persistSettings();
+
+  if (draft) {
+    settings.value = draft;
+    persistSettings();
+  }
+
   host.setBeaconInterval(props.cardId, {
     armed: intervalArmed.value,
     minutes: settings.value.intervalMinutes,
     mine: props.mine,
-    settings: { ...settings.value },
+    settings: draft ?? { ...settings.value },
   });
 }
 
@@ -228,17 +264,34 @@ watch(() => snapshot.value?.beaconIntervalArmed, (armed) => {
   intervalArmed.value = armed === true;
 });
 
-watch(kissBlock, (block) => {
-  if (block && props.cardId && intervalArmed.value) {
-    intervalArmed.value = false;
-    host.setBeaconInterval(props.cardId, {
-      armed: false,
-      minutes: settings.value.intervalMinutes,
-      mine: props.mine,
-      settings: { ...settings.value },
-    });
+function disarmInterval(): void {
+  if (!props.cardId || !intervalArmed.value) {
+    return;
+  }
+
+  intervalArmed.value = false;
+  host.setBeaconInterval(props.cardId, {
+    armed: false,
+    minutes: settings.value.intervalMinutes,
+    mine: props.mine,
+    settings: buildSettings() ?? { ...settings.value },
+  });
+}
+
+watch(intervalBlocked, (blocked) => {
+  if (blocked) {
+    disarmInterval();
   }
 });
+
+watch(
+  () => snapshot.value?.hardwareTransmit,
+  (on) => {
+    if (on === false) {
+      disarmInterval();
+    }
+  },
+);
 
 function onIntervalMinutesPersist(): void {
   persistSettings();
@@ -322,6 +375,7 @@ function onIntervalMinutesPersist(): void {
         :model-value="intervalArmed"
         label="Beacon on an interval"
         :description="intervalDetail"
+        :disabled="intervalBlocked"
         @update:model-value="onInterval"
       />
       <UFormField label="Minutes between beacons" class="w-40">

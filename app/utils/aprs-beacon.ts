@@ -280,11 +280,28 @@ export function formatAprsBeaconPositionBody(settings: SavedRadioAprsBeacon): st
     tail = tail.length > 0 ? `${tail} ${suffix}` : suffix;
   }
 
-  const symbolSuffix = settings.symbolTable === '/'
-    ? settings.symbolCode
-    : `${settings.symbolTable}${settings.symbolCode}`;
+  return `=${lat}${settings.symbolTable}${lon}${settings.symbolCode}${tail}`;
+}
 
-  return `=${lat}/${lon}${symbolSuffix}${tail}`;
+/**
+ * Parse decimal-degree text for the beacon form. Blank or whitespace is invalid (not 0,0).
+ */
+export function parseBeaconDecimalDegrees(latText: string, lonText: string): { latitude: number; longitude: number } | undefined {
+  const latTrim = latText.trim();
+  const lonTrim = lonText.trim();
+
+  if (latTrim.length === 0 || lonTrim.length === 0) {
+    return undefined;
+  }
+
+  const latitude = Number(latTrim);
+  const longitude = Number(lonTrim);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+    return undefined;
+  }
+
+  return { latitude, longitude };
 }
 
 /**

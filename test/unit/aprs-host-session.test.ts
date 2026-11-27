@@ -2467,4 +2467,60 @@ describe('host position beacon', () => {
     await session.advance(15 * 60_000);
     expect(fake.writes.filter((frame) => frame[0] === 0xc0)).toHaveLength(1);
   });
+
+  it('refuses to arm the interval before KISS is confirmed', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    expect(session.setBeaconInterval({ armed: true, minutes: 10, mine: 'KF5UFJ-1', settings: beacon })).toMatch(/AX\.25 UI frame/);
+    expect(session.snapshot().beaconIntervalArmed).toBe(false);
+  });
+
+  it('stops the interval when kissConfirmed is lost', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    await confirmKiss(session, fake);
+    expect(session.setBeaconInterval({ armed: true, minutes: 10, mine: 'KF5UFJ-1', settings: beacon })).toBeUndefined();
+    expect(session.snapshot().beaconIntervalArmed).toBe(true);
+    fake.push(Uint8Array.from([...'cmd:\r\n'].map((character) => character.charCodeAt(0))));
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(false);
+    expect(session.snapshot().beaconIntervalArmed).toBe(false);
+  });
+
+  it('schedules the next interval slot after a failed write instead of retrying every tick', async () => {
+    const clock = { t: 1_000_000 };
+    let rejectBeaconWrite = false;
+    const base = fakePort();
+    const port: AprsHostBytePort = {
+      ...base.port,
+      async write(bytes) {
+        if (rejectBeaconWrite && bytes[0] === 0xc0 && bytes[1] === 0x00 && bytes.length > 20) {
+          throw new Error('Port rejected');
+        }
+
+        return base.port.write(bytes);
+      },
+    };
+    const session = createD710HostSession({
+      useRetryClock: true,
+      now: () => clock.t,
+      allowHardwareTransmit: true,
+    });
+    await session.connect('/dev/ttyUSB0', async () => port);
+    await confirmKiss(session, { ...base, port, push: base.push.bind(base) });
+    const dataWrites = () => base.writes.filter((frame) => frame[0] === 0xc0 && frame[1] === 0x00).length;
+    const beforeArm = dataWrites();
+    expect(session.setBeaconInterval({ armed: true, minutes: 10, mine: 'KF5UFJ-1', settings: beacon })).toBeUndefined();
+    rejectBeaconWrite = true;
+    await session.advance(10 * 60_000);
+    expect(dataWrites()).toBe(beforeArm);
+    expect(session.snapshot().lastBeaconDetail).toMatch(/Not sent/);
+    await session.advance(8 * 60_000);
+    expect(dataWrites()).toBe(beforeArm);
+    rejectBeaconWrite = false;
+    await session.advance(2 * 60_000);
+    expect(dataWrites()).toBe(beforeArm + 1);
+  });
 });

@@ -2693,6 +2693,12 @@ export function createAprsHostSession(options?: {
           return 'Listen is not open. Interval beacons were not started.';
         }
 
+        const gate = beaconTransmitBlock();
+
+        if (gate) {
+          return gate;
+        }
+
         identity = source;
         beaconIntervalArmed = true;
         beaconIntervalMinutes = minutes;
@@ -2754,10 +2760,11 @@ export function createAprsHostSession(options?: {
         && allowHardwareTransmit
         && clock - lastIntervalBeaconAt >= beaconIntervalMinutes * 60_000
       ) {
+        lastIntervalBeaconAt = clock;
         const result = await transmitBeacon(beaconIntervalSource, beaconIntervalSettings);
 
-        if (result.ok) {
-          lastIntervalBeaconAt = clock;
+        if (!result.ok) {
+          lastBeaconDetail = result.detail.startsWith('Not sent') ? result.detail : `Not sent. ${result.detail}`;
         }
       }
 
