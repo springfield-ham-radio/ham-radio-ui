@@ -237,15 +237,15 @@ jobs:
         run: node scripts/rename-release-installers.ts
 
       # tauri-action merges latest.json from each platform job. Parallel
-      # uploads can drop darwin-aarch64 or darwin-x86_64. Restore either key
-      # from the arch-specific updater archive when that archive is present.
-      - name: Restore macOS updater entries in latest.json
+      # uploads can drop platform keys. Rebuild entries from uploaded payloads
+      # and .sig files, then fail if any expected key is still missing.
+      - name: Repair updater manifest in latest.json
         if: always() && steps.app-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
-        run: node scripts/repair-darwin-updater-manifest.ts
+        run: node scripts/repair-updater-manifest.ts
 
       # tauri-action updates the release without make_latest, and the API
       # default marks that release as latest. Point releases/latest at the

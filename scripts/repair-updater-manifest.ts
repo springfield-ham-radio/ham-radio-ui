@@ -2,7 +2,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { repairDarwinUpdaterManifest, type UpdaterAssetRef, type UpdaterManifest } from './darwin-updater-manifest.ts';
+import {
+  discoverUpdaterBundles,
+  missingExpectedPlatformKeys,
+  repairUpdaterManifest,
+  type UpdaterAssetRef,
+  type UpdaterManifest,
+} from './updater-manifest.ts';
 
 const releaseTag = process.env.RELEASE_TAG?.trim();
 const repository = process.env.GITHUB_REPOSITORY?.trim();
@@ -36,7 +42,7 @@ function listAssets(): UpdaterAssetRef[] {
   return parsed.assets;
 }
 
-const workDirectory = mkdtempSync(join(tmpdir(), 'darwin-updater-'));
+const workDirectory = mkdtempSync(join(tmpdir(), 'updater-manifest-'));
 
 function finish(status: number): never {
   rmSync(workDirectory, { recursive: true, force: true });
@@ -72,23 +78,31 @@ if (!manifest.platforms || typeof manifest.platforms !== 'object') {
 const assets = listAssets();
 const signaturesByName: Record<string, string> = {};
 
-for (const asset of assets) {
-  if (!asset.name.endsWith('_aarch64.app.tar.gz.sig') && !asset.name.endsWith('_x64.app.tar.gz.sig')) {
+for (const { sigAsset } of discoverUpdaterBundles(assets, manifest.version)) {
+  if (signaturesByName[sigAsset.name] !== undefined) {
     continue;
   }
 
-  gh(['release', 'download', tag, '--pattern', asset.name, '--clobber', '--dir', workDirectory]);
-  signaturesByName[asset.name] = readFileSync(join(workDirectory, asset.name), 'utf8');
+  gh(['release', 'download', tag, '--pattern', sigAsset.name, '--clobber', '--dir', workDirectory]);
+  signaturesByName[sigAsset.name] = readFileSync(join(workDirectory, sigAsset.name), 'utf8');
 }
 
-const repaired = repairDarwinUpdaterManifest(manifest, assets, signaturesByName);
+const repaired = repairUpdaterManifest(manifest, assets, signaturesByName);
+const stillMissing = missingExpectedPlatformKeys(repaired.manifest, assets, manifest.version);
 
-if (!repaired.changed) {
-  console.log(`macOS updater entries in latest.json on ${tag} already match the release assets.`);
-  finish(0);
+if (repaired.changed) {
+  writeFileSync(manifestPath, `${JSON.stringify(repaired.manifest, null, 2)}\n`);
+  gh(['release', 'upload', tag, manifestPath, '--clobber']);
+  console.log(`Updated latest.json platforms: ${repaired.updatedPlatforms.join(', ')}`);
+} else {
+  console.log(`Updater entries in latest.json on ${tag} already match the release assets.`);
 }
 
-writeFileSync(manifestPath, `${JSON.stringify(repaired.manifest, null, 2)}\n`);
-gh(['release', 'upload', tag, manifestPath, '--clobber']);
-console.log(`Updated latest.json platforms: ${repaired.updatedPlatforms.join(', ')}`);
+if (stillMissing.length > 0) {
+  console.error(
+    `latest.json on ${tag} is still missing platform keys after repair: ${stillMissing.join(', ')}`,
+  );
+  finish(1);
+}
+
 finish(0);
