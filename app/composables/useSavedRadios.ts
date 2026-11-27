@@ -1,5 +1,6 @@
 import { adoptLegacyAprsConnection } from '~/utils/aprs-d710';
 import {
+  clearSavedRadioStationLinks,
   createSavedRadio,
   draftFromSavedRadio,
   readSavedRadioStore,
@@ -158,6 +159,16 @@ export function useSavedRadios() {
     persist(removeSavedRadio(store.value, id));
   }
 
+  function unlinkRadiosFromStation(stationId: string): void {
+    const next = clearSavedRadioStationLinks(store.value, stationId);
+
+    if (next === store.value) {
+      return;
+    }
+
+    persist(next);
+  }
+
   function assignPrivilege(id: string, choice: { personId: string; licenseId?: string } | undefined): void {
     const current = radioById(id);
 
@@ -185,6 +196,7 @@ export function useSavedRadios() {
     rememberAprsMyCall,
     rememberSavedRadioAprsBeacon,
     deleteRadio,
+    unlinkRadiosFromStation,
     assignPrivilege,
   };
 }

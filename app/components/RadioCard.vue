@@ -19,6 +19,7 @@ const cardId = computed(() => props.radio.id);
 provide(radioCardIdKey, cardId);
 
 const { configurations, memoryUnsaved } = useRadio();
+const { stations } = useStationAntennas();
 const driverInstalled = computed(() =>
   configurations.value.some((config) => String(config.id.model) === props.radio.model),
 );
@@ -31,6 +32,14 @@ const detail = computed(() => {
 
   if (props.radio.baudRate !== undefined) {
     parts.splice(1, 0, `${props.radio.baudRate} baud`);
+  }
+
+  const stationNickname = props.radio.stationId
+    ? stations.value.find((entry) => entry.id === props.radio.stationId)?.nickname
+    : undefined;
+
+  if (stationNickname) {
+    parts.push(stationNickname);
   }
 
   return parts.join(' · ');

@@ -11,6 +11,7 @@ import {
 } from '~/utils/radio-baud-rate';
 import { serialPortLabel, serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { formatStationLocation, HOME_STATION_ID } from '~/utils/antenna-station';
 import {
   draftFromSavedRadio,
   savedRadioDraftHasIssues,
@@ -37,6 +38,7 @@ const emit = defineEmits<{
 
 const { configurations, manufacturers } = useRadio();
 const { radios } = useSavedRadios();
+const { stations } = useStationAntennas();
 
 const name = shallowRef('');
 const manufacturer = shallowRef<string | undefined>();
@@ -46,6 +48,7 @@ const serialPort = shallowRef<string | undefined>();
 const aprsBaudRate = shallowRef<number | undefined>();
 const aprsSerialPort = shallowRef<string | undefined>();
 const txPower = shallowRef('');
+const stationId = shallowRef('');
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = shallowRef(false);
 const nameError = shallowRef<string | undefined>();
@@ -148,6 +151,15 @@ const portItems = computed(() => portItemsFor(serialPort.value, ' (saved)'));
 
 const aprsFieldsReady = ref(false);
 
+const stationItems = computed(() => [
+  { label: 'None', value: '' },
+  ...stations.value.map((station) => ({
+    label: station.nickname,
+    value: station.id,
+    description: formatStationLocation(station),
+  })),
+]);
+
 const aprsPortItems = computed(() =>
   aprsSerialPortMenuItems(
     ports.value,
@@ -201,6 +213,7 @@ watch(
     aprsSerialPort.value = draft?.aprsSerialPort;
     aprsFieldsReady.value = false;
     txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
+    stationId.value = draft?.stationId ?? (props.radio ? '' : HOME_STATION_ID);
     nameError.value = undefined;
     manufacturerError.value = undefined;
     modelError.value = undefined;
@@ -253,6 +266,7 @@ function aprsDraftIssues() {
       txPowerWatts: txPowerWattsFromText(txPower.value),
       aprsSerialPort: aprsSerialPort.value,
       aprsBaudRate: aprsBaudRate.value,
+      stationId: stationId.value,
     },
     {
       radios: radios.value,
@@ -293,6 +307,7 @@ function save(): void {
     txPowerWatts,
     aprsSerialPort: profile ? (aprsSerialPort.value ?? '') : props.radio?.aprsSerialPort,
     aprsBaudRate: profile ? aprsBaudRate.value : props.radio?.aprsBaudRate,
+    stationId: stationId.value,
   };
   const listed = selectedConfig.value ? listedProgrammingBaudRates(selectedConfig.value.serialConfig) : [];
   const issues = savedRadioDraftIssues(draft, {
@@ -449,6 +464,18 @@ function save(): void {
             </div>
           </UFormField>
         </template>
+
+        <UFormField
+          label="Station"
+          description="Site where you usually operate this radio. New radios start at Home."
+        >
+          <USelect
+            v-model="stationId"
+            :items="stationItems"
+            value-key="value"
+            class="w-full"
+          />
+        </UFormField>
 
         <UFormField
           label="TX power (W)"

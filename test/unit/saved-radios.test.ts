@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { HOME_STATION_ID } from '../../app/utils/antenna-station.ts';
 import {
   applyRadioPrivilege,
+  clearSavedRadioStationLinks,
   createSavedRadio,
   draftFromSavedRadio,
   parseSavedRadio,
@@ -77,6 +79,7 @@ describe('saved radios', () => {
     expect(radio.packetSsid).toBe(0);
     expect(radio.packetAcceptIncoming).toBe(false);
     expect(radio.aprsMyCall).toBeUndefined();
+    expect(radio.stationId).toBe(HOME_STATION_ID);
   });
 
   it('should round-trip radios through serialize and parse', () => {
@@ -329,5 +332,59 @@ describe('saved radios', () => {
     expect(roundTrip?.aprsMyCall).toBe('KF5UFJ-7');
     expect(roundTrip?.aprsBeacon).toEqual(both.aprsBeacon);
     expect(roundTrip?.packetSsid).toBe(3);
+  });
+
+  it('stores stationId on saved radios without disturbing APRS fields', () => {
+    const beacon = {
+      latitude: 30.5187,
+      longitude: -97.879,
+      symbolTable: '/',
+      symbolCode: '-',
+      path: 'WIDE1-1,WIDE2-1',
+      intervalMinutes: 30,
+    };
+    const linked: SavedRadio = {
+      ...base,
+      stationId: 'station-cabin',
+      aprsMyCall: 'KF5UFJ-1',
+      privilegePersonId: 'ada',
+      privilegeLicenseId: 'lic-ada',
+      packetSsid: 2,
+      packetAcceptIncoming: true,
+      aprsBeacon: beacon,
+    };
+
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [linked] })).radios[0]).toEqual(linked);
+    expect(parseSavedRadio({ ...linked, stationId: '  ' })?.stationId).toBeUndefined();
+    expect(parseSavedRadio({ ...linked, stationId: 'station-gone' })?.stationId).toBe('station-gone');
+
+    const none = createSavedRadio(
+      { name: 'HT', manufacturer: 'Kenwood', model: 'kenwood-th-d74', serialPort: '/dev/cu.ht', stationId: '' },
+      1,
+      'radio-ht',
+    );
+    expect(none.stationId).toBeUndefined();
+
+    const updated = updateSavedRadio(linked, { ...draftFromSavedRadio(linked), stationId: '' }, 50);
+    expect(updated.stationId).toBeUndefined();
+    expect(updated.aprsMyCall).toBe('KF5UFJ-1');
+    expect(updated.aprsBeacon).toEqual(beacon);
+    expect(updated.updatedAt).toBe(50);
+
+    const relinked = updateSavedRadio(updated, { ...draftFromSavedRadio(updated), stationId: HOME_STATION_ID }, 51);
+    expect(relinked.stationId).toBe(HOME_STATION_ID);
+  });
+
+  it('clears stationId when a site is removed', () => {
+    const atHome: SavedRadio = { ...mobile, stationId: HOME_STATION_ID };
+    const atCabin: SavedRadio = { ...base, stationId: 'station-cabin' };
+    const store = { radios: [atHome, atCabin] };
+
+    const cleared = clearSavedRadioStationLinks(store, 'station-cabin');
+    expect(cleared.radios[0]?.stationId).toBe(HOME_STATION_ID);
+    expect(cleared.radios[1]?.stationId).toBeUndefined();
+    expect(cleared.radios[1]?.updatedAt).toBe(atCabin.updatedAt);
+
+    expect(clearSavedRadioStationLinks(store, 'missing')).toBe(store);
   });
 });

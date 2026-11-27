@@ -8,6 +8,7 @@ const {
   saveStation,
   removeStation,
 } = useStationAntennas();
+const { unlinkRadiosFromStation } = useSavedRadios();
 
 const editorOpen = ref(false);
 const editing = ref<RadioStation | undefined>();
@@ -51,6 +52,7 @@ function confirmRemove(): void {
   const station = pendingRemove.value;
 
   if (station) {
+    unlinkRadiosFromStation(station.id);
     removeStation(station.id);
   }
 
@@ -127,7 +129,7 @@ function confirmRemove(): void {
           <p class="mt-2 text-sm text-muted">
             {{
               pendingRemove
-                ? `Remove ${pendingRemove.nickname} and the antennas assigned to it?`
+                ? `Remove ${pendingRemove.nickname} and the antennas assigned to it? Radios linked to this site will no longer name it.`
                 : ''
             }}
           </p>

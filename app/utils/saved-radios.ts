@@ -1,3 +1,4 @@
+import { HOME_STATION_ID } from '~/utils/antenna-station';
 import { parseSavedRadioAprsBeacon, type SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
 import { canonicalAx25Call, formatAx25Call } from '~/utils/aprs-ax25';
 
@@ -42,6 +43,8 @@ export interface SavedRadio {
   aprsMyCall?: string;
   /** APRS position beacon fields for the host session. */
   aprsBeacon?: SavedRadioAprsBeacon;
+  /** Operating site (`RadioStation.id`). Absent until the operator links the radio to a station. */
+  stationId?: string;
 }
 
 export interface SavedRadioDraft {
@@ -54,6 +57,8 @@ export interface SavedRadioDraft {
   /** Empty string clears a stored APRS port. Omit to leave it unchanged. */
   aprsSerialPort?: string;
   aprsBaudRate?: number;
+  /** Empty string clears the station link. Omit on create to default to Home. */
+  stationId?: string;
 }
 
 export interface SavedRadioStore {
@@ -216,6 +221,10 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     radio.aprsBeacon = aprsBeacon;
   }
 
+  if (nonEmpty(value.stationId)) {
+    radio.stationId = String(value.stationId).trim();
+  }
+
   return radio;
 }
 
@@ -305,6 +314,10 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.aprsBeacon) {
         stored.aprsBeacon = radio.aprsBeacon;
+      }
+
+      if (radio.stationId) {
+        stored.stationId = radio.stationId;
       }
 
       return stored;
@@ -437,6 +450,14 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
   radio.packetSsid = 0;
   radio.packetAcceptIncoming = false;
 
+  const station = draft.stationId?.trim() ?? '';
+
+  if (station.length > 0) {
+    radio.stationId = station;
+  } else if (draft.stationId === undefined) {
+    radio.stationId = HOME_STATION_ID;
+  }
+
   return radio;
 }
 
@@ -505,6 +526,16 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
 
   if (draft.aprsBaudRate !== undefined) {
     next.aprsBaudRate = draft.aprsBaudRate;
+  }
+
+  if (draft.stationId !== undefined) {
+    const station = draft.stationId.trim();
+
+    if (station.length === 0) {
+      delete next.stationId;
+    } else {
+      next.stationId = station;
+    }
   }
 
   return next;
@@ -580,7 +611,35 @@ export function draftFromSavedRadio(radio: SavedRadio): SavedRadioDraft {
     txPowerWatts: radio.txPowerWatts,
     aprsSerialPort: radio.aprsSerialPort,
     aprsBaudRate: radio.aprsBaudRate,
+    stationId: radio.stationId,
   };
+}
+
+/**
+ * Clears `stationId` on every radio linked to a removed station.
+ *
+ * Does not change `updatedAt`, same as privilege assignment.
+ */
+export function clearSavedRadioStationLinks(store: SavedRadioStore, stationId: string): SavedRadioStore {
+  const trimmed = stationId.trim();
+
+  if (!trimmed) {
+    return store;
+  }
+
+  let changed = false;
+  const radios = store.radios.map((radio) => {
+    if (radio.stationId !== trimmed) {
+      return radio;
+    }
+
+    changed = true;
+    const next = { ...radio };
+    delete next.stationId;
+    return next;
+  });
+
+  return changed ? { radios } : store;
 }
 
 /**

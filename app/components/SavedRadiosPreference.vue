@@ -7,7 +7,7 @@ import { formatEquipmentBands, radioBandsFromConfig } from '~/utils/radio-bands'
 import { savedRadioModelLabel, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
 
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
-const { removeRadioAntennas } = useStationAntennas();
+const { removeRadioAntennas, stations } = useStationAntennas();
 const { clearCardSession, configurations } = useRadio();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
@@ -91,6 +91,14 @@ function radioDetail(radio: SavedRadio): string {
 
   if (radio.txPowerWatts !== undefined) {
     parts.push(`${radio.txPowerWatts} W`);
+  }
+
+  const stationNickname = radio.stationId
+    ? stations.value.find((entry) => entry.id === radio.stationId)?.nickname
+    : undefined;
+
+  if (stationNickname) {
+    parts.push(stationNickname);
   }
 
   const aliases = readSerialPortSettings().portAliases;
