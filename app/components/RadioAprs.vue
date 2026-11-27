@@ -79,7 +79,7 @@ const isConnected = computed(() => snapshot.value?.connected === true || tncPrev
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
 const mine = ref('');
 const mineError = computed(() => callsignError(mine.value));
-const mineInput = useTemplateRef('mineInput');
+const mineInput = useTemplateRef<{ inputRef?: HTMLInputElement }>('mineInput');
 const selectedMode = computed<AprsConnectionMode>(() => {
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
 
@@ -185,14 +185,7 @@ function onMine(value: string | number): void {
 }
 
 function focusMineCallsign(): void {
-  const root = mineInput.value;
-
-  if (!root) {
-    return;
-  }
-
-  const input = root instanceof HTMLInputElement ? root : root.querySelector('input');
-  input?.focus();
+  mineInput.value?.inputRef?.focus();
 }
 
 function onAck(next: boolean): void {

@@ -89,5 +89,10 @@ describe('TNC flow control from the radio module', () => {
     expect(messages).toContain('aprsOwnCallsignBlock');
     expect(messages).toContain("'focus-mine'");
     expect(aprs).toContain('@focus-mine="focusMineCallsign"');
+    expect(aprs).toContain('inputRef?.focus()');
+    expect(aprs).not.toContain('querySelector');
+    expect(messages).toContain('!!sendBlocked');
+    expect(messages).toContain('useId()');
+    expect(messages).toContain('aprs-send-mine-${');
   });
 });

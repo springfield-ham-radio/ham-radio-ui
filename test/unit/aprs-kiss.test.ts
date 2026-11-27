@@ -231,7 +231,7 @@ describe('AX.25 callsign hints', () => {
   });
 
   it('blocks APRS send until My callsign is valid', () => {
-    for (const call of ['', 'K5', '1BAD']) {
+    for (const call of ['', '   ', 'K5', '1BAD', 'K5KTF-16']) {
       expect(aprsOwnCallsignBlock(call)).toBe('Set My callsign to send');
     }
 

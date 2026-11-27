@@ -5,7 +5,7 @@ import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '..
 import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND, d710AprsHostLink } from '../../app/utils/aprs-d710-host.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
-import { APRS_MESSAGE_RETRY_MS, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
+import { AX25_CALLSIGN_HINT, APRS_MESSAGE_RETRY_MS, destinationCallsignError, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
 import { aprsHoldPaths } from '../../app/utils/aprs-session.ts';
 import { APRS_HOST_BOOT_QUIET_MS } from '../../app/utils/aprs-host-boot.ts';
 
@@ -545,6 +545,7 @@ describe('APRS host session', () => {
     const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
+    session.setIdentity('N0TST');
 
     for (const mine of ['', '   ', '1BAD', 'K5']) {
       const result = await session.send({ mine, to: 'K5KTF-4', text: 'Hello' });
@@ -553,6 +554,11 @@ describe('APRS host session', () => {
 
     expect(session.snapshot().messages).toEqual([]);
     expect(fake.writes).toEqual([]);
+
+    const destinationOnly = await session.send({ mine: 'N0TST', to: '1BAD', text: 'Hi' });
+    expect(destinationOnly?.status).toBe('blocked');
+    expect(destinationOnly?.detail).toBe(destinationCallsignError('1BAD'));
+    expect(session.snapshot().messages).toHaveLength(1);
   });
 
   it('queues Not sent for a bad destination and empty text without writing', async () => {
@@ -563,8 +569,12 @@ describe('APRS host session', () => {
     for (const to of ['1BAD', 'K5KTF-16']) {
       const blocked = await session.send({ mine: 'N0TST', to, text: 'Hi' });
       expect(blocked?.status).toBe('blocked');
-      expect(blocked?.detail).toMatch(/^Destination callsign:/);
+      expect(blocked?.detail).toBe(`Destination callsign: ${AX25_CALLSIGN_HINT}`);
     }
+
+    const badDestinationAndText = await session.send({ mine: 'N0TST', to: '1BAD', text: '' });
+    expect(badDestinationAndText?.status).toBe('blocked');
+    expect(badDestinationAndText?.detail).toBe(`Destination callsign: ${AX25_CALLSIGN_HINT}`);
 
     const emptyText = await session.send({ mine: 'N0TST', to: 'K5KTF', text: '' });
     expect(emptyText?.status).toBe('blocked');

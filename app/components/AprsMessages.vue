@@ -70,7 +70,8 @@ const messages = computed(() => [...(example.value ? exampleMessages : []), ...(
 const conversations = computed(() => aprsConversations(messages.value));
 const thread = computed(() => conversations.value.find((row) => row.callsign === selectedCall.value)?.messages ?? []);
 const sendBlocked = computed(() => aprsOwnCallsignBlock(props.mine));
-const sendBlockId = computed(() => (sendBlocked.value ? 'aprs-send-mine-block' : undefined));
+const sendHintIdBase = useId();
+const sendBlockId = computed(() => (sendBlocked.value ? `aprs-send-mine-${props.cardId ?? sendHintIdBase}` : undefined));
 
 const statusLabel: Record<AprsHostMessage['status'], string> = {
   heard: 'Heard',
