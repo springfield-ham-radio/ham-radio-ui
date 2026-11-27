@@ -10,11 +10,11 @@ import type {
 } from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
+import { isSpecialChannelIndex } from '@springfield/ham-radio-utils';
 import {
   encodeRadioProgramPreservingSpecialSlots,
   hasMemoryMapSpecialChannels,
   isRegularChannelIndex,
-  isSpecialChannelIndex,
 } from '~/utils/channel-specials';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import {

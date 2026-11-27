@@ -21,12 +21,11 @@ function programmedChannel(overrides: Partial<RadioProgrammedChannel> = {}): Rad
   };
 }
 import { channelCapacity, channelRecordCapacity, moveProgrammedChannel } from '~/utils/channel-edit';
+import { isSpecialChannelIndex, memoryMapSpecialChannelLabel } from '@springfield/ham-radio-utils';
 import {
   encodeRadioProgramPreservingSpecialSlots,
   hasMemoryMapSpecialChannels,
   isRegularChannelIndex,
-  isSpecialChannelIndex,
-  memoryMapSpecialChannelLabel,
   restoreUnprogrammedSpecialChannelBytes,
   specialChannelRows,
 } from '~/utils/channel-specials';

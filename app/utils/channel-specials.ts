@@ -5,12 +5,7 @@ import type {
   RadioProgram,
   RadioProgrammedChannel,
 } from '@springfield/ham-radio-api';
-import {
-  isSpecialChannelIndex,
-  memoryMapChannelRecordCount,
-  memoryMapRegularChannelCapacity,
-  memoryMapSpecialChannelLabel,
-} from '@springfield/ham-radio-utils';
+import { memoryMapRegularChannelCapacity, memoryMapSpecialChannelLabel } from '@springfield/ham-radio-utils';
 import {
   encodeMemoryMap,
   programToChannelSettings,
@@ -19,13 +14,6 @@ import {
 } from '~/utils/ham-radio-utils-shim';
 import type { ChannelRow } from '~/composables/useRadio';
 import { toChannelRowFromProgrammed } from '~/utils/channel-specials-rows';
-
-export {
-  isSpecialChannelIndex,
-  memoryMapChannelRecordCount,
-  memoryMapRegularChannelCapacity,
-  memoryMapSpecialChannelLabel,
-};
 
 export function hasMemoryMapSpecialChannels(memoryMap: RadioMemoryMap | undefined): boolean {
   return Boolean(memoryMap?.channelBindings?.specials?.labels?.length);

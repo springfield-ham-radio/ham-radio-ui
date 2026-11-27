@@ -2,7 +2,7 @@
 
 **Status:** proposed  
 **Date:** 2026-11-27  
-**Related:** [ham-radio-docs ADR 0013](https://github.com/springfield-ham-radio/ham-radio-docs/pull/39) (`docs/developer/adr/0013-memory-map-special-channels.md`), [ham-radio-api#42](https://github.com/springfield-ham-radio/ham-radio-api/pull/42), [ham-radio-utils#51](https://github.com/springfield-ham-radio/ham-radio-utils/pull/51)
+**Related:** [ham-radio-docs ADR 0013](https://github.com/springfield-ham-radio/ham-radio-docs/blob/main/docs/developer/adr/0013-memory-map-special-channels.md), [ham-radio-api#42](https://github.com/springfield-ham-radio/ham-radio-api/pull/42), [ham-radio-utils#51](https://github.com/springfield-ham-radio/ham-radio-utils/pull/51)
 
 ## Context
 
@@ -20,6 +20,6 @@ Radios without `specials` metadata keep current behavior.
 
 ## Consequences
 
-- HamBench temporarily pins `ham-radio-api` and `ham-radio-utils` to feature branches until releases include `specials` types and helpers.
+- HamBench requires `@springfield/ham-radio-api` 18.6.0+ and `@springfield/ham-radio-utils` 4.20.0+ for `specials` types and helpers.
 - Channel table UI splits into regular (sortable) and special (static) regions when metadata is present.
 - Encode preservation lives in HamBench until utils gains first-class special-slot handling in `encodeMemoryMap`.

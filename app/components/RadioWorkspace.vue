@@ -23,10 +23,10 @@ import {
   nextAvailableChannelNumber,
   programLibraryChannelsIntoSlots,
 } from '~/utils/channel-edit';
+import { isSpecialChannelIndex } from '@springfield/ham-radio-utils';
 import {
   hasMemoryMapSpecialChannels,
   isRegularChannelIndex,
-  isSpecialChannelIndex,
   specialChannelRows,
 } from '~/utils/channel-specials';
 import {

@@ -30,7 +30,7 @@ import {
   validateChannelForRadio,
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
-import { isSpecialChannelIndex, memoryMapSpecialChannelLabel } from '~/utils/channel-specials';
+import { isSpecialChannelIndex, memoryMapSpecialChannelLabel } from '@springfield/ham-radio-utils';
 
 const props = defineProps<{
   open: boolean;
