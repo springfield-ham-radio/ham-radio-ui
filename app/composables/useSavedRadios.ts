@@ -6,6 +6,7 @@ import {
   removeSavedRadio,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
+  patchSavedRadioAprsBeacon,
   rememberSavedRadioSerialPort,
   rememberSavedRadioAprsCall,
   updateSavedRadio,
@@ -113,6 +114,26 @@ export function useSavedRadios() {
     persist(upsertSavedRadio(store.value, next));
   }
 
+  function rememberSavedRadioAprsBeacon(id: string | undefined, beacon: import('~/utils/aprs-beacon').SavedRadioAprsBeacon | undefined): void {
+    if (!id) {
+      return;
+    }
+
+    const current = radioById(id);
+
+    if (!current) {
+      return;
+    }
+
+    const next = patchSavedRadioAprsBeacon(current, beacon);
+
+    if (next === current) {
+      return;
+    }
+
+    persist(upsertSavedRadio(store.value, next));
+  }
+
   function rememberSavedRadioPort(id: string | undefined, serialPort: string): void {
     if (!id) {
       return;
@@ -162,6 +183,7 @@ export function useSavedRadios() {
     saveRadio,
     rememberSavedRadioPort,
     rememberAprsMyCall,
+    rememberSavedRadioAprsBeacon,
     deleteRadio,
     assignPrivilege,
   };

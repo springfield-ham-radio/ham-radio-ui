@@ -126,8 +126,13 @@ function decodeAddress(
  *
  * No digipeaters are added. The FCS is not included; a KISS TNC adds it.
  */
-export function encodeAx25Ui(source: Ax25Call, info: string, path: readonly Ax25Call[] = []): Uint8Array | undefined {
-  const destination = canonicalAx25Call(APRS_AX25_DESTINATION);
+export function encodeAx25Ui(
+  source: Ax25Call,
+  info: string,
+  path: readonly Ax25Call[] = [],
+  destinationCall: string = APRS_AX25_DESTINATION,
+): Uint8Array | undefined {
+  const destination = canonicalAx25Call(destinationCall);
 
   if (!destination || !canonicalAx25Call(formatAx25Call(source)) || path.some((hop) => !canonicalAx25Call(formatAx25Call(hop)))) {
     return undefined;

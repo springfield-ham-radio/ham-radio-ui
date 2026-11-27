@@ -1,3 +1,9 @@
+import {
+  aprsBeaconSettingsError,
+  clampBeaconIntervalMinutes,
+  encodeAprsBeaconFrame,
+  type SavedRadioAprsBeacon,
+} from '~/utils/aprs-beacon';
 import { canonicalAx25Call, formatAx25Call, parseAx25Ui, type Ax25Call } from '~/utils/aprs-ax25';
 import { containsAprsMonitorLine } from '~/utils/aprs-decode';
 import { appendCommandBytes, hasCommandPrompt, hasCommandPromptAfter, hasTncError } from '~/utils/aprs-command';
@@ -150,6 +156,9 @@ export interface AprsHostSnapshot {
   trace: AprsTraceLine[];
   traceDropped: number;
   messages: AprsHostMessage[];
+  lastBeaconAt?: number;
+  lastBeaconDetail?: string;
+  beaconIntervalArmed: boolean;
 }
 
 export interface AprsHostSession {
@@ -176,6 +185,10 @@ export interface AprsHostSession {
   clearTrace(): void;
   /** Send is the transmit choice. It does not enter KISS and does not acknowledge old messages. */
   send(input: { mine: string; to: string; text: string }): Promise<AprsHostMessage | undefined>;
+  /** One position beacon. No retry. */
+  sendBeacon(input: { mine: string; settings: SavedRadioAprsBeacon }): Promise<{ ok: boolean; detail: string }>;
+  /** Interval beacons stop on Disconnect and are off on each Connect. */
+  setBeaconInterval(input: { armed: boolean; minutes: number; mine: string; settings: SavedRadioAprsBeacon }): string | undefined;
   cancel(key: string): void;
   /** Move the test clock. Waiting messages retry or time out. Disconnect clears them first. */
   advance(ms: number): Promise<void>;
@@ -340,6 +353,14 @@ export function createAprsHostSession(options?: {
   let identity: Ax25Call | undefined;
   let clock = now();
   let retryTimer: ReturnType<typeof setInterval> | undefined;
+  let lastBeaconAt: number | undefined;
+  let lastBeaconDetail: string | undefined;
+  let beaconIntervalArmed = false;
+  let beaconIntervalMinutes = 30;
+  let beaconIntervalSource: Ax25Call | undefined;
+  let beaconIntervalSettings: SavedRadioAprsBeacon | undefined;
+  let lastIntervalBeaconAt = 0;
+  let advanceMs: (ms: number) => Promise<void> = async () => {};
 
   function publish(): void {
     for (const listener of listeners) {
@@ -417,10 +438,66 @@ export function createAprsHostSession(options?: {
   }
 
   function stopRetryIfIdle(): void {
-    if (waiting.size === 0 && retryTimer) {
+    if (waiting.size === 0 && !beaconIntervalArmed && retryTimer) {
       clearInterval(retryTimer);
       retryTimer = undefined;
     }
+  }
+
+  function ensureAdvanceTimer(): void {
+    if (!options?.useRetryClock || retryTimer) {
+      return;
+    }
+
+    if (waiting.size === 0 && !beaconIntervalArmed) {
+      return;
+    }
+
+    retryTimer = setInterval(() => {
+      void advanceMs(1000);
+    }, 1000);
+  }
+
+  function beaconTransmitBlock(): string | undefined {
+    if (!port?.isOpen) {
+      return 'Listen is not open. Nothing was sent.';
+    }
+
+    if (!allowHardwareTransmit) {
+      return 'This session does not transmit.';
+    }
+
+    if (!kissConfirmed) {
+      return 'This Listen has no AX.25 UI frame. A KISS frame that is not a UI frame does not count. Nothing was sent.';
+    }
+
+    return undefined;
+  }
+
+  async function transmitBeacon(source: Ax25Call, settings: SavedRadioAprsBeacon): Promise<{ ok: boolean; detail: string }> {
+    const block = beaconTransmitBlock();
+
+    if (block) {
+      return { ok: false, detail: block };
+    }
+
+    const ax25 = encodeAprsBeaconFrame(source, settings);
+
+    if (!ax25) {
+      return { ok: false, detail: 'The position beacon could not be encoded' };
+    }
+
+    const frame = encodeKissData(ax25);
+
+    if (!(await writeFrame(frame))) {
+      return { ok: false, detail: 'The COM port did not accept the frame.' };
+    }
+
+    record('tx-frame', frame, 'Position beacon. Not a KISS enter command.');
+    options?.onAx25Ui?.(ax25);
+    lastBeaconAt = clock;
+    lastBeaconDetail = 'Sent';
+    return { ok: true, detail: 'Sent' };
   }
 
   function remember(message: AprsHostMessage): AprsHostMessage {
@@ -1720,7 +1797,17 @@ export function createAprsHostSession(options?: {
     kissConfirmed = false;
     commandTextAtConfirm = commandText.length;
     cancelWaiting(reason);
+    stopBeaconInterval('Stopped. Nothing further will be sent.');
     record('note', new Uint8Array(), reason);
+  }
+
+  function stopBeaconInterval(detail: string): void {
+    if (beaconIntervalArmed) {
+      beaconIntervalArmed = false;
+      beaconIntervalSource = undefined;
+      beaconIntervalSettings = undefined;
+      lastBeaconDetail = detail;
+    }
   }
 
   async function transmitWaiting(item: Waiting): Promise<void> {
@@ -2137,7 +2224,7 @@ export function createAprsHostSession(options?: {
     return 'sent';
   }
 
-  return {
+  const hostApi: AprsHostSession = {
     snapshot() {
       const committed = trace.map((line) => ({ ...line }));
       const pending = rxTraceCoalesce.peekPending();
@@ -2174,6 +2261,9 @@ export function createAprsHostSession(options?: {
         trace: committed,
         traceDropped,
         messages: messages.map((message) => ({ ...message })),
+        lastBeaconAt,
+        lastBeaconDetail,
+        beaconIntervalArmed,
       };
     },
     async connect(nextPath, openPort, capture) {
@@ -2190,6 +2280,11 @@ export function createAprsHostSession(options?: {
       rxBytes = 0;
       rxChunks = 0;
       kissConfirmed = false;
+      beaconIntervalArmed = false;
+      beaconIntervalSource = undefined;
+      beaconIntervalSettings = undefined;
+      lastBeaconAt = undefined;
+      lastBeaconDetail = undefined;
       commandText = new Uint8Array();
       commandTextAtConfirm = 0;
       commandPhase = 'idle';
@@ -2275,6 +2370,7 @@ export function createAprsHostSession(options?: {
       }
 
       cancelWaiting('Disconnected. This message will not be sent again.');
+      stopBeaconInterval('Stopped. Nothing further will be sent.');
       ackOptIn = false;
       commandActive = false;
       commandBytes = new Uint8Array();
@@ -2550,6 +2646,77 @@ export function createAprsHostSession(options?: {
       publish();
       return { ...(row(key) as AprsHostMessage) };
     },
+    async sendBeacon(input) {
+      const source = canonicalAx25Call(input.mine);
+      const settingsError = aprsBeaconSettingsError(input.settings);
+
+      if (!source) {
+        const detail = callsignError(input.mine) ?? 'Set My callsign to beacon';
+        lastBeaconDetail = `Not sent. ${detail}`;
+        publish();
+        return { ok: false, detail: lastBeaconDetail };
+      }
+
+      if (settingsError) {
+        lastBeaconDetail = `Not sent. ${settingsError}`;
+        publish();
+        return { ok: false, detail: lastBeaconDetail };
+      }
+
+      identity = source;
+      const result = await transmitBeacon(source, input.settings);
+
+      if (!result.ok) {
+        lastBeaconDetail = `Not sent. ${result.detail}`;
+        publish();
+        return { ok: false, detail: lastBeaconDetail };
+      }
+
+      publish();
+      return { ok: true, detail: 'Sent' };
+    },
+    setBeaconInterval(input) {
+      const source = canonicalAx25Call(input.mine);
+      const settingsError = aprsBeaconSettingsError(input.settings);
+      const minutes = clampBeaconIntervalMinutes(input.minutes);
+
+      if (input.armed) {
+        if (!source) {
+          return callsignError(input.mine) ?? 'Set My callsign to beacon';
+        }
+
+        if (settingsError) {
+          return settingsError;
+        }
+
+        if (!port?.isOpen) {
+          return 'Listen is not open. Interval beacons were not started.';
+        }
+
+        const gate = beaconTransmitBlock();
+
+        if (gate) {
+          return gate;
+        }
+
+        identity = source;
+        beaconIntervalArmed = true;
+        beaconIntervalMinutes = minutes;
+        beaconIntervalSource = source;
+        beaconIntervalSettings = input.settings;
+        lastIntervalBeaconAt = clock;
+        ensureAdvanceTimer();
+        publish();
+        return undefined;
+      }
+
+      beaconIntervalArmed = false;
+      beaconIntervalSource = undefined;
+      beaconIntervalSettings = undefined;
+      stopRetryIfIdle();
+      publish();
+      return undefined;
+    },
     cancel(key) {
       waiting.delete(key);
       const current = row(key);
@@ -2583,6 +2750,22 @@ export function createAprsHostSession(options?: {
         }
 
         await transmitWaiting(item);
+      }
+
+      if (
+        beaconIntervalArmed
+        && beaconIntervalSource
+        && beaconIntervalSettings
+        && kissConfirmed
+        && allowHardwareTransmit
+        && clock - lastIntervalBeaconAt >= beaconIntervalMinutes * 60_000
+      ) {
+        lastIntervalBeaconAt = clock;
+        const result = await transmitBeacon(beaconIntervalSource, beaconIntervalSettings);
+
+        if (!result.ok) {
+          lastBeaconDetail = result.detail.startsWith('Not sent') ? result.detail : `Not sent. ${result.detail}`;
+        }
       }
 
       stopRetryIfIdle();
@@ -2633,6 +2816,9 @@ export function createAprsHostSession(options?: {
       return undefined;
     },
   };
+
+  advanceMs = (ms) => hostApi.advance(ms);
+  return hostApi;
 }
 
 export function hostListenNote(flow: AprsHostFlowControl): string {

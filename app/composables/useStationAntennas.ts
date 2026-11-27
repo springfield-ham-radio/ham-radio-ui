@@ -268,6 +268,7 @@ export function useStationAntennas() {
   }
 
   return {
+    store,
     stations,
     selectedStationId,
     selectedStation,

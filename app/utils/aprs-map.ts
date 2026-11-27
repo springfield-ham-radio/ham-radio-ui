@@ -1,12 +1,22 @@
 import type { CircleLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
-import type { AprsStation } from '~/utils/aprs-stations';
+import { formatAx25Call, canonicalAx25Call } from '~/utils/aprs-ax25';
+import type { SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
+import { formatAprsBeaconSummaryPosition, resolveAprsBeaconLocation } from '~/utils/aprs-beacon-location';
+import type { StationAntennaStore } from '~/utils/antenna-station';
 import { formatAprsHeardAt } from '~/utils/aprs-display';
+import type { AprsStation } from '~/utils/aprs-stations';
 
 /** Marker color used for a heard station that is not the selected call. */
 export const APRS_STATION_MARKER_COLOR = '#0f766e';
 
 /** Marker color used when the APRS map has that callsign selected. */
 export const APRS_STATION_SELECTED_COLOR = '#c2410c';
+
+/** Fill for this radio’s manual beacon position (not a heard station). */
+export const APRS_OWN_BEACON_MARKER_COLOR = '#2563eb';
+
+/** Accent ring for the own-beacon marker. */
+export const APRS_OWN_BEACON_RING_COLOR = '#fbbf24';
 
 /**
  * Circle paint shared by the APRS tab map and the main Map APRS layer.
@@ -20,6 +30,16 @@ export function aprsStationCirclePaint(): NonNullable<CircleLayerSpecification['
     'circle-color': ['case', ['==', ['get', 'selected'], 1], APRS_STATION_SELECTED_COLOR, APRS_STATION_MARKER_COLOR],
     'circle-stroke-width': 2,
     'circle-stroke-color': '#ffffff',
+  };
+}
+
+/** Own-beacon marker: larger fill with an accent outline so it stands apart from heard traffic. */
+export function aprsOwnBeaconCirclePaint(): NonNullable<CircleLayerSpecification['paint']> {
+  return {
+    'circle-radius': 9,
+    'circle-color': APRS_OWN_BEACON_MARKER_COLOR,
+    'circle-stroke-width': 3,
+    'circle-stroke-color': APRS_OWN_BEACON_RING_COLOR,
   };
 }
 
@@ -82,6 +102,13 @@ export interface AprsMapBounds {
   maxLatitude: number;
 }
 
+export interface AprsMapOwnBeaconPosition {
+  callsign: string;
+  latitude: number;
+  longitude: number;
+  label: string;
+}
+
 /**
  * A station position can be drawn only when the decoder produced finite coordinates.
  *
@@ -139,7 +166,93 @@ export function aprsMapFeatures(stations: readonly AprsStation[], selectedCall?:
   return { type: 'FeatureCollection', features };
 }
 
-export function aprsMapBounds(collection: AprsMapFeatureCollection): AprsMapBounds | undefined {
+/**
+ * Position for **My callsign** on the map: saved `aprsBeacon` first, otherwise station prefill.
+ * Omitted when there is no valid latitude and longitude or My callsign is not a valid AX.25 call.
+ */
+export function resolveAprsMapOwnBeaconPosition(
+  mine: string,
+  stored: SavedRadioAprsBeacon | undefined,
+  store: StationAntennaStore,
+): AprsMapOwnBeaconPosition | undefined {
+  const source = canonicalAx25Call(mine.trim());
+
+  if (!source) {
+    return undefined;
+  }
+
+  const callsign = formatAx25Call(source);
+  let latitude: number | undefined;
+  let longitude: number | undefined;
+
+  if (stored && isPlottableAprsPosition({ latitude: stored.latitude, longitude: stored.longitude })) {
+    latitude = stored.latitude;
+    longitude = stored.longitude;
+  } else {
+    const prefill = resolveAprsBeaconLocation(store);
+
+    if (prefill && isPlottableAprsPosition(prefill)) {
+      latitude = prefill.latitude;
+      longitude = prefill.longitude;
+    }
+  }
+
+  if (latitude === undefined || longitude === undefined) {
+    return undefined;
+  }
+
+  return {
+    callsign,
+    latitude,
+    longitude,
+    label: formatAprsBeaconSummaryPosition(latitude, longitude),
+  };
+}
+
+/**
+ * Map feature for this radio’s beacon. Not folded into heard stations.
+ */
+export function aprsMapOwnBeaconFeature(position: AprsMapOwnBeaconPosition | undefined): AprsMapFeature | undefined {
+  if (!position || !isPlottableAprsPosition(position)) {
+    return undefined;
+  }
+
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'Point',
+      coordinates: [position.longitude, position.latitude],
+    },
+    properties: {
+      callsign: position.callsign,
+      label: position.label,
+      lastHeardAt: '',
+      selected: 0,
+    },
+  };
+}
+
+function extendBounds(
+  bounds: AprsMapBounds | undefined,
+  longitude: number,
+  latitude: number,
+): AprsMapBounds {
+  if (!bounds) {
+    return { minLongitude: longitude, minLatitude: latitude, maxLongitude: longitude, maxLatitude: latitude };
+  }
+
+  return {
+    minLongitude: Math.min(bounds.minLongitude, longitude),
+    minLatitude: Math.min(bounds.minLatitude, latitude),
+    maxLongitude: Math.max(bounds.maxLongitude, longitude),
+    maxLatitude: Math.max(bounds.maxLatitude, latitude),
+  };
+}
+
+export function aprsMapBounds(
+  collection: AprsMapFeatureCollection,
+  ownBeacon?: Pick<AprsMapOwnBeaconPosition, 'latitude' | 'longitude'>,
+): AprsMapBounds | undefined {
   let minLongitude: number | undefined;
   let minLatitude: number | undefined;
   let maxLongitude: number | undefined;
@@ -151,6 +264,18 @@ export function aprsMapBounds(collection: AprsMapFeatureCollection): AprsMapBoun
     minLatitude = minLatitude === undefined ? latitude : Math.min(minLatitude, latitude);
     maxLongitude = maxLongitude === undefined ? longitude : Math.max(maxLongitude, longitude);
     maxLatitude = maxLatitude === undefined ? latitude : Math.max(maxLatitude, latitude);
+  }
+
+  if (ownBeacon && isPlottableAprsPosition(ownBeacon)) {
+    const extended = extendBounds(
+      minLongitude === undefined || minLatitude === undefined || maxLongitude === undefined || maxLatitude === undefined
+        ? undefined
+        : { minLongitude, minLatitude, maxLongitude, maxLatitude },
+      ownBeacon.longitude,
+      ownBeacon.latitude,
+    );
+
+    return extended;
   }
 
   if (minLongitude === undefined || minLatitude === undefined || maxLongitude === undefined || maxLatitude === undefined) {

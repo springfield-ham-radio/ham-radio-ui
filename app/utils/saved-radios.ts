@@ -1,3 +1,4 @@
+import { parseSavedRadioAprsBeacon, type SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
 import { canonicalAx25Call, formatAx25Call } from '~/utils/aprs-ax25';
 
 export const SAVED_RADIOS_STORAGE_KEY = 'ham-radio-saved-radios';
@@ -39,6 +40,8 @@ export interface SavedRadio {
    * Absent follows the operator callsign. Empty string means the field was cleared.
    */
   aprsMyCall?: string;
+  /** APRS position beacon fields for the host session. */
+  aprsBeacon?: SavedRadioAprsBeacon;
 }
 
 export interface SavedRadioDraft {
@@ -207,6 +210,12 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     }
   }
 
+  const aprsBeacon = parseSavedRadioAprsBeacon(value.aprsBeacon);
+
+  if (aprsBeacon) {
+    radio.aprsBeacon = aprsBeacon;
+  }
+
   return radio;
 }
 
@@ -292,6 +301,10 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.aprsMyCall !== undefined) {
         stored.aprsMyCall = radio.aprsMyCall;
+      }
+
+      if (radio.aprsBeacon) {
+        stored.aprsBeacon = radio.aprsBeacon;
       }
 
       return stored;
@@ -425,6 +438,19 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
   radio.packetAcceptIncoming = false;
 
   return radio;
+}
+
+export function patchSavedRadioAprsBeacon(radio: SavedRadio, beacon: SavedRadioAprsBeacon | undefined, now = Date.now()): SavedRadio {
+  const parsed = beacon ? parseSavedRadioAprsBeacon(beacon) : undefined;
+  const next: SavedRadio = { ...radio, updatedAt: now };
+
+  if (!parsed) {
+    delete next.aprsBeacon;
+    return next;
+  }
+
+  next.aprsBeacon = parsed;
+  return next;
 }
 
 export function patchSavedRadioPacketFields(

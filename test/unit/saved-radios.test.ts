@@ -6,6 +6,7 @@ import {
   parseSavedRadio,
   parseSavedRadioStore,
   savedRadioModelLabel,
+  patchSavedRadioAprsBeacon,
   removeSavedRadio,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
@@ -278,5 +279,55 @@ describe('saved radios', () => {
       savedRadioModelLabel(mobile, [{ id: { model: 'baofeng-uv5r', name: 'Baofeng UV-5R' } }]),
     ).toBe('Baofeng UV-5R');
     expect(savedRadioModelLabel(mobile, [])).toBe('Baofeng baofeng-uv5r');
+  });
+
+  it('round-trips APRS beacon settings without disturbing packet identity fields', () => {
+    const beacon = {
+      latitude: 30.5187,
+      longitude: -97.879,
+      symbolTable: '/',
+      symbolCode: '-',
+      comment: 'Home',
+      altitudeFt: 1180,
+      path: 'WIDE1-1,WIDE2-1',
+      intervalMinutes: 5,
+    };
+    const withBeacon = patchSavedRadioAprsBeacon(
+      { ...mobile, packetSsid: 7, packetAcceptIncoming: true, aprsSerialPort: '/dev/cu.pg5g', aprsBaudRate: 9600 },
+      beacon,
+    );
+
+    expect(withBeacon.packetSsid).toBe(7);
+    expect(withBeacon.packetAcceptIncoming).toBe(true);
+    expect(withBeacon.aprsBeacon?.intervalMinutes).toBe(10);
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [withBeacon] })).radios[0]?.aprsBeacon).toEqual(
+      withBeacon.aprsBeacon,
+    );
+    expect(patchSavedRadioAprsBeacon(withBeacon, undefined).aprsBeacon).toBeUndefined();
+  });
+
+  it('round-trips aprsMyCall and aprsBeacon on the same saved radio', () => {
+    const beacon = {
+      latitude: 30.5187,
+      longitude: -97.879,
+      symbolTable: '/',
+      symbolCode: '-',
+      comment: 'Home',
+      path: 'WIDE1-1,WIDE2-1',
+      intervalMinutes: 30,
+    };
+    const both = patchSavedRadioAprsBeacon(
+      rememberSavedRadioAprsCall({ ...mobile, packetSsid: 3 }, 'KF5UFJ-7'),
+      beacon,
+    );
+
+    expect(both.aprsMyCall).toBe('KF5UFJ-7');
+    expect(both.aprsBeacon?.comment).toBe('Home');
+
+    const roundTrip = parseSavedRadioStore(serializeSavedRadioStore({ radios: [both] })).radios[0];
+
+    expect(roundTrip?.aprsMyCall).toBe('KF5UFJ-7');
+    expect(roundTrip?.aprsBeacon).toEqual(both.aprsBeacon);
+    expect(roundTrip?.packetSsid).toBe(3);
   });
 });
