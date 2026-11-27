@@ -1,3 +1,9 @@
+## [3.24.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.23.0...v3.24.0) (2026-11-27)
+
+### Features
+
+* **radios:** link saved radios to stations ([#255](https://github.com/springfield-ham-radio/ham-radio-ui/issues/255)) ([1cde493](https://github.com/springfield-ham-radio/ham-radio-ui/commit/1cde493b6d4140a891a48b75f09040d0441ccfa7))
+
 ## [3.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.22.1...v3.23.0) (2026-11-27)
 
 ### Features
