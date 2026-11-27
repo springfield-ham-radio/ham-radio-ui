@@ -1,3 +1,9 @@
+## [3.19.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.19.0...v3.19.1) (2026-11-27)
+
+### Bug Fixes
+
+* guard APRS Send until My callsign is valid ([#248](https://github.com/springfield-ham-radio/ham-radio-ui/issues/248)) ([2b26bec](https://github.com/springfield-ham-radio/ham-radio-ui/commit/2b26beccd1593a9d6f7201d8fe24bfb73b93724f))
+
 ## [3.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.18.1...v3.19.0) (2026-11-27)
 
 ### Features
