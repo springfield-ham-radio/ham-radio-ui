@@ -1,3 +1,9 @@
+## [3.22.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.21.0...v3.22.0) (2026-11-27)
+
+### Features
+
+* **ui:** mark required fields with asterisks instead of Optional hints ([#254](https://github.com/springfield-ham-radio/ham-radio-ui/issues/254)) ([30479f5](https://github.com/springfield-ham-radio/ham-radio-ui/commit/30479f50a9c6402475511b009b32a73ada79a66a))
+
 ## [3.21.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.20.1...v3.21.0) (2026-11-27)
 
 ### Features
