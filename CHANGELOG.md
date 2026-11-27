@@ -1,3 +1,9 @@
+## [3.22.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.22.0...v3.22.1) (2026-11-27)
+
+### Bug Fixes
+
+* **menu-capture:** wait for radio restart before restore verification ([#253](https://github.com/springfield-ham-radio/ham-radio-ui/issues/253)) ([ff69130](https://github.com/springfield-ham-radio/ham-radio-ui/commit/ff691308993d127da1866af82fcda100af4a34b0))
+
 ## [3.22.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.21.0...v3.22.0) (2026-11-27)
 
 ### Features
