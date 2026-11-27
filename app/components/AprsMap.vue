@@ -9,6 +9,7 @@ import {
 } from 'maplibre-gl';
 import {
   aprsMapBounds,
+  aprsMapClickResult,
   aprsMapFeatures,
   aprsMapOwnBeaconFeature,
   aprsMapPopupLines,
@@ -273,15 +274,22 @@ function onMapClick(event: MapLayerMouseEvent): void {
     return;
   }
 
-  const hits = instance.queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] });
-  const callsign = hits[0]?.properties?.callsign;
+  const heardHits = instance.queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] });
+  const ownHits = instance.queryRenderedFeatures(event.point, { layers: [OWN_CIRCLE_ID, OWN_LABEL_ID] });
+  const heardCallsign = heardHits[0]?.properties?.callsign;
+  const click = aprsMapClickResult({
+    heardCallsign: typeof heardCallsign === 'string' ? heardCallsign : undefined,
+    ownBeaconHit: ownHits.length > 0,
+  });
 
-  if (typeof callsign === 'string' && callsign.length > 0) {
-    emit('select', callsign);
+  if (click.kind === 'select') {
+    emit('select', click.callsign);
     return;
   }
 
-  emit('dismiss');
+  if (click.kind === 'dismiss') {
+    emit('dismiss');
+  }
 }
 
 function onPointerEnter(): void {
@@ -304,7 +312,7 @@ function unbindPointer(instance: MapLibreMap): void {
   instance.off('movestart', onMoveStart);
   instance.off('click', onMapClick);
 
-  for (const layerId of [CIRCLE_ID, LABEL_ID]) {
+  for (const layerId of [CIRCLE_ID, LABEL_ID, OWN_CIRCLE_ID, OWN_LABEL_ID]) {
     instance.off('mouseenter', layerId, onPointerEnter);
     instance.off('mouseleave', layerId, onPointerLeave);
   }
@@ -336,7 +344,7 @@ function bindPointer(instance: MapLibreMap): void {
   instance.on('movestart', onMoveStart);
   instance.on('click', onMapClick);
 
-  for (const layerId of [CIRCLE_ID, LABEL_ID]) {
+  for (const layerId of [CIRCLE_ID, LABEL_ID, OWN_CIRCLE_ID, OWN_LABEL_ID]) {
     instance.on('mouseenter', layerId, onPointerEnter);
     instance.on('mouseleave', layerId, onPointerLeave);
   }

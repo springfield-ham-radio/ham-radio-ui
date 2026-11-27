@@ -6,6 +6,8 @@ import { formatAprsHeardAt } from '../../app/utils/aprs-display.ts';
 import {
   APRS_OWN_BEACON_RING_COLOR,
   aprsMapBounds,
+  aprsMapCaption,
+  aprsMapClickResult,
   aprsMapDetailsCall,
   aprsMapFeatures,
   aprsMapOwnBeaconFeature,
@@ -55,6 +57,71 @@ function homeAntennaStore() {
     }),
   );
 }
+
+describe('APRS map caption', () => {
+  it('says heard-only when the own beacon is not plotted', () => {
+    expect(
+      aprsMapCaption({
+        plottedCount: 3,
+        heardPlottedCount: 3,
+        hasOwnBeacon: false,
+        unlocatedCount: 0,
+      }),
+    ).toBe(
+      '3 on the map. Heard this session only. The radio does not export its stored station list.',
+    );
+  });
+
+  it('includes unlocated count and separates the own beacon from heard pins', () => {
+    expect(
+      aprsMapCaption({
+        plottedCount: 2,
+        heardPlottedCount: 1,
+        hasOwnBeacon: true,
+        unlocatedCount: 1,
+      }),
+    ).toBe(
+      '2 on the map · 1 without a position. Includes this radio’s beacon. Other pins were heard this session only. The radio does not export its stored station list.',
+    );
+  });
+
+  it('describes beacon-only map without heard traffic', () => {
+    expect(
+      aprsMapCaption({
+        plottedCount: 1,
+        heardPlottedCount: 0,
+        hasOwnBeacon: true,
+        unlocatedCount: 0,
+      }),
+    ).toBe(
+      '1 on the map. Includes this radio’s beacon position; not heard this session. The radio does not export its stored station list.',
+    );
+  });
+});
+
+describe('APRS map click result', () => {
+  it('selects a heard callsign when present', () => {
+    expect(aprsMapClickResult({ heardCallsign: 'N0CALL', ownBeaconHit: false })).toEqual({
+      kind: 'select',
+      callsign: 'N0CALL',
+    });
+  });
+
+  it('ignores an own-beacon hit when a heard station is underneath', () => {
+    expect(aprsMapClickResult({ heardCallsign: 'W5XYZ', ownBeaconHit: true })).toEqual({
+      kind: 'select',
+      callsign: 'W5XYZ',
+    });
+  });
+
+  it('does not dismiss when only the own beacon was hit', () => {
+    expect(aprsMapClickResult({ heardCallsign: undefined, ownBeaconHit: true })).toEqual({ kind: 'own-beacon' });
+  });
+
+  it('dismisses on empty map', () => {
+    expect(aprsMapClickResult({ heardCallsign: undefined, ownBeaconHit: false })).toEqual({ kind: 'dismiss' });
+  });
+});
 
 describe('APRS map own beacon', () => {
   it('builds a distinct own-beacon feature labeled with My callsign', () => {
@@ -285,7 +352,9 @@ describe('APRS map click-only details wiring', () => {
     expect(aprsMap).toContain('detailsCall');
     expect(aprsMap).toContain("emit('dismiss')");
     expect(aprsMap).toContain("event.key !== 'Escape'");
+    expect(aprsMap).toContain('aprsMapClickResult');
     expect(aprsMap).toContain('queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] })');
+    expect(aprsMap).toContain('queryRenderedFeatures(event.point, { layers: [OWN_CIRCLE_ID, OWN_LABEL_ID] })');
     expect(aprsMap).toContain('suppressPopupCloseEmit');
     expect(aprsMap).toMatch(/function closePopup\(\)[\s\S]*suppressPopupCloseEmit = true[\s\S]*popup\.remove/);
     expect(aprsMap).toMatch(/popup\.on\('close'[\s\S]*if \(suppressPopupCloseEmit\)/);
@@ -305,6 +374,7 @@ describe('APRS map click-only details wiring', () => {
   it('passes detailsCall and listens for dismiss in RadioAprs', () => {
     const radioAprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
 
+    expect(radioAprs).toContain('aprsMapCaption');
     expect(radioAprs).toContain(':own-beacon="ownMapBeacon"');
     expect(radioAprs).toContain(':details-call="detailsCall"');
     expect(radioAprs).toContain('@dismiss="dismissMapDetails"');

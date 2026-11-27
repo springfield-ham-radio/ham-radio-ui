@@ -289,6 +289,51 @@ export function aprsMapUnlocatedCount(stations: readonly AprsStation[]): number 
   return stations.filter((station) => !isPlottableAprsPosition(station.position?.value)).length;
 }
 
+/** Caption under the APRS tab map (heard stations plus optional own-beacon pin). */
+export function aprsMapCaption(input: {
+  plottedCount: number;
+  heardPlottedCount: number;
+  hasOwnBeacon: boolean;
+  unlocatedCount: number;
+}): string {
+  const unlocatedSuffix = input.unlocatedCount > 0 ? ` · ${input.unlocatedCount} without a position` : '';
+  const head = `${input.plottedCount} on the map${unlocatedSuffix}`;
+
+  if (!input.hasOwnBeacon) {
+    return `${head}. Heard this session only. The radio does not export its stored station list.`;
+  }
+
+  if (input.heardPlottedCount === 0) {
+    return `${head}. Includes this radio’s beacon position; not heard this session. The radio does not export its stored station list.`;
+  }
+
+  return `${head}. Includes this radio’s beacon. Other pins were heard this session only. The radio does not export its stored station list.`;
+}
+
+export type AprsMapClickResult =
+  | { kind: 'select'; callsign: string }
+  | { kind: 'own-beacon' }
+  | { kind: 'dismiss' };
+
+/**
+ * Heard stations open the details card. The own-beacon pin is not a heard station,
+ * so a click there leaves the card as-is. Empty map clicks dismiss.
+ */
+export function aprsMapClickResult(input: {
+  heardCallsign?: string;
+  ownBeaconHit: boolean;
+}): AprsMapClickResult {
+  if (typeof input.heardCallsign === 'string' && input.heardCallsign.length > 0) {
+    return { kind: 'select', callsign: input.heardCallsign };
+  }
+
+  if (input.ownBeaconHit) {
+    return { kind: 'own-beacon' };
+  }
+
+  return { kind: 'dismiss' };
+}
+
 export type AprsMapDetailsEvent =
   | { type: 'choose'; callsign: string }
   | { type: 'dismiss' }
