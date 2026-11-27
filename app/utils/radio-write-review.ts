@@ -22,6 +22,7 @@ import {
 } from '~/utils/channel-validation';
 import { formatCoordinate, fieldComposite, type SettingsCoordinateComposite } from '~/utils/settings-coordinate';
 import { collectMemoryMapUiGroups, fieldSubgroup, type SettingsUiGroup } from '~/utils/settings-groups';
+import { memoryTableReviewLabel } from '~/utils/settings-memory-table';
 import { fieldRecord, recordFieldLabel } from '~/utils/settings-record';
 import { getSettingAtPath } from '~/utils/settings-path';
 
@@ -330,6 +331,12 @@ function reviewSubgroupPrefix(group: SettingsUiGroup, field: RadioMemoryMapUiFie
 }
 
 function reviewSettingLabel(group: SettingsUiGroup, field: RadioMemoryMapUiField): string {
+  const tableLabel = memoryTableReviewLabel(group.fields, field);
+
+  if (tableLabel) {
+    return reviewSubgroupPrefix(group, field, tableLabel);
+  }
+
   return reviewSubgroupPrefix(group, field, reviewRecordLabel(field, recordFieldLabel(field)));
 }
 

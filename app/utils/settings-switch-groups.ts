@@ -1,5 +1,10 @@
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
 import { settingsFieldHelp, settingsFieldMenuNumber, type SettingsFieldHelp } from './settings-field-help';
+import {
+  buildMemoryTableCell,
+  findMemoryTableMenuNumbers,
+  type SettingsMemoryTableCell,
+} from './settings-memory-table';
 
 /**
  * One front-panel menu drawn as a single settings cell.
@@ -132,6 +137,9 @@ function buildSwitchGroup(menuNumber: number, fields: readonly RadioMemoryMapUiF
  * A menu that also has a text, select, or other non-boolean field stays as separate
  * cells. A single switch stays a single cell. Each checkbox still uses its own field path.
  */
+
+export type SettingsPlainFieldCell = SettingsFieldCell | SettingsMemoryTableCell;
+
 export function layoutSettingsFields(fields: readonly RadioMemoryMapUiField[]): SettingsFieldCell[] {
   const byMenu = new Map<number, RadioMemoryMapUiField[]>();
 
@@ -171,6 +179,79 @@ export function layoutSettingsFields(fields: readonly RadioMemoryMapUiField[]): 
       }
 
       emitted.add(menuNumber);
+      cells.push({
+        kind: 'switches',
+        key: `menu-${menuNumber}`,
+        group: buildSwitchGroup(menuNumber, byMenu.get(menuNumber) ?? []),
+      });
+      continue;
+    }
+
+    cells.push({ kind: 'field', key: field.path, field });
+  }
+
+  return cells;
+}
+
+/**
+ * Lay out plain settings fields, folding repeated text lists into channel tables
+ * before boolean switch groups and ordinary fields.
+ */
+export function layoutPlainSettingsFields(fields: readonly RadioMemoryMapUiField[]): SettingsPlainFieldCell[] {
+  const tableMenus = findMemoryTableMenuNumbers(fields);
+  const byMenu = new Map<number, RadioMemoryMapUiField[]>();
+
+  for (const field of fields) {
+    const menuNumber = settingsFieldMenuNumber(field);
+
+    if (menuNumber === undefined) {
+      continue;
+    }
+
+    const existing = byMenu.get(menuNumber);
+
+    if (existing) {
+      existing.push(field);
+    } else {
+      byMenu.set(menuNumber, [field]);
+    }
+  }
+
+  const switchMenus = new Set<number>();
+
+  for (const [menuNumber, members] of byMenu) {
+    if (tableMenus.has(menuNumber)) {
+      continue;
+    }
+
+    if (members.length >= 2 && members.every(isBooleanSwitch)) {
+      switchMenus.add(menuNumber);
+    }
+  }
+
+  const emittedTables = new Set<number>();
+  const emittedSwitches = new Set<number>();
+  const cells: SettingsPlainFieldCell[] = [];
+
+  for (const field of fields) {
+    const menuNumber = settingsFieldMenuNumber(field);
+
+    if (menuNumber !== undefined && tableMenus.has(menuNumber)) {
+      if (emittedTables.has(menuNumber)) {
+        continue;
+      }
+
+      emittedTables.add(menuNumber);
+      cells.push(buildMemoryTableCell(menuNumber, fields));
+      continue;
+    }
+
+    if (menuNumber !== undefined && switchMenus.has(menuNumber)) {
+      if (emittedSwitches.has(menuNumber)) {
+        continue;
+      }
+
+      emittedSwitches.add(menuNumber);
       cells.push({
         kind: 'switches',
         key: `menu-${menuNumber}`,

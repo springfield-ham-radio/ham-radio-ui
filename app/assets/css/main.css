@@ -59,6 +59,14 @@ body {
   }
 }
 
+.settings-memory-table tbody tr:nth-child(odd) {
+  background-color: var(--ui-bg-elevated);
+}
+
+.settings-memory-table tbody tr:nth-child(even) {
+  background-color: var(--ui-bg-accented);
+}
+
 .channel-table tbody td {
   height: 1.75rem;
   padding-block: 0;

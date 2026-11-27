@@ -17,6 +17,7 @@ import {
 } from '~/utils/settings-layout';
 import { recordFieldLabel } from '~/utils/settings-record';
 import { getSettingAtPath, setSettingAtPath } from '~/utils/settings-path';
+import { memoryTableFieldAt, type SettingsMemoryTableCell } from '~/utils/settings-memory-table';
 import { settingsSwitchCheckboxHelp, type SettingsSwitchGroup } from '~/utils/settings-switch-groups';
 
 const props = defineProps<{
@@ -219,6 +220,22 @@ function selectRecordTab(cell: SettingsRecordCell, index: number): void {
 
 function tabChanged(tab: SettingsRecordTab): boolean {
   return tab.cells.some((cell) => layoutCellPaths(cell).some((path) => fieldChanged(path)));
+}
+
+function memoryTableChanged(cell: SettingsMemoryTableCell): boolean {
+  return cell.columns.some((column) =>
+    [...column.fieldsByIndex.values()].some((field) => fieldChanged(field.path)),
+  );
+}
+
+function memoryTableColumnHelp(column: SettingsMemoryTableCell['columns'][number]): SettingsFieldHelp | undefined {
+  const sample = column.fieldsByIndex.values().next().value;
+
+  if (!sample) {
+    return undefined;
+  }
+
+  return props.helpByPath.get(sample.path);
 }
 
 function coordinatePartValue(cell: SettingsCoordinateCell, part: SettingsCoordinatePart): number {
@@ -492,6 +509,73 @@ function coordinateHelp(cell: SettingsCoordinateCell): SettingsFieldHelp | undef
           <span class="text-base leading-none text-default" aria-hidden="true">′</span>
         </div>
       </UFormField>
+
+      <div v-else-if="cell.kind === 'memoryTable'" class="col-span-full">
+        <UFormField class="min-w-0" :label="cell.label" :ui="cell.help ? { labelWrapper: 'justify-start' } : undefined">
+          <template #label>
+            <span class="inline-flex min-w-0 items-center gap-1.5">
+              <span class="shrink-0 font-mono text-xs tabular-nums text-muted">{{ cell.menuNumber }}</span>
+              <span v-if="cell.code">{{ cell.code }}</span>
+              <UTooltip v-if="memoryTableChanged(cell)" text="Changed">
+                <UBadge color="warning" variant="subtle" size="xs" class="size-1.5 rounded-full p-0" aria-label="Changed" />
+              </UTooltip>
+            </span>
+          </template>
+          <template v-if="cell.help" #hint>
+            <HelpTooltip
+              :menu="cell.help.menuLabel"
+              :text="cell.help.description"
+              :constraint="cell.help.constraint"
+            />
+          </template>
+
+          <table class="settings-memory-table w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted">
+                <th scope="col" class="w-16 px-2 py-1 font-medium">Ch</th>
+                <th
+                  v-for="column in cell.columns"
+                  :key="column.key"
+                  scope="col"
+                  class="min-w-0 px-2 py-1 font-medium"
+                >
+                  <span class="inline-flex items-center gap-1">
+                    <span>{{ column.header }}</span>
+                    <HelpTooltip
+                      v-if="memoryTableColumnHelp(column)"
+                      :menu="memoryTableColumnHelp(column)?.menuLabel"
+                      :text="memoryTableColumnHelp(column)?.description"
+                      :constraint="memoryTableColumnHelp(column)?.constraint"
+                    />
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="channelIndex in cell.channelIndices"
+                :key="`${cell.key}-ch-${channelIndex}`"
+                class="border-t border-default"
+              >
+                <th scope="row" class="whitespace-nowrap px-2 py-1 font-mono text-xs tabular-nums text-muted">
+                  Ch {{ channelIndex }}
+                </th>
+                <td v-for="column in cell.columns" :key="`${cell.key}-${channelIndex}-${column.key}`" class="px-2 py-1">
+                  <UInput
+                    v-if="memoryTableFieldAt(cell, channelIndex, column)"
+                    v-bind="changedControlBindings(memoryTableFieldAt(cell, channelIndex, column)!.path)"
+                    :model-value="textValue(memoryTableFieldAt(cell, channelIndex, column)!)"
+                    :disabled="!isWritable(memoryTableFieldAt(cell, channelIndex, column)!)"
+                    class="w-full"
+                    :aria-label="`${cell.label} Ch ${channelIndex} ${column.header}`"
+                    @update:model-value="updateField(memoryTableFieldAt(cell, channelIndex, column)!, String($event ?? ''))"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </UFormField>
+      </div>
 
       <div v-else-if="cell.kind === 'coordinatePair'" class="col-span-full">
         <SettingsFieldGrid
