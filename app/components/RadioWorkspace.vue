@@ -17,7 +17,18 @@ import { useImportExportRunner } from '~/importExport/runner';
 import { extraChannelTableFields } from '~/utils/channel-table';
 import { applyMacRowSelection, pruneRowSelection, type MacSelectionModifiers } from '~/utils/mac-row-selection';
 import { writeToRadioTooltip } from '~/utils/cat-memory-transfer';
-import { channelCapacity, channelSlotsAfterLastOccupied, nextAvailableChannelNumber, programLibraryChannelsIntoSlots } from '~/utils/channel-edit';
+import {
+  channelCapacity,
+  channelSlotsAfterLastOccupied,
+  nextAvailableChannelNumber,
+  programLibraryChannelsIntoSlots,
+} from '~/utils/channel-edit';
+import { isSpecialChannelIndex } from '@springfield/ham-radio-utils';
+import {
+  hasMemoryMapSpecialChannels,
+  isRegularChannelIndex,
+  specialChannelRows,
+} from '~/utils/channel-specials';
 import {
   addToRadioRowsWithoutErrors,
   addToRadioValidationRows,
@@ -355,8 +366,18 @@ function toDisplayChannel(
 }
 
 const displayChannels = computed<DisplayChannelRow[]>(() => {
-  return channels.value.map((channel) => toDisplayChannel(channel, pendingBySlot.value.get(channel.channelNumber)));
+  return channels.value
+    .filter((channel) => isRegularChannelIndex(settingsMemoryMap.value, channel.channelNumber))
+    .map((channel) => toDisplayChannel(channel, pendingBySlot.value.get(channel.channelNumber)));
 });
+
+const specialDisplayChannels = computed<DisplayChannelRow[]>(() => {
+  return specialChannelRows(settingsMemoryMap.value, program.value).map((channel) =>
+    toDisplayChannel(channel, pendingBySlot.value.get(channel.channelNumber)),
+  );
+});
+
+const showSpecialChannelsSection = computed(() => hasMemoryMapSpecialChannels(settingsMemoryMap.value));
 
 const tableChannels = computed<DisplayChannelRow[]>(() => {
   const rows = displayChannels.value.map((row) => ({ ...row, baselineOnly: false }));
@@ -382,7 +403,9 @@ const tableChannels = computed<DisplayChannelRow[]>(() => {
     }
   }
 
-  return rows.sort((left, right) => left.channelNumber - right.channelNumber);
+  return rows
+    .filter((row) => isRegularChannelIndex(settingsMemoryMap.value, row.channelNumber))
+    .sort((left, right) => left.channelNumber - right.channelNumber);
 });
 
 const tableSlotKey = computed(() =>
@@ -589,7 +612,12 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
           } satisfies TableColumn<DisplayChannelRow>,
         ]
       : []),
-    { accessorKey: 'channelNumber', header: '#' },
+    {
+      id: 'channelNumber',
+      accessorKey: 'channelNumber',
+      header: '#',
+      cell: ({ row }) => row.original.slotLabel ?? row.original.channelNumber,
+    },
     { accessorKey: 'name', header: 'Name' },
     { id: 'bandName', accessorKey: 'band', header: 'Band' },
     { accessorKey: 'transmit', header: 'TX' },
@@ -634,6 +662,13 @@ const columns = computed<TableColumn<DisplayChannelRow>[]>(() => {
 
 const editorOpen = ref(false);
 const editingChannelNumber = ref<number | undefined>();
+const createSpecialChannelNumber = ref<number | undefined>();
+
+watch(editorOpen, (open) => {
+  if (!open) {
+    createSpecialChannelNumber.value = undefined;
+  }
+});
 const removeOpen = ref(false);
 const pendingRemoveNumbers = ref<number[]>([]);
 const isReorderingChannels = ref(false);
@@ -724,18 +759,47 @@ const removeDescription = computed(() => {
   return `Clear ${numbers.length} selected memory slots from the loaded image? Write to the radio to apply the change on the device.`;
 });
 
-function openChannelEditor(channelNumber: number): void {
+function openChannelEditor(channelNumber: number, options?: { programEmptySpecial?: boolean }): void {
+  createSpecialChannelNumber.value = undefined;
+
+  if (options?.programEmptySpecial && isSpecialChannelIndex(settingsMemoryMap.value, channelNumber)) {
+    const occupied = program.value?.channels.some((channel) => channel.channelNumber === channelNumber);
+
+    if (!occupied) {
+      createSpecialChannelNumber.value = channelNumber;
+      editingChannelNumber.value = undefined;
+      editorOpen.value = true;
+      return;
+    }
+  }
+
   editingChannelNumber.value = channelNumber;
   editorOpen.value = true;
 }
 
 function openAddChannel(): void {
+  createSpecialChannelNumber.value = undefined;
   editingChannelNumber.value = undefined;
   editorOpen.value = true;
 }
 
 function isChannelTableRow(value: unknown): value is TableRow<DisplayChannelRow> {
   return typeof value === 'object' && value !== null && 'original' in value && typeof (value as TableRow<DisplayChannelRow>).original?.channelNumber === 'number';
+}
+
+function onSelectSpecialChannel(first: unknown, second?: unknown): void {
+  const row = [first, second].find(isChannelTableRow);
+
+  if (!row || row.original.baselineOnly) {
+    return;
+  }
+
+  if (row.original.isEmptySpecial) {
+    openChannelEditor(row.original.channelNumber, { programEmptySpecial: true });
+    return;
+  }
+
+  openChannelEditor(row.original.channelNumber);
 }
 
 function onSelectChannel(first: unknown, second?: unknown): void {
@@ -1426,6 +1490,71 @@ async function onSaveSerialLog(): Promise<void> {
               </template>
             </UTable>
           </div>
+          <div
+            v-if="showSpecialChannelsSection"
+            class="mt-4 flex min-h-0 shrink-0 flex-col overflow-hidden rounded-lg ring-1 ring-default"
+          >
+            <div class="flex items-center justify-between gap-2 border-b border-default bg-muted/40 px-3 py-2">
+              <h3 class="text-sm font-medium">Special channels</h3>
+              <p class="text-xs text-muted">Scan-edge and priority slots (not draggable)</p>
+            </div>
+            <div class="min-h-0 max-h-72 overflow-auto">
+              <UTable
+                :data="specialDisplayChannels"
+                :columns="columns.filter((column) => column.id !== 'drag')"
+                :meta="channelTableMeta"
+                :get-row-id="(row) => `special-${row.channelNumber}`"
+                class="channel-table"
+                :ui="{
+                  thead: 'bg-default',
+                  th: 'h-8 px-2 py-0 text-sm font-medium bg-default',
+                  td: 'h-7 px-2 py-0 text-xs tabular-nums align-middle',
+                  tbody: 'divide-y-0',
+                  empty: 'py-4 text-center text-xs text-muted',
+                }"
+                empty="No special channel slots."
+                @select="onSelectSpecialChannel"
+              >
+                <template #pending-cell="{ row }">
+                  <UTooltip v-if="row.original.pendingKind" :text="pendingLabel(row.original.pendingKind)">
+                    <UBadge
+                      :color="pendingBadgeColor(row.original.pendingKind)"
+                      :icon="pendingBadgeIcon(row.original.pendingKind)"
+                      variant="subtle"
+                      size="xs"
+                      :aria-label="pendingLabel(row.original.pendingKind)"
+                    />
+                  </UTooltip>
+                </template>
+                <template #privilege-cell />
+                <template #actions-cell="{ row }">
+                  <div class="flex items-center justify-end gap-0.5" @click.stop>
+                    <UButton
+                      :icon="row.original.isEmptySpecial ? 'i-lucide-plus' : 'i-lucide-pencil'"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :aria-label="row.original.isEmptySpecial ? 'Program special channel' : 'Edit special channel'"
+                      @click="
+                        openChannelEditor(row.original.channelNumber, {
+                          programEmptySpecial: row.original.isEmptySpecial,
+                        })
+                      "
+                    />
+                    <UButton
+                      v-if="!row.original.isEmptySpecial"
+                      icon="i-lucide-trash-2"
+                      color="error"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Clear special channel"
+                      @click="requestRemoveChannel(row.original.channelNumber)"
+                    />
+                  </div>
+                </template>
+              </UTable>
+            </div>
+          </div>
           <p class="mt-2 shrink-0 text-xs text-muted">
             Drag the handle to reorder channels or drop into a gap to take the first empty slot in that gap; dropping
             between adjacent occupied slots reorders those memory positions. Open a channel to set its memory slot
@@ -1528,6 +1657,7 @@ async function onSaveSerialLog(): Promise<void> {
     <RadioChannelEditor
       v-model:open="editorOpen"
       :channel="editingChannel"
+      :create-special-channel-number="createSpecialChannelNumber"
       :memory-map="settingsMemoryMap"
       :occupied-channel-numbers="occupiedChannelNumbers"
       :channel-capacity="radioChannelCapacity"

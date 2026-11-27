@@ -6,7 +6,14 @@ export {
   encodeMemoryMap,
   parseSeekAddress,
   radioAddressToBufferOffset,
+  structInstanceAddress,
 } from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-codec.js';
+export {
+  isSpecialChannelIndex,
+  memoryMapChannelRecordCount,
+  memoryMapRegularChannelCapacity,
+  memoryMapSpecialChannelLabel,
+} from '../../node_modules/@springfield/ham-radio-utils/dist/memory/memory-map-specials.js';
 export {
   bindingsToChannels,
   decodeRadioProgram,

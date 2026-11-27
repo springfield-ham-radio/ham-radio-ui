@@ -10,11 +10,18 @@ import type {
 } from '@springfield/ham-radio-api';
 import { RadioToneType } from '@springfield/ham-radio-api';
 import { createMemoryMapCodec } from '@springfield/ham-radio-utils';
+import { isSpecialChannelIndex } from '@springfield/ham-radio-utils';
+import {
+  encodeRadioProgramPreservingSpecialSlots,
+  hasMemoryMapSpecialChannels,
+  isRegularChannelIndex,
+} from '~/utils/channel-specials';
 import { ConsoleTransport, LogLayer } from 'loglayer';
 import {
   applyChannelPatch,
   channelSlotsAfterLastOccupied,
   channelCapacity,
+  channelRecordCapacity,
   channelNameMaxLength,
   moveProgrammedChannel,
   programLibraryChannelsIntoSlots,
@@ -221,6 +228,10 @@ export type RadioComparisonSource = 'radio' | 'loaded' | 'editor';
 
 export interface ChannelRow {
   channelNumber: number;
+  /** Special-channel label (L0, Pri, …) shown instead of the numeric index. */
+  slotLabel?: string;
+  isSpecialChannel?: boolean;
+  isEmptySpecial?: boolean;
   name: string;
   transmit: string;
   receive: string;
@@ -2068,9 +2079,11 @@ export function useRadio() {
       return false;
     }
 
-    const capacity = channelCapacity(settingsMemoryMap.value);
+    const memoryMap = settingsMemoryMap.value;
+    const isSpecial = isSpecialChannelIndex(memoryMap, programmed.channelNumber);
+    const capacity = isSpecial ? channelRecordCapacity(memoryMap) : channelCapacity(memoryMap);
 
-    if (programmed.channelNumber < 0 || programmed.channelNumber >= capacity) {
+    if (programmed.channelNumber < 0 || programmed.channelNumber >= capacity || (!isSpecial && !isRegularChannelIndex(memoryMap, programmed.channelNumber))) {
       toast.add({
         title: 'Cannot add channel',
         description: 'That memory slot is outside this radio\'s channel range.',
@@ -2167,12 +2180,10 @@ export function useRadio() {
       return new Map();
     }
 
-    const result = reorderProgrammedChannels(
-      program.value.channels,
-      fromIndex,
-      toIndex,
-      channelCapacity(settingsMemoryMap.value),
-    );
+    const memoryMap = settingsMemoryMap.value;
+    const regular = program.value.channels.filter((channel) => isRegularChannelIndex(memoryMap, channel.channelNumber));
+    const specials = program.value.channels.filter((channel) => isSpecialChannelIndex(memoryMap, channel.channelNumber));
+    const result = reorderProgrammedChannels(regular, fromIndex, toIndex, channelCapacity(memoryMap));
 
     if (result.previousToNext.size === 0) {
       return result.previousToNext;
@@ -2180,7 +2191,7 @@ export function useRadio() {
 
     persistProgram({
       ...program.value,
-      channels: result.channels,
+      channels: [...result.channels, ...specials].sort((left, right) => left.channelNumber - right.channelNumber),
     });
 
     return result.previousToNext;
@@ -2191,8 +2202,16 @@ export function useRadio() {
       return new Map();
     }
 
-    const capacity = channelCapacity(settingsMemoryMap.value);
-    const result = moveProgrammedChannel(program.value.channels, fromNumber, toNumber, capacity);
+    const memoryMap = settingsMemoryMap.value;
+    const capacity = channelCapacity(memoryMap);
+    const capacityRefusal = hasMemoryMapSpecialChannels(memoryMap) ? 'specials-boundary' : 'default';
+    const result = moveProgrammedChannel(
+      program.value.channels,
+      fromNumber,
+      toNumber,
+      capacity,
+      capacityRefusal,
+    );
 
     if (result.refused) {
       toast.add({
@@ -2300,12 +2319,26 @@ export function useRadio() {
           return;
         }
 
-        const encoded = codec.encode(cloneRadioProgram(session.program), {
-          radioModel: session.activeRadioId.model,
-          contents: session.memory,
-        });
+        const memoryMap = session.settingsMemoryMap;
+        const memoryConfig = configurations.value.find((config) => config.id.model === session.activeRadioId!.model)
+          ?.memoryConfig;
 
-        patchSession(id, { memory: encoded.contents });
+        if (memoryMap && memoryConfig && hasMemoryMapSpecialChannels(memoryMap) && session.memory) {
+          const contents = encodeRadioProgramPreservingSpecialSlots(
+            memoryMap,
+            cloneRadioProgram(session.program),
+            new Uint8Array(session.memory),
+            memoryConfig,
+          );
+          patchSession(id, { memory: contents });
+        } else {
+          const encoded = codec.encode(cloneRadioProgram(session.program), {
+            radioModel: session.activeRadioId.model,
+            contents: session.memory,
+          });
+
+          patchSession(id, { memory: encoded.contents });
+        }
       })
       .catch((cause) => {
         logger.withError(cause).error('Failed to encode radio program');

@@ -11,6 +11,7 @@ import {
   RadioToneType,
 } from '@springfield/ham-radio-api';
 import type { RadioMemoryMapUiField } from '@springfield/ham-radio-utils';
+import { memoryMapChannelRecordCount, memoryMapRegularChannelCapacity } from '~/utils/ham-radio-utils-shim';
 
 /** Encode derives these from frequencies/tones; do not seed them on a new channel. */
 const DERIVED_CHANNEL_SETTING_IDS = new Set([
@@ -193,9 +194,19 @@ export function channelNameMaxLength(memoryMap: RadioMemoryMap | undefined): num
 }
 
 /**
- * Number of memory slots the radio's channel-records struct can hold.
+ * Number of regular (non-special) channel slots. Equals total record count when specials are absent.
  */
 export function channelCapacity(memoryMap: RadioMemoryMap | undefined): number {
+  if (!memoryMap) {
+    return 0;
+  }
+
+  const regular = memoryMapRegularChannelCapacity(memoryMap);
+
+  if (regular !== undefined) {
+    return regular;
+  }
+
   const records = memoryMap?.channelBindings?.records;
 
   if (!records) {
@@ -204,6 +215,21 @@ export function channelCapacity(memoryMap: RadioMemoryMap | undefined): number {
 
   const struct = memoryMap?.structs.find((entry) => entry.id === records);
   return struct?.count ?? 0;
+}
+
+/** Total channel records in the map, including special slots. */
+export function channelRecordCapacity(memoryMap: RadioMemoryMap | undefined): number {
+  if (!memoryMap) {
+    return 0;
+  }
+
+  const total = memoryMapChannelRecordCount(memoryMap);
+
+  if (total !== undefined) {
+    return total;
+  }
+
+  return channelCapacity(memoryMap);
 }
 
 /**
@@ -637,11 +663,14 @@ export function reorderProgrammedChannels(
  * slots after it shift up by one until the ripple lands in the first empty slot.
  * If no empty slot exists before {@link capacity}, the move is refused.
  */
+export type ChannelMoveCapacityRefusal = 'default' | 'specials-boundary';
+
 export function moveProgrammedChannel(
   channels: RadioProgrammedChannel[],
   fromNumber: number,
   toNumber: number,
   capacity: number,
+  capacityRefusal: ChannelMoveCapacityRefusal = 'default',
 ): ChannelReorder {
   if (
     fromNumber === toNumber ||
@@ -702,10 +731,15 @@ export function moveProgrammedChannel(
     slot += 1;
 
     if (slot >= capacity) {
+      const refused =
+        capacityRefusal === 'specials-boundary'
+          ? 'Radio memory is full; no free slot after that position.'
+          : `No free memory slot after ${toNumber}. Clear a slot or choose another destination.`;
+
       return {
         channels,
         previousToNext: new Map(),
-        refused: `No free memory slot after ${toNumber}. Clear a slot or choose another destination.`,
+        refused,
       };
     }
   }
