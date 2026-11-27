@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
-import { APRS_PANEL_TABS } from '~/utils/aprs-panels';
+import { aprsPanelTabs } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import {
@@ -25,6 +25,7 @@ const props = defineProps<{
 }>();
 
 const { snapshots, watchCard, receiveText, ingestAx25Ui, clear } = useAprs();
+const { panels: developerPanels } = useDeveloperPanels();
 const host = useAprsHost();
 const { requestedModes } = useAprsTncMode();
 const { radioById, rememberAprsMyCall } = useSavedRadios();
@@ -127,7 +128,16 @@ const { virtualRows: stationRows, paddingTop: stationPadTop, paddingBottom: stat
 );
 const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom } = useFixedVirtualRows(logCount, logScroller, 24);
 
-const tabs: TabsItem[] = APRS_PANEL_TABS.map((tab) => ({ ...tab }));
+const tabs = computed<TabsItem[]>(() => aprsPanelTabs(developerPanels.value.aprsRawLog).map((tab) => ({ ...tab })));
+
+watch(
+  () => developerPanels.value.aprsRawLog,
+  (showRawLog) => {
+    if (!showRawLog && activeTab.value === 'log') {
+      activeTab.value = 'stations';
+    }
+  },
+);
 const ownMapBeacon = computed(() =>
   resolveAprsMapOwnBeaconPosition(mine.value, savedRadio.value?.aprsBeacon, antennaStore.value));
 const plottedCount = computed(

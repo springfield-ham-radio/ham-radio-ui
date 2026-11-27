@@ -27,6 +27,13 @@ describe('developer panels preference', () => {
     expect(parseDeveloperPanels(JSON.stringify({ driverDevelopment: '1' }))).toEqual(defaultDeveloperPanels());
   });
 
+  it('treats a stored object without aprsRawLog as off', () => {
+    expect(parseDeveloperPanels(JSON.stringify({ radioSniffer: true }))).toEqual({
+      ...defaultDeveloperPanels(),
+      radioSniffer: true,
+    });
+  });
+
   it('round-trips through localStorage when available', () => {
     if (typeof localStorage === 'undefined') {
       expect(readDeveloperPanels()).toEqual(defaultDeveloperPanels());
@@ -113,6 +120,7 @@ describe('developer panels preference', () => {
         radioHex: false,
         radioDebug: false,
         radioSniffer: false,
+        aprsRawLog: false,
       });
       expect(localStorage.getItem(DEVELOPER_PANELS_STORAGE_KEY)).not.toBeNull();
 
@@ -132,6 +140,7 @@ describe('developer panels preference', () => {
         radioHex: false,
         radioDebug: false,
         radioSniffer: false,
+        aprsRawLog: false,
       });
     });
   });
@@ -147,6 +156,7 @@ describe('developer panels preference', () => {
         radioHex: false,
         radioDebug: false,
         radioSniffer: false,
+        aprsRawLog: false,
       });
     });
   });
@@ -167,7 +177,7 @@ describe('developer panels preference', () => {
     }
   });
 
-  it('wires five Developer section switches in preferences', () => {
+  it('wires six Developer section switches in preferences', () => {
     const preferences = readFileSync('app/pages/preferences.vue', 'utf8');
 
     expect(preferences).toContain('aria-label="Driver development"');
@@ -175,6 +185,8 @@ describe('developer panels preference', () => {
     expect(preferences).toContain('aria-label="Radio Hex Dump tab"');
     expect(preferences).toContain('aria-label="Radio Debug tab"');
     expect(preferences).toContain('aria-label="Radio Sniffer tab"');
+    expect(preferences).toContain('aria-label="Raw log"');
+    expect(preferences).toContain("setDeveloperPanel('aprsRawLog'");
     expect(preferences).toContain('setDeveloperPanel');
     expect(preferences).toContain('useDeveloperPanels');
   });

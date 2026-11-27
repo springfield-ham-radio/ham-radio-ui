@@ -14,6 +14,8 @@ export interface DeveloperPanels {
   radioHex: boolean;
   radioDebug: boolean;
   radioSniffer: boolean;
+  /** APRS sub-tab: serial reply, counters, and decoded lines. */
+  aprsRawLog: boolean;
 }
 
 export type DeveloperPanelKey = keyof DeveloperPanels;
@@ -26,6 +28,7 @@ export function defaultDeveloperPanels(): DeveloperPanels {
     radioHex: false,
     radioDebug: false,
     radioSniffer: false,
+    aprsRawLog: false,
   };
 }
 
@@ -56,6 +59,7 @@ export function parseDeveloperPanels(raw: string | null): DeveloperPanels {
       radioHex: parseDeveloperPanelFlag(record.radioHex),
       radioDebug: parseDeveloperPanelFlag(record.radioDebug),
       radioSniffer: parseDeveloperPanelFlag(record.radioSniffer),
+      aprsRawLog: parseDeveloperPanelFlag(record.aprsRawLog),
     };
   } catch {
     return defaults;
@@ -69,6 +73,7 @@ export function serializeDeveloperPanels(panels: DeveloperPanels): string {
     radioHex: panels.radioHex === true,
     radioDebug: panels.radioDebug === true,
     radioSniffer: panels.radioSniffer === true,
+    aprsRawLog: panels.aprsRawLog === true,
   });
 }
 
@@ -87,6 +92,7 @@ function migrateDeveloperPanelsFromLegacy(): DeveloperPanels {
     radioHex: false,
     radioDebug: false,
     radioSniffer: false,
+    aprsRawLog: false,
   };
 }
 

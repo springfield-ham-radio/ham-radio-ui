@@ -349,6 +349,27 @@
               </ClientOnly>
             </div>
           </div>
+
+          <div class="overflow-hidden rounded-xl bg-default shadow-sm ring-1 ring-default">
+            <div class="flex items-center justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">Raw log</p>
+                <p class="text-xs text-muted">
+                  Show serial reply, byte counters, and decoded lines on the APRS tab. Off by default. Lines keep recording while this is off.
+                </p>
+              </div>
+              <ClientOnly>
+                <USwitch
+                  :model-value="developerPanels.aprsRawLog"
+                  aria-label="Raw log"
+                  @update:model-value="(on) => setDeveloperPanel('aprsRawLog', on)"
+                />
+                <template #fallback>
+                  <div class="h-5 w-9 rounded-full bg-elevated" />
+                </template>
+              </ClientOnly>
+            </div>
+          </div>
         </section>
 
         <section v-else-if="currentSection === 'sniffer'" class="flex flex-col gap-4">
