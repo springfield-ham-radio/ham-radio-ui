@@ -11,7 +11,6 @@ import {
   clampBeaconIntervalMinutes,
   defaultSavedRadioAprsBeacon,
   parseBeaconAltitudeFeet,
-  parseBeaconDecimalDegrees,
   type SavedRadioAprsBeacon,
 } from '~/utils/aprs-beacon';
 import {
@@ -21,7 +20,13 @@ import {
 import { canonicalAx25Call } from '~/utils/aprs-ax25';
 import { callsignError } from '~/utils/aprs-message';
 import { formatAprsHeardAt } from '~/utils/aprs-display';
-import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
+import {
+  dmsInputFromDecimal,
+  emptyDmsInput,
+  parseDmsInput,
+  type DmsInput,
+  type DmsParseResult,
+} from '~/utils/location-format';
 
 const props = defineProps<{
   cardId?: string;
@@ -45,16 +50,20 @@ const altTouched = ref(false);
 const prefillSourceLabel = ref<string | undefined>();
 
 const settings = ref<SavedRadioAprsBeacon>(defaultSavedRadioAprsBeacon());
-const latitudeText = ref('');
-const longitudeText = ref('');
+const latitudeDms = ref<DmsInput>(emptyDmsInput('latitude'));
+const longitudeDms = ref<DmsInput>(emptyDmsInput('longitude'));
 const altitudeText = ref('');
 const symbolKey = ref('/-');
 const intervalArmed = ref(false);
 
+function parsedDecimal(result: DmsParseResult): number | undefined {
+  return 'value' in result ? result.value : undefined;
+}
+
 interface FormSnapshot {
   settings: SavedRadioAprsBeacon;
-  latitudeText: string;
-  longitudeText: string;
+  latitudeDms: DmsInput;
+  longitudeDms: DmsInput;
   altitudeText: string;
   symbolKey: string;
 }
@@ -62,8 +71,8 @@ interface FormSnapshot {
 function captureFormSnapshot(): FormSnapshot {
   return {
     settings: { ...settings.value },
-    latitudeText: latitudeText.value,
-    longitudeText: longitudeText.value,
+    latitudeDms: { ...latitudeDms.value },
+    longitudeDms: { ...longitudeDms.value },
     altitudeText: altitudeText.value,
     symbolKey: symbolKey.value,
   };
@@ -73,8 +82,8 @@ let modalBaseline: FormSnapshot = captureFormSnapshot();
 
 function applySnapshot(snapshot: FormSnapshot): void {
   settings.value = { ...snapshot.settings };
-  latitudeText.value = snapshot.latitudeText;
-  longitudeText.value = snapshot.longitudeText;
+  latitudeDms.value = { ...snapshot.latitudeDms };
+  longitudeDms.value = { ...snapshot.longitudeDms };
   altitudeText.value = snapshot.altitudeText;
   symbolKey.value = snapshot.symbolKey;
 }
@@ -82,8 +91,8 @@ function applySnapshot(snapshot: FormSnapshot): void {
 function applyStored(stored: SavedRadioAprsBeacon): void {
   prefillSourceLabel.value = undefined;
   settings.value = { ...stored };
-  latitudeText.value = String(stored.latitude);
-  longitudeText.value = String(stored.longitude);
+  latitudeDms.value = dmsInputFromDecimal(stored.latitude, 'latitude');
+  longitudeDms.value = dmsInputFromDecimal(stored.longitude, 'longitude');
   altitudeText.value = stored.altitudeFt !== undefined ? String(stored.altitudeFt) : '';
   symbolKey.value = `${stored.symbolTable}${stored.symbolCode}`;
 }
@@ -92,8 +101,8 @@ function applyPrefill(): void {
   const prefill = resolveAprsBeaconLocation(antennaStore.value);
 
   if (!prefill) {
-    latitudeText.value = '';
-    longitudeText.value = '';
+    latitudeDms.value = emptyDmsInput('latitude');
+    longitudeDms.value = emptyDmsInput('longitude');
     altitudeText.value = '';
     prefillSourceLabel.value = undefined;
     settings.value = defaultSavedRadioAprsBeacon();
@@ -103,10 +112,15 @@ function applyPrefill(): void {
 
   prefillSourceLabel.value = prefill.label;
   settings.value = defaultSavedRadioAprsBeacon();
-  latitudeText.value = String(prefill.latitude);
-  longitudeText.value = String(prefill.longitude);
+  latitudeDms.value = dmsInputFromDecimal(prefill.latitude, 'latitude');
+  longitudeDms.value = dmsInputFromDecimal(prefill.longitude, 'longitude');
   altitudeText.value = '';
   symbolKey.value = '/-';
+}
+
+function onCoordinateInput(): void {
+  latTouched.value = true;
+  lonTouched.value = true;
 }
 
 watch(
@@ -145,54 +159,39 @@ function showAltFieldError(): boolean {
   return altTouched.value || modalValidated.value;
 }
 
-const latitudeError = computed(() => {
-  if (!showLatFieldError()) {
+function coordinateFieldError(axis: 'latitude' | 'longitude', touched: boolean): string | undefined {
+  if (!touched && !modalValidated.value) {
     return undefined;
   }
 
-  if (latitudeText.value.trim().length === 0) {
-    return 'Enter latitude between -90 and 90';
+  const parsed = parseDmsInput(axis === 'latitude' ? latitudeDms.value : longitudeDms.value, axis);
+
+  if ('error' in parsed) {
+    return parsed.error;
   }
 
-  const value = Number(latitudeText.value);
-
-  if (!Number.isFinite(value)) {
-    return 'Enter latitude between -90 and 90';
-  }
-
-  if (!isValidLatitude(value)) {
-    return 'Enter latitude between -90 and 90';
-  }
-
-  return undefined;
-});
-
-const longitudeError = computed(() => {
-  if (!showLonFieldError()) {
-    return undefined;
-  }
-
-  if (longitudeText.value.trim().length === 0) {
-    return 'Enter longitude between -180 and 180';
-  }
-
-  const value = Number(longitudeText.value);
-
-  if (!Number.isFinite(value) || !isValidLongitude(value)) {
-    return 'Enter longitude between -180 and 180';
+  if (parsed.empty) {
+    return axis === 'latitude'
+      ? 'Enter latitude in degrees, minutes, and seconds.'
+      : 'Enter longitude in degrees, minutes, and seconds.';
   }
 
   return undefined;
-});
+}
+
+const latitudeError = computed(() => coordinateFieldError('latitude', latTouched.value));
+
+const longitudeError = computed(() => coordinateFieldError('longitude', lonTouched.value));
 
 const commentError = computed(() => (modalValidated.value ? beaconCommentError(settings.value.comment ?? '') : undefined));
 const altitudeError = computed(() => (showAltFieldError() ? beaconAltitudeError(altitudeText.value) : undefined));
 const pathError = computed(() => (modalValidated.value ? beaconPathError(settings.value.path) : undefined));
 
 const draftFromForm = computed((): SavedRadioAprsBeacon | undefined => {
-  const coordinates = parseBeaconDecimalDegrees(latitudeText.value, longitudeText.value);
+  const latitude = parsedDecimal(parseDmsInput(latitudeDms.value, 'latitude'));
+  const longitude = parsedDecimal(parseDmsInput(longitudeDms.value, 'longitude'));
 
-  if (!coordinates) {
+  if (latitude === undefined || longitude === undefined) {
     return undefined;
   }
 
@@ -204,8 +203,8 @@ const draftFromForm = computed((): SavedRadioAprsBeacon | undefined => {
 
   return {
     ...settings.value,
-    latitude: coordinates.latitude,
-    longitude: coordinates.longitude,
+    latitude,
+    longitude,
     ...(altitude.feet !== undefined ? { altitudeFt: altitude.feet } : {}),
   };
 });
@@ -217,11 +216,22 @@ const formError = computed(() => {
     return altitude.error;
   }
 
-  if (!draftFromForm.value) {
-    if (latitudeText.value.trim().length === 0 || longitudeText.value.trim().length === 0) {
-      return 'Enter latitude and longitude in decimal degrees (WGS84).';
-    }
+  const latitude = parseDmsInput(latitudeDms.value, 'latitude');
+  const longitude = parseDmsInput(longitudeDms.value, 'longitude');
 
+  if ('error' in latitude) {
+    return latitude.error;
+  }
+
+  if ('error' in longitude) {
+    return longitude.error;
+  }
+
+  if (latitude.empty || longitude.empty) {
+    return 'Enter latitude and longitude in degrees, minutes, and seconds.';
+  }
+
+  if (!draftFromForm.value) {
     return 'Enter a valid latitude and longitude';
   }
 
@@ -539,22 +549,22 @@ function saveModal(): void {
       <template #body>
         <div v-if="prefillSourceLabel" class="mb-3 text-xs text-muted">From {{ prefillSourceLabel }}</div>
         <div class="grid gap-3">
-          <div class="grid gap-3 @min-[28rem]:grid-cols-2">
-            <UFormField label="Latitude" :error="latitudeError">
-              <UInput
-                v-model="latitudeText"
-                inputmode="decimal"
-                @change="latTouched = true"
-              />
-            </UFormField>
-            <UFormField label="Longitude" :error="longitudeError">
-              <UInput
-                v-model="longitudeText"
-                inputmode="decimal"
-                @change="lonTouched = true"
-              />
-            </UFormField>
-          </div>
+          <DmsCoordinateInput
+            v-model="latitudeDms"
+            name="latitude"
+            axis="latitude"
+            label="Latitude"
+            :error="latitudeError"
+            @change="onCoordinateInput"
+          />
+          <DmsCoordinateInput
+            v-model="longitudeDms"
+            name="longitude"
+            axis="longitude"
+            label="Longitude"
+            :error="longitudeError"
+            @change="onCoordinateInput"
+          />
           <div class="grid gap-3 @min-[28rem]:grid-cols-2">
             <UFormField label="Symbol">
               <USelect :model-value="symbolKey" :items="symbolItems" @update:model-value="onSymbol" />

@@ -3,12 +3,14 @@ import { computed, defineComponent, h, nextTick, ref, watch } from 'vue';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AprsBeacon from '../../app/components/AprsBeacon.vue';
+import DmsCoordinateInput from '../../app/components/DmsCoordinateInput.vue';
 import {
   HOME_STATION_ID,
   defaultStationAntennaStore,
   replaceStationInStore,
   updateRadioStation,
 } from '../../app/utils/antenna-station.ts';
+import { dmsInputFromDecimal, formatLatitude, formatLongitude } from '../../app/utils/location-format.ts';
 import { readSavedRadioStore, SAVED_RADIOS_STORAGE_KEY } from '../../app/utils/saved-radios.ts';
 import { useAprsHost } from '../../app/composables/useAprsHost.ts';
 import { useSavedRadios } from '../../app/composables/useSavedRadios.ts';
@@ -96,12 +98,33 @@ const stubs = {
   USelect: defineComponent({
     props: ['modelValue', 'items'],
     emits: ['update:model-value'],
-    template: '<select class="u-select"><option /></select>',
+    setup(props, { emit }) {
+      return () =>
+        h(
+          'select',
+          {
+            class: 'u-select',
+            value: props.modelValue as string,
+            onChange: (event: Event) => emit('update:model-value', (event.target as HTMLSelectElement).value),
+          },
+          (props.items as string[]).map((item) => h('option', { value: item }, item)),
+        );
+    },
   }),
   UTooltip: defineComponent({
     template: '<span class="u-tooltip"><slot /></span>',
   }),
 };
+
+function mountBeacon() {
+  return mount(AprsBeacon, {
+    props: { cardId: 'radio-1', mine: 'KF5UFJ-1' },
+    global: {
+      components: { DmsCoordinateInput },
+      stubs,
+    },
+  });
+}
 
 describe('AprsBeacon layout', () => {
   beforeEach(() => {
@@ -155,31 +178,26 @@ describe('AprsBeacon layout', () => {
     vi.unstubAllGlobals();
   });
 
-  it('prefills coordinates in memory with a From label and opens the modal on Edit beacon', async () => {
-    const wrapper = mount(AprsBeacon, {
-      props: { cardId: 'radio-1', mine: 'KF5UFJ-1' },
-      global: { stubs },
-    });
+  it('prefills DMS in memory with a From label and opens the modal on Edit beacon', async () => {
+    const wrapper = mountBeacon();
+    const summary = `${formatLatitude(30.5187)} ${formatLongitude(-97.879)}`;
 
     expect(wrapper.text()).toContain('From Home:');
-    expect(wrapper.text()).toContain('Edit beacon');
+    expect(wrapper.text()).toContain(summary);
+    expect(wrapper.text()).not.toContain('30.5187');
     expect(wrapper.find('.u-modal').exists()).toBe(false);
+    expect(wrapper.find('.field-error').exists()).toBe(false);
+
     await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
     await nextTick();
 
     expect(wrapper.find('.u-modal').exists()).toBe(true);
-    expect(wrapper.text()).toContain('From Home');
-
-    const latitude = wrapper.findAll('input.u-input')[0];
-    expect((latitude?.element as HTMLInputElement).value).toBe('30.5187');
-    expect(wrapper.find('.field-error').exists()).toBe(false);
+    const latDegrees = dmsInputFromDecimal(30.5187, 'latitude').degrees;
+    expect((wrapper.findAll('input.u-input')[0]!.element as HTMLInputElement).value).toBe(latDegrees);
   });
 
   it('persists on Save and clears the From label after save', async () => {
-    const wrapper = mount(AprsBeacon, {
-      props: { cardId: 'radio-1', mine: 'KF5UFJ-1' },
-      global: { stubs },
-    });
+    const wrapper = mountBeacon();
 
     await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
     await nextTick();
@@ -188,23 +206,20 @@ describe('AprsBeacon layout', () => {
     await nextTick();
 
     const store = JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}');
-    expect(store.radios[0]?.aprsBeacon?.latitude).toBe(30.5187);
+    expect(store.radios[0]?.aprsBeacon?.latitude).toBeCloseTo(30.5187, 4);
     expect(wrapper.text()).not.toContain('From Home:');
     expect(wrapper.find('.u-modal').exists()).toBe(false);
   });
 
   it('restores the form on Cancel without persisting', async () => {
-    const wrapper = mount(AprsBeacon, {
-      props: { cardId: 'radio-1', mine: 'KF5UFJ-1' },
-      global: { stubs },
-    });
+    const wrapper = mountBeacon();
 
     await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
     await nextTick();
 
-    const latitude = wrapper.findAll('input.u-input')[0];
-    await latitude!.setValue('12.345');
-    await latitude!.trigger('input');
+    const degrees = wrapper.findAll('input.u-input')[0]!;
+    await degrees.setValue('12');
+    await degrees.trigger('input');
 
     await wrapper.findAll('button').find((button) => button.text() === 'Cancel')!.trigger('click');
     await nextTick();
@@ -212,19 +227,21 @@ describe('AprsBeacon layout', () => {
     expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
     await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
     await nextTick();
-    expect((wrapper.findAll('input.u-input')[0]!.element as HTMLInputElement).value).toBe('30.5187');
+    expect((wrapper.findAll('input.u-input')[0]!.element as HTMLInputElement).value).toBe(
+      dmsInputFromDecimal(30.5187, 'latitude').degrees,
+    );
   });
 
   it('does not persist when altitude text is invalid', async () => {
-    const wrapper = mount(AprsBeacon, {
-      props: { cardId: 'radio-1', mine: 'KF5UFJ-1' },
-      global: { stubs },
-    });
+    const wrapper = mountBeacon();
 
     await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
     await nextTick();
 
-    const altitude = wrapper.findAll('input.u-input').at(-1);
+    const altitude = wrapper.findAll('input.u-input').find((input) => {
+      const field = input.element.closest('.u-form-field');
+      return field?.textContent?.includes('Altitude');
+    });
     await altitude!.setValue('abc');
     await altitude!.trigger('input');
     await altitude!.trigger('change');
@@ -235,5 +252,29 @@ describe('AprsBeacon layout', () => {
     expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
     expect(wrapper.find('.u-modal').exists()).toBe(true);
     expect(wrapper.text()).toContain('Enter altitude in feet');
+  });
+
+  it('blocks Save and Beacon now when latitude DMS is invalid', async () => {
+    const wrapper = mountBeacon();
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
+    await nextTick();
+
+    const degrees = wrapper.findAll('input.u-input')[0]!;
+    await degrees.setValue('999');
+    await degrees.trigger('input');
+    await degrees.trigger('change');
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+
+    expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
+    expect(wrapper.find('.u-modal').exists()).toBe(true);
+    expect(wrapper.text()).toMatch(/Latitude|Degrees/);
+
+    const beaconNow = wrapper.findAll('button').find((button) => button.text() === 'Beacon now');
+    await beaconNow?.trigger('click');
+    await nextTick();
+    expect(hostStub.sendBeacon).not.toHaveBeenCalled();
   });
 });

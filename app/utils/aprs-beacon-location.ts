@@ -7,7 +7,7 @@ import {
   type StationAntennaStore,
   type StationDraft,
 } from '~/utils/antenna-station';
-import { locatedPoint } from '~/utils/location-format';
+import { formatLatitude, formatLongitude, locatedPoint } from '~/utils/location-format';
 import { isValidLatitude, isValidLongitude } from '~/utils/maidenhead';
 
 export interface AprsBeaconLocationPrefill {
@@ -96,8 +96,5 @@ export function formatAprsBeaconSummaryPosition(latitude: number, longitude: num
     return 'No position';
   }
 
-  const lat = latitude >= 0 ? `${latitude.toFixed(4)}° N` : `${Math.abs(latitude).toFixed(4)}° S`;
-  const lon = longitude >= 0 ? `${longitude.toFixed(4)}° E` : `${Math.abs(longitude).toFixed(4)}° W`;
-
-  return `${lat}, ${lon}`;
+  return `${formatLatitude(latitude)} ${formatLongitude(longitude)}`;
 }

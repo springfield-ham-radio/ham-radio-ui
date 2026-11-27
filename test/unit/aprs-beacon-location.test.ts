@@ -8,6 +8,7 @@ import {
 } from '~/utils/antenna-station';
 import { maidenheadToLatLon } from '~/utils/maidenhead';
 import { formatAprsBeaconSummaryPosition, resolveAprsBeaconLocation } from '~/utils/aprs-beacon-location';
+import { dmsInputFromDecimal, formatLatitude, formatLongitude, parseDmsInput } from '~/utils/location-format';
 
 function storeWithHomeAt(thirty: number, lon: number): StationAntennaStore {
   let store = defaultStationAntennaStore();
@@ -95,8 +96,20 @@ describe('resolveAprsBeaconLocation', () => {
     expect(resolveAprsBeaconLocation(defaultStationAntennaStore())).toBeUndefined();
   });
 
-  it('formats summary position strings', () => {
-    expect(formatAprsBeaconSummaryPosition(30.5187, -97.879)).toBe('30.5187° N, 97.8790° W');
-    expect(formatAprsBeaconSummaryPosition(0, 0)).toBe('0.0000° N, 0.0000° E');
+  it('formats summary position strings in DMS', () => {
+    expect(formatAprsBeaconSummaryPosition(30.5187, -97.879)).toBe(
+      `${formatLatitude(30.5187)} ${formatLongitude(-97.879)}`,
+    );
+    expect(formatAprsBeaconSummaryPosition(0, 0)).toBe(`${formatLatitude(0)} ${formatLongitude(0)}`);
+  });
+
+  it('round-trips decimal degrees through DMS input', () => {
+    const latitude = dmsInputFromDecimal(30.5187, 'latitude');
+    const longitude = dmsInputFromDecimal(-97.879, 'longitude');
+    const lat = parseDmsInput(latitude, 'latitude');
+    const lon = parseDmsInput(longitude, 'longitude');
+
+    expect('value' in lat ? lat.value : undefined).toBeCloseTo(30.5187, 4);
+    expect('value' in lon ? lon.value : undefined).toBeCloseTo(-97.879, 4);
   });
 });
