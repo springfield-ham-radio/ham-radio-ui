@@ -1,5 +1,10 @@
 import type { Radio, RadioId, RadioMemoryMap } from '@springfield/ham-radio-api';
-import type { RadioCapabilities, RadioCatalogSource, RegistryRadio } from '@springfield/ham-radio-registry';
+import type {
+  RadioCapabilities,
+  RadioCatalogSource,
+  RadioCatConfig,
+  RegistryRadio,
+} from '@springfield/ham-radio-registry';
 import {
   extractCatalogMetadata,
   hashRadioConfig,
@@ -7,7 +12,6 @@ import {
   validateConfiguration,
 } from '@springfield/ham-radio-registry';
 import Database from '@tauri-apps/plugin-sql';
-import type { RadioCatConfig } from '~/utils/cat-capability';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 
 export const RADIO_CATALOG_DATABASE = 'sqlite:ham-radio.db';
