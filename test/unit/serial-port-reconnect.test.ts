@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLONE_EXIT_FIRMWARE_SETTLE_MS,
+  CLONE_EXIT_PORT_GONE_GRACE_MS,
   formatSerialPortOpenError,
   isPortMissingError,
   portIsReconnectWaiting,
   resetSerialPortReconnectHooks,
   setSerialPortReconnectHooks,
   updateReconnectWaitingPorts,
+  waitForProgrammingPortAfterCloneExit,
   waitForSerialPortPathAvailable,
 } from '../../app/utils/serial-port-reconnect.ts';
 
@@ -97,6 +100,67 @@ describe('waitForSerialPortPathAvailable', () => {
 
     await expect(stopped).rejects.toThrow(/canceled/i);
     await expect(continuing).resolves.toBeUndefined();
+  });
+});
+
+describe('waitForProgrammingPortAfterCloneExit', () => {
+  afterEach(() => {
+    resetSerialPortReconnectHooks();
+    vi.useRealTimers();
+  });
+
+  it('settles after the port was missing when the wait began', async () => {
+    const settleSleep = vi.fn(async () => undefined);
+
+    await waitForProgrammingPortAfterCloneExit('/dev/cu.usbmodem31101', {
+      settleMs: CLONE_EXIT_FIRMWARE_SETTLE_MS,
+      timeoutMs: 200,
+      pollIntervalMs: 10,
+      listPorts: async () => ['/dev/cu.usbmodem31101'],
+      isPortAvailable: async () => false,
+      sleep: settleSleep,
+    });
+
+    expect(settleSleep).toHaveBeenCalledWith(CLONE_EXIT_FIRMWARE_SETTLE_MS);
+  });
+
+  it('returns once when the port never disappears during the grace window', async () => {
+    let clock = 0;
+    const listPorts = vi.fn(async () => ['/dev/cu.usbmodem31101']);
+    const settleSleep = vi.fn(async () => undefined);
+
+    await waitForProgrammingPortAfterCloneExit('/dev/cu.usbmodem31101', {
+      graceMs: 100,
+      pollIntervalMs: 50,
+      listPorts,
+      isPortAvailable: async (path) => listPorts().then((ports) => ports.includes(path)),
+      sleep: async (ms) => {
+        clock += ms;
+      },
+      now: () => clock,
+    });
+
+    expect(settleSleep).not.toHaveBeenCalled();
+  });
+
+  it('polls when the port starts missing', async () => {
+    let listed: string[] = [];
+    const listPorts = vi.fn(async () => listed);
+
+    const promise = waitForProgrammingPortAfterCloneExit('/dev/cu.usbmodem31101', {
+      timeoutMs: 2_000,
+      pollIntervalMs: 100,
+      settleMs: 0,
+      listPorts,
+      isPortAvailable: async (path) => listPorts().then((ports) => ports.includes(path)),
+      sleep: async () => undefined,
+      now: () => Date.now(),
+    });
+
+    listed = ['/dev/cu.usbmodem31101'];
+    await promise;
+
+    expect(listPorts.mock.calls.length).toBeGreaterThan(0);
   });
 });
 

@@ -103,10 +103,14 @@ export interface MenuCaptureStepRecord {
   diff: MenuCaptureStepDiff;
 }
 
+export type MenuCaptureRestoreStatus = 'write-failed' | 'read-failed' | 'mismatch' | 'verified';
+
 export interface MenuCaptureRestoreRecord {
   writtenAt?: string;
   verifiedAt?: string;
   matchesBaseline?: boolean;
+  status?: MenuCaptureRestoreStatus;
+  readError?: string;
 }
 
 export interface MenuCaptureDocument {

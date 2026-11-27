@@ -2,6 +2,11 @@
 import { loadMenuCaptureBaseline, loadMenuCaptureStepImage } from '~/utils/menu-capture-io';
 import type { MenuCaptureStepDiff } from '~/utils/menu-capture';
 import { menuCaptureReviewHasVisibleDiff } from '~/utils/menu-capture-review';
+import {
+  menuCaptureRestoreAllowsExport,
+  menuCaptureRestoreIsVerified,
+  menuCaptureWizardResumePhase,
+} from '~/utils/menu-capture-restore';
 import { savedRadioModelLabel } from '~/utils/saved-radios';
 
 type WizardPhase = 'intro' | 'baseline' | 'change' | 'review' | 'more' | 'restore' | 'export';
@@ -31,6 +36,7 @@ const {
   patchLastCapturedStep,
   redoLastStep,
   restoreBaseline,
+  verifyRestoredBaseline,
   exportCapture,
   completeExportedSession,
   discardSession,
@@ -57,6 +63,7 @@ const pendingAfterImage = shallowRef<Uint8Array | undefined>();
 const pendingAnalysis = shallowRef<ReturnType<typeof analyzeMenuCaptureStep> | undefined>();
 const restoreConfirmed = ref(false);
 const restoring = ref(false);
+const verifying = ref(false);
 const exportSavedPath = ref<string | undefined>();
 const exportCompleted = ref(false);
 const discardConfirmOpen = ref(false);
@@ -121,6 +128,23 @@ watch(menuPrefill, (lookup) => {
   menuNameSource.value = 'map';
 });
 
+const canContinueToExport = computed(
+  () => Boolean(session.value && menuCaptureRestoreAllowsExport(session.value)),
+);
+
+const showVerifyAgain = computed(() => {
+  const restore = session.value?.restore;
+  if (!restore?.writtenAt) {
+    return false;
+  }
+
+  if (restore.status === 'read-failed' || restore.status === 'mismatch') {
+    return true;
+  }
+
+  return restore.matchesBaseline === false && !restore.status;
+});
+
 watch(
   session,
   (value) => {
@@ -136,23 +160,20 @@ watch(
       return;
     }
 
-    if (!value.baselineByteLength) {
-      phase.value = 'baseline';
-      return;
-    }
-
-    if (value.restore?.matchesBaseline) {
-      phase.value = 'export';
-      return;
-    }
-
     if (pendingAfterImage.value) {
       phase.value = 'review';
       return;
     }
 
+    const resume = menuCaptureWizardResumePhase(value);
+
+    if (resume === 'restore' || resume === 'export' || resume === 'baseline') {
+      phase.value = resume;
+      return;
+    }
+
     if (phase.value === 'intro' || phase.value === 'baseline') {
-      phase.value = value.steps.length > 0 ? 'more' : 'change';
+      phase.value = resume;
     }
   },
   { immediate: true },
@@ -270,6 +291,24 @@ async function onRedoReviewStep(): Promise<void> {
   phase.value = 'change';
 }
 
+async function onVerifyAgain(): Promise<void> {
+  verifying.value = true;
+
+  try {
+    const result = await verifyRestoredBaseline();
+
+    if (result.verified) {
+      phase.value = 'export';
+    }
+  } finally {
+    verifying.value = false;
+  }
+}
+
+function onContinueToExport(): void {
+  phase.value = 'export';
+}
+
 async function onRestore(): Promise<void> {
   if (!restoreConfirmed.value) {
     return;
@@ -372,6 +411,17 @@ async function onConfirmDiscardSession(): Promise<void> {
         Read and Write on this card are paused.
       </p>
 
+      <div v-if="session" class="flex flex-wrap gap-2">
+        <UButton
+          label="Discard session"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          :disabled="captureBusy || restoring || verifying"
+          @click="discardConfirmOpen = true"
+        />
+      </div>
+
       <UStepper
         :items="stepperItems"
         :model-value="phase === 'more' || phase === 'review' ? 'change' : phase"
@@ -394,7 +444,6 @@ async function onConfirmDiscardSession(): Promise<void> {
             variant="outline"
             @click="phase = hasBaseline ? 'change' : 'baseline'"
           />
-          <UButton v-if="session" label="Discard session" color="neutral" variant="ghost" @click="discardConfirmOpen = true" />
         </div>
       </section>
 
@@ -491,10 +540,35 @@ async function onConfirmDiscardSession(): Promise<void> {
           :loading="restoring || captureBusy"
           @click="onRestore"
         />
-        <p v-if="session?.restore?.matchesBaseline === false" class="text-sm text-error">
-          Verification read did not match the baseline. Check the cable and try another verification read from the Restore step.
+        <div v-if="showVerifyAgain || canContinueToExport" class="flex flex-wrap gap-2">
+          <UButton
+            v-if="showVerifyAgain"
+            label="Verify again"
+            icon="i-hambench-radio-read"
+            color="primary"
+            variant="outline"
+            :loading="verifying || captureBusy"
+            @click="onVerifyAgain"
+          />
+          <UButton
+            v-if="canContinueToExport"
+            label="Continue to export"
+            color="neutral"
+            variant="outline"
+            @click="onContinueToExport"
+          />
+        </div>
+        <p v-if="session?.restore?.status === 'read-failed'" class="text-sm text-error">
+          Verification read failed: {{ session.restore.readError ?? 'Could not read the radio.' }}
         </p>
-        <p v-else-if="session?.restore?.matchesBaseline" class="text-sm text-success">
+        <p v-else-if="session?.restore?.status === 'mismatch'" class="text-sm text-error">
+          Verification read completed, but bytes outside the driver ignore list differ from the baseline. Try Verify again or
+          export the capture for your maintainer.
+        </p>
+        <p v-else-if="session?.restore?.status === 'write-failed'" class="text-sm text-error">
+          The baseline image was not written. Confirm the checkbox and use Write original image to radio, or discard the session.
+        </p>
+        <p v-else-if="menuCaptureRestoreIsVerified(session?.restore)" class="text-sm text-success">
           Radio matches the baseline read.
         </p>
       </section>
@@ -522,7 +596,6 @@ async function onConfirmDiscardSession(): Promise<void> {
           />
           <UButton v-else label="Start new capture" color="primary" @click="onStartNewCapture" />
           <UButton label="Done" color="neutral" variant="outline" :disabled="!exportCompleted" @click="onDone" />
-          <UButton label="Discard session" color="neutral" variant="ghost" @click="discardConfirmOpen = true" />
         </div>
         <UAlert
           v-if="exportSavedPath"

@@ -7,6 +7,12 @@ export const SERIAL_PORT_RECONNECT_POLL_MS = 250;
 /** Upper bound before giving up on a missing programming port. */
 export const SERIAL_PORT_RECONNECT_TIMEOUT_MS = 15_000;
 
+/** After a clone write, poll this long for the CDC path to disappear (radio reboot). */
+export const CLONE_EXIT_PORT_GONE_GRACE_MS = 3_000;
+
+/** After the programming port reappears, wait before the first post-reboot clone handshake. */
+export const CLONE_EXIT_FIRMWARE_SETTLE_MS = 2_000;
+
 export interface SerialPortReconnectHooks {
   /** Cancel only the wait for this path. Another port's transfer keeps polling. */
   shouldAbort?: (path: string) => boolean;
@@ -113,6 +119,57 @@ export async function waitForSerialPortPathAvailable(
   } finally {
     hooks.onWaiting?.(path, false);
   }
+}
+
+export interface WaitAfterCloneExitOptions extends WaitForSerialPortOptions {
+  graceMs?: number;
+  settleMs?: number;
+  isPortAvailable?: (path: string) => Promise<boolean>;
+  now?: () => number;
+}
+
+/**
+ * Menu capture restore only: after a clone write, wait for a TH-D74-style CDC drop and reboot.
+ * Does not change global port open timeouts (see ADR 0024).
+ */
+export async function waitForProgrammingPortAfterCloneExit(
+  path: string,
+  options: WaitAfterCloneExitOptions = {},
+): Promise<void> {
+  const graceMs = options.graceMs ?? CLONE_EXIT_PORT_GONE_GRACE_MS;
+  const settleMs = options.settleMs ?? CLONE_EXIT_FIRMWARE_SETTLE_MS;
+  const delay = options.sleep ?? sleep;
+  const now = options.now ?? Date.now;
+  const portAvailable = options.isPortAvailable ?? isSerialPortPathAvailable;
+
+  if (!(await portAvailable(path))) {
+    await waitForSerialPortPathAvailable(path, options);
+    await delay(settleMs);
+    return;
+  }
+
+  const graceDeadline = now() + graceMs;
+  let sawDisappear = false;
+
+  while (now() < graceDeadline) {
+    if (hooks.shouldAbort?.(path)) {
+      throw new Error('Serial port reconnect canceled');
+    }
+
+    if (!(await portAvailable(path))) {
+      sawDisappear = true;
+      break;
+    }
+
+    await delay(options.pollIntervalMs ?? SERIAL_PORT_RECONNECT_POLL_MS);
+  }
+
+  if (!sawDisappear) {
+    return;
+  }
+
+  await waitForSerialPortPathAvailable(path, options);
+  await delay(settleMs);
 }
 
 /** Drop or add one path. Other ports that are still waiting stay in the list. */

@@ -87,6 +87,54 @@ describe('menu capture export document', () => {
     expect(normalizeMenuCaptureStepMenuForExport(session.steps[0]!.menu).code).toBeUndefined();
   });
 
+  it('exports read-failed restore metadata without matchesBaseline', () => {
+    const document = buildMenuCaptureExportDocument({
+      exportedAt: '2026-11-27T00:00:00.000Z',
+      app: { name: 'HamBench', version: '3.20.1' },
+      operator: {},
+      radioId: { manufacturer: 'Kenwood', model: 'TH-D74', name: 'TH-D74' },
+      ignore: [],
+      memoryConfig: undefined,
+      baselineLength: 100,
+      session: {
+        ...session,
+        restore: {
+          writtenAt: '2026-11-27T00:00:00.000Z',
+          status: 'read-failed',
+          readError: 'Timeout waiting for response: Enter programming mode',
+        },
+      },
+    });
+
+    expect(document.restore?.status).toBe('read-failed');
+    expect(document.restore?.readError).toContain('Enter programming mode');
+    expect(document.restore).not.toHaveProperty('matchesBaseline');
+  });
+
+  it('exports mismatch restore metadata', () => {
+    const document = buildMenuCaptureExportDocument({
+      exportedAt: '2026-11-27T00:00:00.000Z',
+      app: { name: 'HamBench', version: '3.20.1' },
+      operator: {},
+      radioId: { manufacturer: 'Kenwood', model: 'TH-D74', name: 'TH-D74' },
+      ignore: [],
+      memoryConfig: undefined,
+      baselineLength: 100,
+      session: {
+        ...session,
+        restore: {
+          writtenAt: '2026-11-27T00:00:00.000Z',
+          verifiedAt: '2026-11-27T00:01:00.000Z',
+          status: 'mismatch',
+          matchesBaseline: false,
+        },
+      },
+    });
+
+    expect(document.restore?.status).toBe('mismatch');
+    expect(document.restore?.matchesBaseline).toBe(false);
+  });
+
   it('export UI keeps notes separate from the saved path', () => {
     const wizard = readFileSync(new URL('../../app/components/RadioMenuCapture.vue', import.meta.url), 'utf8');
 
