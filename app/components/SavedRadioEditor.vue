@@ -11,7 +11,11 @@ import {
 } from '~/utils/radio-baud-rate';
 import { serialPortLabel, serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
-import { formatStationLocation } from '~/utils/antenna-station';
+import {
+  antennaIsAtStation,
+  formatStationLocation,
+  stationAntennaIdsUsedByRadio,
+} from '~/utils/antenna-station';
 import {
   defaultNewSavedRadioStationId,
   draftFromSavedRadio,
@@ -38,12 +42,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
-  save: [draft: SavedRadioDraft];
+  save: [draft: SavedRadioDraft, stationAntennaIds: string[]];
 }>();
 
 const { configurations, manufacturers } = useRadio();
 const { radios } = useSavedRadios();
-const { stations } = useStationAntennas();
+const { stations, antennas, store: stationAntennaStore } = useStationAntennas();
 
 const name = shallowRef('');
 const manufacturer = shallowRef<string | undefined>();
@@ -54,6 +58,7 @@ const aprsBaudRate = shallowRef<number | undefined>();
 const aprsSerialPort = shallowRef<string | undefined>();
 const txPower = shallowRef('');
 const stationId = shallowRef(NO_STATION_VALUE);
+const stationAntennaIds = ref<string[]>([]);
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = shallowRef(false);
 const nameError = shallowRef<string | undefined>();
@@ -172,6 +177,39 @@ function stationIdForSave(): string | undefined {
   return resolveSavedRadioStationDraft(stationId.value, knownStationIds.value);
 }
 
+const linkedStationId = computed(() => stationIdForSave());
+
+const stationAntennaItems = computed(() => {
+  const linked = linkedStationId.value;
+
+  if (!linked) {
+    return [];
+  }
+
+  return antennas.value
+    .filter((antenna) => antennaIsAtStation(antenna, linked))
+    .map((antenna) => ({
+      label: antenna.nickname,
+      id: antenna.id,
+    }));
+});
+
+watch(stationId, () => {
+  const linked = stationIdForSave();
+
+  if (!linked) {
+    stationAntennaIds.value = [];
+    return;
+  }
+
+  const valid = new Set(
+    antennas.value
+      .filter((antenna) => antennaIsAtStation(antenna, linked))
+      .map((antenna) => antenna.id),
+  );
+  stationAntennaIds.value = stationAntennaIds.value.filter((id) => valid.has(id));
+});
+
 const aprsPortItems = computed(() =>
   aprsSerialPortMenuItems(
     ports.value,
@@ -228,6 +266,9 @@ watch(
     stationId.value = props.radio
       ? savedRadioStationSelectValue(draft?.stationId, knownStationIds.value)
       : defaultNewSavedRadioStationId(knownStationIds.value);
+    stationAntennaIds.value = props.radio
+      ? stationAntennaIdsUsedByRadio(stationAntennaStore.value, props.radio.id)
+      : [];
     nameError.value = undefined;
     manufacturerError.value = undefined;
     modelError.value = undefined;
@@ -344,7 +385,7 @@ function save(): void {
     return;
   }
 
-  emit('save', draft);
+  emit('save', draft, [...stationAntennaIds.value]);
 }
 </script>
 
@@ -488,6 +529,22 @@ function save(): void {
             :items="stationItems"
             value-key="value"
             class="w-full"
+          />
+        </UFormField>
+
+        <UFormField
+          v-if="linkedStationId"
+          label="Station antennas"
+          description="Antennas at this site that this radio uses."
+        >
+          <USelectMenu
+            v-model="stationAntennaIds"
+            :items="stationAntennaItems"
+            value-key="id"
+            multiple
+            class="w-full"
+            :search-input="false"
+            placeholder="Choose antennas"
           />
         </UFormField>
 

@@ -7,8 +7,9 @@ const {
   addStation,
   saveStation,
   removeStation,
+  syncRadioStationAntennas,
 } = useStationAntennas();
-const { unlinkRadiosFromStation } = useSavedRadios();
+const { radios, unlinkRadiosFromStation } = useSavedRadios();
 
 const editorOpen = ref(false);
 const editing = ref<RadioStation | undefined>();
@@ -52,8 +53,15 @@ function confirmRemove(): void {
   const station = pendingRemove.value;
 
   if (station) {
+    const linkedRadioIds = radios.value
+      .filter((radio) => radio.stationId === station.id)
+      .map((radio) => radio.id);
     unlinkRadiosFromStation(station.id);
     removeStation(station.id);
+
+    for (const radioId of linkedRadioIds) {
+      syncRadioStationAntennas(radioId, undefined, []);
+    }
   }
 
   cancelRemove();

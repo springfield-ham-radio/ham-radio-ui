@@ -2,6 +2,7 @@
 import { radioCardIdKey } from '~/composables/radio-card-context';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
+import { savedRadioAntennaDetailNames } from '~/utils/antenna-station';
 import { savedRadioModelLabel, type SavedRadio } from '~/utils/saved-radios';
 
 const props = defineProps<{
@@ -19,7 +20,7 @@ const cardId = computed(() => props.radio.id);
 provide(radioCardIdKey, cardId);
 
 const { configurations, memoryUnsaved } = useRadio();
-const { stations } = useStationAntennas();
+const { stations, store: stationAntennaStore } = useStationAntennas();
 const driverInstalled = computed(() =>
   configurations.value.some((config) => String(config.id.model) === props.radio.model),
 );
@@ -40,6 +41,12 @@ const detail = computed(() => {
 
   if (stationNickname) {
     parts.push(stationNickname);
+  }
+
+  const antennaNames = savedRadioAntennaDetailNames(stationAntennaStore.value, props.radio.id);
+
+  if (antennaNames.length > 0) {
+    parts.push(antennaNames.join(', '));
   }
 
   return parts.join(' · ');

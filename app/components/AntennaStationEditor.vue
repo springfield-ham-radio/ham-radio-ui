@@ -34,6 +34,7 @@ const emit = defineEmits<{
 }>();
 
 const { stations } = useStationAntennas();
+const { radios } = useSavedRadios();
 
 const nickname = ref('');
 const manufacturer = ref('');
@@ -44,6 +45,7 @@ const heightText = ref('10');
 const headingText = ref('45');
 const bands = ref<AntennaBandId[]>([]);
 const trapped = ref(false);
+const usedByRadioIds = ref<string[]>([]);
 const heightError = ref<string | undefined>();
 const headingError = ref<string | undefined>();
 
@@ -65,6 +67,14 @@ const usesHeading = computed(() => {
 const usesTraps = computed(() => selectedType.value?.supportsTraps === true);
 const trapCaption = computed(() =>
   trapped.value && usesTraps.value ? formatTrapSummary(bands.value) : undefined,
+);
+const radioSelectItems = computed(() =>
+  radios.value
+    .filter((radio) => radio.stationId === assignedStationId.value)
+    .map((radio) => ({
+      label: radio.name,
+      id: radio.id,
+    })),
 );
 
 const title = computed(() => (isCreate.value ? 'Add antenna' : 'Edit antenna'));
@@ -107,6 +117,19 @@ watch(bands, (next) => {
   }
 });
 
+watch(assignedStationId, (next) => {
+  if (mountedOnRadio.value) {
+    return;
+  }
+
+  const valid = new Set(
+    radios.value
+      .filter((radio) => radio.stationId === next)
+      .map((radio) => radio.id),
+  );
+  usedByRadioIds.value = usedByRadioIds.value.filter((id) => valid.has(id));
+});
+
 function applyDraft(draft: AntennaDraft): void {
   nickname.value = draft.nickname;
   manufacturer.value = draft.manufacturer ?? '';
@@ -117,6 +140,7 @@ function applyDraft(draft: AntennaDraft): void {
   headingText.value = draft.headingDeg === undefined ? '' : String(Math.round(draft.headingDeg));
   bands.value = [...draft.bands];
   trapped.value = draft.trapped === true;
+  usedByRadioIds.value = draft.usedByRadioIds ? [...draft.usedByRadioIds] : [];
   heightError.value = undefined;
   headingError.value = undefined;
 }
@@ -149,6 +173,7 @@ function currentDraft(): AntennaDraft {
     headingDeg: usesHeading.value ? Number(headingText.value) : undefined,
     bands: [...bands.value],
     trapped: usesTraps.value ? trapped.value : undefined,
+    usedByRadioIds: mountedOnRadio.value ? undefined : [...usedByRadioIds.value],
   };
 }
 
@@ -260,6 +285,22 @@ function save(): void {
             multiple
             class="w-full"
             :search-input="false"
+          />
+        </UFormField>
+
+        <UFormField
+          v-if="!mountedOnRadio"
+          label="Radios"
+          description="Saved radios at this station that use this antenna."
+        >
+          <USelectMenu
+            v-model="usedByRadioIds"
+            :items="radioSelectItems"
+            value-key="id"
+            multiple
+            class="w-full"
+            :search-input="false"
+            placeholder="Choose radios"
           />
         </UFormField>
 

@@ -4,10 +4,11 @@ import { effectiveAprsSerialPort } from '~/utils/aprs-connection';
 import { serialPortLabel } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
 import { formatEquipmentBands, radioBandsFromConfig } from '~/utils/radio-bands';
+import { savedRadioAntennaDetailNames } from '~/utils/antenna-station';
 import { savedRadioModelLabel, type SavedRadio, type SavedRadioDraft } from '~/utils/saved-radios';
 
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
-const { removeRadioAntennas, stations } = useStationAntennas();
+const { removeRadioAntennas, stations, store: stationAntennaStore, syncRadioStationAntennas } = useStationAntennas();
 const { clearCardSession, configurations } = useRadio();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
@@ -28,11 +29,12 @@ function openEdit(radio: SavedRadio): void {
   editorOpen.value = true;
 }
 
-function onSave(draft: SavedRadioDraft): void {
+function onSave(draft: SavedRadioDraft, stationAntennaIds: string[]): void {
   const current = editing.value;
+  let saved: SavedRadio | undefined;
 
   if (current) {
-    const saved = saveRadio(current.id, draft);
+    saved = saveRadio(current.id, draft);
 
     if (!saved) {
       return;
@@ -41,10 +43,15 @@ function onSave(draft: SavedRadioDraft): void {
     if (saved.model !== current.model) {
       clearCardSession(saved.id);
     }
-  } else if (!addRadio(draft)) {
-    return;
+  } else {
+    saved = addRadio(draft) ?? undefined;
+
+    if (!saved) {
+      return;
+    }
   }
 
+  syncRadioStationAntennas(saved.id, saved.stationId, stationAntennaIds);
   editorOpen.value = false;
 }
 
@@ -99,6 +106,12 @@ function radioDetail(radio: SavedRadio): string {
 
   if (stationNickname) {
     parts.push(stationNickname);
+  }
+
+  const antennaNames = savedRadioAntennaDetailNames(stationAntennaStore.value, radio.id);
+
+  if (antennaNames.length > 0) {
+    parts.push(antennaNames.join(', '));
   }
 
   const aliases = readSerialPortSettings().portAliases;
