@@ -1416,18 +1416,16 @@ export function useRadio() {
     }
   }
 
-  /**
-   * Read the radio for menu capture without loading bytes into the editor memory.
-   */
-  async function readRadioImageForMenuCapture(
+  type MenuCaptureReadAttemptOutcome =
+    | { ok: true; image: Uint8Array }
+    | { ok: false; cancelled?: boolean; error?: string; retryable: boolean; cause?: unknown };
+
+  async function executeMenuCaptureDriverRead(
     sessionId: string,
     serialPortPath: string,
-    baudRate?: number,
-  ): Promise<Uint8Array | undefined> {
-    if (refuseDevFixtureHardware('read')) {
-      return undefined;
-    }
-
+    baudRate: number | undefined,
+    progressIndicator: RadioProgressIndicator,
+  ): Promise<MenuCaptureReadAttemptOutcome> {
     const session = readSession(sessionId);
     const radioId = radioIdForMenuCaptureSession(
       session?.activeRadioId,
@@ -1436,63 +1434,216 @@ export function useRadio() {
     );
 
     if (!radioId) {
-      return undefined;
-    }
-
-    if (!beginTransferOperation(sessionId, serialPortPath)) {
-      return undefined;
-    }
-
-    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
-      finishTransferOperation(sessionId);
-      return undefined;
+      return { ok: false, error: 'Radio driver is not available', retryable: false };
     }
 
     const config = getConfiguration(radioId);
 
     if (!config?.readMemory) {
-      finishTransferOperation(sessionId);
-      return undefined;
+      return { ok: false, error: 'This driver cannot read memory from the radio', retryable: false };
     }
 
-    const progressIndicator = startProgress('capture', sessionId, serialPortPath);
     const { RadioDriver } = await import('@springfield/ham-radio-driver');
     const driver = new RadioDriver(loadedRadioToRadio(config, baudRate), logger, undefined, true);
 
     try {
       const memoryData = await driver.readRadio(serialPortPath, progressIndicator);
-      closeProgress(sessionId);
 
       if (memoryData == undefined || memoryData.length === 0) {
         captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+        return { ok: false, error: 'Menu capture read returned no data', retryable: true };
+      }
+
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      return { ok: true, image: memoryData.slice() };
+    } catch (cause) {
+      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+
+      if (isCancelledTransfer(sessionId, cause)) {
+        return { ok: false, cancelled: true, retryable: false, cause };
+      }
+
+      const { isRetryableMenuCaptureReadError, menuCaptureReadErrorMessage } = await import('~/utils/menu-capture-restore');
+
+      return {
+        ok: false,
+        error: menuCaptureReadErrorMessage(cause),
+        retryable: isRetryableMenuCaptureReadError(cause),
+        cause,
+      };
+    }
+  }
+
+  /**
+   * Read the radio for menu capture without loading bytes into the editor memory.
+   */
+  async function readRadioImageForMenuCaptureAttempt(
+    sessionId: string,
+    serialPortPath: string,
+    baudRate?: number,
+  ): Promise<MenuCaptureReadAttemptOutcome> {
+    if (refuseDevFixtureHardware('read')) {
+      return { ok: false, error: 'Hardware reads are disabled in this dev fixture', retryable: false };
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
+      return { ok: false, error: 'Another transfer is using this port', retryable: false };
+    }
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      finishTransferOperation(sessionId);
+      return { ok: false, error: 'CAT is using this port', retryable: false };
+    }
+
+    const progressIndicator = startProgress('capture', sessionId, serialPortPath);
+
+    try {
+      const attempt = await executeMenuCaptureDriverRead(sessionId, serialPortPath, baudRate, progressIndicator);
+      closeProgress(sessionId);
+      return attempt;
+    } catch (cause) {
+      closeProgress(sessionId);
+      throw cause;
+    } finally {
+      finishTransferOperation(sessionId);
+    }
+  }
+
+  async function readRadioImageForMenuCapture(
+    sessionId: string,
+    serialPortPath: string,
+    baudRate?: number,
+    options?: { showErrorToast?: boolean; waitForCloneRestart?: boolean },
+  ): Promise<Uint8Array | undefined | import('~/utils/menu-capture-restore').MenuCaptureRestoreReadResult> {
+    if (options?.waitForCloneRestart) {
+      return readRadioImageForMenuCaptureRestoreVerify(sessionId, serialPortPath, baudRate);
+    }
+
+    const attempt = await readRadioImageForMenuCaptureAttempt(sessionId, serialPortPath, baudRate);
+
+    if (attempt.ok) {
+      return attempt.image;
+    }
+
+    if (options?.showErrorToast !== false && attempt.error && !attempt.cancelled) {
+      const session = readSession(sessionId);
+      const radioId = radioIdForMenuCaptureSession(
+        session?.activeRadioId,
+        boundRadio(sessionId)?.model,
+        configurations.value,
+      );
+
+      if (!radioId) {
         return undefined;
       }
 
-      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
-      return memoryData.slice();
-    } catch (cause) {
-      closeProgress(sessionId);
-      captureSerialLog(sessionId, driver, 'import', radioId, serialPortPath);
+      const config = getConfiguration(radioId);
 
-      if (!isCancelledTransfer(sessionId, cause)) {
-        const report = await createRadioErrorReport(
-          radioErrorContextFromRadio('read', 'menu capture read', {
-            radioId,
-            cardName: boundRadio(sessionId)?.name,
-            config,
-            port: serialPortPath,
-          }),
-          cause,
+      const report = await createRadioErrorReport(
+        radioErrorContextFromRadio('read', 'menu capture read', {
+          radioId,
+          cardName: boundRadio(sessionId)?.name,
+          config,
+          port: serialPortPath,
+        }),
+        attempt.cause ?? new Error(attempt.error),
+      );
+      showRadioErrorToast(toast, logger, {
+        title: 'Could not read radio',
+        report,
+        logMessage: 'Failed menu capture read',
+      });
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Post-restore verification read: wait for CDC reboot, retry transient failures, toast once on final error.
+   */
+  async function readRadioImageForMenuCaptureRestoreVerify(
+    sessionId: string,
+    serialPortPath: string,
+    baudRate?: number,
+  ): Promise<import('~/utils/menu-capture-restore').MenuCaptureRestoreReadResult> {
+    if (refuseDevFixtureHardware('read')) {
+      return { error: 'Hardware reads are disabled in this dev fixture' };
+    }
+
+    if (!beginTransferOperation(sessionId, serialPortPath)) {
+      return { error: 'Another transfer is using this port' };
+    }
+
+    if (warnIfCatBlocksMemoryTransfer(serialPortPath)) {
+      finishTransferOperation(sessionId);
+      return { error: 'CAT is using this port' };
+    }
+
+    const progressIndicator = startProgress('capture', sessionId, serialPortPath);
+    const { waitForProgrammingPortAfterCloneExit } = await import('~/utils/serial-port-reconnect');
+    const { retryMenuCaptureRestoreRead } = await import('~/utils/menu-capture-restore');
+
+    let lastError: string | undefined;
+
+    try {
+      const result = await retryMenuCaptureRestoreRead(
+        async () => {
+          const attempt = await executeMenuCaptureDriverRead(sessionId, serialPortPath, baudRate, progressIndicator);
+
+          if (attempt.ok) {
+            return attempt.image;
+          }
+
+          if (attempt.cancelled) {
+            lastError = 'Menu capture read canceled';
+            throw new Error(lastError);
+          }
+
+          lastError = attempt.error;
+          if (attempt.retryable && attempt.error) {
+            throw new Error(attempt.error);
+          }
+
+          return undefined;
+        },
+        () => lastError,
+        {
+          shouldAbort: () => isTransferCanceled(sessionId),
+          beforeFirstRead: () => waitForProgrammingPortAfterCloneExit(serialPortPath),
+        },
+      );
+
+      if ('error' in result && result.error && !isTransferCanceled(sessionId)) {
+        const session = readSession(sessionId);
+        const radioId = radioIdForMenuCaptureSession(
+          session?.activeRadioId,
+          boundRadio(sessionId)?.model,
+          configurations.value,
         );
-        showRadioErrorToast(toast, logger, {
-          title: 'Could not read radio',
-          report,
-          logMessage: 'Failed menu capture read',
-        });
+
+        if (radioId) {
+          const config = getConfiguration(radioId);
+
+          const report = await createRadioErrorReport(
+            radioErrorContextFromRadio('read', 'menu capture read', {
+              radioId,
+              cardName: boundRadio(sessionId)?.name,
+              config,
+              port: serialPortPath,
+            }),
+            new Error(result.error),
+          );
+          showRadioErrorToast(toast, logger, {
+            title: 'Could not read radio',
+            report,
+            logMessage: 'Failed menu capture read',
+          });
+        }
       }
 
-      return undefined;
+      return result;
     } finally {
+      closeProgress(sessionId);
       finishTransferOperation(sessionId);
     }
   }
@@ -3018,6 +3169,7 @@ export function useRadio() {
     writeTarget,
     readRadioForWriteReview,
     readRadioImageForMenuCapture,
+    readRadioImageForMenuCaptureRestoreVerify,
     writeRadioImageForMenuCapture,
     refreshCardMemoryFromVerifiedCapture,
     setMenuCapturePortHold,

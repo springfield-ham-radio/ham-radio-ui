@@ -172,4 +172,22 @@ describe('menu capture diff', () => {
     expect(result.matches).toBe(true);
     expect(filterMemoryDiffRuns(baseline, verify, new Set([0x038c])).runs).toHaveLength(0);
   });
+
+  it('flags a mismatch when ignore bytes differ and a real byte changes', () => {
+    const baseline = new Uint8Array(0x0390);
+    const verify = baseline.slice();
+    verify[0x038c] = 0x44;
+    verify[0x0010] = 0x01;
+
+    const result = imagesMatchExceptMenuCaptureIgnore(
+      baseline,
+      verify,
+      [{ address: '0x038C', length: 1 }],
+      sparseMemoryConfig,
+    );
+
+    expect(result.matches).toBe(false);
+    expect(result.diff.ignoredByteCount).toBe(1);
+    expect(result.diff.byteCount).toBeGreaterThan(0);
+  });
 });

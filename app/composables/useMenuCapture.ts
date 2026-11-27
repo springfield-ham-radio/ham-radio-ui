@@ -3,7 +3,6 @@ import {
   analyzeMenuCaptureStep,
   buildMenuCaptureZip,
   comparedToForStepIndex,
-  imagesMatchExceptMenuCaptureIgnore,
   lookupMenuCaptureByNumber,
   menuCaptureMenuCodeForStep,
   menuCaptureSessionNeedsPortHold,
@@ -35,6 +34,12 @@ import {
 } from '~/utils/menu-capture-catalog';
 import { resolveMenuCaptureIgnoreForConfig, resolveMenuCaptureModuleIdentity } from '~/utils/menu-capture-module-config';
 import { menuCaptureUseStepImageForPrewriteBackup } from '~/utils/menu-capture-restore-backup';
+import {
+  buildMenuCaptureRestoreRecord,
+  menuCaptureRestoreIsVerified,
+  patchMenuCaptureSessionRestore,
+  type MenuCaptureRestoreReadResult,
+} from '~/utils/menu-capture-restore';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { backupFileSegment } from '~/utils/radio-image-backup';
@@ -132,6 +137,18 @@ export function useMenuCapture() {
       });
     } finally {
       loadingSession.value = false;
+    }
+  }
+
+  async function loadLatestMenuCaptureSession(
+    savedRadioId: string,
+    fallback: MenuCaptureSessionState,
+  ): Promise<MenuCaptureSessionState> {
+    try {
+      const stored = await loadMenuCaptureSession(savedRadioId);
+      return stored ?? fallback;
+    } catch {
+      return fallback;
     }
   }
 
@@ -383,6 +400,42 @@ export function useMenuCapture() {
     await persistSession(removeMenuCaptureSessionStepFrom(current, stepIndex));
   }
 
+  async function applyRestoreVerification(
+    id: string,
+    savedRadioId: string,
+    current: MenuCaptureSessionState,
+    port: string,
+    baseline: Uint8Array,
+    writtenAt: string,
+  ): Promise<{ verified: boolean }> {
+    const readResult = (await readRadioImageForMenuCapture(id, port, current.baudRate, {
+      waitForCloneRestart: true,
+      showErrorToast: false,
+    })) as MenuCaptureRestoreReadResult;
+
+    const verifyImage = 'image' in readResult ? readResult.image : undefined;
+    const readError = 'error' in readResult ? readResult.error : undefined;
+
+    const restore = buildMenuCaptureRestoreRecord({
+      writtenAt,
+      verifyImage,
+      readError,
+      baseline,
+      ignore: ignoreEntries.value,
+      memoryConfig: memoryConfig.value,
+    });
+
+    const latest = await loadLatestMenuCaptureSession(savedRadioId, current);
+
+    await persistSession(patchMenuCaptureSessionRestore(latest, restore));
+
+    if (menuCaptureRestoreIsVerified(restore) && verifyImage) {
+      await refreshCardMemoryFromVerifiedCapture(id, verifyImage, port);
+    }
+
+    return { verified: menuCaptureRestoreIsVerified(restore) };
+  }
+
   async function restoreBaseline(): Promise<{ verified: boolean }> {
     const id = cardId.value;
     const savedRadioId = savedRadio.value?.id;
@@ -424,7 +477,7 @@ export function useMenuCapture() {
         await persistSession({
           ...current,
           updatedAt: new Date().toISOString(),
-          restore: { writtenAt, matchesBaseline: false },
+          restore: buildMenuCaptureRestoreRecord({ writtenAt, writeFailed: true, baseline, ignore: ignoreEntries.value }),
         });
         toast.add({
           title: 'Could not restore radio',
@@ -435,36 +488,29 @@ export function useMenuCapture() {
         return { verified: false };
       }
 
-      const verifyImage = await readRadioImageForMenuCapture(id, port, current.baudRate);
+      return await applyRestoreVerification(id, savedRadioId, current, port, baseline, writtenAt);
+    } finally {
+      working.value = false;
+    }
+  }
 
-      if (!verifyImage) {
-        await persistSession({
-          ...current,
-          updatedAt: new Date().toISOString(),
-          restore: { writtenAt, matchesBaseline: false },
-        });
-        return { verified: false };
-      }
+  async function verifyRestoredBaseline(): Promise<{ verified: boolean }> {
+    const id = cardId.value;
+    const savedRadioId = savedRadio.value?.id;
+    const current = session.value;
+    const port = current?.serialPort;
 
-      const verifiedAt = new Date().toISOString();
-      const { matches } = imagesMatchExceptMenuCaptureIgnore(
-        baseline,
-        verifyImage,
-        ignoreEntries.value,
-        memoryConfig.value,
-      );
+    if (!id || !savedRadioId || !current || !port) {
+      return { verified: false };
+    }
 
-      await persistSession({
-        ...current,
-        updatedAt: new Date().toISOString(),
-        restore: { writtenAt, verifiedAt, matchesBaseline: matches },
-      });
+    working.value = true;
 
-      if (matches) {
-        await refreshCardMemoryFromVerifiedCapture(id, verifyImage, port);
-      }
+    try {
+      const baseline = await loadMenuCaptureBaseline(savedRadioId);
+      const writtenAt = current.restore?.writtenAt ?? new Date().toISOString();
 
-      return { verified: matches };
+      return await applyRestoreVerification(id, savedRadioId, current, port, baseline, writtenAt);
     } finally {
       working.value = false;
     }
@@ -602,6 +648,7 @@ export function useMenuCapture() {
     redoLastStep,
     redoFromStep,
     restoreBaseline,
+    verifyRestoredBaseline,
     exportCapture,
     completeExportedSession,
     releasePortHold,
