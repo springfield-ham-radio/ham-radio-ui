@@ -5,6 +5,7 @@ import { aprsPanelTabs } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import {
+  aprsMapCaption,
   aprsMapDetailsCall,
   aprsMapFeatures,
   aprsMapOwnBeaconFeature,
@@ -140,10 +141,18 @@ watch(
 );
 const ownMapBeacon = computed(() =>
   resolveAprsMapOwnBeaconPosition(mine.value, savedRadio.value?.aprsBeacon, antennaStore.value));
-const plottedCount = computed(
-  () => aprsMapFeatures(stations.value).features.length + (aprsMapOwnBeaconFeature(ownMapBeacon.value) ? 1 : 0),
-);
+const heardPlottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
+const hasOwnMapBeacon = computed(() => aprsMapOwnBeaconFeature(ownMapBeacon.value) !== undefined);
+const plottedCount = computed(() => heardPlottedCount.value + (hasOwnMapBeacon.value ? 1 : 0));
 const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
+const mapCaption = computed(() =>
+  aprsMapCaption({
+    plottedCount: plottedCount.value,
+    heardPlottedCount: heardPlottedCount.value,
+    hasOwnBeacon: hasOwnMapBeacon.value,
+    unlocatedCount: unlocatedCount.value,
+  }),
+);
 
 const detectFailure = computed(() => {
   const detail = hostSnapshot.value?.detectDetail ?? '';
@@ -471,9 +480,7 @@ function onClear(): void {
         <div class="flex min-h-0 flex-1 flex-col gap-2 py-2">
           <div class="flex shrink-0 flex-wrap items-center justify-between gap-2">
             <p class="min-w-0 text-xs text-muted">
-              {{ plottedCount }} on the map
-              <template v-if="unlocatedCount > 0"> · {{ unlocatedCount }} without a position</template>
-              . Heard this session only. The radio does not export its stored station list.
+              {{ mapCaption }}
             </p>
             <UButton
               icon="i-lucide-locate"
