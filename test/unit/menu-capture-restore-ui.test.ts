@@ -17,8 +17,15 @@ describe('menu capture restore wizard UI', () => {
     expect(wizard).toContain('label="Continue to export"');
     expect(wizard).not.toMatch(/onVerifyAgain[\s\S]*writeRadioImageForMenuCapture/);
     expect(useMenuCapture).toContain('async function verifyRestoredBaseline');
-    expect(useMenuCapture).toContain('readRadioImageForMenuCaptureRestoreVerify');
+    expect(useMenuCapture).toContain('waitForCloneRestart: true');
     expect(useMenuCapture).not.toMatch(/verifyRestoredBaseline[\s\S]*writeRadioImageForMenuCapture/);
+  });
+
+  it('cancels in-flight verify on unmount and disables export while verifying', () => {
+    expect(wizard).toContain('onBeforeUnmount');
+    expect(wizard).toContain('cancelTransfer');
+    expect(wizard).toMatch(/canContinueToExport[\s\S]*!verifying\.value/);
+    expect(wizard).toContain('matchesBaseline === false && !session?.restore?.status');
   });
 
   it('surfaces read-failed copy separately from mismatch', () => {

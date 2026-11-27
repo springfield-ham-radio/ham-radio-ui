@@ -124,6 +124,23 @@ describe('waitForProgrammingPortAfterCloneExit', () => {
     expect(settleSleep).toHaveBeenCalledWith(CLONE_EXIT_FIRMWARE_SETTLE_MS);
   });
 
+  it('throws when reconnect is canceled during the grace window', async () => {
+    setSerialPortReconnectHooks({ shouldAbort: () => true });
+    let clock = 0;
+
+    await expect(
+      waitForProgrammingPortAfterCloneExit('/dev/cu.usbmodem31101', {
+        graceMs: 1_000,
+        pollIntervalMs: 50,
+        isPortAvailable: async () => true,
+        sleep: async (ms) => {
+          clock += ms;
+        },
+        now: () => clock,
+      }),
+    ).rejects.toThrow(/canceled/i);
+  });
+
   it('returns once when the port never disappears during the grace window', async () => {
     let clock = 0;
     const listPorts = vi.fn(async () => ['/dev/cu.usbmodem31101']);

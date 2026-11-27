@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RadioMemoryConfig } from '@springfield/ham-radio-api';
-import { buildMenuCaptureRestoreRecord } from '../../app/utils/menu-capture-restore.ts';
+import {
+  buildMenuCaptureRestoreRecord,
+  patchMenuCaptureSessionRestore,
+} from '../../app/utils/menu-capture-restore.ts';
+import type { MenuCaptureSessionState } from '../../app/utils/menu-capture.ts';
 
 const sparseMemoryConfig = {
   chunkSize: 256,
@@ -57,6 +61,31 @@ describe('buildMenuCaptureRestoreRecord', () => {
 
     expect(record.status).toBe('mismatch');
     expect(record.matchesBaseline).toBe(false);
+  });
+
+  it('patchMenuCaptureSessionRestore keeps export completion while updating restore', () => {
+    const session: MenuCaptureSessionState = {
+      sessionId: 's',
+      savedRadioId: 'r',
+      createdAt: '2026-11-24T00:00:00.000Z',
+      updatedAt: '2026-11-24T01:00:00.000Z',
+      baselineReadAt: '2026-11-24T00:30:00.000Z',
+      baselineSha256: 'abc',
+      baselineByteLength: 100,
+      steps: [],
+      completedAt: '2026-11-27T01:00:00.000Z',
+      export: { savedAt: '2026-11-27T01:00:00.000Z', path: '/tmp/foo.hmenucap' },
+    };
+
+    const next = patchMenuCaptureSessionRestore(session, {
+      writtenAt: '2026-11-27T00:00:00.000Z',
+      status: 'read-failed',
+      readError: 'timeout',
+    });
+
+    expect(next.completedAt).toBe(session.completedAt);
+    expect(next.export?.path).toBe('/tmp/foo.hmenucap');
+    expect(next.restore?.status).toBe('read-failed');
   });
 
   it('records write-failed without matchesBaseline', () => {

@@ -62,6 +62,24 @@ describe('retryMenuCaptureRestoreRead', () => {
     expect(read.mock.calls.length).toBeGreaterThan(1);
   });
 
+  it('returns an error when beforeFirstRead fails (for example port never reappears)', async () => {
+    const result = await retryMenuCaptureRestoreRead(
+      async () => undefined,
+      () => undefined,
+      {
+        beforeFirstRead: async () => {
+          throw new Error('The port did not reappear before the reconnect wait timed out');
+        },
+        now: () => 0,
+      },
+    );
+
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.error).toContain('reappear');
+    }
+  });
+
   it('calls beforeFirstRead once before the first attempt', async () => {
     const before = vi.fn(async () => undefined);
     const read = vi.fn(async () => Uint8Array.from([1]));

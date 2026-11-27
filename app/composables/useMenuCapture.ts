@@ -34,7 +34,12 @@ import {
 } from '~/utils/menu-capture-catalog';
 import { resolveMenuCaptureIgnoreForConfig, resolveMenuCaptureModuleIdentity } from '~/utils/menu-capture-module-config';
 import { menuCaptureUseStepImageForPrewriteBackup } from '~/utils/menu-capture-restore-backup';
-import { buildMenuCaptureRestoreRecord, menuCaptureRestoreIsVerified } from '~/utils/menu-capture-restore';
+import {
+  buildMenuCaptureRestoreRecord,
+  menuCaptureRestoreIsVerified,
+  patchMenuCaptureSessionRestore,
+  type MenuCaptureRestoreReadResult,
+} from '~/utils/menu-capture-restore';
 import type { LoadedRadioConfig } from '~/utils/radio-catalog-db';
 import { isTauriRuntime } from '~/utils/radio-memory-file-io';
 import { backupFileSegment } from '~/utils/radio-image-backup';
@@ -51,7 +56,6 @@ export function useMenuCapture() {
     configurations,
     transferInFlight,
     readRadioImageForMenuCapture,
-    readRadioImageForMenuCaptureRestoreVerify,
     writeRadioImageForMenuCapture,
     refreshCardMemoryFromVerifiedCapture,
     setMenuCapturePortHold,
@@ -133,6 +137,18 @@ export function useMenuCapture() {
       });
     } finally {
       loadingSession.value = false;
+    }
+  }
+
+  async function loadLatestMenuCaptureSession(
+    savedRadioId: string,
+    fallback: MenuCaptureSessionState,
+  ): Promise<MenuCaptureSessionState> {
+    try {
+      const stored = await loadMenuCaptureSession(savedRadioId);
+      return stored ?? fallback;
+    } catch {
+      return fallback;
     }
   }
 
@@ -392,7 +408,11 @@ export function useMenuCapture() {
     baseline: Uint8Array,
     writtenAt: string,
   ): Promise<{ verified: boolean }> {
-    const readResult = await readRadioImageForMenuCaptureRestoreVerify(id, port, current.baudRate);
+    const readResult = (await readRadioImageForMenuCapture(id, port, current.baudRate, {
+      waitForCloneRestart: true,
+      showErrorToast: false,
+    })) as MenuCaptureRestoreReadResult;
+
     const verifyImage = 'image' in readResult ? readResult.image : undefined;
     const readError = 'error' in readResult ? readResult.error : undefined;
 
@@ -405,11 +425,9 @@ export function useMenuCapture() {
       memoryConfig: memoryConfig.value,
     });
 
-    await persistSession({
-      ...current,
-      updatedAt: new Date().toISOString(),
-      restore,
-    });
+    const latest = await loadLatestMenuCaptureSession(savedRadioId, current);
+
+    await persistSession(patchMenuCaptureSessionRestore(latest, restore));
 
     if (menuCaptureRestoreIsVerified(restore) && verifyImage) {
       await refreshCardMemoryFromVerifiedCapture(id, verifyImage, port);

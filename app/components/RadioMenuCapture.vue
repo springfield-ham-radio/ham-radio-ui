@@ -16,6 +16,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { cancelTransfer } = useRadio();
 
 const {
   session,
@@ -129,7 +130,11 @@ watch(menuPrefill, (lookup) => {
 });
 
 const canContinueToExport = computed(
-  () => Boolean(session.value && menuCaptureRestoreAllowsExport(session.value)),
+  () =>
+    Boolean(session.value && menuCaptureRestoreAllowsExport(session.value)) &&
+    !verifying.value &&
+    !restoring.value &&
+    !captureBusy.value,
 );
 
 const showVerifyAgain = computed(() => {
@@ -181,6 +186,12 @@ watch(
 
 onMounted(() => {
   callsign.value = defaultCallsign() ?? '';
+});
+
+onBeforeUnmount(() => {
+  if (restoring.value || verifying.value) {
+    cancelTransfer();
+  }
 });
 
 async function onStart(): Promise<void> {
@@ -567,6 +578,13 @@ async function onConfirmDiscardSession(): Promise<void> {
         </p>
         <p v-else-if="session?.restore?.status === 'write-failed'" class="text-sm text-error">
           The baseline image was not written. Confirm the checkbox and use Write original image to radio, or discard the session.
+        </p>
+        <p
+          v-else-if="session?.restore?.matchesBaseline === false && !session?.restore?.status"
+          class="text-sm text-error"
+        >
+          Verification read did not match the baseline, or the read failed before this build recorded a status. Use Verify
+          again or export the capture for your maintainer.
         </p>
         <p v-else-if="menuCaptureRestoreIsVerified(session?.restore)" class="text-sm text-success">
           Radio matches the baseline read.

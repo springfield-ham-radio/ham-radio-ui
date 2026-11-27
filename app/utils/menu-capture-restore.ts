@@ -115,6 +115,17 @@ export function menuCaptureRestoreAllowsExport(session: MenuCaptureSessionState)
   return session.baselineByteLength > 0;
 }
 
+export function patchMenuCaptureSessionRestore(
+  session: MenuCaptureSessionState,
+  restore: MenuCaptureRestoreRecord,
+): MenuCaptureSessionState {
+  return {
+    ...session,
+    updatedAt: new Date().toISOString(),
+    restore,
+  };
+}
+
 /**
  * On load, pick the wizard step so failed restore is recoverable (Verify again, export, Discard).
  */
@@ -176,7 +187,11 @@ export async function retryMenuCaptureRestoreRead(
   let lastError: string | undefined;
 
   if (options.beforeFirstRead) {
-    await options.beforeFirstRead();
+    try {
+      await options.beforeFirstRead();
+    } catch (cause) {
+      return { error: menuCaptureReadErrorMessage(cause) };
+    }
   }
 
   while (now() < deadline) {
