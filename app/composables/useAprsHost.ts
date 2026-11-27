@@ -115,7 +115,7 @@ export function useAprsHost() {
   async function send(
     cardId: string,
     input: { mine: string; to: string; text: string },
-  ): Promise<AprsHostMessage> {
+  ): Promise<AprsHostMessage | undefined> {
     const message = await sessionFor(cardId).send(input);
     publish(cardId);
     return message;

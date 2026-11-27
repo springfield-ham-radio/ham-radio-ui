@@ -7,6 +7,7 @@ import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
 import { aprsMapDetailsCall, aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
+import { callsignError } from '~/utils/aprs-message';
 import type { AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
 
@@ -78,7 +79,8 @@ const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true || tncPreview.value === 'monitor');
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
 const mine = ref('');
-const mineError = ref<string | undefined>();
+const mineError = computed(() => callsignError(mine.value));
+const mineInput = useTemplateRef<{ inputRef?: HTMLInputElement }>('mineInput');
 const selectedMode = computed<AprsConnectionMode>(() => {
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
 
@@ -185,7 +187,11 @@ function onMine(value: string | number): void {
     return;
   }
 
-  mineError.value = host.setIdentity(props.cardId, value);
+  host.setIdentity(props.cardId, value);
+}
+
+function focusMineCallsign(): void {
+  mineInput.value?.inputRef?.focus();
 }
 
 function onAck(next: boolean): void {
@@ -198,7 +204,7 @@ function onAck(next: boolean): void {
 
 watch(kissListening, (open) => {
   if (open && props.cardId && mine.value) {
-    mineError.value = host.setIdentity(props.cardId, mine.value);
+    host.setIdentity(props.cardId, mine.value);
   }
 });
 
@@ -250,7 +256,7 @@ function onClear(): void {
     <AprsConnectionBar :card-id="cardId" :model="model" :radio-name="radioName" />
     <div v-if="activeMode === 'host'" class="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
       <UFormField label="My callsign" :error="mineError" class="w-40">
-        <UInput :model-value="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" @update:model-value="onMine" />
+        <UInput ref="mineInput" :model-value="mine" class="w-full" placeholder="N0CALL" autocapitalize="characters" @update:model-value="onMine" />
       </UFormField>
       <USwitch
         :model-value="hostSnapshot?.ackOptIn === true"
@@ -465,7 +471,7 @@ function onClear(): void {
       </template>
 
       <template #messages>
-        <AprsMessages :card-id="cardId" :mine="mine" />
+        <AprsMessages :card-id="cardId" :mine="mine" @focus-mine="focusMineCallsign" />
       </template>
 
       <template #log>

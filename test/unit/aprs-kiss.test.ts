@@ -9,7 +9,16 @@ import {
   KISS_MAX_FRAME_BYTES,
   pushKissBytes,
 } from '../../app/utils/aprs-kiss.ts';
-import { encodeAprsMessageFrame, formatAprsMessage, parseAprsMessage, parseAprsMessageFrame } from '../../app/utils/aprs-message.ts';
+import {
+  AX25_CALLSIGN_HINT,
+  aprsOwnCallsignBlock,
+  callsignError,
+  destinationCallsignError,
+  encodeAprsMessageFrame,
+  formatAprsMessage,
+  parseAprsMessage,
+  parseAprsMessageFrame,
+} from '../../app/utils/aprs-message.ts';
 
 describe('KISS framing', () => {
   it('round-trips a payload that contains frame and escape bytes', () => {
@@ -202,6 +211,31 @@ describe('AX.25 APRS messages', () => {
     midCr[midCr.indexOf(0x61)] = 0x0d;
     expect(parseAx25Ui(midCr)).toBeUndefined();
     expect(parseAprsMessageFrame(midCr)).toBeUndefined();
+  });
+});
+
+describe('AX.25 callsign hints', () => {
+  it('accepts valid callsigns and rejects invalid input', () => {
+    for (const call of ['K5KTF-4', 'k5ktf-4', 'N0CALL', 'N0TST']) {
+      expect(callsignError(call)).toBeUndefined();
+    }
+
+    for (const call of ['', '   ', 'K5', '1BAD', 'K5KTF-16', 'not a call']) {
+      expect(callsignError(call)).toBe(AX25_CALLSIGN_HINT);
+    }
+  });
+
+  it('names the destination when the addressee fails validation', () => {
+    expect(destinationCallsignError('K5KTF-4')).toBeUndefined();
+    expect(destinationCallsignError('1BAD')).toBe(`Destination callsign: ${AX25_CALLSIGN_HINT}`);
+  });
+
+  it('blocks APRS send until My callsign is valid', () => {
+    for (const call of ['', '   ', 'K5', '1BAD', 'K5KTF-16']) {
+      expect(aprsOwnCallsignBlock(call)).toBe('Set My callsign to send');
+    }
+
+    expect(aprsOwnCallsignBlock('N0TST')).toBeUndefined();
   });
 });
 
