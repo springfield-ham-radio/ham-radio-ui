@@ -66,6 +66,8 @@ describe('TNC flow control from the radio module', () => {
     expect(bar).not.toContain('readAprsHostFlow');
     expect(bar).not.toContain('writeAprsHostFlow');
     expect(aprs).not.toContain('writeAprsHostFlow');
+    expect(aprs).toContain('<AprsBeacon');
+    expect(aprs).not.toContain('Beacon now');
     expect(bar).toContain('aprsStatusBadge');
     expect(bar).toContain('aprsMonitorSilenceHint');
     expect(bar).toContain('aprsHostAprsModeHint');

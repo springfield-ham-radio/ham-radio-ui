@@ -5,6 +5,7 @@ import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '..
 import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND, d710AprsHostLink } from '../../app/utils/aprs-d710-host.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
 import { APRS_TRACE_CAP, escapeSerialText, formatTrace, APRS_HOST_TRACE_FIXTURE } from '../../app/utils/aprs-serial-trace.ts';
+import { defaultSavedRadioAprsBeacon, type SavedRadioAprsBeacon } from '../../app/utils/aprs-beacon.ts';
 import { AX25_CALLSIGN_HINT, APRS_MESSAGE_RETRY_MS, destinationCallsignError, encodeAprsMessageFrame } from '../../app/utils/aprs-message.ts';
 import { aprsHoldPaths } from '../../app/utils/aprs-session.ts';
 import { APRS_HOST_BOOT_QUIET_MS } from '../../app/utils/aprs-host-boot.ts';
@@ -2378,5 +2379,92 @@ describe('manual KISS entry', () => {
     expect(orphan.writes).toEqual([exit]);
     expect(orphan.port.isOpen).toBe(false);
     expect(superseding.port.isOpen).toBe(true);
+  });
+});
+
+describe('host position beacon', () => {
+  const beacon: SavedRadioAprsBeacon = {
+    ...defaultSavedRadioAprsBeacon(),
+    latitude: 30.5187,
+    longitude: -97.879,
+    path: '',
+    comment: 'beacon test',
+  };
+
+  function pushConfirmedUi(fake: ReturnType<typeof fakePort>): void {
+    const source = canonicalAx25Call('K5KTF-4');
+    const via = canonicalAx25Call('WIDE2-1');
+    const frame = source && via ? encodeAx25Ui(source, '!3031.12NI09752.74W&test', [via]) : undefined;
+
+    if (frame) {
+      fake.push(encodeKissData(frame));
+    }
+  }
+
+  it('blocks Beacon now until an AX.25 UI frame is parsed', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    const result = await session.sendBeacon({ mine: 'KF5UFJ-1', settings: beacon });
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('AX.25 UI frame');
+    expect(fake.writes).toHaveLength(0);
+  });
+
+  it('writes one position frame after KISS is confirmed and folds it into onAx25Ui', async () => {
+    const payloads: Uint8Array[] = [];
+    const session = createD710HostSession({
+      allowHardwareTransmit: true,
+      onAx25Ui: (payload) => {
+        payloads.push(payload);
+      },
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    pushConfirmedUi(fake);
+    await settle();
+    expect(session.snapshot().kissConfirmed).toBe(true);
+
+    const first = await session.sendBeacon({ mine: 'KF5UFJ-1', settings: beacon });
+    const second = await session.sendBeacon({ mine: 'KF5UFJ-1', settings: beacon });
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(fake.writes.filter((frame) => frame[0] === 0xc0)).toHaveLength(2);
+    expect(payloads).toHaveLength(3);
+    expect(session.snapshot().lastBeaconDetail).toBe('Sent');
+  });
+
+  it('does not beacon when hardware transmit is off', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: false });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    pushConfirmedUi(fake);
+    await settle();
+    const result = await session.sendBeacon({ mine: 'KF5UFJ-1', settings: beacon });
+    expect(result.ok).toBe(false);
+    expect(fake.writes).toHaveLength(0);
+  });
+
+  it('sends on an interval and stops after disconnect', async () => {
+    const clock = { t: 1_000_000 };
+    const session = createD710HostSession({
+      useRetryClock: true,
+      now: () => clock.t,
+      allowHardwareTransmit: true,
+    });
+    const fake = fakePort();
+    await session.connect('/dev/ttyUSB0', async () => fake.port);
+    pushConfirmedUi(fake);
+    await settle();
+    expect(session.setBeaconInterval({ armed: true, minutes: 10, mine: 'KF5UFJ-1', settings: beacon })).toBeUndefined();
+    expect(session.snapshot().beaconIntervalArmed).toBe(true);
+    await session.advance(9 * 60_000);
+    expect(fake.writes.filter((frame) => frame[0] === 0xc0)).toHaveLength(0);
+    await session.advance(60_000);
+    expect(fake.writes.filter((frame) => frame[0] === 0xc0)).toHaveLength(1);
+    await session.disconnect();
+    expect(session.snapshot().beaconIntervalArmed).toBe(false);
+    await session.advance(15 * 60_000);
+    expect(fake.writes.filter((frame) => frame[0] === 0xc0)).toHaveLength(1);
   });
 });

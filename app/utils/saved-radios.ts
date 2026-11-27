@@ -1,3 +1,5 @@
+import { parseSavedRadioAprsBeacon, type SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
+
 export const SAVED_RADIOS_STORAGE_KEY = 'ham-radio-saved-radios';
 
 /**
@@ -32,6 +34,8 @@ export interface SavedRadio {
   packetSsid?: number;
   /** Packet tab Accept incoming connections for this radio. */
   packetAcceptIncoming?: boolean;
+  /** APRS position beacon fields for the host session. My callsign stays separate when stored. */
+  aprsBeacon?: SavedRadioAprsBeacon;
 }
 
 export interface SavedRadioDraft {
@@ -190,6 +194,12 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     radio.packetAcceptIncoming = false;
   }
 
+  const aprsBeacon = parseSavedRadioAprsBeacon(value.aprsBeacon);
+
+  if (aprsBeacon) {
+    radio.aprsBeacon = aprsBeacon;
+  }
+
   return radio;
 }
 
@@ -271,6 +281,10 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.packetAcceptIncoming !== undefined) {
         stored.packetAcceptIncoming = radio.packetAcceptIncoming;
+      }
+
+      if (radio.aprsBeacon) {
+        stored.aprsBeacon = radio.aprsBeacon;
       }
 
       return stored;
@@ -404,6 +418,19 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
   radio.packetAcceptIncoming = false;
 
   return radio;
+}
+
+export function patchSavedRadioAprsBeacon(radio: SavedRadio, beacon: SavedRadioAprsBeacon | undefined, now = Date.now()): SavedRadio {
+  const parsed = beacon ? parseSavedRadioAprsBeacon(beacon) : undefined;
+  const next: SavedRadio = { ...radio, updatedAt: now };
+
+  if (!parsed) {
+    delete next.aprsBeacon;
+    return next;
+  }
+
+  next.aprsBeacon = parsed;
+  return next;
 }
 
 export function patchSavedRadioPacketFields(

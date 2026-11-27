@@ -2,6 +2,7 @@ import { ingestAprsAx25Ui } from '~/composables/useAprs';
 import { aprsConnectBlocked } from '~/utils/cat-memory-transfer';
 import { aprsPortMissingMessage } from '~/utils/aprs-d710';
 import type { AprsHostLink } from '~/utils/aprs-host-profile';
+import type { SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
 import { createAprsHostSession, type AprsHostMessage, type AprsHostSession, type AprsHostSnapshot } from '~/utils/aprs-host-session';
 import { aprsHoldPaths, nextAprsPortHolds } from '~/utils/aprs-session';
 import { openAprsHostPort } from '~/utils/aprs-serial';
@@ -187,6 +188,24 @@ export function useAprsHost() {
     return reason;
   }
 
+  async function sendBeacon(
+    cardId: string,
+    input: { mine: string; settings: SavedRadioAprsBeacon },
+  ): Promise<{ ok: boolean; detail: string }> {
+    const result = await sessionFor(cardId).sendBeacon(input);
+    publish(cardId);
+    return result;
+  }
+
+  function setBeaconInterval(
+    cardId: string,
+    input: { armed: boolean; minutes: number; mine: string; settings: SavedRadioAprsBeacon },
+  ): string | undefined {
+    const reason = sessionFor(cardId).setBeaconInterval(input);
+    publish(cardId);
+    return reason;
+  }
+
   return {
     snapshots,
     connecting,
@@ -200,6 +219,8 @@ export function useAprsHost() {
     setIdentity,
     setHostLink,
     setAckOptIn,
+    sendBeacon,
+    setBeaconInterval,
     requestCommandPrompt,
     cancelCommand,
     enterHostKiss,

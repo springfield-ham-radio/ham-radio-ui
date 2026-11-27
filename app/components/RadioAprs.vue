@@ -253,6 +253,7 @@ function onClear(): void {
         @update:model-value="onAck"
       />
     </div>
+    <AprsBeacon v-if="activeMode === 'host'" :card-id="cardId" :mine="mine" class="mb-2 shrink-0" />
 
     <UAlert
       v-if="tncPreview"

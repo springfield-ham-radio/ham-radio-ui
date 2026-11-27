@@ -19,7 +19,7 @@ Kenwood copies received APRS traffic to the COM jack when menu 604 OUTPUT is ON.
 - The operator's APRS adapter and baud live on the saved radio (`aprsSerialPort`, `aprsBaudRate`). Saving them does not write the memory `serialPort` or `baudRate`, and the reverse is also true. Connect uses those APRS fields when set. Kiss-only radios (`aprs.mode` `kiss`; see [ADR 0025](./0025-aprs-kiss-only-host.md)) may Connect without a saved `aprsSerialPort` by opening the saved memory/CAT port at the profile baud instead.
 - Show the tab when the installed module sets `capabilities.aprsReceive`. Until that field exists, a TM-D710 model id still shows the tab. A/E/S and G use different port menu numbers; a bare TM-D710 id shows both in the preferences help until the faceplate is confirmed.
 - Plot a station only when its own decoded latitude and longitude are finite and in range. Do not invent a position for ambiguity, objects, or unsupported packets. Fit the map to those stations once; later packets update markers without moving the camera. The log is the session's monitor text, not a copy of the radio's internal station list.
-- No APRS-IS connection, no igate, no beacon, and no radio menu writes.
+- No APRS-IS connection, no igate, and no radio menu writes. The passive monitor does not beacon. Opt-in host position beacons are described in [0027](./0027-aprs-position-beacon.md).
 
 An in-tree decoder is used. `@hamradio/aprs` declares MIT but the 1.4.2 package has no LICENSE file, and its Mic-E N/S and longitude-offset bits do not match APRS Protocol Reference 1.0.1. `js-aprs-fap` is a rewrite of a Perl library. GPL APRS parsers are not acceptable in this repository.
 

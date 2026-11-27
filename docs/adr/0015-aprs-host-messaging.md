@@ -23,7 +23,7 @@ The operation-panel COM jack carries RTS, CTS, TXD, RXD, and ground. The 2.5 mm 
 - A message frame or its retry is written only after this connection has parsed an AX.25 UI frame. A KISS frame that does not parse does not confirm KISS and does not by itself remove a confirmation already earned. `cmd:` outside a KISS frame clears the confirmation and cancels the queue. Automatic acknowledgement is a separate switch, off when the port opens, and it is not saved. Turning it on does not acknowledge messages already heard and does not answer an ack. It applies to the My callsign on the APRS header.
 - The shared TNC port takes flow control from `aprs.host.flowControl` when the module declares it. Host and Monitor only both use that value. There is no flow-control menu. **Hardware (RTS/CTS)** sets plugin `FlowControl::Hardware` (`CRTSCTS`) and does not ioctl RTS, because the panel MPU `PCCTS` pin is a UART inhibit input. When the field is omitted, a TM-D710 host open uses hardware, because Kenwood 1.15.1’s `defaultFlow: "software"` is the old menu default and is not the verified COM-jack setting. Monitor only on that older module stays off, with RTS and DTR low. Any other module without the field uses software for Host and off for Monitor only. None of these sends `XFLOW`. RTS and DTR are not PTT. Connect does not transmit.
 - Converse mode was not adopted. Ctrl+C would leave it, but the TNC would own the callsign, path, and connected-mode retry.
-- No APRS-IS, igate, beacon, or GPS. No registry or driver change.
+- No APRS-IS, igate, or GPS. No registry or driver change. Opt-in position beacons share this host session; see [0027](./0027-aprs-position-beacon.md). Connect and detection do not beacon.
 
 ## Consequences
 
