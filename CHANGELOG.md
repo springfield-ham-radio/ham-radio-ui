@@ -1,3 +1,15 @@
+## [3.20.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.20.0...v3.20.1) (2026-11-27)
+
+### Bug Fixes
+
+* **aprs:** make map station callsign labels readable ([#252](https://github.com/springfield-ham-radio/ham-radio-ui/issues/252)) ([60cf39d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/60cf39d8c5bc9af6027d3b9935842c789db0d598))
+
+## [3.20.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.19.2...v3.20.0) (2026-11-27)
+
+### Features
+
+* **aprs:** remember My callsign per radio across launches ([#250](https://github.com/springfield-ham-radio/ham-radio-ui/issues/250)) ([97baf5b](https://github.com/springfield-ham-radio/ham-radio-ui/commit/97baf5b4f3aea1d19d279f82f16c11f0d8631512))
+
 ## [3.19.2](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.19.1...v3.19.2) (2026-11-27)
 
 ### Bug Fixes

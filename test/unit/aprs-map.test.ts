@@ -9,6 +9,8 @@ import {
   aprsMapFeatures,
   aprsMapPopupLines,
   aprsMapUnlocatedCount,
+  aprsStationLabelLayout,
+  aprsStationLabelPaint,
   isPlottableAprsPosition,
 } from '../../app/utils/aprs-map.ts';
 import { createAprsFoldState, foldAprsLine, type AprsStation } from '../../app/utils/aprs-stations.ts';
@@ -85,6 +87,77 @@ describe('APRS map points', () => {
       `Last heard ${formatAprsHeardAt('2026-11-07T18:00:00.000Z')}`,
     ]);
     expect(aprsMapPopupLines(station!)).toContain('K5KTF TX/RX-iGate');
+  });
+});
+
+const EXPECTED_LABEL_LAYOUT_SIZE = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  8,
+  ['case', ['==', ['get', 'selected'], 1], 14, 12],
+  12,
+  ['case', ['==', ['get', 'selected'], 1], 16, 14],
+  16,
+  ['case', ['==', ['get', 'selected'], 1], 18, 16],
+] as const;
+
+const EXPECTED_LABEL_HALO_WIDTH = ['case', ['==', ['get', 'selected'], 1], 2, 1.75] as const;
+
+describe('APRS map callsign labels', () => {
+  it('uses Noto Sans Bold and keeps callsign field layout', () => {
+    const layout = aprsStationLabelLayout();
+
+    expect(layout['text-font']).toEqual(['Noto Sans Bold']);
+    expect(layout['text-field']).toEqual(['get', 'callsign']);
+    expect(layout['text-anchor']).toBe('top');
+  });
+
+  it('zoom-interpolates text-size with a selected bump at each stop', () => {
+    const size = aprsStationLabelLayout()['text-size'];
+
+    expect(size).toEqual(EXPECTED_LABEL_LAYOUT_SIZE);
+
+    const unselectedStops = [12, 14, 16];
+    const selectedStops = [14, 16, 18];
+
+    for (const [index, unselected] of unselectedStops.entries()) {
+      expect(unselected).toBeGreaterThan(11);
+      const selected = selectedStops[index];
+      expect(selected! - unselected).toBe(2);
+    }
+  });
+
+  it('offsets labels below the circle with room for halo and stroke', () => {
+    const layout = aprsStationLabelLayout();
+    const yOffsetEms = layout['text-offset']?.[1];
+
+    expect(layout['text-offset']).toEqual([0, 1.4]);
+
+    const cases = [
+      { fontSize: 12, radius: 6, halo: 1.75, label: 'unselected at zoom ≤ 8' },
+      { fontSize: 14, radius: 8, halo: 2, label: 'selected at zoom ≤ 8' },
+    ] as const;
+
+    for (const { fontSize, radius, halo } of cases) {
+      const gapPx = yOffsetEms! * fontSize - halo - (radius + 2);
+      expect(gapPx, `clearance for ${cases.find((c) => c.fontSize === fontSize)?.label}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('paints near-white type on a solid slate halo without blur', () => {
+    const paint = aprsStationLabelPaint();
+
+    expect(paint['text-color']).toBe('#f8fafc');
+    expect(paint['text-halo-color']).toBe('#0f172a');
+    expect(paint['text-halo-blur']).toBe(0);
+    expect(paint['text-halo-width']).toEqual(EXPECTED_LABEL_HALO_WIDTH);
+
+    for (const width of [1.75, 2]) {
+      expect(width).toBeGreaterThanOrEqual(1.5);
+      expect(width).toBeLessThanOrEqual(2);
+      expect(width).toBeLessThanOrEqual(12 / 4);
+    }
   });
 });
 
