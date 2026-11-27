@@ -1,3 +1,13 @@
+## [3.19.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.18.1...v3.19.0) (2026-11-27)
+
+### Features
+
+* show repeated menu lists as channel tables ([#246](https://github.com/springfield-ham-radio/ham-radio-ui/issues/246)) ([caca5b8](https://github.com/springfield-ham-radio/ham-radio-ui/commit/caca5b8f86239724b30687a1f701bfa3a46dab96))
+
+### Bug Fixes
+
+* place Settings immediately after Channels on radio cards ([#245](https://github.com/springfield-ham-radio/ham-radio-ui/issues/245)) ([0ddff09](https://github.com/springfield-ham-radio/ham-radio-ui/commit/0ddff099bc7f369d3fd7fd899cc0fa9f3d9c1906))
+
 ## [3.18.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.18.0...v3.18.1) (2026-11-26)
 
 ### Bug Fixes
