@@ -612,26 +612,22 @@ function saveModal(): void {
             :error="longitudeError"
             @change="onCoordinateInput('longitude')"
           />
-          <div class="grid gap-3 @min-[28rem]:grid-cols-2">
-            <UFormField label="Symbol">
-              <USelect :model-value="symbolKey" :items="symbolItems" @update:model-value="onSymbol" />
-            </UFormField>
-            <UFormField label="Digipeater path" :error="pathError" :hint="`Default ${APRS_BEACON_PATH_DEFAULT}. Empty = direct.`">
-              <UInput :model-value="settings.path" class="uppercase" :placeholder="APRS_BEACON_PATH_DEFAULT" @update:model-value="onPath" />
-            </UFormField>
-          </div>
-          <div class="grid gap-3 @min-[28rem]:grid-cols-2">
-            <UFormField label="Comment" :error="commentError" hint="Optional">
-              <UInput :model-value="settings.comment ?? ''" @update:model-value="onComment" />
-            </UFormField>
-            <UFormField label="Altitude (feet)" :error="altitudeError" hint="Optional">
-              <UInput
-                v-model="altitudeText"
-                inputmode="numeric"
-                @change="altTouched = true"
-              />
-            </UFormField>
-          </div>
+          <UFormField label="Altitude (feet)" :error="altitudeError" hint="Optional">
+            <UInput
+              v-model="altitudeText"
+              inputmode="numeric"
+              @change="altTouched = true"
+            />
+          </UFormField>
+          <UFormField label="Symbol">
+            <USelect :model-value="symbolKey" :items="symbolItems" @update:model-value="onSymbol" />
+          </UFormField>
+          <UFormField label="Digipeater path" :error="pathError" :hint="`Default ${APRS_BEACON_PATH_DEFAULT}. Empty = direct.`">
+            <UInput :model-value="settings.path" class="w-full uppercase" :placeholder="APRS_BEACON_PATH_DEFAULT" @update:model-value="onPath" />
+          </UFormField>
+          <UFormField label="Comment" :error="commentError" hint="Optional">
+            <UInput :model-value="settings.comment ?? ''" class="w-full" @update:model-value="onComment" />
+          </UFormField>
           <p class="text-xs text-muted">Connect does not beacon. Beacon now keys once after a UI frame is heard.</p>
         </div>
       </template>

@@ -57,7 +57,17 @@ function onHemisphere(value: string | number): void {
 
 <template>
   <UFormField :name="name" :label="label" :hint="hint" :error="error">
-    <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_4.5rem] gap-1.5">
+    <div class="grid grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-1.5">
+      <div>
+        <p class="mb-1 text-[11px] leading-none text-muted">{{ axis === 'latitude' ? 'N / S' : 'E / W' }}</p>
+        <USelect
+          :model-value="modelValue.hemisphere"
+          :items="hemisphereItems"
+          class="w-full"
+          :aria-label="axis === 'latitude' ? 'North or south' : 'East or west'"
+          @update:model-value="onHemisphere"
+        />
+      </div>
       <div>
         <p class="mb-1 text-[11px] leading-none text-muted">Degrees</p>
         <UInput
@@ -105,16 +115,6 @@ function onHemisphere(value: string | number): void {
             <span class="text-xs text-muted">″</span>
           </template>
         </UInput>
-      </div>
-      <div>
-        <p class="mb-1 text-[11px] leading-none text-muted">{{ axis === 'latitude' ? 'N / S' : 'E / W' }}</p>
-        <USelect
-          :model-value="modelValue.hemisphere"
-          :items="hemisphereItems"
-          class="w-full"
-          :aria-label="axis === 'latitude' ? 'North or south' : 'East or west'"
-          @update:model-value="onHemisphere"
-        />
       </div>
     </div>
   </UFormField>
