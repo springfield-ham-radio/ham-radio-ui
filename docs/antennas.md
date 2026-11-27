@@ -26,6 +26,8 @@ Station antennas sit under the station they belong to. **Add antenna** on a site
 
 Radio-mounted antennas sit under **Preferences → Radios**, on that saved radio. **Add antenna** there opens the same slideover without a station. A new one starts as a dual-band vertical at 1.5 m. The record stores `radioId` and no `stationId`. The same whip on two radios is two records.
 
+Each saved radio can also link to an operating **station** (Home, Cabin, and so on) under **Preferences → Radios → Edit**. New radios default to Home. Older radios stay unlinked until you pick a site. That link names the usual location; station antennas and mounted whips are unchanged. A later release will let a station antenna list which radios use it at that site.
+
 - **Station** — the site where a station antenna is installed. Hidden for an antenna mounted on a radio
 - **Nickname** — optional; empty uses the type label
 - **Manufacturer** and **Model** — optional free text, such as Nagoya NA-771. Blank values are omitted. There is no manufacturer catalog. The log label includes them when set.

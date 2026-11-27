@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { HOME_STATION_ID } from '../../app/utils/antenna-station.ts';
 import {
   applyRadioPrivilege,
+  clearSavedRadioStationLinks,
   createSavedRadio,
+  defaultNewSavedRadioStationId,
   draftFromSavedRadio,
+  NO_STATION_VALUE,
   parseSavedRadio,
+  resolveSavedRadioStationDraft,
+  savedRadioStationSelectItems,
+  savedRadioStationSelectValue,
   parseSavedRadioStore,
   savedRadioModelLabel,
   patchSavedRadioAprsBeacon,
@@ -68,15 +75,21 @@ describe('saved radios', () => {
   });
 
   it('should default new radios to SSID 0 and accept off', () => {
-    const radio = createSavedRadio({
-      name: 'Fresh',
-      manufacturer: 'Kenwood',
-      model: 'kenwood-tm-d710a',
-      serialPort: '/dev/cu.new',
-    });
+    const radio = createSavedRadio(
+      {
+        name: 'Fresh',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-tm-d710a',
+        serialPort: '/dev/cu.new',
+      },
+      1,
+      'radio-fresh',
+      { knownStationIds: [HOME_STATION_ID] },
+    );
     expect(radio.packetSsid).toBe(0);
     expect(radio.packetAcceptIncoming).toBe(false);
     expect(radio.aprsMyCall).toBeUndefined();
+    expect(radio.stationId).toBe(HOME_STATION_ID);
   });
 
   it('should round-trip radios through serialize and parse', () => {
@@ -329,5 +342,121 @@ describe('saved radios', () => {
     expect(roundTrip?.aprsMyCall).toBe('KF5UFJ-7');
     expect(roundTrip?.aprsBeacon).toEqual(both.aprsBeacon);
     expect(roundTrip?.packetSsid).toBe(3);
+  });
+
+  it('stores stationId on saved radios without disturbing APRS fields', () => {
+    const beacon = {
+      latitude: 30.5187,
+      longitude: -97.879,
+      symbolTable: '/',
+      symbolCode: '-',
+      path: 'WIDE1-1,WIDE2-1',
+      intervalMinutes: 30,
+    };
+    const linked: SavedRadio = {
+      ...base,
+      stationId: 'station-cabin',
+      aprsMyCall: 'KF5UFJ-1',
+      privilegePersonId: 'ada',
+      privilegeLicenseId: 'lic-ada',
+      packetSsid: 2,
+      packetAcceptIncoming: true,
+      aprsBeacon: beacon,
+    };
+
+    expect(parseSavedRadioStore(serializeSavedRadioStore({ radios: [linked] })).radios[0]).toEqual(linked);
+    expect(parseSavedRadio({ ...linked, stationId: '  ' })?.stationId).toBeUndefined();
+    expect(parseSavedRadio({ ...linked, stationId: 'station-gone' })?.stationId).toBe('station-gone');
+
+    const none = createSavedRadio(
+      { name: 'HT', manufacturer: 'Kenwood', model: 'kenwood-th-d74', serialPort: '/dev/cu.ht', stationId: '' },
+      1,
+      'radio-ht',
+    );
+    expect(none.stationId).toBeUndefined();
+
+    const known = [HOME_STATION_ID, 'station-cabin'];
+
+    const updated = updateSavedRadio(
+      linked,
+      { ...draftFromSavedRadio(linked), stationId: '' },
+      50,
+      { knownStationIds: known },
+    );
+    expect(updated.stationId).toBeUndefined();
+    expect(updated.aprsMyCall).toBe('KF5UFJ-1');
+    expect(updated.aprsBeacon).toEqual(beacon);
+    expect(updated.updatedAt).toBe(50);
+
+    const stale = updateSavedRadio(
+      linked,
+      { ...draftFromSavedRadio(linked), stationId: 'station-gone' },
+      51,
+      { knownStationIds: known },
+    );
+    expect(stale.stationId).toBeUndefined();
+
+    const relinked = updateSavedRadio(
+      stale,
+      { ...draftFromSavedRadio(stale), stationId: HOME_STATION_ID },
+      52,
+      { knownStationIds: known },
+    );
+    expect(relinked.stationId).toBe(HOME_STATION_ID);
+  });
+
+  it('defaults new radios to Home only when Home exists', () => {
+    const withHome = createSavedRadio(
+      {
+        name: 'Base',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-tm-d710a',
+        serialPort: '/dev/cu.new',
+      },
+      1,
+      'radio-base',
+      { knownStationIds: [HOME_STATION_ID, 'station-cabin'] },
+    );
+    expect(withHome.stationId).toBe(HOME_STATION_ID);
+
+    const withoutHome = createSavedRadio(
+      {
+        name: 'Portable',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-th-d74',
+        serialPort: '/dev/cu.ht',
+      },
+      2,
+      'radio-portable',
+      { knownStationIds: ['station-cabin'] },
+    );
+    expect(withoutHome.stationId).toBeUndefined();
+    expect(defaultNewSavedRadioStationId([HOME_STATION_ID])).toBe(HOME_STATION_ID);
+    expect(defaultNewSavedRadioStationId(['station-cabin'])).toBe(NO_STATION_VALUE);
+  });
+
+  it('uses a non-empty select value for station menu items', () => {
+    const items = savedRadioStationSelectItems([
+      { id: HOME_STATION_ID, nickname: 'Home', description: 'Location not set' },
+    ]);
+
+    expect(items.every((item) => item.value.length > 0)).toBe(true);
+    expect(items[0]?.value).toBe(NO_STATION_VALUE);
+    expect(savedRadioStationSelectValue('station-gone', [HOME_STATION_ID])).toBe(NO_STATION_VALUE);
+    expect(resolveSavedRadioStationDraft('station-gone', [HOME_STATION_ID])).toBe('');
+    expect(resolveSavedRadioStationDraft(NO_STATION_VALUE, [HOME_STATION_ID])).toBe('');
+  });
+
+  it('clears stationId when a site is removed', () => {
+    const atHome: SavedRadio = { ...mobile, stationId: HOME_STATION_ID };
+    const atCabin: SavedRadio = { ...base, stationId: 'station-cabin' };
+    const store = { radios: [atHome, atCabin] };
+
+    const cleared = clearSavedRadioStationLinks(store, 'station-cabin');
+    expect(cleared.radios[0]?.stationId).toBe(HOME_STATION_ID);
+    expect(cleared.radios[1]?.stationId).toBeUndefined();
+    expect(cleared.radios[1]?.updatedAt).toBe(atCabin.updatedAt);
+
+    expect(clearSavedRadioStationLinks(store, 'missing')).toBe(store);
   });
 });

@@ -1,6 +1,9 @@
+import { defaultStationAntennaStore } from '~/utils/antenna-station';
 import { adoptLegacyAprsConnection } from '~/utils/aprs-d710';
 import {
+  clearSavedRadioStationLinks,
   createSavedRadio,
+  resolveSavedRadioStationDraft,
   draftFromSavedRadio,
   readSavedRadioStore,
   removeSavedRadio,
@@ -24,6 +27,22 @@ import {
 export function useSavedRadios() {
   const store = useState('saved-radios', () => readSavedRadioStore());
   const hydrated = useState('saved-radios-hydrated', () => false);
+  const stationAntennaStore = useState('station-antenna-store', () => defaultStationAntennaStore());
+
+  function knownStationIds(): readonly string[] {
+    return stationAntennaStore.value.stations.map((station) => station.id);
+  }
+
+  function draftWithResolvedStation(draft: SavedRadioDraft): SavedRadioDraft {
+    if (draft.stationId === undefined) {
+      return draft;
+    }
+
+    return {
+      ...draft,
+      stationId: resolveSavedRadioStationDraft(draft.stationId, knownStationIds()),
+    };
+  }
 
   if (import.meta.client && !hydrated.value) {
     const read = readSavedRadioStore();
@@ -71,7 +90,8 @@ export function useSavedRadios() {
       return undefined;
     }
 
-    const radio = createSavedRadio(draft);
+    const resolved = draftWithResolvedStation(draft);
+    const radio = createSavedRadio(resolved, Date.now(), crypto.randomUUID(), { knownStationIds: knownStationIds() });
     persist(upsertSavedRadio(store.value, radio));
     return radio;
   }
@@ -89,7 +109,8 @@ export function useSavedRadios() {
       return undefined;
     }
 
-    const radio = updateSavedRadio(current, draft);
+    const resolved = draftWithResolvedStation(draft);
+    const radio = updateSavedRadio(current, resolved, Date.now(), { knownStationIds: knownStationIds() });
     persist(upsertSavedRadio(store.value, radio));
     return radio;
   }
@@ -158,6 +179,16 @@ export function useSavedRadios() {
     persist(removeSavedRadio(store.value, id));
   }
 
+  function unlinkRadiosFromStation(stationId: string): void {
+    const next = clearSavedRadioStationLinks(store.value, stationId);
+
+    if (next === store.value) {
+      return;
+    }
+
+    persist(next);
+  }
+
   function assignPrivilege(id: string, choice: { personId: string; licenseId?: string } | undefined): void {
     const current = radioById(id);
 
@@ -185,6 +216,7 @@ export function useSavedRadios() {
     rememberAprsMyCall,
     rememberSavedRadioAprsBeacon,
     deleteRadio,
+    unlinkRadiosFromStation,
     assignPrivilege,
   };
 }
