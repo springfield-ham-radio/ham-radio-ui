@@ -28,6 +28,7 @@ import {
   removeAntennasForRadio,
   antennasUsedByRadio,
   savedRadioAntennaDetailNames,
+  pruneUnknownUsedByRadioIds,
   setAntennaUsedByRadioIds,
   setRadioStationAntennas,
   removeStationFromStore,
@@ -724,8 +725,42 @@ describe('radio stations', () => {
     store = setAntennaUsedByRadioIds(store, 'ant-one', ['radio-a', 'radio-b'], 3);
     store = setAntennaUsedByRadioIds(store, 'ant-two', ['radio-b'], 4);
 
-    expect(store.antennas.find((antenna) => antenna.id === 'ant-one')?.usedByRadioIds).toEqual(['radio-a']);
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-one')?.usedByRadioIds).toEqual(['radio-a', 'radio-b']);
     expect(store.antennas.find((antenna) => antenna.id === 'ant-two')?.usedByRadioIds).toEqual(['radio-b']);
+  });
+
+  it('should keep a radio on two antennas after antenna-editor saves', () => {
+    const first = createStationAntenna(sampleDraft(), { id: 'ant-one', now: 1 });
+    const second = createStationAntenna(
+      { ...sampleDraft(), nickname: 'Dipole' },
+      { id: 'ant-two', now: 2 },
+    );
+    let store = addAntennaToStore(defaultStationAntennaStore(), first);
+    store = addAntennaToStore(store, second);
+    store = setRadioStationAntennas(store, 'radio-b', HOME_STATION_ID, ['ant-one', 'ant-two'], 3);
+
+    expect(antennasUsedByRadio(store, 'radio-b').map((antenna) => antenna.id).sort()).toEqual(['ant-one', 'ant-two']);
+
+    const antOneIds = store.antennas.find((antenna) => antenna.id === 'ant-one')?.usedByRadioIds ?? [];
+    store = setAntennaUsedByRadioIds(store, 'ant-one', antOneIds, 4);
+
+    expect(antennasUsedByRadio(store, 'radio-b').map((antenna) => antenna.id).sort()).toEqual(['ant-one', 'ant-two']);
+
+    store = setAntennaUsedByRadioIds(store, 'ant-one', [...antOneIds, 'radio-a'], 5);
+
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-two')?.usedByRadioIds).toEqual(['radio-b']);
+    expect(antennasUsedByRadio(store, 'radio-b').map((antenna) => antenna.id).sort()).toEqual(['ant-one', 'ant-two']);
+  });
+
+  it('should drop unknown used-by radio ids when pruning', () => {
+    const antenna = createStationAntenna(
+      { ...sampleDraft(), usedByRadioIds: ['radio-a', 'missing', 'radio-b'] },
+      { id: 'ant-one', now: 1 },
+    );
+    const store = addAntennaToStore(defaultStationAntennaStore(), antenna);
+    const pruned = pruneUnknownUsedByRadioIds(store, ['radio-a']);
+
+    expect(pruned.antennas[0]?.usedByRadioIds).toEqual(['radio-a']);
   });
 
   it('should strip usedByRadioIds when a radio is removed', () => {

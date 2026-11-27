@@ -573,7 +573,7 @@ export function setRadioStationAntennas(
 }
 
 /**
- * Updates one site antenna's used-by list and clears those radios from every other site antenna.
+ * Updates one site antenna's used-by list without changing other antennas.
  */
 export function setAntennaUsedByRadioIds(
   store: StationAntennaStore,
@@ -590,36 +590,81 @@ export function setAntennaUsedByRadioIds(
   const wanted = dedupeRadioIds(radioIds);
 
   const antennas = store.antennas.map((entry) => {
-    if (entry.radioId) {
+    if (entry.id !== antennaId || entry.radioId) {
       return entry;
     }
 
-    if (entry.id === antennaId) {
-      if (arraysEqual(entry.usedByRadioIds ?? [], wanted)) {
-        return entry;
-      }
-
-      return {
-        ...entry,
-        usedByRadioIds: wanted.length > 0 ? wanted : undefined,
-        updatedAt: now,
-      };
-    }
-
-    const current = entry.usedByRadioIds;
-
-    if (!current?.some((id) => wanted.includes(id))) {
+    if (arraysEqual(entry.usedByRadioIds ?? [], wanted)) {
       return entry;
     }
-
-    const next = current.filter((id) => !wanted.includes(id));
 
     return {
       ...entry,
-      usedByRadioIds: next.length > 0 ? next : undefined,
+      usedByRadioIds: wanted.length > 0 ? wanted : undefined,
       updatedAt: now,
     };
   });
+
+  return { ...store, antennas };
+}
+
+/**
+ * Drops used-by entries that are not in the known saved-radio id list.
+ */
+/**
+ * Keeps only saved radios whose linked station matches this site antenna's station.
+ */
+export function filterUsedByRadioIdsAtStation(
+  radioIds: readonly string[],
+  stationId: string | undefined,
+  savedRadios: ReadonlyArray<{ id: string; stationId?: string }>,
+): string[] {
+  if (!stationId) {
+    return [];
+  }
+
+  const known = new Set(savedRadios.map((radio) => radio.id));
+
+  return dedupeRadioIds(radioIds).filter((id) => {
+    if (!known.has(id)) {
+      return false;
+    }
+
+    const radio = savedRadios.find((entry) => entry.id === id);
+
+    return radio?.stationId === stationId;
+  });
+}
+
+export function pruneUnknownUsedByRadioIds(
+  store: StationAntennaStore,
+  knownRadioIds: readonly string[],
+): StationAntennaStore {
+  const known = new Set(knownRadioIds);
+  let changed = false;
+
+  const antennas = store.antennas.map((antenna) => {
+    if (antenna.radioId || !antenna.usedByRadioIds?.length) {
+      return antenna;
+    }
+
+    const next = antenna.usedByRadioIds.filter((id) => known.has(id));
+
+    if (next.length === antenna.usedByRadioIds.length) {
+      return antenna;
+    }
+
+    changed = true;
+
+    return {
+      ...antenna,
+      usedByRadioIds: next.length > 0 ? next : undefined,
+    };
+  });
+
+  if (!changed) {
+    return store;
+  }
 
   return { ...store, antennas };
 }

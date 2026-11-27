@@ -14,6 +14,8 @@ import {
   readStationAntennaStore,
   removeAntennaFromStore,
   removeAntennasForRadio,
+  filterUsedByRadioIdsAtStation,
+  pruneUnknownUsedByRadioIds,
   setAntennaUsedByRadioIds,
   setRadioStationAntennas,
   removeStationFromStore,
@@ -56,11 +58,16 @@ export function useStationAntennas() {
   const source = useState<AntennaViewSource>('station-antenna-source', () => 'station');
   const whatIf = useState<AntennaWhatIf>('station-antenna-what-if', () => defaultAntennaWhatIf());
   const { homeGridsquare } = useOperatorLicense();
+  const { radios: savedRadios } = useSavedRadios();
 
   const hydrated = useState('station-antenna-store-hydrated', () => false);
 
   if (import.meta.client && !hydrated.value) {
-    store.value = readStationAntennaStore();
+    const read = readStationAntennaStore();
+    store.value = pruneUnknownUsedByRadioIds(
+      read,
+      savedRadios.value.map((radio) => radio.id),
+    );
     hydrated.value = true;
   }
 
@@ -91,7 +98,11 @@ export function useStationAntennas() {
   );
 
   function persist(next: typeof store.value): void {
-    const raw = serializeStationAntennaStore(next);
+    const pruned = pruneUnknownUsedByRadioIds(
+      next,
+      savedRadios.value.map((radio) => radio.id),
+    );
+    const raw = serializeStationAntennaStore(pruned);
     const plain = parseStationAntennaStore(raw);
     store.value = plain;
     writeStationAntennaStore(plain);
@@ -110,7 +121,13 @@ export function useStationAntennas() {
     let next = addAntennaToStore(store.value, antenna);
 
     if (!antenna.radioId) {
-      next = setAntennaUsedByRadioIds(next, antenna.id, draft.usedByRadioIds ?? []);
+      const stationId = antenna.stationId;
+      const usedBy = filterUsedByRadioIdsAtStation(
+        draft.usedByRadioIds ?? [],
+        stationId,
+        savedRadios.value,
+      );
+      next = setAntennaUsedByRadioIds(next, antenna.id, usedBy);
       source.value = 'station';
     }
 
@@ -132,7 +149,12 @@ export function useStationAntennas() {
     let next = replaceAntennaInStore(store.value, updated);
 
     if (!updated.radioId) {
-      next = setAntennaUsedByRadioIds(next, id, normalizedDraft.usedByRadioIds ?? []);
+      const usedBy = filterUsedByRadioIdsAtStation(
+        normalizedDraft.usedByRadioIds ?? [],
+        updated.stationId,
+        savedRadios.value,
+      );
+      next = setAntennaUsedByRadioIds(next, id, usedBy);
     }
 
     persist(next);

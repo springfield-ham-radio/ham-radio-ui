@@ -7,9 +7,9 @@ const {
   addStation,
   saveStation,
   removeStation,
+  syncRadioStationAntennas,
 } = useStationAntennas();
 const { radios, unlinkRadiosFromStation } = useSavedRadios();
-const { syncRadioStationAntennas } = useStationAntennas();
 
 const editorOpen = ref(false);
 const editing = ref<RadioStation | undefined>();

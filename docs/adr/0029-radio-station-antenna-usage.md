@@ -17,7 +17,7 @@ PR 1 linked each saved radio to an operating site (`SavedRadio.stationId`). Stat
 - `setRadioStationAntennas` from the radio editor after `addRadio` / `saveRadio`.
 - `setAntennaUsedByRadioIds` when a site antenna is saved from its slideover.
 
-Adding a radio to an antenna’s list removes that radio from every other site antenna’s list. Changing or clearing a radio’s linked station drops ids that do not belong to the new site. Deleting a radio calls the existing `removeAntennasForRadio`, which also strips the id from all `usedByRadioIds`. Deleting a site antenna or station removes those records; unlinking a station clears each affected radio’s station-antenna picks.
+Several radios may share one site antenna, and one radio may list several antennas at its linked station. The radio editor sets the full pick list for that radio; the antenna editor sets only that antenna’s list. Neither path clears the same radio from other antennas at the same site. Changing or clearing a radio’s linked station drops that radio from antennas at other sites (and from picks that no longer match the site). Deleting a radio calls the existing `removeAntennasForRadio`, which also strips the id from all `usedByRadioIds`. Deleting a site antenna or station removes those records; unlinking a station clears each affected radio’s station-antenna picks.
 
 **UI.** `SavedRadioEditor` shows a multi-select of antennas at the linked station (hidden when station is None). `AntennaStationEditor` lists radios at that station that use the antenna. Detail lines on the radio card and Preferences → Radios show shared station antenna nicknames, then whip nicknames.
 
@@ -27,4 +27,4 @@ Adding a radio to an antenna’s list removes that radio from every other site a
 
 - Propagation, the station log, and APRS beacon prefill remain unchanged.
 - Many-to-many sharing is explicit in localStorage on the station-antenna store.
-- Hand-edited storage with unknown radio ids is dropped at parse time for `usedByRadioIds` entries that are not strings; dangling ids after radio delete are removed when the store is loaded through serialize/parse or on delete.
+- Hand-edited storage with non-string or blank ids is dropped at parse time. Unknown or deleted radio ids are stripped whenever the antenna store is persisted, using the current saved-radio list.
