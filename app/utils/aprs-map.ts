@@ -27,18 +27,29 @@ export function aprsStationCirclePaint(): NonNullable<CircleLayerSpecification['
 export function aprsStationLabelLayout(): NonNullable<SymbolLayerSpecification['layout']> {
   return {
     'text-field': ['get', 'callsign'],
-    'text-font': ['Noto Sans Regular'],
-    'text-size': 11,
-    'text-offset': [0, 1.15],
+    'text-font': ['Noto Sans Bold'],
+    'text-size': [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      8,
+      ['case', ['==', ['get', 'selected'], 1], 14, 12],
+      12,
+      ['case', ['==', ['get', 'selected'], 1], 16, 14],
+      16,
+      ['case', ['==', ['get', 'selected'], 1], 18, 16],
+    ],
+    'text-offset': [0, 1.4],
     'text-anchor': 'top',
   };
 }
 
 export function aprsStationLabelPaint(): NonNullable<SymbolLayerSpecification['paint']> {
   return {
-    'text-color': '#0f172a',
-    'text-halo-color': '#ffffff',
-    'text-halo-width': 1.2,
+    'text-color': '#f8fafc',
+    'text-halo-color': '#0f172a',
+    'text-halo-width': ['case', ['==', ['get', 'selected'], 1], 2, 1.75],
+    'text-halo-blur': 0,
   };
 }
 
