@@ -177,14 +177,14 @@ const ackCall = computed(() => {
 });
 const ackDetail = computed(() => {
   if (!ackCall.value) {
-    return 'Off. Set My callsign first. Nothing is acknowledged, and this is not a read receipt.';
+    return 'Off until My callsign is set. Not a read receipt.';
   }
 
-  const live = kissListening.value ? '' : ' Each connection starts off, and the choice is not saved.';
+  const live = kissListening.value ? '' : ' Resets each Connect.';
 
   return hostSnapshot.value?.ackOptIn
-    ? `On for ${ackCall.value}. A later message addressed to that callsign is answered. Messages already heard are left alone. This is not a read receipt.${live}`
-    : `Off for ${ackCall.value}. Turn it on to answer a later message addressed to that callsign. This is not a read receipt.${live}`;
+    ? `On for ${ackCall.value}. Answers later messages to that callsign only.${live}`
+    : `Off for ${ackCall.value}. Turn on to send acks to later matching traffic.${live}`;
 });
 
 function onMine(value: string | number): void {
@@ -343,7 +343,7 @@ function onClear(): void {
           <div class="flex min-h-0 flex-1 flex-col @min-[42rem]:flex-row">
             <div ref="stationScroller" class="max-h-72 min-h-0 shrink-0 overflow-auto border-b border-default @min-[42rem]:max-h-none @min-[42rem]:w-80 @min-[42rem]:self-stretch @min-[42rem]:border-r @min-[42rem]:border-b-0">
               <p v-if="stations.length === 0" class="px-1 py-6 text-sm text-muted">
-                No stations yet. Connect opens the APRS COM port above. This list is what arrived this session.
+                No stations yet.
               </p>
               <div v-else :style="{ paddingTop: `${stationPadTop}px`, paddingBottom: `${stationPadBottom}px` }">
                 <button
