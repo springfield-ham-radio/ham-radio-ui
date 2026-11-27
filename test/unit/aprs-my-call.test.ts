@@ -28,9 +28,10 @@ describe('APRS My callsign wiring', () => {
 
     expect(source).toContain('aprsMyCallField');
     expect(source).toContain('rememberAprsMyCall');
-    expect(source).toMatch(/host\.setIdentity\(props\.cardId, mine\.value\)/);
+    expect(source).toMatch(
+      /mineError = computed\(\(\) => callsignError\(mine\.value\)\);\s*\n\s*if \(props\.cardId\) \{\s*\n\s*host\.setIdentity\(props\.cardId, mine\.value\);\s*\n\}/,
+    );
     expect(source).toContain('label="My callsign"');
     expect(source).toContain('watch(kissListening');
-    expect(source).toContain('host.setIdentity(props.cardId, mine.value)');
   });
 });

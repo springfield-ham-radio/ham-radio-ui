@@ -485,10 +485,10 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
 }
 
 /**
- * Cable chosen in Read, Write, or CAT connect.
+ * APRS **My callsign** typed on the radio card.
  *
- * Replaces the stored port, including when the radio had none. The same path
- * is returned unchanged.
+ * Writes a canonical call or an empty string when cleared. Half-typed text leaves
+ * the stored value unchanged.
  */
 export function rememberSavedRadioAprsCall(radio: SavedRadio, text: string, now = Date.now()): SavedRadio {
   const trimmed = text.trim();
@@ -524,6 +524,12 @@ export function rememberSavedRadioAprsCall(radio: SavedRadio, text: string, now 
   };
 }
 
+/**
+ * Cable chosen in Read, Write, or CAT connect.
+ *
+ * Replaces the stored port, including when the radio had none. The same path
+ * is returned unchanged.
+ */
 export function rememberSavedRadioSerialPort(radio: SavedRadio, serialPort: string, now = Date.now()): SavedRadio {
   const trimmed = serialPort.trim();
 
