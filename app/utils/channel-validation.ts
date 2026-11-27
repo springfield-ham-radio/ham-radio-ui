@@ -471,8 +471,10 @@ export function validateChannelForRadio(
   channel: Pick<RadioChannel, 'name' | 'receiveFrequency' | 'transmitFrequency' | 'receiveTone' | 'transmitTone'>,
   radio: ChannelValidationRadio,
   license?: ChannelValidationLicense,
+  options?: { skipBandAndOffsetRules?: boolean },
 ): ChannelValidationFinding[] {
   const findings: ChannelValidationFinding[] = [];
+  const skipBandRules = options?.skipBandAndOffsetRules === true;
   const declaredBands = radio.bands ?? [];
   const tokenList = declaredBands.length > 0 ? declaredBands : radioBandsFromConfig({ bands: declaredBands });
   const bandWindows = adifBandWindows(tokenList);
@@ -481,7 +483,7 @@ export function validateChannelForRadio(
   const receiveHz = Number(channel.receiveFrequency);
   const transmitHz = Number(channel.transmitFrequency);
 
-  if (useSchemaFrequencyRange) {
+  if (!skipBandRules && useSchemaFrequencyRange) {
     const receiveBounds = schemaFrequencyBounds(radio.channelSchema, 'receiveFrequency');
     const transmitBounds = schemaFrequencyBounds(radio.channelSchema, 'transmitFrequency');
     const receiveRange = schemaRangeFinding('receiveFrequency', receiveHz, receiveBounds);
@@ -494,7 +496,7 @@ export function validateChannelForRadio(
     if (transmitRange) {
       findings.push(transmitRange);
     }
-  } else {
+  } else if (!skipBandRules) {
     findings.push(...bandMembershipFindings('receiveFrequency', receiveHz, bandWindows));
     findings.push(...bandMembershipFindings('transmitFrequency', transmitHz, bandWindows));
   }
@@ -562,10 +564,12 @@ export function validateChannelForRadio(
     });
   }
 
-  const offset = offsetFinding(receiveHz, transmitHz);
+  if (!skipBandRules) {
+    const offset = offsetFinding(receiveHz, transmitHz);
 
-  if (offset) {
-    findings.push(offset);
+    if (offset) {
+      findings.push(offset);
+    }
   }
 
   if (license?.active) {

@@ -449,7 +449,7 @@ describe('moveProgrammedChannel', () => {
     const channels = [namedChannel(0, 'A'), namedChannel(1, 'B'), namedChannel(2, 'C')];
     const result = moveProgrammedChannel(channels, 0, 2, 3);
 
-    expect(result.refused).toMatch(/no free memory slot/i);
+    expect(result.refused).toMatch(/memory is full/i);
     expect(result.previousToNext.size).toBe(0);
     expect(result.channels).toBe(channels);
   });

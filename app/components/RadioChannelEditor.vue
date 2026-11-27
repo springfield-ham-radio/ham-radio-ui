@@ -9,6 +9,7 @@ import {
   channelFieldEditor,
   channelNameMaxLength,
   channelPatchFromLibrary,
+  channelRecordCapacity,
   createProgrammedChannel,
   duplexFromFrequencies,
   formatFrequencyMHz,
@@ -29,10 +30,13 @@ import {
   validateChannelForRadio,
   type ChannelValidationRadio,
 } from '~/utils/channel-validation';
+import { isSpecialChannelIndex, memoryMapSpecialChannelLabel } from '~/utils/channel-specials';
 
 const props = defineProps<{
   open: boolean;
   channel?: RadioProgrammedChannel;
+  /** When set, create mode programs an empty special slot at this index. */
+  createSpecialChannelNumber?: number;
   memoryMap?: RadioMemoryMap;
   occupiedChannelNumbers?: number[];
   channelCapacity?: number;
@@ -64,7 +68,15 @@ const pendingLibraryReplace = shallowRef<SavedChannel | undefined>();
 
 const isCreate = computed(() => props.channel === undefined);
 const occupiedSlots = computed(() => new Set(props.occupiedChannelNumbers ?? []));
-const capacity = computed(() => props.channelCapacity ?? 0);
+const targetChannelNumber = computed(() => props.channel?.channelNumber ?? props.createSpecialChannelNumber);
+const isSpecialChannel = computed(() =>
+  targetChannelNumber.value !== undefined && isSpecialChannelIndex(props.memoryMap, targetChannelNumber.value),
+);
+const slotLocked = computed(() => isSpecialChannel.value);
+const capacity = computed(() =>
+  isSpecialChannel.value ? channelRecordCapacity(props.memoryMap) : (props.channelCapacity ?? 0),
+);
+const validationOptions = computed(() => (isSpecialChannel.value ? { skipBandAndOffsetRules: true } : undefined));
 
 const programmed = computed(() => (isCreate.value ? draftChannel.value : props.channel));
 
@@ -105,8 +117,17 @@ function extraHelp(field: RadioMemoryMapUiField) {
 }
 
 const title = computed(() => {
+  const label =
+    targetChannelNumber.value !== undefined
+      ? memoryMapSpecialChannelLabel(props.memoryMap, targetChannelNumber.value)
+      : undefined;
+
   if (isCreate.value) {
-    return 'New channel';
+    return label ? `Program ${label}` : 'New channel';
+  }
+
+  if (label) {
+    return `Special ${label}`;
   }
 
   return `Channel ${props.channel?.channelNumber}`;
@@ -177,7 +198,10 @@ watch(
     }
 
     if (props.channel === undefined) {
-      const available = nextAvailableChannelNumber(props.occupiedChannelNumbers ?? [], capacity.value) ?? 0;
+      const available =
+        props.createSpecialChannelNumber ??
+        nextAvailableChannelNumber(props.occupiedChannelNumbers ?? [], capacity.value) ??
+        0;
       draftChannel.value = createProgrammedChannel({
         channelNumber: available,
         memoryMap: props.memoryMap,
@@ -258,7 +282,7 @@ function updateSlotNumber(value: number | undefined | null): void {
 }
 
 function commitSlotNumber(): void {
-  if (isCreate.value || props.channel === undefined) {
+  if (slotLocked.value || isCreate.value || props.channel === undefined) {
     return;
   }
 
@@ -447,7 +471,7 @@ function applyLibraryChannel(source: SavedChannel): void {
   const slotNumber = props.channel?.channelNumber;
 
   if (props.validationRadio && slotNumber !== undefined) {
-    const findings = validateChannelForRadio(source, props.validationRadio, props.license);
+    const findings = validateChannelForRadio(source, props.validationRadio, props.license, validationOptions.value);
 
     if (findings.length > 0) {
       pendingLibraryReplace.value = source;
@@ -470,7 +494,7 @@ function confirmLibraryReplace(mode: 'all' | 'valid-only'): void {
   }
 
   if (mode === 'valid-only' && props.validationRadio) {
-    const findings = validateChannelForRadio(source, props.validationRadio, props.license);
+    const findings = validateChannelForRadio(source, props.validationRadio, props.license, validationOptions.value);
 
     if (findings.some((finding) => finding.level === 'error')) {
       return;
@@ -538,6 +562,7 @@ function submitCreate(): void {
           :hint="slotHint"
         >
           <UInputNumber
+            v-if="!slotLocked"
             :model-value="slotNumber"
             :min="0"
             :max="Math.max(capacity - 1, 0)"
@@ -545,6 +570,12 @@ function submitCreate(): void {
             @update:model-value="updateSlotNumber"
             @blur="commitSlotNumber"
             @keydown.enter="commitSlotNumber"
+          />
+          <UInput
+            v-else
+            :model-value="memoryMapSpecialChannelLabel(props.memoryMap, slotNumber) ?? String(slotNumber)"
+            disabled
+            class="w-full"
           />
         </UFormField>
 

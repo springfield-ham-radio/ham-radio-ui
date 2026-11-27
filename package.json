@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "nuxt build",
+    "postinstall": "sh scripts/build-ham-radio-api-dep.sh && sh scripts/build-ham-radio-utils-dep.sh",
     "prepare": "yarn build",
     "bundle:sniffer": "node scripts/bundle-sniffer-resources.ts",
     "dev": "nuxt dev",
@@ -34,10 +35,10 @@
   },
   "dependencies": {
     "@nuxt/ui": "4.13.0",
-    "@springfield/ham-radio-api": "18.5.0",
+    "@springfield/ham-radio-api": "github:springfield-ham-radio/ham-radio-api#cursor/channel-bindings-specials-schema",
     "@springfield/ham-radio-driver": "^3.8.0",
     "@springfield/ham-radio-registry": "2.2.0",
-    "@springfield/ham-radio-utils": "^4.19.0",
+    "@springfield/ham-radio-utils": "github:springfield-ham-radio/ham-radio-utils#cursor/channel-bindings-specials-schema-b897",
     "@tanstack/vue-virtual": "^3.13.52",
     "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/plugin-dialog": "^2.8.4",
@@ -81,7 +82,7 @@
     "vue-tsc": "^3.3.14"
   },
   "resolutions": {
-    "@springfield/ham-radio-api": "18.5.0",
+    "@springfield/ham-radio-api": "github:springfield-ham-radio/ham-radio-api#cursor/channel-bindings-specials-schema",
     "conventional-changelog-conventionalcommits": "10.4.1",
     "esbuild@npm:^0.27.0": "0.28.2",
     "glob": "14.0.3",
@@ -138,5 +139,10 @@
       ]
     ]
   },
-  "packageManager": "yarn@4.18.0"
+  "packageManager": "yarn@4.18.0",
+  "dependenciesMeta": {
+    "@springfield/ham-radio-utils": {
+      "built": false
+    }
+  }
 }
