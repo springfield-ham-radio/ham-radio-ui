@@ -222,6 +222,34 @@ function onMapClick(event: MapLayerMouseEvent): void {
   emit('dismiss');
 }
 
+function onPointerEnter(): void {
+  const instance = mapInstance();
+
+  if (instance) {
+    instance.getCanvas().style.cursor = 'pointer';
+  }
+}
+
+function onPointerLeave(): void {
+  const instance = mapInstance();
+
+  if (instance) {
+    instance.getCanvas().style.cursor = '';
+  }
+}
+
+function unbindPointer(instance: MapLibreMap): void {
+  instance.off('movestart', onMoveStart);
+  instance.off('click', onMapClick);
+
+  for (const layerId of [CIRCLE_ID, LABEL_ID]) {
+    instance.off('mouseenter', layerId, onPointerEnter);
+    instance.off('mouseleave', layerId, onPointerLeave);
+  }
+
+  listenersBound = false;
+}
+
 function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !props.detailsCall) {
     return;
@@ -240,28 +268,23 @@ function onWindowKeydown(event: KeyboardEvent): void {
   emit('dismiss');
 }
 
-function bind(instance: MapLibreMap): void {
-  if (listenersBound) {
-    return;
-  }
+function bindPointer(instance: MapLibreMap): void {
+  unbindPointer(instance);
 
-  listenersBound = true;
   instance.on('movestart', onMoveStart);
   instance.on('click', onMapClick);
 
   for (const layerId of [CIRCLE_ID, LABEL_ID]) {
-    instance.on('mouseenter', layerId, () => {
-      instance.getCanvas().style.cursor = 'pointer';
-    });
-    instance.on('mouseleave', layerId, () => {
-      instance.getCanvas().style.cursor = '';
-    });
+    instance.on('mouseenter', layerId, onPointerEnter);
+    instance.on('mouseleave', layerId, onPointerLeave);
   }
+
+  listenersBound = true;
 }
 
 function onReady(instance: MapLibreMap): void {
   setData(instance);
-  bind(instance);
+  bindPointer(instance);
 
   if (!userMoved && !didInitialFit && collection.value.features.length > 0) {
     fitStations(instance);
@@ -271,9 +294,8 @@ function onReady(instance: MapLibreMap): void {
 }
 
 function onStyleLoad(instance: MapLibreMap): void {
-  listenersBound = false;
   setData(instance);
-  bind(instance);
+  bindPointer(instance);
   syncPopup(instance);
 }
 
@@ -345,13 +367,7 @@ onUnmounted(() => {
   const instance = mapInstance();
 
   if (instance && listenersBound) {
-    instance.off('movestart', onMoveStart);
-    instance.off('click', onMapClick);
-
-    for (const layerId of [CIRCLE_ID, LABEL_ID]) {
-      instance.off('mouseenter', layerId);
-      instance.off('mouseleave', layerId);
-    }
+    unbindPointer(instance);
   }
 
   window.removeEventListener('keydown', onWindowKeydown);

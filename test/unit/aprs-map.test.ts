@@ -115,6 +115,10 @@ describe('APRS map details card state', () => {
   it('does not open the first row through retain alone', () => {
     expect(aprsMapDetailsCall(undefined, { type: 'retain', callsigns: ['W5XYZ'] })).toBeUndefined();
   });
+
+  it('retains detailsCall when the callsign stays in the list without a plottable position', () => {
+    expect(aprsMapDetailsCall('N0MSG', { type: 'retain', callsigns: ['N0MSG', 'W5XYZ'] })).toBe('N0MSG');
+  });
 });
 
 describe('APRS map click-only details wiring', () => {
@@ -124,10 +128,21 @@ describe('APRS map click-only details wiring', () => {
     expect(aprsMap).toContain('detailsCall');
     expect(aprsMap).toContain("emit('dismiss')");
     expect(aprsMap).toContain("event.key !== 'Escape'");
-    expect(aprsMap).toContain('queryRenderedFeatures(event.point');
+    expect(aprsMap).toContain('queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] })');
+    expect(aprsMap).toContain('suppressPopupCloseEmit');
+    expect(aprsMap).toMatch(/function closePopup\(\)[\s\S]*suppressPopupCloseEmit = true[\s\S]*popup\.remove/);
+    expect(aprsMap).toMatch(/popup\.on\('close'[\s\S]*if \(suppressPopupCloseEmit\)/);
+    const closePopupSource = aprsMap.match(/function closePopup\(\)[\s\S]*?^}/m)?.[0] ?? '';
+    expect(closePopupSource.length).toBeGreaterThan(0);
+    expect(closePopupSource).not.toContain("emit('dismiss')");
+    expect(aprsMap).toContain("removeEventListener('keydown', onWindowKeydown)");
+    expect(aprsMap).toContain('instance.off(');
+    expect(aprsMap).toContain('onPointerEnter');
+    expect(aprsMap).toContain("instance.off('click', onMapClick)");
     expect(aprsMap).not.toContain('onLayerClick');
     expect(aprsMap).not.toContain('mousemove');
     expect(aprsMap).not.toMatch(/mouseenter[\s\S]*aprsMapPopupLines/);
+    expect(aprsMap).toMatch(/if \(!station \|\| !feature/);
   });
 
   it('passes detailsCall and listens for dismiss in RadioAprs', () => {
@@ -136,6 +151,7 @@ describe('APRS map click-only details wiring', () => {
     expect(radioAprs).toContain(':details-call="detailsCall"');
     expect(radioAprs).toContain('@dismiss="dismissMapDetails"');
     expect(radioAprs).toContain('aprsMapDetailsCall');
+    expect(radioAprs).toMatch(/detailsCall\.value = aprsMapDetailsCall[\s\S]*type: 'retain'/);
   });
 
   it('keeps callsign labels on the symbol layer', () => {
