@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeAprsMonitorLine } from '../../app/utils/aprs-decode.ts';
 import { formatAprsHeardAt } from '../../app/utils/aprs-display.ts';
 import { APRS_MAP_EXAMPLE_TEXT } from '../../app/utils/aprs-map-example.ts';
-import { aprsStationCirclePaint, aprsStationLabelLayout } from '../../app/utils/aprs-map.ts';
+import { aprsStationCirclePaint, aprsStationLabelLayout, aprsStationLabelPaint } from '../../app/utils/aprs-map.ts';
 import { createAprsFoldState, foldAprsLine, type AprsStation } from '../../app/utils/aprs-stations.ts';
 import { parseAdifLocationPair } from '../../app/utils/station-log-adif-location.ts';
 import { RadioChannelId } from '@springfield/ham-radio-api';
@@ -650,6 +650,8 @@ describe('mapAprsFeatures', () => {
 
   it('reuses the APRS map callsign label and marker paint', () => {
     expect(aprsStationLabelLayout()['text-field']).toEqual(['get', 'callsign']);
+    expect(aprsStationLabelLayout()['text-font']).toEqual(['Noto Sans Bold']);
+    expect(aprsStationLabelPaint()['text-color']).toBe('#f8fafc');
     expect(aprsStationCirclePaint()['circle-stroke-color']).toBe('#ffffff');
     expect(aprsStationCirclePaint()['circle-color']).toEqual(['case', ['==', ['get', 'selected'], 1], '#c2410c', '#0f766e']);
   });
