@@ -1,3 +1,9 @@
+## [3.23.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.22.1...v3.23.0) (2026-11-27)
+
+### Features
+
+* **aprs:** move Raw log behind a developer preference ([#256](https://github.com/springfield-ham-radio/ham-radio-ui/issues/256)) ([9580039](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9580039ba68c858c083f4ff58d3ce7720bc80966))
+
 ## [3.22.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.22.0...v3.22.1) (2026-11-27)
 
 ### Bug Fixes
