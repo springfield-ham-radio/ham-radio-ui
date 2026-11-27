@@ -34,7 +34,7 @@ interface DriverRowState {
 const { catalogEntries, catalogFailure, catalogLoading, loadOfficialCatalog, reload } = useRadioModuleCatalog();
 const { radios, addRadio, saveRadio, deleteRadio } = useSavedRadios();
 const { configurations, clearCardSession, refreshCatalogState } = useRadio();
-const { removeRadioAntennas } = useStationAntennas();
+const { removeRadioAntennas, syncRadioStationAntennas } = useStationAntennas();
 const { cardById, closeCard } = useRadioBoard();
 const { disconnect } = useCat();
 
@@ -124,12 +124,20 @@ function openEdit(savedId: string): void {
   editorOpen.value = true;
 }
 
-function onSave(draft: SavedRadioDraft): void {
+function onSave(draft: SavedRadioDraft, stationAntennaIds: string[]): void {
   const current = editing.value;
 
-  if (!current || !saveRadio(current.id, draft, baudRatesFor(current.model))) {
+  if (!current) {
     return;
   }
+
+  const saved = saveRadio(current.id, draft, baudRatesFor(current.model));
+
+  if (!saved) {
+    return;
+  }
+
+  syncRadioStationAntennas(saved.id, saved.stationId, stationAntennaIds);
 
   if (draft.model !== current.model) {
     clearCardSession(current.id);

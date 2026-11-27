@@ -14,6 +14,8 @@ import {
   readStationAntennaStore,
   removeAntennaFromStore,
   removeAntennasForRadio,
+  setAntennaUsedByRadioIds,
+  setRadioStationAntennas,
   removeStationFromStore,
   replaceAntennaInStore,
   replaceStationInStore,
@@ -98,20 +100,22 @@ export function useStationAntennas() {
   function addAntenna(draft: AntennaDraft): StationAntenna {
     const antenna = createStationAntenna(
       draft.radioId
-        ? { ...draft, stationId: undefined, radioId: draft.radioId }
+        ? { ...draft, stationId: undefined, radioId: draft.radioId, usedByRadioIds: undefined }
         : {
             ...draft,
             radioId: undefined,
             stationId: draft.stationId ?? store.value.selectedStationId ?? HOME_STATION_ID,
           },
     );
-    persist(addAntennaToStore(store.value, antenna));
+    let next = addAntennaToStore(store.value, antenna);
 
     if (!antenna.radioId) {
+      next = setAntennaUsedByRadioIds(next, antenna.id, draft.usedByRadioIds ?? []);
       source.value = 'station';
     }
 
-    return antenna;
+    persist(next);
+    return next.antennas.find((entry) => entry.id === antenna.id) ?? antenna;
   }
 
   function saveAntenna(id: string, draft: AntennaDraft): StationAntenna | undefined {
@@ -121,9 +125,26 @@ export function useStationAntennas() {
       return undefined;
     }
 
-    const updated = updateStationAntenna(current, draft);
-    persist(replaceAntennaInStore(store.value, updated));
-    return updated;
+    const normalizedDraft = draft.radioId
+      ? { ...draft, stationId: undefined, usedByRadioIds: undefined }
+      : { ...draft, radioId: undefined };
+    const updated = updateStationAntenna(current, normalizedDraft);
+    let next = replaceAntennaInStore(store.value, updated);
+
+    if (!updated.radioId) {
+      next = setAntennaUsedByRadioIds(next, id, normalizedDraft.usedByRadioIds ?? []);
+    }
+
+    persist(next);
+    return next.antennas.find((entry) => entry.id === id);
+  }
+
+  function syncRadioStationAntennas(
+    radioId: string,
+    stationId: string | undefined,
+    antennaIds: readonly string[],
+  ): void {
+    persist(setRadioStationAntennas(store.value, radioId, stationId, antennaIds));
   }
 
   function removeAntenna(id: string): void {
@@ -284,6 +305,7 @@ export function useStationAntennas() {
     saveAntenna,
     removeAntenna,
     removeRadioAntennas,
+    syncRadioStationAntennas,
     selectAntenna,
     addStation,
     saveStation,

@@ -26,6 +26,10 @@ import {
   antennasOnRadio,
   removeAntennaFromStore,
   removeAntennasForRadio,
+  antennasUsedByRadio,
+  savedRadioAntennaDetailNames,
+  setAntennaUsedByRadioIds,
+  setRadioStationAntennas,
   removeStationFromStore,
   replaceAntennaInStore,
   resolveAntennaView,
@@ -642,6 +646,111 @@ describe('radio stations', () => {
 
     const alreadySet = applyLicenseGridToHomeIfEmpty(empty, 'FN42', 9);
     expect(alreadySet.stations[0]?.gridsquare).toBe('EM48');
+  });
+
+  it('should parse and serialize usedByRadioIds on site antennas only', () => {
+    const home = createStationAntenna(
+      {
+        ...sampleDraft(),
+        usedByRadioIds: ['radio-a', 'radio-a', 'radio-b', ''],
+      },
+      { id: 'ant-home', now: 1 },
+    );
+
+    expect(home.usedByRadioIds).toEqual(['radio-a', 'radio-b']);
+
+    const whip = createStationAntenna(
+      {
+        nickname: 'Stick',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-ht',
+        usedByRadioIds: ['should-drop'],
+      },
+      { id: 'ant-ht', now: 2 },
+    );
+
+    expect(whip.usedByRadioIds).toBeUndefined();
+
+    let store = addAntennaToStore(defaultStationAntennaStore(), home);
+    store = addAntennaToStore(store, whip);
+
+    const parsed = parseStationAntennaStore(serializeStationAntennaStore(store));
+
+    expect(parsed.antennas.find((antenna) => antenna.id === 'ant-home')?.usedByRadioIds).toEqual(['radio-a', 'radio-b']);
+    expect(parsed.antennas.find((antenna) => antenna.id === 'ant-ht')?.usedByRadioIds).toBeUndefined();
+  });
+
+  it('should link a radio to station antennas and prune other lists', () => {
+    const first = createStationAntenna(sampleDraft(), { id: 'ant-one', now: 1 });
+    const second = createStationAntenna(
+      { ...sampleDraft(), nickname: 'Dipole' },
+      { id: 'ant-two', now: 2 },
+    );
+    let store = addAntennaToStore(defaultStationAntennaStore(), first);
+    store = addAntennaToStore(store, second);
+    store = setRadioStationAntennas(store, 'radio-a', HOME_STATION_ID, ['ant-one'], 3);
+
+    expect(antennasUsedByRadio(store, 'radio-a').map((antenna) => antenna.id)).toEqual(['ant-one']);
+
+    store = setRadioStationAntennas(store, 'radio-a', HOME_STATION_ID, ['ant-two'], 4);
+
+    expect(antennasUsedByRadio(store, 'radio-a').map((antenna) => antenna.id)).toEqual(['ant-two']);
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-one')?.usedByRadioIds).toBeUndefined();
+
+    store = setRadioStationAntennas(store, 'radio-b', HOME_STATION_ID, ['ant-two'], 5);
+
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-two')?.usedByRadioIds?.sort()).toEqual(['radio-a', 'radio-b']);
+  });
+
+  it('should clear usage when the radio station link is cleared', () => {
+    const antenna = createStationAntenna(sampleDraft(), { id: 'ant-one', now: 1 });
+    let store = addAntennaToStore(defaultStationAntennaStore(), antenna);
+    store = setRadioStationAntennas(store, 'radio-a', HOME_STATION_ID, ['ant-one'], 2);
+    store = setRadioStationAntennas(store, 'radio-a', undefined, [], 3);
+
+    expect(antennasUsedByRadio(store, 'radio-a')).toEqual([]);
+  });
+
+  it('should sync used-by from the antenna editor without duplicate radio rows', () => {
+    const first = createStationAntenna(sampleDraft(), { id: 'ant-one', now: 1 });
+    const second = createStationAntenna(
+      { ...sampleDraft(), nickname: 'Dipole' },
+      { id: 'ant-two', now: 2 },
+    );
+    let store = addAntennaToStore(defaultStationAntennaStore(), first);
+    store = addAntennaToStore(store, second);
+    store = setAntennaUsedByRadioIds(store, 'ant-one', ['radio-a', 'radio-b'], 3);
+    store = setAntennaUsedByRadioIds(store, 'ant-two', ['radio-b'], 4);
+
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-one')?.usedByRadioIds).toEqual(['radio-a']);
+    expect(store.antennas.find((antenna) => antenna.id === 'ant-two')?.usedByRadioIds).toEqual(['radio-b']);
+  });
+
+  it('should strip usedByRadioIds when a radio is removed', () => {
+    const stationAntenna = createStationAntenna(
+      { ...sampleDraft(), usedByRadioIds: ['radio-a'] },
+      { id: 'ant-home', now: 1 },
+    );
+    const whip = createStationAntenna(
+      {
+        nickname: 'Stick',
+        typeId: 'dual-band-vertical',
+        heightAglM: 1.5,
+        bands: ['2m', '70cm'],
+        radioId: 'radio-a',
+      },
+      { id: 'ant-ht', now: 2 },
+    );
+    let store = addAntennaToStore(defaultStationAntennaStore(), stationAntenna);
+    store = addAntennaToStore(store, whip);
+
+    store = removeAntennasForRadio(store, 'radio-a');
+
+    expect(store.antennas.map((antenna) => antenna.id)).toEqual(['ant-home']);
+    expect(store.antennas[0]?.usedByRadioIds).toBeUndefined();
+    expect(savedRadioAntennaDetailNames(store, 'radio-a')).toEqual([]);
   });
 
   it('should format a station location line', () => {

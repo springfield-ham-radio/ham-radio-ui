@@ -13,6 +13,25 @@ const props = defineProps<{
 }>();
 
 const { antennas, addAntenna, saveAntenna, removeAntenna } = useStationAntennas();
+const { radios } = useSavedRadios();
+
+function usedByRadiosLabel(antenna: StationAntenna): string | undefined {
+  const ids = antenna.usedByRadioIds;
+
+  if (!ids?.length) {
+    return undefined;
+  }
+
+  const names = ids
+    .map((id) => radios.value.find((radio) => radio.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  if (names.length === 0) {
+    return undefined;
+  }
+
+  return `Used by ${names.join(', ')}`;
+}
 
 const editorOpen = ref(false);
 const editing = ref<StationAntenna | undefined>();
@@ -83,6 +102,7 @@ function confirmRemove(): void {
           <p v-if="formatAntennaProduct(antenna)" class="truncate text-xs text-muted">{{ formatAntennaProduct(antenna) }}</p>
           <p class="truncate text-xs text-muted">{{ formatAntennaGeometry(antenna) }}</p>
           <p class="truncate text-xs text-muted">{{ formatAntennaBands(antenna.bands, antenna.trapped === true) }}</p>
+          <p v-if="usedByRadiosLabel(antenna)" class="truncate text-xs text-muted">{{ usedByRadiosLabel(antenna) }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <UButton

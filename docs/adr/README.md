@@ -38,7 +38,7 @@ Numbered Markdown files record code and architecture decisions so future work st
 | [0027](./0027-aprs-position-beacon.md) | accepted | Host position beacons on the KISS session |
 | [0028](./0028-radio-station-link.md) | accepted | Optional station link on saved radios |
 
-Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0029. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
+Numbers 0007 and 0008 are unused in this repository. 0006 is the channel-card print record. Two records share number 0014 because they were written in parallel: the reference tab (`0014-reference-tab.md`) and receive-only APRS (`0014-aprs-receive.md`). The filenames distinguish them. The next free number is 0030. Ecosystem ADRs live in [ham-radio-docs](https://github.com/springfield-ham-radio/ham-radio-docs/tree/main/docs/developer/adr).
 
 ## Status
 

@@ -26,9 +26,9 @@ A follow-up will let a station antenna stay at a site while listing which radios
 
 **Antenna ownership.** Radio→station does not move or duplicate antennas. A handheld whip remains `radioId`-only.
 
-**Deferred (PR 2 and later).**
+**Deferred (later PRs).**
 
-- `usedByRadioIds` on `StationAntenna` for many-to-many “this roof antenna used by these radios.”
+- Many-to-many station antenna usage — see [0029](./0029-radio-station-antenna-usage.md).
 - Station log / CAT defaults from the radio’s linked station instead of only the globally selected station.
 - APRS beacon prefill from linked-station coordinates when no beacon is stored.
 - Propagation still uses the selected station antenna; no radio filter yet.
@@ -36,5 +36,5 @@ A follow-up will let a station antenna stay at a site while listing which radios
 ## Consequences
 
 - Operators can name a usual site per radio without changing global station selection or propagation.
-- PR 2 can restrict antenna pickers to `radio.stationId` and prune `usedByRadioIds` when sites or radios change.
+- Antenna pickers and pruning are covered in ADR 0029.
 - Dangling `stationId` values (hand-edited storage) display as None in the editor until the operator saves or the station is removed.
