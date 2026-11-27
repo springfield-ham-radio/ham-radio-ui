@@ -6,6 +6,12 @@ export const APRS_BEACON_TOCALL = 'APZHMB';
 
 export const APRS_BEACON_COMMENT_MAX = 43;
 
+/** APRS uncompressed position tail uses `/A=` plus six altitude digits (nine characters). */
+export const APRS_BEACON_ALTITUDE_SUFFIX_CHARS = 9;
+
+/** User comment length when altitude will be appended in the 43-character tail. */
+export const APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE = APRS_BEACON_COMMENT_MAX - APRS_BEACON_ALTITUDE_SUFFIX_CHARS;
+
 export const APRS_BEACON_PATH_DEFAULT = 'WIDE1-1,WIDE2-1';
 
 export const APRS_BEACON_INTERVAL_MIN = 10;
@@ -80,10 +86,11 @@ export function parseSavedRadioAprsBeacon(value: unknown): SavedRadioAprsBeacon 
 
   const symbolTable = typeof raw.symbolTable === 'string' && raw.symbolTable.length === 1 ? raw.symbolTable : '/';
   const symbolCode = typeof raw.symbolCode === 'string' && raw.symbolCode.length === 1 ? raw.symbolCode : '-';
-  const comment = typeof raw.comment === 'string' && raw.comment.trim().length > 0 ? raw.comment : undefined;
   const altitudeFt = typeof raw.altitudeFt === 'number' && Number.isFinite(raw.altitudeFt) && raw.altitudeFt >= 0
     ? Math.round(raw.altitudeFt)
     : undefined;
+  const rawComment = typeof raw.comment === 'string' && raw.comment.trim().length > 0 ? raw.comment.trim() : undefined;
+  const comment = rawComment ? normalizeBeaconComment(rawComment, altitudeFt) : undefined;
   const path = typeof raw.path === 'string' ? raw.path.trim() : APRS_BEACON_PATH_DEFAULT;
 
   return {
@@ -115,13 +122,94 @@ export function beaconSymbolError(table: string, code: string): string | undefin
   return undefined;
 }
 
-export function beaconCommentError(text: string): string | undefined {
+export function beaconCommentMaxLength(altitudeFt: number | undefined): number {
+  return altitudeFt === undefined ? APRS_BEACON_COMMENT_MAX : APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE;
+}
+
+export function beaconAltitudeSuffix(feet: number): string {
+  return `/A=${String(Math.round(feet)).padStart(6, '0')}`;
+}
+
+export function beaconPositionTail(comment: string, altitudeFt: number | undefined): string {
+  if (altitudeFt === undefined) {
+    return comment;
+  }
+
+  const suffix = beaconAltitudeSuffix(altitudeFt);
+
+  if (comment.length === 0) {
+    return suffix;
+  }
+
+  const spaced = `${comment} ${suffix}`;
+
+  if (spaced.length <= APRS_BEACON_COMMENT_MAX) {
+    return spaced;
+  }
+
+  const compact = `${comment}${suffix}`;
+
+  return compact;
+}
+
+export function beaconPositionTailLength(comment: string, altitudeFt: number | undefined): number {
+  return beaconPositionTail(comment, altitudeFt).length;
+}
+
+/** Truncate stored or in-memory comment so the encoded tail fits the APRS limit. */
+export function normalizeBeaconComment(comment: string, altitudeFt: number | undefined): string {
+  const trimmed = comment.trim();
+
+  if (trimmed.length === 0) {
+    return '';
+  }
+
+  let text = trimmed.slice(0, beaconCommentMaxLength(altitudeFt));
+
+  while (text.length > 0 && beaconPositionTailLength(text, altitudeFt) > APRS_BEACON_COMMENT_MAX) {
+    text = text.slice(0, -1);
+  }
+
+  return text;
+}
+
+export function beaconCommentLengthHint(comment: string, altitudeFt: number | undefined): string {
+  const max = beaconCommentMaxLength(altitudeFt);
+
+  return `${comment.length}/${max}`;
+}
+
+/** Clamp live comment input to the APRS tail budget (untrimmed, for the form field). */
+export function capBeaconCommentInput(text: string, altitudeFt: number | undefined): string {
+  let capped = text;
+  const hardMax = beaconCommentMaxLength(altitudeFt);
+
+  if (capped.length > hardMax) {
+    capped = capped.slice(0, hardMax);
+  }
+
+  while (capped.length > 0 && beaconPositionTailLength(capped, altitudeFt) > APRS_BEACON_COMMENT_MAX) {
+    capped = capped.slice(0, -1);
+  }
+
+  return capped;
+}
+
+export function beaconCommentError(text: string, altitudeFt?: number): string | undefined {
   if (text.length === 0) {
     return undefined;
   }
 
-  if (text.length > APRS_BEACON_COMMENT_MAX) {
-    return `Comment is limited to ${APRS_BEACON_COMMENT_MAX} characters`;
+  const max = beaconCommentMaxLength(altitudeFt);
+
+  if (text.length > max) {
+    return altitudeFt === undefined
+      ? `Comment is limited to ${APRS_BEACON_COMMENT_MAX} characters`
+      : `Comment is limited to ${APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE} characters when altitude is set`;
+  }
+
+  if (altitudeFt !== undefined && beaconPositionTailLength(text, altitudeFt) > APRS_BEACON_COMMENT_MAX) {
+    return `Comment with altitude must fit ${APRS_BEACON_COMMENT_MAX} characters in the position tail`;
   }
 
   if ([...text].some((character) => character.charCodeAt(0) < 0x20 || character.charCodeAt(0) > 0x7e)) {
@@ -254,7 +342,7 @@ export function formatAprsBeaconPositionBody(settings: SavedRadioAprsBeacon): st
   }
 
   const comment = settings.comment ?? '';
-  const commentError = beaconCommentError(comment);
+  const commentError = beaconCommentError(comment, settings.altitudeFt);
 
   if (commentError) {
     return undefined;
@@ -267,17 +355,18 @@ export function formatAprsBeaconPositionBody(settings: SavedRadioAprsBeacon): st
     return undefined;
   }
 
-  let tail = comment;
-
   if (settings.altitudeFt !== undefined) {
     const feet = Math.round(settings.altitudeFt);
 
     if (feet < 0 || feet > 999_999) {
       return undefined;
     }
+  }
 
-    const suffix = `/A=${String(feet).padStart(6, '0')}`;
-    tail = tail.length > 0 ? `${tail} ${suffix}` : suffix;
+  const tail = beaconPositionTail(comment, settings.altitudeFt);
+
+  if (tail.length > APRS_BEACON_COMMENT_MAX) {
+    return undefined;
   }
 
   return `=${lat}${settings.symbolTable}${lon}${settings.symbolCode}${tail}`;
@@ -348,7 +437,7 @@ export function aprsBeaconSettingsError(settings: SavedRadioAprsBeacon): string 
   }
 
   return beaconSymbolError(settings.symbolTable, settings.symbolCode)
-    ?? beaconCommentError(settings.comment ?? '')
+    ?? beaconCommentError(settings.comment ?? '', settings.altitudeFt)
     ?? (settings.altitudeFt !== undefined ? beaconAltitudeError(String(settings.altitudeFt)) : undefined)
     ?? beaconPathError(settings.path)
     ?? (formatAprsBeaconPositionBody(settings) ? undefined : 'The position could not be encoded');

@@ -102,17 +102,29 @@ const stubs = {
   }),
   UFormField: defineComponent({
     props: ['label', 'error', 'hint'],
-    template: '<label class="u-form-field"><span class="field-label">{{ label }}</span><span v-if="error" class="field-error">{{ error }}</span><slot /></label>',
+    template: '<label class="u-form-field"><span class="field-label">{{ label }}</span><span v-if="hint" class="field-hint">{{ hint }}</span><span v-if="error" class="field-error">{{ error }}</span><slot /></label>',
   }),
   UInput: defineComponent({
-    props: ['modelValue'],
+    props: ['modelValue', 'maxlength'],
     emits: ['update:modelValue', 'change'],
     setup(props, { emit }) {
       return () =>
         h('input', {
           class: 'u-input',
           value: props.modelValue as string,
-          onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
+          maxlength: props.maxlength,
+          onInput: (event: Event) => {
+            const input = event.target as HTMLInputElement;
+            let value = input.value;
+            const limit = props.maxlength !== undefined ? Number(props.maxlength) : undefined;
+
+            if (limit !== undefined && value.length > limit) {
+              value = value.slice(0, limit);
+              input.value = value;
+            }
+
+            emit('update:modelValue', value);
+          },
           onChange: () => emit('change'),
         });
     },
@@ -161,6 +173,13 @@ function findAltitudeInput(wrapper: ReturnType<typeof mountBeacon>) {
   return wrapper.findAll('input.u-input').find((input) => {
     const field = input.element.closest('.u-form-field');
     return field?.textContent?.includes('Altitude');
+  })!;
+}
+
+function findCommentInput(wrapper: ReturnType<typeof mountBeacon>) {
+  return wrapper.findAll('input.u-input').find((input) => {
+    const field = input.element.closest('.u-form-field');
+    return field?.textContent?.includes('Comment');
   })!;
 }
 
@@ -379,6 +398,29 @@ describe('AprsBeacon layout', () => {
     expect(storedBeacon()).toBeUndefined();
     expect(wrapper.find('.u-modal').exists()).toBe(true);
     expect(wrapper.text()).toMatch(/Seconds must be from 0 up to \(but not including\) 60/);
+  });
+
+  it('shows a live comment counter and maxlength, and shrinks comment when altitude is added', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+
+    const comment = findCommentInput(wrapper);
+    expect(comment.attributes('maxlength')).toBe('43');
+    expect(wrapper.text()).toContain('0/43');
+
+    await comment.setValue('c'.repeat(50));
+    await comment.trigger('input');
+    expect((comment.element as HTMLInputElement).value.length).toBe(43);
+    expect(wrapper.text()).toContain('43/43');
+
+    await findAltitudeInput(wrapper).setValue('1180');
+    await findAltitudeInput(wrapper).trigger('input');
+    await nextTick();
+
+    expect(comment.attributes('maxlength')).toBe('34');
+    expect((comment.element as HTMLInputElement).value.length).toBeLessThanOrEqual(34);
+    expect(wrapper.text()).toMatch(/\/34/);
   });
 
   it('does not disarm the interval when the modal has invalid altitude before Save', async () => {

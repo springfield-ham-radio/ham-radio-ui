@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { APRS_AX25_DESTINATION, canonicalAx25Call, formatAx25Call, parseAx25Ui } from '~/utils/aprs-ax25';
 import {
+  APRS_BEACON_COMMENT_MAX,
+  APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE,
   APRS_BEACON_TOCALL,
   aprsBeaconSettingsError,
+  beaconCommentError,
+  beaconCommentLengthHint,
+  beaconAltitudeSuffix,
+  beaconCommentMaxLength,
+  beaconPositionTail,
+  capBeaconCommentInput,
   encodeAprsBeaconFrame,
   formatAprsBeaconPositionBody,
+  normalizeBeaconComment,
   parseBeaconAltitudeFeet,
   parseBeaconDecimalDegrees,
   parseSavedRadioAprsBeacon,
@@ -157,5 +166,43 @@ describe('APRS position beacon encode', () => {
     expect(parseBeaconDecimalDegrees('30.5', '   ')).toBeUndefined();
     expect(parseBeaconDecimalDegrees('  ', '0')).toBeUndefined();
     expect(parseBeaconDecimalDegrees('30.5187', '-97.879')).toEqual({ latitude: 30.5187, longitude: -97.879 });
+  });
+
+  it('reserves nine tail characters for /A= altitude in the comment budget', () => {
+    expect(beaconCommentMaxLength(undefined)).toBe(APRS_BEACON_COMMENT_MAX);
+    expect(beaconCommentMaxLength(1180)).toBe(APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE);
+    expect(beaconCommentLengthHint('HamBench', undefined)).toBe('8/43');
+    expect(beaconCommentLengthHint('Hi', 1180)).toBe('2/34');
+
+    const commentOnly = 'x'.repeat(APRS_BEACON_COMMENT_MAX);
+    expect(formatAprsBeaconPositionBody({ ...beacon, comment: commentOnly, altitudeFt: undefined })).toBeDefined();
+    expect(beaconCommentError(commentOnly)).toBeUndefined();
+    expect(beaconCommentError(commentOnly, 1180)).toMatch(/34/);
+
+    const withAlt = 'x'.repeat(APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE);
+    const tail = beaconPositionTail(withAlt, 1180);
+    expect(tail).toBe(`${withAlt}${beaconAltitudeSuffix(1180)}`);
+    expect(tail.length).toBe(APRS_BEACON_COMMENT_MAX);
+    expect(formatAprsBeaconPositionBody({ ...beacon, comment: withAlt, altitudeFt: 1180 })).toBeDefined();
+
+    const tooLongWithAlt = 'x'.repeat(APRS_BEACON_COMMENT_MAX);
+    expect(formatAprsBeaconPositionBody({ ...beacon, comment: tooLongWithAlt, altitudeFt: 1180 })).toBeUndefined();
+    expect(capBeaconCommentInput(tooLongWithAlt, 1180).length).toBeLessThanOrEqual(APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE);
+  });
+
+  it('truncates stored comment when altitude consumes part of the tail budget', () => {
+    const longComment = 'c'.repeat(43);
+    const parsed = parseSavedRadioAprsBeacon({
+      ...beacon,
+      comment: longComment,
+      altitudeFt: 100,
+    });
+
+    expect(parsed?.comment?.length).toBeLessThan(43);
+    expect(parsed?.comment?.length).toBeLessThanOrEqual(APRS_BEACON_COMMENT_MAX_WITH_ALTITUDE);
+    expect(formatAprsBeaconPositionBody(parsed!)).toBeDefined();
+
+    expect(normalizeBeaconComment(longComment, undefined)).toBe(longComment);
+    expect(normalizeBeaconComment(longComment, 100).length).toBeLessThan(longComment.length);
   });
 });

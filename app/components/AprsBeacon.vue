@@ -7,7 +7,11 @@ import {
   aprsBeaconSettingsError,
   beaconAltitudeError,
   beaconCommentError,
+  beaconCommentLengthHint,
+  beaconCommentMaxLength,
+  capBeaconCommentInput,
   beaconPathError,
+  normalizeBeaconComment,
   clampBeaconIntervalMinutes,
   defaultSavedRadioAprsBeacon,
   parseBeaconAltitudeFeet,
@@ -148,11 +152,17 @@ function draftFromParts(
 
   const { altitudeFt: _dropped, ...settingsRest } = settingsBase;
 
+  const altitudeFt = altitude.feet;
+  const comment = settingsRest.comment
+    ? normalizeBeaconComment(settingsRest.comment, altitudeFt)
+    : undefined;
+
   return {
     ...settingsRest,
     latitude,
     longitude,
-    ...(altitude.feet !== undefined ? { altitudeFt: altitude.feet } : {}),
+    ...(comment ? { comment } : {}),
+    ...(altitudeFt !== undefined ? { altitudeFt } : {}),
   };
 }
 
@@ -182,6 +192,21 @@ watch(
 watch(selectedStationId, () => {
   if (!radioById(props.cardId)?.aprsBeacon) {
     applyPrefill();
+  }
+});
+
+watch(altitudeText, () => {
+  const comment = settings.value.comment;
+
+  if (!comment) {
+    return;
+  }
+
+  const feet = parseBeaconAltitudeFeet(altitudeText.value).feet;
+  const normalized = normalizeBeaconComment(comment, feet);
+
+  if (normalized !== comment) {
+    settings.value.comment = normalized.length > 0 ? normalized : undefined;
   }
 });
 
@@ -226,7 +251,14 @@ const latitudeError = computed(() => coordinateFieldError('latitude', latTouched
 
 const longitudeError = computed(() => coordinateFieldError('longitude', lonTouched.value));
 
-const commentError = computed(() => (modalValidated.value ? beaconCommentError(settings.value.comment ?? '') : undefined));
+const commentAltitudeFt = computed(() => parseBeaconAltitudeFeet(altitudeText.value).feet);
+
+const commentMaxLength = computed(() => beaconCommentMaxLength(commentAltitudeFt.value));
+
+const commentLengthHint = computed(() => beaconCommentLengthHint(settings.value.comment ?? '', commentAltitudeFt.value));
+
+const commentError = computed(() =>
+  (modalValidated.value ? beaconCommentError(settings.value.comment ?? '', commentAltitudeFt.value) : undefined));
 const altitudeError = computed(() => (showAltFieldError() ? beaconAltitudeError(altitudeText.value) : undefined));
 const pathError = computed(() => (modalValidated.value ? beaconPathError(settings.value.path) : undefined));
 
@@ -395,9 +427,9 @@ function onPath(value: string | number): void {
 }
 
 function onComment(value: string | number): void {
-  const text = String(value);
+  const text = capBeaconCommentInput(String(value), commentAltitudeFt.value);
 
-  settings.value.comment = text.trim().length > 0 ? text : undefined;
+  settings.value.comment = text.length > 0 ? text : undefined;
 }
 
 function onIntervalMinutes(value: string | number): void {
@@ -625,8 +657,13 @@ function saveModal(): void {
           <UFormField label="Digipeater path" :error="pathError" :hint="`Default ${APRS_BEACON_PATH_DEFAULT}. Empty = direct.`">
             <UInput :model-value="settings.path" class="w-full uppercase" :placeholder="APRS_BEACON_PATH_DEFAULT" @update:model-value="onPath" />
           </UFormField>
-          <UFormField label="Comment" :error="commentError" hint="Optional">
-            <UInput :model-value="settings.comment ?? ''" class="w-full" @update:model-value="onComment" />
+          <UFormField label="Comment" :error="commentError" :hint="commentLengthHint">
+            <UInput
+              :model-value="settings.comment ?? ''"
+              class="w-full"
+              :maxlength="commentMaxLength"
+              @update:model-value="onComment"
+            />
           </UFormField>
           <p class="text-xs text-muted">Connect does not beacon. Beacon now keys once after a UI frame is heard.</p>
         </div>
