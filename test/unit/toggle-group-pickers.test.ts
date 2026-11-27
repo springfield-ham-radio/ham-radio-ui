@@ -57,4 +57,11 @@ describe('toggle group pickers', () => {
     expect(source).toContain('extraSelectUsesToggleGroup(field)');
     expect(source).toContain('updateExtraSelect');
   });
+
+  it('marks required frequency fields in the radio channel editor', () => {
+    const source = readFileSync(new URL('../../app/components/RadioChannelEditor.vue', import.meta.url), 'utf8');
+
+    expect(source).toMatch(/label="Receive \(MHz\)"[^>]*required/);
+    expect(source).toMatch(/label="Transmit \(MHz\)"[^>]*required/);
+  });
 });

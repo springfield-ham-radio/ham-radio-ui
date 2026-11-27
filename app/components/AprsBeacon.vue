@@ -631,7 +631,7 @@ function saveModal(): void {
             name="latitude"
             axis="latitude"
             label="Latitude"
-            hint=""
+            required
             :error="latitudeError"
             @change="onCoordinateInput('latitude')"
           />
@@ -640,20 +640,23 @@ function saveModal(): void {
             name="longitude"
             axis="longitude"
             label="Longitude"
-            hint=""
+            required
             :error="longitudeError"
             @change="onCoordinateInput('longitude')"
           />
-          <UFormField label="Altitude (feet)" :error="altitudeError" hint="Optional">
-            <UInput
-              v-model="altitudeText"
-              inputmode="numeric"
-              @change="altTouched = true"
-            />
-          </UFormField>
-          <UFormField label="Symbol">
-            <USelect :model-value="symbolKey" :items="symbolItems" @update:model-value="onSymbol" />
-          </UFormField>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <UFormField label="Altitude (feet)" :error="altitudeError">
+              <UInput
+                v-model="altitudeText"
+                class="w-full"
+                inputmode="numeric"
+                @change="altTouched = true"
+              />
+            </UFormField>
+            <UFormField label="Symbol">
+              <USelect :model-value="symbolKey" :items="symbolItems" class="w-full" @update:model-value="onSymbol" />
+            </UFormField>
+          </div>
           <UFormField label="Digipeater path" :error="pathError" :hint="`Default ${APRS_BEACON_PATH_DEFAULT}. Empty = direct.`">
             <UInput :model-value="settings.path" class="w-full uppercase" :placeholder="APRS_BEACON_PATH_DEFAULT" @update:model-value="onPath" />
           </UFormField>

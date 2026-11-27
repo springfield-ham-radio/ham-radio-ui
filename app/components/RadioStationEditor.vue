@@ -265,7 +265,6 @@ defineExpose({ save });
         <UFormField
           name="gridsquare"
           label="Maidenhead grid"
-          hint="Optional"
           description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
         >
           <UInput
@@ -322,7 +321,6 @@ defineExpose({ save });
       <UFormField
         name="gridsquare"
         label="Maidenhead grid"
-        hint="Optional"
         description="2, 4, or 6 characters. Editing the grid sets latitude and longitude to the cell center."
       >
         <UInput

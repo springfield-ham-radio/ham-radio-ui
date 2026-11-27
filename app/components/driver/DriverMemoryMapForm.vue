@@ -123,14 +123,11 @@ watch(
         </UFormField>
         <UFormField label="Names struct" :error="errorAt('memory.names')">
           <template #hint>
-            <span class="inline-flex items-center gap-1.5">
-              Optional
-              <HelpTooltip text="A separate struct for channel names. Leave blank when the name is on the record." />
-            </span>
+            <HelpTooltip text="A separate struct for channel names. Leave blank when the name is on the record." />
           </template>
           <UInput v-model="names" class="w-full font-mono" spellcheck="false" />
         </UFormField>
-        <UFormField label="Name field" :error="errorAt('memory.nameField')">
+        <UFormField label="Name field" :required="names.trim().length > 0" :error="errorAt('memory.nameField')">
           <UInput v-model="nameField" class="w-full font-mono" spellcheck="false" />
         </UFormField>
         <UFormField label="Receive frequency" required :error="errorAt('memory.receiveFrequency')">
@@ -147,10 +144,7 @@ watch(
         </UFormField>
         <UFormField label="Extras struct" :error="errorAt('memory.extras')">
           <template #hint>
-            <span class="inline-flex items-center gap-1.5">
-              Optional
-              <HelpTooltip text="A parallel struct merged into each channel, such as lockout flags." />
-            </span>
+            <HelpTooltip text="A parallel struct merged into each channel, such as lockout flags." />
           </template>
           <UInput v-model="extras" class="w-full font-mono" spellcheck="false" />
         </UFormField>

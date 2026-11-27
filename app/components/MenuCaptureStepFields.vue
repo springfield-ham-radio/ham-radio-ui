@@ -33,7 +33,7 @@ defineProps<{
       <UInput v-model="changeTo" class="w-full font-mono" :readonly="readOnly" :disabled="readOnly" />
     </UFormField>
   </div>
-  <UFormField label="Notes (optional)">
+  <UFormField label="Notes">
     <UTextarea v-model="changeNote" :rows="2" class="w-full" :readonly="readOnly" :disabled="readOnly" />
   </UFormField>
 </template>

@@ -80,7 +80,7 @@
               <div>
                 <label for="custom-map-style-url" class="text-sm font-medium text-highlighted">Custom style URL</label>
                 <p class="mt-1 text-xs text-muted">
-                  Optional HTTPS link to a MapLibre style JSON. Leave blank to use OpenFreeMap for the style above.
+                  HTTPS link to a MapLibre style JSON. Leave blank to use OpenFreeMap for the style above.
                 </p>
                 <UInput
                   id="custom-map-style-url"
