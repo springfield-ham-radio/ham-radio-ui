@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { type CoordinateAxis, type DmsInput } from '~/utils/location-format';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   axis: CoordinateAxis;
   modelValue: DmsInput;
   label: string;
   /** Form field name so UForm can show this coordinate's error after blur or submit. */
   name: string;
   error?: string;
-}>();
+  hint?: string;
+}>(), {
+  hint: 'Optional',
+});
 
 const emit = defineEmits<{
   'update:modelValue': [value: DmsInput];
@@ -53,7 +56,7 @@ function onHemisphere(value: string | number): void {
 </script>
 
 <template>
-  <UFormField :name="name" :label="label" hint="Optional" :error="error">
+  <UFormField :name="name" :label="label" :hint="hint" :error="error">
     <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_4.5rem] gap-1.5">
       <div>
         <p class="mb-1 text-[11px] leading-none text-muted">Degrees</p>

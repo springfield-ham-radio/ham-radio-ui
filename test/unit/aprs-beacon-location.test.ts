@@ -97,10 +97,8 @@ describe('resolveAprsBeaconLocation', () => {
   });
 
   it('formats summary position strings in DMS', () => {
-    expect(formatAprsBeaconSummaryPosition(30.5187, -97.879)).toBe(
-      `${formatLatitude(30.5187)} ${formatLongitude(-97.879)}`,
-    );
-    expect(formatAprsBeaconSummaryPosition(0, 0)).toBe(`${formatLatitude(0)} ${formatLongitude(0)}`);
+    expect(formatAprsBeaconSummaryPosition(30.5187, -97.879)).toBe(`30° 31' 07.32" N 97° 52' 44.40" W`);
+    expect(formatAprsBeaconSummaryPosition(0, 0)).toBe(`0° 00' 00.00" N 0° 00' 00.00" E`);
   });
 
   it('round-trips decimal degrees through DMS input', () => {

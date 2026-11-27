@@ -118,9 +118,52 @@ function applyPrefill(): void {
   symbolKey.value = '/-';
 }
 
-function onCoordinateInput(): void {
-  latTouched.value = true;
+function onCoordinateInput(axis: 'latitude' | 'longitude'): void {
+  if (axis === 'latitude') {
+    latTouched.value = true;
+    return;
+  }
+
   lonTouched.value = true;
+}
+
+function draftFromParts(
+  settingsBase: SavedRadioAprsBeacon,
+  latDms: DmsInput,
+  lonDms: DmsInput,
+  altText: string,
+): SavedRadioAprsBeacon | undefined {
+  const latitude = parsedDecimal(parseDmsInput(latDms, 'latitude'));
+  const longitude = parsedDecimal(parseDmsInput(lonDms, 'longitude'));
+
+  if (latitude === undefined || longitude === undefined) {
+    return undefined;
+  }
+
+  const altitude = parseBeaconAltitudeFeet(altText);
+
+  if (altitude.error) {
+    return undefined;
+  }
+
+  const { altitudeFt: _dropped, ...settingsRest } = settingsBase;
+
+  return {
+    ...settingsRest,
+    latitude,
+    longitude,
+    ...(altitude.feet !== undefined ? { altitudeFt: altitude.feet } : {}),
+  };
+}
+
+function buildSettingsFromFormSnapshot(snapshot: FormSnapshot): SavedRadioAprsBeacon | undefined {
+  const draft = draftFromParts(snapshot.settings, snapshot.latitudeDms, snapshot.longitudeDms, snapshot.altitudeText);
+
+  if (!draft || aprsBeaconSettingsError(draft)) {
+    return undefined;
+  }
+
+  return draft;
 }
 
 watch(
@@ -187,27 +230,8 @@ const commentError = computed(() => (modalValidated.value ? beaconCommentError(s
 const altitudeError = computed(() => (showAltFieldError() ? beaconAltitudeError(altitudeText.value) : undefined));
 const pathError = computed(() => (modalValidated.value ? beaconPathError(settings.value.path) : undefined));
 
-const draftFromForm = computed((): SavedRadioAprsBeacon | undefined => {
-  const latitude = parsedDecimal(parseDmsInput(latitudeDms.value, 'latitude'));
-  const longitude = parsedDecimal(parseDmsInput(longitudeDms.value, 'longitude'));
-
-  if (latitude === undefined || longitude === undefined) {
-    return undefined;
-  }
-
-  const altitude = parseBeaconAltitudeFeet(altitudeText.value);
-
-  if (altitude.error) {
-    return undefined;
-  }
-
-  return {
-    ...settings.value,
-    latitude,
-    longitude,
-    ...(altitude.feet !== undefined ? { altitudeFt: altitude.feet } : {}),
-  };
-});
+const draftFromForm = computed((): SavedRadioAprsBeacon | undefined =>
+  draftFromParts(settings.value, latitudeDms.value, longitudeDms.value, altitudeText.value));
 
 const formError = computed(() => {
   const altitude = parseBeaconAltitudeFeet(altitudeText.value);
@@ -269,7 +293,26 @@ const kissBlock = computed(() => {
 
 const sendBlock = computed(() => mineBlock.value ?? formError.value ?? kissBlock.value);
 
-const intervalBlocked = computed(() => Boolean(sendBlock.value || kissBlock.value));
+/** Interval and arm/disarm use committed settings; in-modal edits wait for Save. */
+const settingsForIntervalGate = computed((): SavedRadioAprsBeacon | undefined => {
+  if (modalOpen.value) {
+    return buildSettingsFromFormSnapshot(modalBaseline);
+  }
+
+  return buildSettings();
+});
+
+const intervalGateError = computed(() => {
+  const draft = settingsForIntervalGate.value;
+
+  if (!draft) {
+    return formError.value ?? 'Enter latitude and longitude in degrees, minutes, and seconds.';
+  }
+
+  return aprsBeaconSettingsError(draft);
+});
+
+const intervalBlocked = computed(() => Boolean(mineBlock.value ?? intervalGateError.value ?? kissBlock.value));
 
 const symbolLabel = computed(() => {
   const match = APRS_BEACON_SYMBOLS.find((entry) => entry.table === settings.value.symbolTable && entry.code === settings.value.symbolCode);
@@ -335,8 +378,8 @@ function onSymbol(value: string | number): void {
   settings.value.symbolCode = key[1] ?? '-';
 }
 
-function persistSettings(): void {
-  const draft = buildSettings();
+function persistSettings(draftOverride?: SavedRadioAprsBeacon): void {
+  const draft = draftOverride ?? buildSettings();
 
   if (!props.cardId || !draft) {
     return;
@@ -382,7 +425,7 @@ function onInterval(armed: boolean): void {
     return;
   }
 
-  const draft = buildSettings();
+  const draft = settingsForIntervalGate.value;
 
   if (Boolean(armed) && !draft) {
     return;
@@ -390,14 +433,14 @@ function onInterval(armed: boolean): void {
 
   intervalArmed.value = Boolean(armed);
 
-  if (draft) {
+  if (draft && !modalOpen.value) {
     settings.value = draft;
     persistSettings();
   }
 
   host.setBeaconInterval(props.cardId, {
     armed: intervalArmed.value,
-    minutes: settings.value.intervalMinutes,
+    minutes: draft?.intervalMinutes ?? settings.value.intervalMinutes,
     mine: props.mine,
     settings: draft ?? { ...settings.value },
   });
@@ -417,7 +460,7 @@ function disarmInterval(): void {
     armed: false,
     minutes: settings.value.intervalMinutes,
     mine: props.mine,
-    settings: buildSettings() ?? { ...settings.value },
+    settings: settingsForIntervalGate.value ?? { ...settings.value },
   });
 }
 
@@ -437,13 +480,15 @@ watch(
 );
 
 function onIntervalMinutesPersist(): void {
-  persistSettings();
+  if (!modalOpen.value) {
+    persistSettings();
+  }
 
   if (!props.cardId || !intervalArmed.value) {
     return;
   }
 
-  const draft = buildSettings();
+  const draft = settingsForIntervalGate.value;
 
   if (!draft) {
     return;
@@ -486,7 +531,7 @@ function saveModal(): void {
   }
 
   settings.value = draft;
-  persistSettings();
+  persistSettings(draft);
   modalOpen.value = false;
 }
 </script>
@@ -554,16 +599,18 @@ function saveModal(): void {
             name="latitude"
             axis="latitude"
             label="Latitude"
+            hint=""
             :error="latitudeError"
-            @change="onCoordinateInput"
+            @change="onCoordinateInput('latitude')"
           />
           <DmsCoordinateInput
             v-model="longitudeDms"
             name="longitude"
             axis="longitude"
             label="Longitude"
+            hint=""
             :error="longitudeError"
-            @change="onCoordinateInput"
+            @change="onCoordinateInput('longitude')"
           />
           <div class="grid gap-3 @min-[28rem]:grid-cols-2">
             <UFormField label="Symbol">

@@ -10,13 +10,14 @@ import {
   replaceStationInStore,
   updateRadioStation,
 } from '../../app/utils/antenna-station.ts';
-import { dmsInputFromDecimal, formatLatitude, formatLongitude } from '../../app/utils/location-format.ts';
+import { dmsInputFromDecimal } from '../../app/utils/location-format.ts';
 import { readSavedRadioStore, SAVED_RADIOS_STORAGE_KEY } from '../../app/utils/saved-radios.ts';
 import { useAprsHost } from '../../app/composables/useAprsHost.ts';
 import { useSavedRadios } from '../../app/composables/useSavedRadios.ts';
 import { useStationAntennas } from '../../app/composables/useStationAntennas.ts';
 
 const stateStore = new Map<string, ReturnType<typeof ref>>();
+const LOCKED_HOME_SUMMARY = `From Home: 30° 31' 07.32" N 97° 52' 44.40" W`;
 
 const hostStub = {
   snapshots: ref<Record<string, unknown>>({}),
@@ -24,6 +25,15 @@ const hostStub = {
   sendBeacon: vi.fn(async () => ({ ok: true, detail: 'Sent' })),
   setBeaconInterval: vi.fn(),
 };
+
+function kissReadySnapshot(armed = false) {
+  return {
+    connected: true,
+    hardwareTransmit: true,
+    kissConfirmed: true,
+    beaconIntervalArmed: armed,
+  };
+}
 
 function homeStoreWithCoords() {
   let store = defaultStationAntennaStore();
@@ -76,7 +86,19 @@ const stubs = {
     name: 'USwitch',
     props: ['disabled', 'label'],
     emits: ['update:model-value'],
-    template: '<button type="button" class="u-switch" :disabled="disabled">{{ label }}</button>',
+    setup(props, { emit }) {
+      return () =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'u-switch',
+            disabled: props.disabled === true,
+            onClick: () => emit('update:model-value', true),
+          },
+          props.label as string,
+        );
+    },
   }),
   UFormField: defineComponent({
     props: ['label', 'error', 'hint'],
@@ -126,6 +148,22 @@ function mountBeacon() {
   });
 }
 
+async function openEditBeacon(wrapper: ReturnType<typeof mountBeacon>) {
+  await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
+  await nextTick();
+}
+
+function storedBeacon() {
+  return JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon;
+}
+
+function findAltitudeInput(wrapper: ReturnType<typeof mountBeacon>) {
+  return wrapper.findAll('input.u-input').find((input) => {
+    const field = input.element.closest('.u-form-field');
+    return field?.textContent?.includes('Altitude');
+  })!;
+}
+
 describe('AprsBeacon layout', () => {
   beforeEach(() => {
     stateStore.clear();
@@ -133,6 +171,7 @@ describe('AprsBeacon layout', () => {
     hostStub.watchCard.mockClear();
     hostStub.sendBeacon.mockClear();
     hostStub.setBeaconInterval.mockClear();
+    hostStub.snapshots.value = { 'radio-1': kissReadySnapshot() };
 
     localStorage.setItem(
       SAVED_RADIOS_STORAGE_KEY,
@@ -180,33 +219,32 @@ describe('AprsBeacon layout', () => {
 
   it('prefills DMS in memory with a From label and opens the modal on Edit beacon', async () => {
     const wrapper = mountBeacon();
-    const summary = `${formatLatitude(30.5187)} ${formatLongitude(-97.879)}`;
 
-    expect(wrapper.text()).toContain('From Home:');
-    expect(wrapper.text()).toContain(summary);
+    expect(wrapper.text()).toContain(LOCKED_HOME_SUMMARY);
     expect(wrapper.text()).not.toContain('30.5187');
     expect(wrapper.find('.u-modal').exists()).toBe(false);
     expect(wrapper.find('.field-error').exists()).toBe(false);
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    await openEditBeacon(wrapper);
 
     expect(wrapper.find('.u-modal').exists()).toBe(true);
     const latDegrees = dmsInputFromDecimal(30.5187, 'latitude').degrees;
     expect((wrapper.findAll('input.u-input')[0]!.element as HTMLInputElement).value).toBe(latDegrees);
   });
 
-  it('persists on Save and clears the From label after save', async () => {
+  it('persists on Save with west longitude and clears the From label after save', async () => {
     const wrapper = mountBeacon();
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    await openEditBeacon(wrapper);
+
+    expect((wrapper.findAll('select.u-select')[1]!.element as HTMLSelectElement).value).toBe('W');
 
     await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
     await nextTick();
 
-    const store = JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}');
-    expect(store.radios[0]?.aprsBeacon?.latitude).toBeCloseTo(30.5187, 4);
+    const beacon = storedBeacon();
+    expect(beacon?.latitude).toBeCloseTo(30.5187, 4);
+    expect(beacon?.longitude).toBeCloseTo(-97.879, 4);
     expect(wrapper.text()).not.toContain('From Home:');
     expect(wrapper.find('.u-modal').exists()).toBe(false);
   });
@@ -214,51 +252,98 @@ describe('AprsBeacon layout', () => {
   it('restores the form on Cancel without persisting', async () => {
     const wrapper = mountBeacon();
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    await openEditBeacon(wrapper);
 
     const degrees = wrapper.findAll('input.u-input')[0]!;
     await degrees.setValue('12');
     await degrees.trigger('input');
+    expect((degrees.element as HTMLInputElement).value).toBe('12');
 
     await wrapper.findAll('button').find((button) => button.text() === 'Cancel')!.trigger('click');
     await nextTick();
 
-    expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    expect(storedBeacon()).toBeUndefined();
+    await openEditBeacon(wrapper);
     expect((wrapper.findAll('input.u-input')[0]!.element as HTMLInputElement).value).toBe(
       dmsInputFromDecimal(30.5187, 'latitude').degrees,
     );
   });
 
+  it('clears altitudeFt on Save and omits it when Beacon now runs after a clear', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+
+    let altitude = findAltitudeInput(wrapper);
+    await altitude.setValue('1180');
+    await altitude.trigger('input');
+    await altitude.trigger('change');
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+    expect(storedBeacon()?.altitudeFt).toBe(1180);
+
+    await openEditBeacon(wrapper);
+    altitude = findAltitudeInput(wrapper);
+    await altitude.setValue('');
+    await altitude.trigger('input');
+    await altitude.trigger('change');
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+
+    expect(storedBeacon()?.altitudeFt).toBeUndefined();
+
+    hostStub.sendBeacon.mockClear();
+    await wrapper.findAll('button').find((button) => button.text() === 'Beacon now')!.trigger('click');
+    await nextTick();
+
+    expect(hostStub.sendBeacon).toHaveBeenCalledTimes(1);
+    const payload = hostStub.sendBeacon.mock.calls[0]?.[1] as { settings: { altitudeFt?: number } };
+    expect(payload.settings.altitudeFt).toBeUndefined();
+  });
+
   it('does not persist when altitude text is invalid', async () => {
     const wrapper = mountBeacon();
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    await openEditBeacon(wrapper);
 
-    const altitude = wrapper.findAll('input.u-input').find((input) => {
-      const field = input.element.closest('.u-form-field');
-      return field?.textContent?.includes('Altitude');
-    });
-    await altitude!.setValue('abc');
-    await altitude!.trigger('input');
-    await altitude!.trigger('change');
+    const altitude = findAltitudeInput(wrapper);
+    await altitude.setValue('abc');
+    await altitude.trigger('input');
+    await altitude.trigger('change');
 
     await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
     await nextTick();
 
-    expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
+    expect(storedBeacon()).toBeUndefined();
     expect(wrapper.find('.u-modal').exists()).toBe(true);
     expect(wrapper.text()).toContain('Enter altitude in feet');
+  });
+
+  it('blocks Beacon now when altitude text is invalid', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+
+    await openEditBeacon(wrapper);
+    const altitude = findAltitudeInput(wrapper);
+    await altitude.setValue('abc');
+    await altitude.trigger('input');
+    await altitude.trigger('change');
+    await nextTick();
+
+    const beaconNow = wrapper.findAll('button').find((button) => button.text() === 'Beacon now')!;
+    await beaconNow.trigger('click');
+    await nextTick();
+    expect(hostStub.sendBeacon).not.toHaveBeenCalled();
   });
 
   it('blocks Save and Beacon now when latitude DMS is invalid', async () => {
     const wrapper = mountBeacon();
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Edit beacon')!.trigger('click');
-    await nextTick();
+    await openEditBeacon(wrapper);
 
     const degrees = wrapper.findAll('input.u-input')[0]!;
     await degrees.setValue('999');
@@ -268,7 +353,7 @@ describe('AprsBeacon layout', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
     await nextTick();
 
-    expect(JSON.parse(localStorage.getItem(SAVED_RADIOS_STORAGE_KEY) ?? '{}').radios[0]?.aprsBeacon).toBeUndefined();
+    expect(storedBeacon()).toBeUndefined();
     expect(wrapper.find('.u-modal').exists()).toBe(true);
     expect(wrapper.text()).toMatch(/Latitude|Degrees/);
 
@@ -276,5 +361,49 @@ describe('AprsBeacon layout', () => {
     await beaconNow?.trigger('click');
     await nextTick();
     expect(hostStub.sendBeacon).not.toHaveBeenCalled();
+  });
+
+  it('blocks Save when latitude seconds are 60 or more', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+
+    const seconds = wrapper.findAll('input.u-input')[2]!;
+    await seconds.setValue('60');
+    await seconds.trigger('input');
+    await seconds.trigger('change');
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+
+    expect(storedBeacon()).toBeUndefined();
+    expect(wrapper.find('.u-modal').exists()).toBe(true);
+    expect(wrapper.text()).toMatch(/Seconds must be from 0 up to \(but not including\) 60/);
+  });
+
+  it('does not disarm the interval when the modal has invalid altitude before Save', async () => {
+    const wrapper = mountBeacon();
+
+    await openEditBeacon(wrapper);
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click');
+    await nextTick();
+
+    hostStub.setBeaconInterval.mockClear();
+    await wrapper.find('.u-switch').trigger('click');
+    await nextTick();
+    expect(hostStub.setBeaconInterval).toHaveBeenCalledWith('radio-1', expect.objectContaining({ armed: true }));
+
+    hostStub.snapshots.value = { 'radio-1': kissReadySnapshot(true) };
+    hostStub.setBeaconInterval.mockClear();
+
+    await openEditBeacon(wrapper);
+    const altitude = findAltitudeInput(wrapper);
+    await altitude.setValue('abc');
+    await altitude.trigger('input');
+    await altitude.trigger('change');
+    await nextTick();
+
+    const disarmCalls = hostStub.setBeaconInterval.mock.calls.filter((call) => call[1]?.armed === false);
+    expect(disarmCalls).toHaveLength(0);
   });
 });
