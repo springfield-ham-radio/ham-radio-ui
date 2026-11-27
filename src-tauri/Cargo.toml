@@ -1,6 +1,6 @@
 [package]
 name = "ham-radio"
-version = "3.20.1"
+version = "3.21.0"
 description = "HamBench desktop app"
 authors = ["Bryan Hunt"]
 license = "MIT"

@@ -1,3 +1,9 @@
+## [3.21.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.20.1...v3.21.0) (2026-11-27)
+
+### Features
+
+* **aprs:** send position beacons over KISS ([#251](https://github.com/springfield-ham-radio/ham-radio-ui/issues/251)) ([4fbaffa](https://github.com/springfield-ham-radio/ham-radio-ui/commit/4fbaffaebfec44d84bb06c3ed1044c9fb00c059a))
+
 ## [3.20.1](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.20.0...v3.20.1) (2026-11-27)
 
 ### Bug Fixes
