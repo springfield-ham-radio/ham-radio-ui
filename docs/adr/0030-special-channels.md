@@ -2,7 +2,7 @@
 
 **Status:** proposed  
 **Date:** 2026-11-27  
-**Related:** [ham-radio-docs ADR 0013](https://github.com/springfield-ham-radio/ham-radio-docs/blob/main/docs/adr/0013-special-channels.md), [ham-radio-api#42](https://github.com/springfield-ham-radio/ham-radio-api/pull/42), [ham-radio-utils#51](https://github.com/springfield-ham-radio/ham-radio-utils/pull/51)
+**Related:** [ham-radio-docs ADR 0013](https://github.com/springfield-ham-radio/ham-radio-docs/pull/39) (`docs/developer/adr/0013-memory-map-special-channels.md`), [ham-radio-api#42](https://github.com/springfield-ham-radio/ham-radio-api/pull/42), [ham-radio-utils#51](https://github.com/springfield-ham-radio/ham-radio-utils/pull/51)
 
 ## Context
 
@@ -14,7 +14,7 @@ Some radios place extra channel records after the main 0-based block in the same
 - Cap add, move, reorder, library fill, and typed slot edits at **regular** capacity; refuse shifts that would cross into specials the same way full memory is refused today.
 - Render programmed regular channels as today; add a **Special channels** block below with one row per declared label. Show label in the slot column (not 1000+), lock slot edits and drag, support program/clear via the same channel editor.
 - Skip band and L&lt;U validation for special indices.
-- On encode, preserve bytes for unprogrammed special indices so `clearEmpty` on channel structs does not wipe factory special slots.
+- On encode, preserve bytes only for special indices that were empty in the loaded image and remain unprogrammed, so `clearEmpty` does not wipe factory-empty special slots.
 
 Radios without `specials` metadata keep current behavior.
 

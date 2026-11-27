@@ -22,6 +22,7 @@ function programmedChannel(overrides: Partial<RadioProgrammedChannel> = {}): Rad
 }
 import { channelCapacity, channelRecordCapacity, moveProgrammedChannel } from '~/utils/channel-edit';
 import {
+  encodeRadioProgramPreservingSpecialSlots,
   hasMemoryMapSpecialChannels,
   isRegularChannelIndex,
   isSpecialChannelIndex,
@@ -87,9 +88,9 @@ describe('memory map special channel helpers', () => {
       }),
     ];
 
-    const result = moveProgrammedChannel(channels, 998, 999, 1000);
+    const result = moveProgrammedChannel(channels, 998, 999, 1000, 'specials-boundary');
 
-    expect(result.refused).toMatch(/memory is full/i);
+    expect(result.refused).toBe('Radio memory is full; no free slot after that position.');
     expect(result.previousToNext.size).toBe(0);
   });
 
@@ -120,12 +121,22 @@ describe('memory map special channel helpers', () => {
     expect(rows[2]?.slotLabel).toBe('Pri');
   });
 
-  it('preserves EEPROM bytes for unprogrammed special indices', () => {
+  it('preserves EEPROM bytes only for special slots that were empty and remain unprogrammed', () => {
     const program: RadioProgram = { channels: [], settings: {} };
     const compactMap: RadioMemoryMap = {
       version: '1',
       description: 'compact',
-      structs: [{ id: 'records', seek: 0, count: 2, stride: 16, fields: [] }],
+      structs: [
+        {
+          id: 'records',
+          seek: 0,
+          count: 2,
+          stride: 16,
+          emptyWhen: { equals: 255 },
+          clearEmpty: true,
+          fields: [],
+        },
+      ],
       channelBindings: {
         records: 'records',
         receiveFrequency: 'rx',
@@ -135,23 +146,77 @@ describe('memory map special channel helpers', () => {
         specials: { start: 1, labels: ['Pri'] },
       },
     };
-    const before = new Uint8Array(32).fill(0xff);
-    before[16] = 0x42;
-    const after = new Uint8Array(before);
-    after[16] = 0x00;
-
-    restoreUnprogrammedSpecialChannelBytes(
-      compactMap,
-      program,
-      before,
-      after,
-      {
-        segments: {
-          main: { startAddress: 0, endAddress: 31 },
-        },
+    const memoryConfig = {
+      segments: {
+        main: { startAddress: 0, endAddress: 31 },
       },
+    };
+    const before = new Uint8Array(32).fill(0xff);
+    before[17] = 0x42;
+    const after = new Uint8Array(before);
+    after[17] = 0x00;
+
+    restoreUnprogrammedSpecialChannelBytes(compactMap, program, before, after, memoryConfig);
+
+    expect(after[17]).toBe(0x42);
+  });
+
+  it('writes cleared bytes after program then clear (does not resurrect the special)', () => {
+    const compactMap: RadioMemoryMap = {
+      version: '1',
+      description: 'compact',
+      structs: [
+        {
+          id: 'records',
+          seek: 0,
+          count: 2,
+          stride: 16,
+          emptyWhen: { equals: 255 },
+          clearEmpty: true,
+          fields: [{ id: 'rx', type: 'u32', value: { kind: 'integer' } }],
+        },
+      ],
+      channelBindings: {
+        records: 'records',
+        receiveFrequency: 'rx',
+        transmitFrequency: 'tx',
+        receiveTone: 'rxtone',
+        transmitTone: 'txtone',
+        specials: { start: 1, labels: ['Pri'] },
+      },
+    };
+    const memoryConfig = {
+      segments: {
+        main: { startAddress: 0, endAddress: 31 },
+      },
+    };
+    const before = new Uint8Array(32).fill(0xff);
+    const programmed: RadioProgram = {
+      channels: [
+        programmedChannel({
+          channelNumber: 1,
+          radioChannel: {
+            name: 'X',
+            receiveFrequency: Frequency(146_520_000),
+            transmitFrequency: Frequency(146_520_000),
+            receiveTone: { tone: 0, type: RadioToneType.CTCSS },
+            transmitTone: { tone: 0, type: RadioToneType.CTCSS },
+          },
+        }),
+      ],
+      settings: {},
+    };
+
+    const encoded = encodeRadioProgramPreservingSpecialSlots(compactMap, programmed, before, memoryConfig);
+    expect(encoded[16]).not.toBe(0xff);
+
+    const cleared = encodeRadioProgramPreservingSpecialSlots(
+      compactMap,
+      { channels: [], settings: {} },
+      encoded,
+      memoryConfig,
     );
 
-    expect(after[16]).toBe(0x42);
+    expect(cleared[16]).toBe(0xff);
   });
 });

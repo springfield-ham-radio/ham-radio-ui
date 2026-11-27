@@ -1,4 +1,10 @@
-import type { RadioMemoryMap, RadioMemoryConfig, RadioProgram, RadioProgrammedChannel } from '@springfield/ham-radio-api';
+import type {
+  RadioMemoryConfig,
+  RadioMemoryMap,
+  RadioMemoryMapStruct,
+  RadioProgram,
+  RadioProgrammedChannel,
+} from '@springfield/ham-radio-api';
 import {
   isSpecialChannelIndex,
   memoryMapChannelRecordCount,
@@ -49,9 +55,57 @@ export function isRegularChannelIndex(memoryMap: RadioMemoryMap | undefined, ind
   return regularEnd === undefined || index < regularEnd;
 }
 
+function structInstanceWasEmpty(
+  struct: RadioMemoryMapStruct,
+  contents: Uint8Array,
+  memoryConfig: RadioMemoryConfig,
+  instanceIndex: number,
+): boolean {
+  if (!struct.emptyWhen) {
+    return false;
+  }
+
+  const radioAddress = structInstanceAddress(struct, instanceIndex);
+  const offset = radioAddressToBufferOffset(radioAddress, memoryConfig, contents.length);
+  return contents[offset] === struct.emptyWhen.equals;
+}
+
+function specialSlotWasEmptyInImage(
+  memoryMap: RadioMemoryMap,
+  contents: Uint8Array,
+  memoryConfig: RadioMemoryConfig,
+  index: number,
+): boolean {
+  const bindings = memoryMap.channelBindings;
+
+  if (!bindings) {
+    return false;
+  }
+
+  const channelStructIds = new Set(
+    [bindings.records, bindings.names, bindings.extras].filter((id): id is string => Boolean(id)),
+  );
+
+  let hasEmptyMarker = false;
+
+  for (const struct of memoryMap.structs) {
+    if (!channelStructIds.has(struct.id) || !struct.emptyWhen) {
+      continue;
+    }
+
+    hasEmptyMarker = true;
+
+    if (!structInstanceWasEmpty(struct, contents, memoryConfig, index)) {
+      return false;
+    }
+  }
+
+  return hasEmptyMarker;
+}
+
 /**
- * Encode channels and settings, then restore EEPROM bytes for unprogrammed special slots
- * so `clearEmpty` does not erase factory special records.
+ * Encode channels and settings, then restore EEPROM bytes for special slots that were empty
+ * in the loaded image and remain unprogrammed, so `clearEmpty` does not erase factory-empty slots.
  */
 export function encodeRadioProgramPreservingSpecialSlots(
   memoryMap: RadioMemoryMap,
@@ -99,7 +153,7 @@ export function restoreUnprogrammedSpecialChannelBytes(
     }
 
     for (let index = specials.start; index < specialEnd; index += 1) {
-      if (occupied.has(index)) {
+      if (occupied.has(index) || !specialSlotWasEmptyInImage(memoryMap, before, memoryConfig, index)) {
         continue;
       }
 

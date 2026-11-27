@@ -2202,8 +2202,16 @@ export function useRadio() {
       return new Map();
     }
 
-    const capacity = channelCapacity(settingsMemoryMap.value);
-    const result = moveProgrammedChannel(program.value.channels, fromNumber, toNumber, capacity);
+    const memoryMap = settingsMemoryMap.value;
+    const capacity = channelCapacity(memoryMap);
+    const capacityRefusal = hasMemoryMapSpecialChannels(memoryMap) ? 'specials-boundary' : 'default';
+    const result = moveProgrammedChannel(
+      program.value.channels,
+      fromNumber,
+      toNumber,
+      capacity,
+      capacityRefusal,
+    );
 
     if (result.refused) {
       toast.add({

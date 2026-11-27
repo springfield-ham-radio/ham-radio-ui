@@ -663,11 +663,14 @@ export function reorderProgrammedChannels(
  * slots after it shift up by one until the ripple lands in the first empty slot.
  * If no empty slot exists before {@link capacity}, the move is refused.
  */
+export type ChannelMoveCapacityRefusal = 'default' | 'specials-boundary';
+
 export function moveProgrammedChannel(
   channels: RadioProgrammedChannel[],
   fromNumber: number,
   toNumber: number,
   capacity: number,
+  capacityRefusal: ChannelMoveCapacityRefusal = 'default',
 ): ChannelReorder {
   if (
     fromNumber === toNumber ||
@@ -728,10 +731,15 @@ export function moveProgrammedChannel(
     slot += 1;
 
     if (slot >= capacity) {
+      const refused =
+        capacityRefusal === 'specials-boundary'
+          ? 'Radio memory is full; no free slot after that position.'
+          : `No free memory slot after ${toNumber}. Clear a slot or choose another destination.`;
+
       return {
         channels,
         previousToNext: new Map(),
-        refused: 'Radio memory is full; no free slot after that position.',
+        refused,
       };
     }
   }
