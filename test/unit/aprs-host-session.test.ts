@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { canonicalAx25Call, encodeAx25Ui } from '../../app/utils/aprs-ax25.ts';
-import { encodeKissData } from '../../app/utils/aprs-kiss.ts';
+import { canonicalAx25Call, encodeAx25Ui, formatAx25Call, parseAx25Ui } from '../../app/utils/aprs-ax25.ts';
+import { createKissDecoderState, encodeKissData, pushKissBytes } from '../../app/utils/aprs-kiss.ts';
 import { createAprsHostSession, hostListenNote, type AprsHostBytePort } from '../../app/utils/aprs-host-session.ts';
 import { APRS_COMMAND_INTERRUPT, APRS_KISS_ON_COMMAND, APRS_RESTART_COMMAND, d710AprsHostLink } from '../../app/utils/aprs-d710-host.ts';
 import { aprsHostSerialOpenOptions, aprsOpenKeepsIncoming, aprsSerialOpenOptions } from '../../app/utils/aprs-serial-options.ts';
@@ -555,10 +555,33 @@ describe('APRS host session', () => {
     expect(session.snapshot().messages).toEqual([]);
     expect(fake.writes).toEqual([]);
 
+    await confirmKiss(session, fake);
+    expect(session.setAckOptIn(true)).toBeUndefined();
+
+    const heard = canonicalAx25Call('K5KTF-4');
+    const incoming = heard
+      ? encodeAprsMessageFrame(heard, { addressee: 'N0TST', kind: 'text', text: 'Ping', id: '9' })
+      : undefined;
+
+    expect(incoming).toBeDefined();
+
+    if (!incoming) {
+      return;
+    }
+
+    fake.push(incoming);
+    await settle();
+    expect(fake.writes).toHaveLength(1);
+
+    const ackPayload = pushKissBytes(createKissDecoderState(), fake.writes[0] ?? new Uint8Array()).frames[0]?.data;
+    const ackFrame = ackPayload ? parseAx25Ui(ackPayload) : undefined;
+    expect(ackFrame ? formatAx25Call(ackFrame.source) : undefined).toBe('N0TST');
+
     const destinationOnly = await session.send({ mine: 'N0TST', to: '1BAD', text: 'Hi' });
     expect(destinationOnly?.status).toBe('blocked');
     expect(destinationOnly?.detail).toBe(destinationCallsignError('1BAD'));
-    expect(session.snapshot().messages).toHaveLength(1);
+    expect(session.snapshot().messages.filter((message) => message.status === 'blocked')).toHaveLength(1);
+    expect(session.snapshot().messages.find((message) => message.text === 'Ping')).toBeDefined();
   });
 
   it('queues Not sent for a bad destination and empty text without writing', async () => {
