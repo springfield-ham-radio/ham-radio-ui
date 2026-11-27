@@ -11,11 +11,16 @@ import {
 } from '~/utils/radio-baud-rate';
 import { serialPortLabel, serialPortOption, serialPortSelectItems } from '~/utils/serial-port-list';
 import { readSerialPortSettings } from '~/utils/serial-port-settings';
-import { formatStationLocation, HOME_STATION_ID } from '~/utils/antenna-station';
+import { formatStationLocation } from '~/utils/antenna-station';
 import {
+  defaultNewSavedRadioStationId,
   draftFromSavedRadio,
+  NO_STATION_VALUE,
+  resolveSavedRadioStationDraft,
   savedRadioDraftHasIssues,
   savedRadioDraftIssues,
+  savedRadioStationSelectItems,
+  savedRadioStationSelectValue,
   txPowerWattsFieldError,
   txPowerWattsFromText,
   type SavedRadio,
@@ -48,7 +53,7 @@ const serialPort = shallowRef<string | undefined>();
 const aprsBaudRate = shallowRef<number | undefined>();
 const aprsSerialPort = shallowRef<string | undefined>();
 const txPower = shallowRef('');
-const stationId = shallowRef('');
+const stationId = shallowRef(NO_STATION_VALUE);
 const ports = ref<Array<{ label: string; value: string }>>([]);
 const loadingPorts = shallowRef(false);
 const nameError = shallowRef<string | undefined>();
@@ -151,14 +156,21 @@ const portItems = computed(() => portItemsFor(serialPort.value, ' (saved)'));
 
 const aprsFieldsReady = ref(false);
 
-const stationItems = computed(() => [
-  { label: 'None', value: '' },
-  ...stations.value.map((station) => ({
-    label: station.nickname,
-    value: station.id,
-    description: formatStationLocation(station),
-  })),
-]);
+const knownStationIds = computed(() => stations.value.map((station) => station.id));
+
+const stationItems = computed(() =>
+  savedRadioStationSelectItems(
+    stations.value.map((station) => ({
+      id: station.id,
+      nickname: station.nickname,
+      description: formatStationLocation(station),
+    })),
+  ),
+);
+
+function stationIdForSave(): string | undefined {
+  return resolveSavedRadioStationDraft(stationId.value, knownStationIds.value);
+}
 
 const aprsPortItems = computed(() =>
   aprsSerialPortMenuItems(
@@ -213,7 +225,9 @@ watch(
     aprsSerialPort.value = draft?.aprsSerialPort;
     aprsFieldsReady.value = false;
     txPower.value = draft?.txPowerWatts !== undefined ? String(draft.txPowerWatts) : '';
-    stationId.value = draft?.stationId ?? (props.radio ? '' : HOME_STATION_ID);
+    stationId.value = props.radio
+      ? savedRadioStationSelectValue(draft?.stationId, knownStationIds.value)
+      : defaultNewSavedRadioStationId(knownStationIds.value);
     nameError.value = undefined;
     manufacturerError.value = undefined;
     modelError.value = undefined;
@@ -266,7 +280,7 @@ function aprsDraftIssues() {
       txPowerWatts: txPowerWattsFromText(txPower.value),
       aprsSerialPort: aprsSerialPort.value,
       aprsBaudRate: aprsBaudRate.value,
-      stationId: stationId.value,
+      stationId: stationIdForSave(),
     },
     {
       radios: radios.value,
@@ -307,7 +321,7 @@ function save(): void {
     txPowerWatts,
     aprsSerialPort: profile ? (aprsSerialPort.value ?? '') : props.radio?.aprsSerialPort,
     aprsBaudRate: profile ? aprsBaudRate.value : props.radio?.aprsBaudRate,
-    stationId: stationId.value,
+    stationId: stationIdForSave(),
   };
   const listed = selectedConfig.value ? listedProgrammingBaudRates(selectedConfig.value.serialConfig) : [];
   const issues = savedRadioDraftIssues(draft, {

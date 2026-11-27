@@ -17,7 +17,7 @@ A follow-up will let a station antenna stay at a site while listing which radios
 **Defaults and migration.**
 
 - Existing radios in localStorage stay **unlinked** (`stationId` absent). No backfill to Home.
-- **New** radios from `createSavedRadio` default to `HOME_STATION_ID` when the draft omits `stationId`. Draft `''` means no link (create or edit).
+- **New** radios from `createSavedRadio` default to `HOME_STATION_ID` when the draft omits `stationId` **and** Home is in the known station list. Draft `''` or `NO_STATION_VALUE` means no link (create or edit).
 - `parseSavedRadio` / `serializeSavedRadioStore` preserve `stationId` alongside `aprsMyCall`, `aprsBeacon`, privilege, and packet fields. `updateSavedRadio` still spreads `...current` before applying the draft.
 
 **UI.** `SavedRadioEditor` offers a station select (None + every `RadioStation`). Preferences and the radio card show the linked nickname when set.

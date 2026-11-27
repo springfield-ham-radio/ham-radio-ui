@@ -4,8 +4,13 @@ import {
   applyRadioPrivilege,
   clearSavedRadioStationLinks,
   createSavedRadio,
+  defaultNewSavedRadioStationId,
   draftFromSavedRadio,
+  NO_STATION_VALUE,
   parseSavedRadio,
+  resolveSavedRadioStationDraft,
+  savedRadioStationSelectItems,
+  savedRadioStationSelectValue,
   parseSavedRadioStore,
   savedRadioModelLabel,
   patchSavedRadioAprsBeacon,
@@ -70,12 +75,17 @@ describe('saved radios', () => {
   });
 
   it('should default new radios to SSID 0 and accept off', () => {
-    const radio = createSavedRadio({
-      name: 'Fresh',
-      manufacturer: 'Kenwood',
-      model: 'kenwood-tm-d710a',
-      serialPort: '/dev/cu.new',
-    });
+    const radio = createSavedRadio(
+      {
+        name: 'Fresh',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-tm-d710a',
+        serialPort: '/dev/cu.new',
+      },
+      1,
+      'radio-fresh',
+      { knownStationIds: [HOME_STATION_ID] },
+    );
     expect(radio.packetSsid).toBe(0);
     expect(radio.packetAcceptIncoming).toBe(false);
     expect(radio.aprsMyCall).toBeUndefined();
@@ -365,14 +375,76 @@ describe('saved radios', () => {
     );
     expect(none.stationId).toBeUndefined();
 
-    const updated = updateSavedRadio(linked, { ...draftFromSavedRadio(linked), stationId: '' }, 50);
+    const known = [HOME_STATION_ID, 'station-cabin'];
+
+    const updated = updateSavedRadio(
+      linked,
+      { ...draftFromSavedRadio(linked), stationId: '' },
+      50,
+      { knownStationIds: known },
+    );
     expect(updated.stationId).toBeUndefined();
     expect(updated.aprsMyCall).toBe('KF5UFJ-1');
     expect(updated.aprsBeacon).toEqual(beacon);
     expect(updated.updatedAt).toBe(50);
 
-    const relinked = updateSavedRadio(updated, { ...draftFromSavedRadio(updated), stationId: HOME_STATION_ID }, 51);
+    const stale = updateSavedRadio(
+      linked,
+      { ...draftFromSavedRadio(linked), stationId: 'station-gone' },
+      51,
+      { knownStationIds: known },
+    );
+    expect(stale.stationId).toBeUndefined();
+
+    const relinked = updateSavedRadio(
+      stale,
+      { ...draftFromSavedRadio(stale), stationId: HOME_STATION_ID },
+      52,
+      { knownStationIds: known },
+    );
     expect(relinked.stationId).toBe(HOME_STATION_ID);
+  });
+
+  it('defaults new radios to Home only when Home exists', () => {
+    const withHome = createSavedRadio(
+      {
+        name: 'Base',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-tm-d710a',
+        serialPort: '/dev/cu.new',
+      },
+      1,
+      'radio-base',
+      { knownStationIds: [HOME_STATION_ID, 'station-cabin'] },
+    );
+    expect(withHome.stationId).toBe(HOME_STATION_ID);
+
+    const withoutHome = createSavedRadio(
+      {
+        name: 'Portable',
+        manufacturer: 'Kenwood',
+        model: 'kenwood-th-d74',
+        serialPort: '/dev/cu.ht',
+      },
+      2,
+      'radio-portable',
+      { knownStationIds: ['station-cabin'] },
+    );
+    expect(withoutHome.stationId).toBeUndefined();
+    expect(defaultNewSavedRadioStationId([HOME_STATION_ID])).toBe(HOME_STATION_ID);
+    expect(defaultNewSavedRadioStationId(['station-cabin'])).toBe(NO_STATION_VALUE);
+  });
+
+  it('uses a non-empty select value for station menu items', () => {
+    const items = savedRadioStationSelectItems([
+      { id: HOME_STATION_ID, nickname: 'Home', description: 'Location not set' },
+    ]);
+
+    expect(items.every((item) => item.value.length > 0)).toBe(true);
+    expect(items[0]?.value).toBe(NO_STATION_VALUE);
+    expect(savedRadioStationSelectValue('station-gone', [HOME_STATION_ID])).toBe(NO_STATION_VALUE);
+    expect(resolveSavedRadioStationDraft('station-gone', [HOME_STATION_ID])).toBe('');
+    expect(resolveSavedRadioStationDraft(NO_STATION_VALUE, [HOME_STATION_ID])).toBe('');
   });
 
   it('clears stationId when a site is removed', () => {

@@ -1,8 +1,15 @@
 import { HOME_STATION_ID } from '~/utils/antenna-station';
 import { parseSavedRadioAprsBeacon, type SavedRadioAprsBeacon } from '~/utils/aprs-beacon';
 import { canonicalAx25Call, formatAx25Call } from '~/utils/aprs-ax25';
+import { NO_EQUIPMENT_VALUE } from '~/utils/radio-bands';
 
 export const SAVED_RADIOS_STORAGE_KEY = 'ham-radio-saved-radios';
+
+/**
+ * Menu value for no linked station on a saved radio.
+ * An empty string clears a select and must not be an item value.
+ */
+export const NO_STATION_VALUE = NO_EQUIPMENT_VALUE;
 
 /**
  * A radio the operator owns, with the cable and speed they usually use.
@@ -57,8 +64,17 @@ export interface SavedRadioDraft {
   /** Empty string clears a stored APRS port. Omit to leave it unchanged. */
   aprsSerialPort?: string;
   aprsBaudRate?: number;
-  /** Empty string clears the station link. Omit on create to default to Home. */
+  /** Empty string clears the station link. Omit on create to default to Home when it exists. */
   stationId?: string;
+}
+
+export interface CreateSavedRadioOptions {
+  /** When set, draft `stationId` is validated and Home is defaulted only if Home is listed. */
+  knownStationIds?: readonly string[];
+}
+
+export interface UpdateSavedRadioOptions {
+  knownStationIds?: readonly string[];
 }
 
 export interface SavedRadioStore {
@@ -418,7 +434,68 @@ export function savedRadioDraftHasIssues(issues: SavedRadioDraftIssues): boolean
   return Object.values(issues).some((issue) => issue !== undefined);
 }
 
-export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = crypto.randomUUID()): SavedRadio {
+/**
+ * Select value for a stored station id. Unknown ids map to {@link NO_STATION_VALUE}.
+ */
+export function savedRadioStationSelectValue(stored: string | undefined, knownStationIds: readonly string[]): string {
+  const trimmed = stored?.trim();
+
+  if (!trimmed) {
+    return NO_STATION_VALUE;
+  }
+
+  return knownStationIds.includes(trimmed) ? trimmed : NO_STATION_VALUE;
+}
+
+/** Default link for a new radio: Home when it exists, otherwise unlinked. */
+export function defaultNewSavedRadioStationId(knownStationIds: readonly string[]): string {
+  return knownStationIds.includes(HOME_STATION_ID) ? HOME_STATION_ID : NO_STATION_VALUE;
+}
+
+/**
+ * Normalize a draft/menu station id for storage. Returns `''` to clear, a station id, or
+ * `undefined` when the field was omitted on the draft.
+ */
+export function resolveSavedRadioStationDraft(
+  stationId: string | undefined,
+  knownStationIds: readonly string[],
+): string | undefined {
+  if (stationId === undefined) {
+    return undefined;
+  }
+
+  const trimmed = stationId.trim();
+
+  if (trimmed.length === 0 || trimmed === NO_STATION_VALUE) {
+    return '';
+  }
+
+  if (knownStationIds.length > 0 && !knownStationIds.includes(trimmed)) {
+    return '';
+  }
+
+  return trimmed;
+}
+
+export function savedRadioStationSelectItems(
+  stations: ReadonlyArray<{ id: string; nickname: string; description?: string }>,
+): Array<{ label: string; value: string; description?: string }> {
+  return [
+    { label: 'None', value: NO_STATION_VALUE },
+    ...stations.map((station) => ({
+      label: station.nickname,
+      value: station.id,
+      description: station.description,
+    })),
+  ];
+}
+
+export function createSavedRadio(
+  draft: SavedRadioDraft,
+  now = Date.now(),
+  id = crypto.randomUUID(),
+  options?: CreateSavedRadioOptions,
+): SavedRadio {
   const radio: SavedRadio = {
     id,
     name: draft.name.trim(),
@@ -450,11 +527,14 @@ export function createSavedRadio(draft: SavedRadioDraft, now = Date.now(), id = 
   radio.packetSsid = 0;
   radio.packetAcceptIncoming = false;
 
-  const station = draft.stationId?.trim() ?? '';
+  const known = options?.knownStationIds ?? [];
+  const resolved = resolveSavedRadioStationDraft(draft.stationId, known);
 
-  if (station.length > 0) {
-    radio.stationId = station;
-  } else if (draft.stationId === undefined) {
+  if (resolved !== undefined) {
+    if (resolved.length > 0) {
+      radio.stationId = resolved;
+    }
+  } else if (known.includes(HOME_STATION_ID)) {
     radio.stationId = HOME_STATION_ID;
   }
 
@@ -492,7 +572,12 @@ export function patchSavedRadioPacketFields(
   return next;
 }
 
-export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, now = Date.now()): SavedRadio {
+export function updateSavedRadio(
+  current: SavedRadio,
+  draft: SavedRadioDraft,
+  now = Date.now(),
+  options?: UpdateSavedRadioOptions,
+): SavedRadio {
   const next: SavedRadio = {
     ...current,
     name: draft.name.trim(),
@@ -529,12 +614,25 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
   }
 
   if (draft.stationId !== undefined) {
-    const station = draft.stationId.trim();
+    const known = options?.knownStationIds;
+    let resolved: string | undefined;
 
-    if (station.length === 0) {
+    if (known !== undefined) {
+      resolved = resolveSavedRadioStationDraft(draft.stationId, known);
+    } else {
+      const trimmed = draft.stationId.trim();
+
+      if (trimmed.length === 0 || trimmed === NO_STATION_VALUE) {
+        resolved = '';
+      } else {
+        resolved = trimmed;
+      }
+    }
+
+    if (resolved === undefined || resolved.length === 0) {
       delete next.stationId;
     } else {
-      next.stationId = station;
+      next.stationId = resolved;
     }
   }
 
