@@ -81,4 +81,13 @@ describe('TNC flow control from the radio module', () => {
     expect(bar).not.toContain('i-lucide-cable');
     expect(bar).not.toContain('write_binary');
   });
+
+  it('guards APRS Messages send on My callsign and focuses the header field', () => {
+    const aprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
+    const messages = readFileSync(new URL('../../app/components/AprsMessages.vue', import.meta.url), 'utf8');
+    expect(aprs).toContain('callsignError(mine.value)');
+    expect(messages).toContain('aprsOwnCallsignBlock');
+    expect(messages).toContain("'focus-mine'");
+    expect(aprs).toContain('@focus-mine="focusMineCallsign"');
+  });
 });

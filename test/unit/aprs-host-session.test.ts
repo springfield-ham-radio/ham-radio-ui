@@ -541,13 +541,34 @@ describe('APRS host session', () => {
     expect(fake.writes).toHaveLength(1);
   });
 
-  it('does not write an invalid message', async () => {
+  it('does not queue a message when My callsign is empty or invalid', async () => {
     const session = createD710HostSession({ allowHardwareTransmit: true });
     const fake = fakePort();
     await session.connect('/dev/cu.pg5g', async () => fake.port);
-    const invalid = await session.send({ mine: '1BAD', to: 'K5KTF', text: '' });
 
-    expect(invalid.status).toBe('blocked');
+    for (const mine of ['', '   ', '1BAD', 'K5']) {
+      const result = await session.send({ mine, to: 'K5KTF-4', text: 'Hello' });
+      expect(result).toBeUndefined();
+    }
+
+    expect(session.snapshot().messages).toEqual([]);
+    expect(fake.writes).toEqual([]);
+  });
+
+  it('queues Not sent for a bad destination and empty text without writing', async () => {
+    const session = createD710HostSession({ allowHardwareTransmit: true });
+    const fake = fakePort();
+    await session.connect('/dev/cu.pg5g', async () => fake.port);
+
+    for (const to of ['1BAD', 'K5KTF-16']) {
+      const blocked = await session.send({ mine: 'N0TST', to, text: 'Hi' });
+      expect(blocked?.status).toBe('blocked');
+      expect(blocked?.detail).toMatch(/^Destination callsign:/);
+    }
+
+    const emptyText = await session.send({ mine: 'N0TST', to: 'K5KTF', text: '' });
+    expect(emptyText?.status).toBe('blocked');
+    expect(emptyText?.detail).toBe('Enter a message');
     expect(fake.writes).toEqual([]);
   });
 

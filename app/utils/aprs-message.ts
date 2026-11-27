@@ -23,12 +23,33 @@ export interface AprsMessageBody {
   id?: string;
 }
 
+export const AX25_CALLSIGN_HINT =
+  'Use a callsign of 3 to 6 characters, starting with a letter, and an SSID from 0 to 15';
+
 export function callsignError(input: string): string | undefined {
   if (canonicalAx25Call(input)) {
     return undefined;
   }
 
-  return 'Use a callsign of 3 to 6 characters, starting with a letter, and an SSID from 0 to 15';
+  return AX25_CALLSIGN_HINT;
+}
+
+export function destinationCallsignError(input: string): string | undefined {
+  const error = callsignError(input);
+
+  if (!error) {
+    return undefined;
+  }
+
+  return `Destination callsign: ${error}`;
+}
+
+export function aprsOwnCallsignBlock(mine: string): string | undefined {
+  if (canonicalAx25Call(mine)) {
+    return undefined;
+  }
+
+  return 'Set My callsign to send';
 }
 
 export function messageTextError(text: string): string | undefined {

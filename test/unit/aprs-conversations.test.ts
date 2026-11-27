@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aprsConversationCall, aprsConversations, aprsHeardAudience } from '~/utils/aprs-conversations';
+import { callsignError } from '~/utils/aprs-message';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
 
 function line(partial: Partial<AprsHostMessage> & Pick<AprsHostMessage, 'key' | 'other' | 'at'>): AprsHostMessage {
@@ -29,6 +30,12 @@ describe('APRS conversations', () => {
     expect(aprsConversationCall('KF5UFJ-1')).not.toBe('KF5UFJ-7');
     expect(aprsConversationCall('not a call')).toBeUndefined();
     expect(aprsConversations([])).toEqual([]);
+  });
+
+  it('opens a draft only when the same validator accepts the callsign', () => {
+    for (const input of ['kf5ufj-7', 'K5KTF-4', '', '1BAD']) {
+      expect(aprsConversationCall(input) !== undefined).toBe(callsignError(input) === undefined);
+    }
   });
 
   it('updates an ack on the outgoing line and does not add an ack bubble', () => {

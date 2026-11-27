@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { aprsConversationCall, aprsConversations, aprsHeardAudience, formatAprsChatTime } from '~/utils/aprs-conversations';
 import type { AprsHostMessage } from '~/utils/aprs-host-session';
-import { APRS_MESSAGE_ATTEMPTS, APRS_MESSAGE_RETRY_MS, APRS_MESSAGE_TEXT_MAX, callsignError } from '~/utils/aprs-message';
+import {
+  APRS_MESSAGE_ATTEMPTS,
+  APRS_MESSAGE_RETRY_MS,
+  APRS_MESSAGE_TEXT_MAX,
+  aprsOwnCallsignBlock,
+  callsignError,
+} from '~/utils/aprs-message';
 
 const props = defineProps<{
   cardId?: string;
   mine: string;
+}>();
+
+const emit = defineEmits<{
+  'focus-mine': [];
 }>();
 
 const route = useRoute();
@@ -59,6 +69,8 @@ const exampleMessages: AprsHostMessage[] = [
 const messages = computed(() => [...(example.value ? exampleMessages : []), ...(snapshot.value?.messages ?? [])]);
 const conversations = computed(() => aprsConversations(messages.value));
 const thread = computed(() => conversations.value.find((row) => row.callsign === selectedCall.value)?.messages ?? []);
+const sendBlocked = computed(() => aprsOwnCallsignBlock(props.mine));
+const sendBlockId = computed(() => (sendBlocked.value ? 'aprs-send-mine-block' : undefined));
 
 const statusLabel: Record<AprsHostMessage['status'], string> = {
   heard: 'Heard',
@@ -109,7 +121,7 @@ function onBack(): void {
 }
 
 async function onSend(): Promise<void> {
-  if (!props.cardId) {
+  if (!props.cardId || sendBlocked.value) {
     return;
   }
 
@@ -118,6 +130,11 @@ async function onSend(): Promise<void> {
     to: selectedCall.value ?? '',
     text: text.value,
   });
+
+  if (!message) {
+    return;
+  }
+
   openCall(message.other);
 }
 
@@ -225,7 +242,25 @@ function onCancel(key: string): void {
                 Send writes this message. Up to {{ APRS_MESSAGE_ATTEMPTS }} tries, {{ APRS_MESSAGE_RETRY_MS / 1000 }} seconds apart, after an AX.25 UI frame.
                 Cancel or Disconnect stops it. From {{ mine || 'the callsign above' }}.
               </p>
-              <UButton color="primary" icon="i-lucide-send" label="Send" :disabled="!cardId" @click="onSend" />
+              <div class="flex shrink-0 items-center gap-2">
+                <button
+                  v-if="sendBlocked"
+                  :id="sendBlockId"
+                  type="button"
+                  class="text-xs text-muted underline"
+                  @click="emit('focus-mine')"
+                >
+                  {{ sendBlocked }}
+                </button>
+                <UButton
+                  color="primary"
+                  icon="i-lucide-send"
+                  label="Send"
+                  :disabled="!cardId || !!sendBlocked"
+                  :aria-describedby="sendBlockId"
+                  @click="onSend"
+                />
+              </div>
             </div>
           </div>
         </div>
