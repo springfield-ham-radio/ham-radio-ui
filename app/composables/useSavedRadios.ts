@@ -1,3 +1,4 @@
+import { defaultStationAntennaStore } from '~/utils/antenna-station';
 import { adoptLegacyAprsConnection } from '~/utils/aprs-d710';
 import {
   clearSavedRadioStationLinks,
@@ -26,9 +27,10 @@ import {
 export function useSavedRadios() {
   const store = useState('saved-radios', () => readSavedRadioStore());
   const hydrated = useState('saved-radios-hydrated', () => false);
+  const stationAntennaStore = useState('station-antenna-store', () => defaultStationAntennaStore());
 
   function knownStationIds(): readonly string[] {
-    return useStationAntennas().stations.value.map((station) => station.id);
+    return stationAntennaStore.value.stations.map((station) => station.id);
   }
 
   function draftWithResolvedStation(draft: SavedRadioDraft): SavedRadioDraft {
