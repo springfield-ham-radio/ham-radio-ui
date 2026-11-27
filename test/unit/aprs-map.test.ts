@@ -4,15 +4,26 @@ import { decodeAprsMonitorLine } from '../../app/utils/aprs-decode.ts';
 import { APRS_MAP_EXAMPLE_TEXT } from '../../app/utils/aprs-map-example.ts';
 import { formatAprsHeardAt } from '../../app/utils/aprs-display.ts';
 import {
+  APRS_OWN_BEACON_RING_COLOR,
   aprsMapBounds,
   aprsMapDetailsCall,
   aprsMapFeatures,
+  aprsMapOwnBeaconFeature,
   aprsMapPopupLines,
   aprsMapUnlocatedCount,
+  aprsOwnBeaconCirclePaint,
   aprsStationLabelLayout,
   aprsStationLabelPaint,
   isPlottableAprsPosition,
+  resolveAprsMapOwnBeaconPosition,
 } from '../../app/utils/aprs-map.ts';
+import { defaultSavedRadioAprsBeacon } from '../../app/utils/aprs-beacon.ts';
+import {
+  HOME_STATION_ID,
+  defaultStationAntennaStore,
+  replaceStationInStore,
+  updateRadioStation,
+} from '../../app/utils/antenna-station.ts';
 import { createAprsFoldState, foldAprsLine, type AprsStation } from '../../app/utils/aprs-stations.ts';
 
 function stationsFrom(text: string): AprsStation[] {
@@ -25,6 +36,79 @@ function stationsFrom(text: string): AprsStation[] {
 
   return state.stations;
 }
+
+function homeAntennaStore() {
+  let store = defaultStationAntennaStore();
+  const home = store.stations.find((entry) => entry.id === HOME_STATION_ID);
+
+  if (!home) {
+    throw new Error('home');
+  }
+
+  return replaceStationInStore(
+    store,
+    updateRadioStation(home, {
+      nickname: 'Home',
+      latitude: 30.5187,
+      longitude: -97.879,
+      locationSource: 'coordinates',
+    }),
+  );
+}
+
+describe('APRS map own beacon', () => {
+  it('builds a distinct own-beacon feature labeled with My callsign', () => {
+    const position = resolveAprsMapOwnBeaconPosition('kf5ufj-1', undefined, homeAntennaStore());
+
+    expect(position).toMatchObject({
+      callsign: 'KF5UFJ-1',
+      latitude: 30.5187,
+      longitude: -97.879,
+    });
+    expect(position?.label).toContain('30°');
+
+    const feature = aprsMapOwnBeaconFeature(position);
+
+    expect(feature?.properties.callsign).toBe('KF5UFJ-1');
+    expect(feature?.geometry.coordinates).toEqual([-97.879, 30.5187]);
+    expect(aprsMapFeatures([], 'KF5UFJ-1').features.some((entry) => entry.properties.callsign === 'KF5UFJ-1')).toBe(
+      false,
+    );
+  });
+
+  it('prefers saved aprsBeacon over station prefill', () => {
+    const stored = {
+      ...defaultSavedRadioAprsBeacon(),
+      latitude: 31.1,
+      longitude: -96.2,
+    };
+    const position = resolveAprsMapOwnBeaconPosition('KF5UFJ-1', stored, homeAntennaStore());
+
+    expect(position?.latitude).toBe(31.1);
+    expect(position?.longitude).toBe(-96.2);
+  });
+
+  it('extends fit bounds with the own-beacon point', () => {
+    const stationMap = aprsMapFeatures(stationsFrom(`${APRS_MAP_EXAMPLE_TEXT}\n`));
+    const withOwn = aprsMapBounds(stationMap, { latitude: 45.5, longitude: -122.6 });
+    const withoutOwn = aprsMapBounds(stationMap);
+
+    expect(withOwn?.maxLatitude).toBeGreaterThan(withoutOwn?.maxLatitude ?? 0);
+    expect(aprsMapBounds({ type: 'FeatureCollection', features: [] }, { latitude: 30, longitude: -97 })).toEqual({
+      minLongitude: -97,
+      minLatitude: 30,
+      maxLongitude: -97,
+      maxLatitude: 30,
+    });
+  });
+
+  it('styles the own-beacon marker with an accent ring', () => {
+    const paint = aprsOwnBeaconCirclePaint();
+
+    expect(paint['circle-stroke-color']).toBe(APRS_OWN_BEACON_RING_COLOR);
+    expect(paint['circle-stroke-width']).toBeGreaterThan(2);
+  });
+});
 
 describe('APRS map points', () => {
   it('plots only stations with their own finite position', () => {
@@ -221,6 +305,7 @@ describe('APRS map click-only details wiring', () => {
   it('passes detailsCall and listens for dismiss in RadioAprs', () => {
     const radioAprs = readFileSync(new URL('../../app/components/RadioAprs.vue', import.meta.url), 'utf8');
 
+    expect(radioAprs).toContain(':own-beacon="ownMapBeacon"');
     expect(radioAprs).toContain(':details-call="detailsCall"');
     expect(radioAprs).toContain('@dismiss="dismissMapDetails"');
     expect(radioAprs).toContain('aprsMapDetailsCall');
@@ -249,7 +334,7 @@ describe('APRS map click-only details wiring', () => {
 
   it('keeps isStyleLoaded on the collection watcher only', () => {
     const aprsMap = readFileSync(new URL('../../app/components/AprsMap.vue', import.meta.url), 'utf8');
-    const collectionWatchSource = aprsMap.match(/watch\(collection[\s\S]*?^watch\(/m)?.[0] ?? '';
+    const collectionWatchSource = aprsMap.match(/watch\(\[collection, ownCollection\][\s\S]*?^watch\(/m)?.[0] ?? '';
 
     expect(collectionWatchSource.length).toBeGreaterThan(0);
     expect(collectionWatchSource).toContain('isStyleLoaded');

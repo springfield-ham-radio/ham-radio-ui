@@ -4,7 +4,13 @@ import { useFixedVirtualRows } from '~/composables/useFixedVirtualRows';
 import { APRS_PANEL_TABS } from '~/utils/aprs-panels';
 import { canonicalAx25Call, encodeAx25Ui, formatAx25Call } from '~/utils/aprs-ax25';
 import { APRS_MAP_EXAMPLE_TEXT } from '~/utils/aprs-map-example';
-import { aprsMapDetailsCall, aprsMapFeatures, aprsMapUnlocatedCount } from '~/utils/aprs-map';
+import {
+  aprsMapDetailsCall,
+  aprsMapFeatures,
+  aprsMapOwnBeaconFeature,
+  aprsMapUnlocatedCount,
+  resolveAprsMapOwnBeaconPosition,
+} from '~/utils/aprs-map';
 import { aprsReceiveProfile } from '~/utils/aprs-capability';
 import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { callsignError } from '~/utils/aprs-message';
@@ -22,6 +28,7 @@ const { snapshots, watchCard, receiveText, ingestAx25Ui, clear } = useAprs();
 const host = useAprsHost();
 const { requestedModes } = useAprsTncMode();
 const { radioById, rememberAprsMyCall } = useSavedRadios();
+const { store: antennaStore } = useStationAntennas();
 const { configurations } = useRadio();
 const { choiceForRadio, identityFor } = useOperatorLicense();
 const route = useRoute();
@@ -121,7 +128,11 @@ const { virtualRows: stationRows, paddingTop: stationPadTop, paddingBottom: stat
 const { virtualRows: logRows, paddingTop: logPadTop, paddingBottom: logPadBottom } = useFixedVirtualRows(logCount, logScroller, 24);
 
 const tabs: TabsItem[] = APRS_PANEL_TABS.map((tab) => ({ ...tab }));
-const plottedCount = computed(() => aprsMapFeatures(stations.value).features.length);
+const ownMapBeacon = computed(() =>
+  resolveAprsMapOwnBeaconPosition(mine.value, savedRadio.value?.aprsBeacon, antennaStore.value));
+const plottedCount = computed(
+  () => aprsMapFeatures(stations.value).features.length + (aprsMapOwnBeaconFeature(ownMapBeacon.value) ? 1 : 0),
+);
 const unlocatedCount = computed(() => aprsMapUnlocatedCount(stations.value));
 
 const detectFailure = computed(() => {
@@ -471,6 +482,7 @@ function onClear(): void {
             :stations="stations"
             :selected-call="selected?.callsign"
             :details-call="detailsCall"
+            :own-beacon="ownMapBeacon"
             @select="selectStation"
             @dismiss="dismissMapDetails"
           />

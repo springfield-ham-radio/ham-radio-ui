@@ -10,21 +10,28 @@ import {
 import {
   aprsMapBounds,
   aprsMapFeatures,
+  aprsMapOwnBeaconFeature,
   aprsMapPopupLines,
+  aprsOwnBeaconCirclePaint,
   aprsStationCirclePaint,
   aprsStationLabelLayout,
   aprsStationLabelPaint,
+  type AprsMapOwnBeaconPosition,
 } from '~/utils/aprs-map';
 import type { AprsStation } from '~/utils/aprs-stations';
 
 const SOURCE_ID = 'aprs-stations';
 const CIRCLE_ID = 'aprs-stations-circle';
 const LABEL_ID = 'aprs-stations-label';
+const OWN_SOURCE_ID = 'aprs-own-beacon';
+const OWN_CIRCLE_ID = 'aprs-own-beacon-circle';
+const OWN_LABEL_ID = 'aprs-own-beacon-label';
 
 const props = defineProps<{
   stations: AprsStation[];
   selectedCall?: string;
   detailsCall?: string;
+  ownBeacon?: AprsMapOwnBeaconPosition;
 }>();
 
 const emit = defineEmits<{
@@ -34,6 +41,15 @@ const emit = defineEmits<{
 
 const mapCanvas = useTemplateRef('mapCanvas');
 const collection = computed(() => aprsMapFeatures(props.stations, props.selectedCall));
+const ownCollection = computed(() => {
+  const feature = aprsMapOwnBeaconFeature(props.ownBeacon);
+
+  return {
+    type: 'FeatureCollection' as const,
+    features: feature ? [feature] : [],
+  };
+});
+const mappableCount = computed(() => collection.value.features.length + ownCollection.value.features.length);
 const popupKey = computed(() => {
   const station = props.stations.find((entry) => entry.callsign === props.detailsCall);
 
@@ -62,8 +78,8 @@ function mapInstance(): MapLibreMap | undefined {
   return mapCanvas.value?.map;
 }
 
-function geoJsonSource(instance: MapLibreMap): GeoJSONSource | undefined {
-  const source = instance.getSource(SOURCE_ID);
+function geoJsonSource(instance: MapLibreMap, sourceId = SOURCE_ID): GeoJSONSource | undefined {
+  const source = instance.getSource(sourceId);
 
   if (!source || source.type !== 'geojson') {
     return undefined;
@@ -100,13 +116,43 @@ function ensureLayers(instance: MapLibreMap): void {
   }
 }
 
+function ensureOwnLayers(instance: MapLibreMap): void {
+  if (!instance.getSource(OWN_SOURCE_ID)) {
+    instance.addSource(OWN_SOURCE_ID, {
+      type: 'geojson',
+      data: ownCollection.value,
+    });
+  }
+
+  if (!instance.getLayer(OWN_CIRCLE_ID)) {
+    instance.addLayer({
+      id: OWN_CIRCLE_ID,
+      type: 'circle',
+      source: OWN_SOURCE_ID,
+      paint: aprsOwnBeaconCirclePaint(),
+    });
+  }
+
+  if (!instance.getLayer(OWN_LABEL_ID)) {
+    instance.addLayer({
+      id: OWN_LABEL_ID,
+      type: 'symbol',
+      source: OWN_SOURCE_ID,
+      layout: aprsStationLabelLayout(),
+      paint: aprsStationLabelPaint(),
+    });
+  }
+}
+
 function setData(instance: MapLibreMap): void {
   ensureLayers(instance);
+  ensureOwnLayers(instance);
   geoJsonSource(instance)?.setData(collection.value);
+  geoJsonSource(instance, OWN_SOURCE_ID)?.setData(ownCollection.value);
 }
 
 function fitStations(instance: MapLibreMap): void {
-  const bounds = aprsMapBounds(collection.value);
+  const bounds = aprsMapBounds(collection.value, props.ownBeacon);
 
   if (!bounds) {
     return;
@@ -302,7 +348,7 @@ function onReady(instance: MapLibreMap): void {
   setData(instance);
   bindPointer(instance);
 
-  if (!userMoved && !didInitialFit && collection.value.features.length > 0) {
+  if (!userMoved && !didInitialFit && mappableCount.value > 0) {
     fitStations(instance);
   }
 
@@ -338,7 +384,7 @@ function fit(): void {
 
 defineExpose({ focus, fit });
 
-watch(collection, () => {
+watch([collection, ownCollection], () => {
   const instance = mapInstance();
 
   if (!instance?.isStyleLoaded()) {
@@ -347,7 +393,7 @@ watch(collection, () => {
 
   setData(instance);
 
-  if (!userMoved && !didInitialFit && collection.value.features.length > 0) {
+  if (!userMoved && !didInitialFit && mappableCount.value > 0) {
     fitStations(instance);
   }
 });
