@@ -10,6 +10,7 @@ import { aprsWeatherLines, formatAprsHeardAt } from '~/utils/aprs-display';
 import { callsignError } from '~/utils/aprs-message';
 import type { AprsConnectionMode } from '~/utils/aprs-connection';
 import { APRS_HOST_TRACE_FIXTURE, formatTrace, serialEventHeadline, serialTranscript } from '~/utils/aprs-serial-trace';
+import { aprsMyCallField } from '~/utils/aprs-my-call';
 
 const props = defineProps<{
   cardId?: string;
@@ -20,8 +21,9 @@ const props = defineProps<{
 const { snapshots, watchCard, receiveText, ingestAx25Ui, clear } = useAprs();
 const host = useAprsHost();
 const { requestedModes } = useAprsTncMode();
-const { radioById } = useSavedRadios();
+const { radioById, rememberAprsMyCall } = useSavedRadios();
 const { configurations } = useRadio();
+const { choiceForRadio, identityFor } = useOperatorLicense();
 const route = useRoute();
 const examplePackets = computed(() => import.meta.dev && route.query.fixture === 'aprs-map');
 const kissFixture = computed(() => import.meta.dev && route.query.fixture === 'aprs-kiss-feed');
@@ -77,8 +79,13 @@ const transcript = computed(() => serialTranscript(traceLines.value));
 const showTraceHex = ref(false);
 const isConnected = computed(() => snapshot.value?.connected === true || tncPreview.value === 'monitor');
 const kissListening = computed(() => hostSnapshot.value?.connected === true || (tncPreview.value !== undefined && tncPreview.value !== 'monitor'));
-const mine = ref('');
+const operatorCall = computed(() => identityFor(choiceForRadio(savedRadio.value)).callSign);
+const mine = ref(aprsMyCallField(savedRadio.value?.aprsMyCall, operatorCall.value));
 const mineError = computed(() => callsignError(mine.value));
+
+if (props.cardId) {
+  host.setIdentity(props.cardId, mine.value);
+}
 const mineInput = useTemplateRef<{ inputRef?: HTMLInputElement }>('mineInput');
 const selectedMode = computed<AprsConnectionMode>(() => {
   const chosen = props.cardId ? requestedModes.value[props.cardId] : undefined;
@@ -175,13 +182,15 @@ const ackDetail = computed(() => {
 });
 
 function onMine(value: string | number): void {
-  mine.value = String(value);
+  const text = String(value);
+  mine.value = text;
 
   if (!props.cardId) {
     return;
   }
 
-  host.setIdentity(props.cardId, value);
+  host.setIdentity(props.cardId, text);
+  rememberAprsMyCall(props.cardId, text);
 }
 
 function focusMineCallsign(): void {

@@ -1,3 +1,5 @@
+import { canonicalAx25Call, formatAx25Call } from '~/utils/aprs-ax25';
+
 export const SAVED_RADIOS_STORAGE_KEY = 'ham-radio-saved-radios';
 
 /**
@@ -32,6 +34,11 @@ export interface SavedRadio {
   packetSsid?: number;
   /** Packet tab Accept incoming connections for this radio. */
   packetAcceptIncoming?: boolean;
+  /**
+   * APRS host **My callsign** for this radio.
+   * Absent follows the operator callsign. Empty string means the field was cleared.
+   */
+  aprsMyCall?: string;
 }
 
 export interface SavedRadioDraft {
@@ -190,6 +197,16 @@ export function parseSavedRadio(value: unknown): SavedRadio | undefined {
     radio.packetAcceptIncoming = false;
   }
 
+  if (value.aprsMyCall === '') {
+    radio.aprsMyCall = '';
+  } else if (nonEmpty(value.aprsMyCall)) {
+    const parsed = canonicalAx25Call(String(value.aprsMyCall));
+
+    if (parsed) {
+      radio.aprsMyCall = formatAx25Call(parsed);
+    }
+  }
+
   return radio;
 }
 
@@ -271,6 +288,10 @@ export function serializeSavedRadioStore(store: SavedRadioStore): string {
 
       if (radio.packetAcceptIncoming !== undefined) {
         stored.packetAcceptIncoming = radio.packetAcceptIncoming;
+      }
+
+      if (radio.aprsMyCall !== undefined) {
+        stored.aprsMyCall = radio.aprsMyCall;
       }
 
       return stored;
@@ -469,6 +490,40 @@ export function updateSavedRadio(current: SavedRadio, draft: SavedRadioDraft, no
  * Replaces the stored port, including when the radio had none. The same path
  * is returned unchanged.
  */
+export function rememberSavedRadioAprsCall(radio: SavedRadio, text: string, now = Date.now()): SavedRadio {
+  const trimmed = text.trim();
+
+  if (trimmed.length === 0) {
+    if (radio.aprsMyCall === '') {
+      return radio;
+    }
+
+    return {
+      ...radio,
+      aprsMyCall: '',
+      updatedAt: now,
+    };
+  }
+
+  const parsed = canonicalAx25Call(trimmed);
+
+  if (!parsed) {
+    return radio;
+  }
+
+  const formatted = formatAx25Call(parsed);
+
+  if (radio.aprsMyCall === formatted) {
+    return radio;
+  }
+
+  return {
+    ...radio,
+    aprsMyCall: formatted,
+    updatedAt: now,
+  };
+}
+
 export function rememberSavedRadioSerialPort(radio: SavedRadio, serialPort: string, now = Date.now()): SavedRadio {
   const trimmed = serialPort.trim();
 
