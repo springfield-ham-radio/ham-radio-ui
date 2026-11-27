@@ -24,16 +24,18 @@ const LABEL_ID = 'aprs-stations-label';
 const props = defineProps<{
   stations: AprsStation[];
   selectedCall?: string;
+  detailsCall?: string;
 }>();
 
 const emit = defineEmits<{
   select: [callsign: string];
+  dismiss: [];
 }>();
 
 const mapCanvas = useTemplateRef('mapCanvas');
 const collection = computed(() => aprsMapFeatures(props.stations, props.selectedCall));
 const popupKey = computed(() => {
-  const station = props.stations.find((entry) => entry.callsign === props.selectedCall);
+  const station = props.stations.find((entry) => entry.callsign === props.detailsCall);
 
   if (!station?.position) {
     return '';
@@ -50,6 +52,8 @@ const popupKey = computed(() => {
 });
 
 let popup: Popup | undefined;
+let popupCallsign: string | undefined;
+let suppressPopupCloseEmit = false;
 let userMoved = false;
 let didInitialFit = false;
 let listenersBound = false;
@@ -115,21 +119,7 @@ function fitStations(instance: MapLibreMap): void {
   );
 }
 
-function closePopup(): void {
-  popup?.remove();
-  popup = undefined;
-  mapCanvas.value?.registerPopup(undefined);
-}
-
-function syncPopup(instance: MapLibreMap): void {
-  const station = props.stations.find((entry) => entry.callsign === props.selectedCall);
-  const feature = collection.value.features.find((entry) => entry.properties.callsign === props.selectedCall);
-
-  if (!station || !feature) {
-    closePopup();
-    return;
-  }
-
+function buildPopupContent(station: AprsStation): HTMLDivElement {
   const root = document.createElement('div');
   root.style.color = '#0f172a';
   root.style.fontSize = '12px';
@@ -146,12 +136,66 @@ function syncPopup(instance: MapLibreMap): void {
     root.append(row);
   }
 
+  return root;
+}
+
+function closePopup(): void {
+  if (popup) {
+    suppressPopupCloseEmit = true;
+    popup.remove();
+    suppressPopupCloseEmit = false;
+  }
+
+  popup = undefined;
+  popupCallsign = undefined;
+  mapCanvas.value?.registerPopup(undefined);
+}
+
+function syncPopup(instance: MapLibreMap): void {
+  const callsign = props.detailsCall;
+  const station = callsign ? props.stations.find((entry) => entry.callsign === callsign) : undefined;
+  const feature = callsign
+    ? collection.value.features.find((entry) => entry.properties.callsign === callsign)
+    : undefined;
+
+  if (!station || !feature || !callsign) {
+    closePopup();
+    return;
+  }
+
+  const coordinates = feature.geometry.coordinates;
+
+  const reanchor = (): void => {
+    popup?.setLngLat(coordinates);
+  };
+
+  if (popup && popupCallsign === callsign) {
+    popup.setDOMContent(buildPopupContent(station));
+    reanchor();
+    instance.once('idle', reanchor);
+    return;
+  }
+
   closePopup();
+  popupCallsign = callsign;
   popup = new Popup({ closeButton: true, closeOnClick: false, maxWidth: '280px', offset: 16 })
-    .setLngLat(feature.geometry.coordinates)
-    .setDOMContent(root)
+    .setLngLat(coordinates)
+    .setDOMContent(buildPopupContent(station))
     .addTo(instance);
+
+  popup.on('close', () => {
+    if (suppressPopupCloseEmit) {
+      return;
+    }
+
+    popup = undefined;
+    popupCallsign = undefined;
+    mapCanvas.value?.registerPopup(undefined);
+    emit('dismiss');
+  });
+
   mapCanvas.value?.registerPopup(popup);
+  instance.once('idle', reanchor);
 }
 
 function onMoveStart(event: MapLibreEvent): void {
@@ -160,12 +204,40 @@ function onMoveStart(event: MapLibreEvent): void {
   }
 }
 
-function onLayerClick(event: MapLayerMouseEvent): void {
-  const callsign = event.features?.[0]?.properties?.callsign;
+function onMapClick(event: MapLayerMouseEvent): void {
+  const instance = mapInstance();
+
+  if (!instance) {
+    return;
+  }
+
+  const hits = instance.queryRenderedFeatures(event.point, { layers: [CIRCLE_ID, LABEL_ID] });
+  const callsign = hits[0]?.properties?.callsign;
 
   if (typeof callsign === 'string' && callsign.length > 0) {
     emit('select', callsign);
+    return;
   }
+
+  emit('dismiss');
+}
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !props.detailsCall) {
+    return;
+  }
+
+  const target = event.target;
+
+  if (target instanceof HTMLElement) {
+    const tag = target.tagName;
+
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+  }
+
+  emit('dismiss');
 }
 
 function bind(instance: MapLibreMap): void {
@@ -175,14 +247,16 @@ function bind(instance: MapLibreMap): void {
 
   listenersBound = true;
   instance.on('movestart', onMoveStart);
-  instance.on('click', CIRCLE_ID, onLayerClick);
-  instance.on('click', LABEL_ID, onLayerClick);
-  instance.on('mouseenter', CIRCLE_ID, () => {
-    instance.getCanvas().style.cursor = 'pointer';
-  });
-  instance.on('mouseleave', CIRCLE_ID, () => {
-    instance.getCanvas().style.cursor = '';
-  });
+  instance.on('click', onMapClick);
+
+  for (const layerId of [CIRCLE_ID, LABEL_ID]) {
+    instance.on('mouseenter', layerId, () => {
+      instance.getCanvas().style.cursor = 'pointer';
+    });
+    instance.on('mouseleave', layerId, () => {
+      instance.getCanvas().style.cursor = '';
+    });
+  }
 }
 
 function onReady(instance: MapLibreMap): void {
@@ -250,15 +324,37 @@ watch(popupKey, () => {
   syncPopup(instance);
 });
 
+watch(
+  () => props.detailsCall,
+  () => {
+    const instance = mapInstance();
+
+    if (!instance?.isStyleLoaded()) {
+      return;
+    }
+
+    syncPopup(instance);
+  },
+);
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown);
+});
+
 onUnmounted(() => {
   const instance = mapInstance();
 
   if (instance && listenersBound) {
     instance.off('movestart', onMoveStart);
-    instance.off('click', CIRCLE_ID, onLayerClick);
-    instance.off('click', LABEL_ID, onLayerClick);
+    instance.off('click', onMapClick);
+
+    for (const layerId of [CIRCLE_ID, LABEL_ID]) {
+      instance.off('mouseenter', layerId);
+      instance.off('mouseleave', layerId);
+    }
   }
 
+  window.removeEventListener('keydown', onWindowKeydown);
   closePopup();
 });
 </script>

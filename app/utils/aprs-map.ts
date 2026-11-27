@@ -153,6 +153,35 @@ export function aprsMapUnlocatedCount(stations: readonly AprsStation[]): number 
   return stations.filter((station) => !isPlottableAprsPosition(station.position?.value)).length;
 }
 
+export type AprsMapDetailsEvent =
+  | { type: 'choose'; callsign: string }
+  | { type: 'dismiss' }
+  | { type: 'retain'; callsigns: readonly string[] };
+
+/**
+ * Which station's map details card is open.
+ *
+ * Row highlight and marker selection are separate; this tracks only the popup.
+ */
+export function aprsMapDetailsCall(
+  open: string | undefined,
+  event: AprsMapDetailsEvent,
+): string | undefined {
+  if (event.type === 'choose') {
+    return event.callsign;
+  }
+
+  if (event.type === 'dismiss') {
+    return undefined;
+  }
+
+  if (!open) {
+    return undefined;
+  }
+
+  return event.callsigns.includes(open) ? open : undefined;
+}
+
 /**
  * Lines for the selected marker. Omitted when that field was not decoded.
  */
