@@ -10,6 +10,7 @@ import {
   APRS_MESSAGE_ATTEMPTS,
   APRS_MESSAGE_RETRY_MS,
   callsignError,
+  destinationCallsignError,
   encodeAprsMessageFrame,
   messageTextError,
   parseAprsMessageFrame,
@@ -174,7 +175,7 @@ export interface AprsHostSession {
   enterHostKiss(): Promise<string | undefined>;
   clearTrace(): void;
   /** Send is the transmit choice. It does not enter KISS and does not acknowledge old messages. */
-  send(input: { mine: string; to: string; text: string }): Promise<AprsHostMessage>;
+  send(input: { mine: string; to: string; text: string }): Promise<AprsHostMessage | undefined>;
   cancel(key: string): void;
   /** Move the test clock. Waiting messages retry or time out. Disconnect clears them first. */
   advance(ms: number): Promise<void>;
@@ -2470,6 +2471,11 @@ export function createAprsHostSession(options?: {
     },
     async send(input) {
       const mine = canonicalAx25Call(input.mine);
+
+      if (!mine) {
+        return undefined;
+      }
+
       const to = canonicalAx25Call(input.to);
       const textError = messageTextError(input.text);
       const key = `out-${sequence}`;
@@ -2489,8 +2495,12 @@ export function createAprsHostSession(options?: {
         return message;
       };
 
-      if (!mine || !to || textError) {
-        return blocked(callsignError(input.mine) ?? callsignError(input.to) ?? textError);
+      if (!to) {
+        return blocked(destinationCallsignError(input.to));
+      }
+
+      if (textError) {
+        return blocked(textError);
       }
 
       identity = mine;
