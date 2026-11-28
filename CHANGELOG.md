@@ -1,3 +1,9 @@
+## [3.26.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.25.0...v3.26.0) (2026-11-28)
+
+### Features
+
+* model memory-map special channels (scan edges and Pri) ([9ab115d](https://github.com/springfield-ham-radio/ham-radio-ui/commit/9ab115d5d827f6654570e627e859ec1f555f4a6b))
+
 ## [3.25.0](https://github.com/springfield-ham-radio/ham-radio-ui/compare/v3.24.0...v3.25.0) (2026-11-27)
 
 ### Features
